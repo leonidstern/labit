@@ -107,6 +107,21 @@ try {
       await open();
       const inks = await until(async () => p.evaluate((r) => new Function(`return ${r}`)().querySelectorAll('.pin.ink svg path, svg.ink path').length, widget));
       check(eng, 'after a reload the drawing is drawn again', Boolean(inks));
+      // a drawing over two frames is still a drawing, on the frame under its middle (it stuck as a pin: Leo, 21 Nov)
+      {
+        const [ra, rb] = [await rect('a'), await rect('b')];
+        const [x0, y0] = [ra.x + ra.w * 0.8, ra.y + ra.h * 0.4];
+        const [x1, y1] = [rb.x + rb.w * 0.2, rb.y + rb.h * 0.6];
+        const had2 = (await comments()).filter((c) => c.anchor?.ink).length;
+        await p.keyboard.down('d');
+        await p.mouse.move(x0, y0);
+        await p.mouse.down();
+        for (let i = 1; i <= 12; i++) await p.mouse.move(x0 + ((x1 - x0) * i) / 12, y0 + ((y1 - y0) * i) / 12 + Math.sin(i) * 12, { steps: 2 });
+        await p.mouse.up();
+        await p.keyboard.up('d');
+        const two = await until(async () => { const l = (await comments()).filter((c) => c.anchor?.ink); return l.length > had2 ? l.at(-1) : null; });
+        check(eng, 'a drawing across two frames keeps its lines on one of them', Boolean(two?.anchor?.frame) && two.anchor.zw > 0 && Boolean(two.anchor.ink?.pts?.length), JSON.stringify({ frame: two?.anchor?.frame, zw: two?.anchor?.zw }));
+      }
       // D with the keyboard focus inside a live frame's page still draws (it drew nothing there: Mac test, 21 Nov)
       await p.evaluate(() => { const fr = window.__labBoard.frame('b'); fr?.contentWindow?.focus(); fr?.contentDocument?.body?.focus?.(); });
       await sleep(200);

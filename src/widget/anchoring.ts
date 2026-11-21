@@ -1503,8 +1503,10 @@ export function zoneAnchor({ x0, y0, x1, y1 }) {
   // An area on a board's frame: kept in the frame's own px (its corner, its size as shares of the frame), never measured on the
   // board's own boxes; on a picture, its two corners on the file too. Not within one frame: a point at its middle.
   if (anchor.kind === 'board') {
-    const B = (window as unknown as { __labBoard?: { anchor: (x: number, y: number) => Anchor; size?: (id: string) => { w: number; h: number } | null } }).__labBoard;
-    const [p, q] = [B?.anchor(left, top), B?.anchor(right, bottom)];
+    const B = (window as unknown as { __labBoard?: { anchor: (x: number, y: number, only?: string) => Anchor; size?: (id: string) => { w: number; h: number } | null } }).__labBoard;
+    // On the frame under its middle, its corners measured on that frame even where they fall past its edge: a circle over two
+    // frames, or half off one, was kept as a point, a pin with no lines (Leo, 21 Nov: "sometimes a pin, sometimes a drawing").
+    const [p, q] = [B?.anchor(left, top, anchor.frame), B?.anchor(right, bottom, anchor.frame)];
     const size = p?.frame && p.frame === q?.frame ? B?.size?.(p.frame) : null;
     if (!p || !q || !size) return anchor;
     const [w, h] = [Math.round(q.fx - p.fx), Math.round(q.fy - p.fy)];

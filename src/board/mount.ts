@@ -922,11 +922,11 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     /** A screen point is on this board (a page's view is less than the window). */
     contains: inBox,
     // Where a point on the screen is on the board: the frame under it (else the nearest), by px from its top left, and the point.
-    anchor: (sx: number, sy: number) => {
+    anchor: (sx: number, sy: number, only?: string) => {
       measure();
       const [wx, wy] = [Math.round((sx - ox) / cam.z - cam.x), Math.round((sy - oy) / cam.z - cam.y)];
       const gap = (c: Card) => Math.hypot(Math.max(c.f.x - wx, 0, wx - c.f.x - c.f.w), Math.max(c.f.y - wy, 0, wy - c.f.y - c.f.h));
-      const f = [...cards].reverse().sort((a, b) => gap(a) - gap(b))[0]?.f; // (a picture over other frames is on top: the newer one wins a tie)
+      const f = (only && find(only)?.f) || [...cards].reverse().sort((a, b) => gap(a) - gap(b))[0]?.f; // (a picture over other frames is on top: the newer one wins a tie)
       // A point on a frame is its px of the frame as stored (the same on every device); a phone draws it at 390 wide, so it is scaled up
       // from there, and says it was laid out so (lay).
       return { kind: 'board', board: name, ...(f && { frame: f.id, fx: Math.round((wx - f.x) * kx(f)), fy: Math.round((wy - f.y) * ky(f)), ...(f.ow && { lay: f.w }) }), ...(f?.kind === 'image' && onPicture(f, wx - f.x, wy - f.y)), bx: wx, by: wy, selector: '', x: 0, y: 0, docX: 0, docY: 0, width: view.w, height: view.h };
