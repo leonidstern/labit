@@ -83,7 +83,6 @@ try {
     await sleep(1300);
     const h2 = await look(p);
     check(eng, `${how} hovering (no press) with D held draws nothing and opens nothing`, !h1.live && !h1.dragging && !h2.box && !h2.draftInk, short({ live: h1.live, dragging: h1.dragging, box: h2.box, doneFlipped: h0.hideDone !== h2.hideDone }));
-    await p.keyboard.press('d'); // done pins back as they were (D alone flips them, as it should)
 
     // 5. Two quick pen strokes, D held: one drawing, an X.
     ({ pen, touch, trusted } = await open('two'));
