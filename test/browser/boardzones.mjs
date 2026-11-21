@@ -87,6 +87,18 @@ try {
       check(eng, 'a drawing on a frame keeps its lines and sits on that frame', d.frame === 'b' && Boolean(d.ink?.pts?.length) && d.zw > 0.2 && d.zw < 0.7 && d.fw === 820, JSON.stringify({ frame: d.frame, zw: d.zw, fw: d.fw, ink: Boolean(d.ink) }));
       const t2 = await text();
       check(eng, 'the agent reads its lines in the frame\'s px', /type: drawing, \d+×\d+ px on frame b/.test(t2) && /lines \(px from the area's top left\): M/.test(t2) && /area on frame b:/.test(t2), t2.split('\n').filter((l) => /drawing|lines|area on/.test(l)).join(' | ').slice(0, 300));
+      // zoomed, the drawing is as big in the frame as it was (Leo, 21 Nov: "zooming board and drawings doesnt work")
+      const share = () => p.evaluate((r) => { const svg = new Function(`return ${r}`)().querySelector('.pin.ink svg'); return svg && window.__labBoard.box('b') ? svg.getBoundingClientRect().width / window.__labBoard.box('b').getBoundingClientRect().width : 0; }, widget);
+      const before = await share();
+      const zb = await rect('b');
+      await p.mouse.move(zb.x + zb.w / 2, zb.y + zb.h / 2);
+      await p.keyboard.down('Control');
+      for (let i = 0; i < 4; i++) { await p.mouse.wheel(0, -120); await sleep(80); }
+      await p.keyboard.up('Control');
+      await sleep(500);
+      const after = await share();
+      const zb2 = await rect('b');
+      check(eng, 'zoomed in, the drawing grows with its frame', zb2.w > zb.w * 1.3 && before > 0 && Math.abs(after - before) / before < 0.05, JSON.stringify({ before, after, w: [zb.w, zb2.w] }));
       await open();
       const inks = await until(async () => p.evaluate((r) => new Function(`return ${r}`)().querySelectorAll('.pin.ink svg path, svg.ink path').length, widget));
       check(eng, 'after a reload the drawing is drawn again', Boolean(inks));

@@ -247,22 +247,21 @@ export function bindDrag(w: unknown) {
   );
   S.dKey = false;
   S.inking = null;
-  // D let go: the drawing is done, or, when nothing was drawn, done pins show or hide (KEYS.done).
+  // D let go: the drawing is done (KEYS.draw; done pins show or hide on KEYS.done, E).
   addEventListener('keyup', (e) => {
-    if (!S.dKey || W.actionOf(e) !== 'done') return;
+    if (!S.dKey || W.actionOf(e) !== 'draw') return;
     S.dKey = false;
     if (S.inking && !S.drag) endInk();
-    else if (!S.drew && !S.drag && !S.dShift) W.toggleDone(); // the pen still down: it's a drawing, done pins stay as they are; ⇧D alone does nothing here
   }, true);
   addEventListener('blur', () => (S.dKey = false));
   // The drawing's box is open and focused, nothing typed yet: D pressed again types a "d" there. If a stroke starts
   // while it is still held, it was D held to draw on: the "d" goes and the stroke joins the drawing (edge tests, 20 Nov).
   addEventListener('keydown', (e) => {
-    if (S.dKey || e.repeat || e.metaKey || e.ctrlKey || e.altKey || W.actionOf(e) !== 'done' || !S.draft?.anchor?.ink) return;
+    if (S.dKey || e.repeat || e.metaKey || e.ctrlKey || e.altKey || W.actionOf(e) !== 'draw' || !S.draft?.anchor?.ink) return;
     const ta = e.composedPath()[0];
     if (ta instanceof HTMLTextAreaElement && !ta.value.trim()) S.dMaybe = ta;
   }, true);
-  addEventListener('keyup', (e) => W.actionOf(e) === 'done' && (S.dMaybe = null), true);
+  addEventListener('keyup', (e) => W.actionOf(e) === 'draw' && (S.dMaybe = null), true);
   addEventListener('pointerdown', (e) => { // on the window: before the document's press that starts the stroke
     if (!S.dMaybe || e.button !== 0) return;
     if (S.dMaybe.value.trim().toLowerCase() === 'd') S.dMaybe.value = '';
