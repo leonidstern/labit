@@ -139,6 +139,18 @@ try {
       await sleep(900);
       const nc = await p.evaluate(() => ({ view: Boolean(document.querySelector('[data-lab-board-view]')), draft: Boolean(document.querySelector('[data-lab-comments]')?.shadowRoot?.querySelector('textarea')) }));
       check(eng, 'a new comment on the page behind a half board closes the board and opens its box', !nc.view && nc.draft, JSON.stringify(nc));
+      // an area drawn on the page behind a half board (⌥-drag): the board goes, the area's comment box opens
+      await p.evaluate(() => (location.hash = ''));
+      await sleep(600);
+      await p.evaluate(() => document.querySelector('h2').scrollIntoView({ block: 'start' }));
+      await sleep(200);
+      await p.click('#go');
+      await p.waitForFunction(() => document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board .f[data-id="b"]'), null, { timeout: 6000 });
+      await sleep(600);
+      await withAlt(p, async () => { await p.mouse.move(hbox.x, hbox.y - 10); await p.mouse.down(); await p.mouse.move(hbox.x + 120, hbox.y + 30, { steps: 6 }); await p.mouse.up(); });
+      await sleep(900);
+      const area = await p.evaluate(() => ({ view: Boolean(document.querySelector('[data-lab-board-view]')), draft: Boolean(document.querySelector('[data-lab-comments]')?.shadowRoot?.querySelector('textarea')) }));
+      check(eng, 'an area drawn on the page behind a half board closes the board and opens its box', !area.view && area.draft, JSON.stringify(area));
       // a page's pin under a half board is hidden, every time the board is opened (it was shown the second time)
       await p.evaluate(() => (location.hash = ''));
       await sleep(500);
