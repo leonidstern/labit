@@ -4,6 +4,36 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 
 ## Unreleased
 
+## 0.7.1 · 2026-11-20
+
+A round of fixes and trims on top of 0.7.0: pins that stay put, questions you answer with a tap, a lab you can open on your phone without a second lab, and a package about 8 KB smaller. The full list of changes as they landed is at the end.
+
+### Better
+
+- **Wifi without a second lab.** `labit invite` turns wifi on in the lab that is already running (same folder, port and comments; your agent's wait keeps listening) and prints the one-time link. `labit --wifi` in a folder that already has a lab does the same, and `labit --no-wifi` turns it off. Never start a copy of a page for a phone.
+- **A pin that looks busy is busy.** A status line counts as a sign of life for 3 minutes, then the pin greys; the plugin only keeps alive lines on pins the agent has claimed and no longer puts helper commands on them. Pin numbers are unique and only go up (so after resolving pins, a new one can be #37 instead of repeating #3).
+- **Questions with a tap.** A tap answers at once (undo for 5 s), keys 1 to 6 pick on a computer, options show in the chat too, each choice can carry a hint line, `a) b) c)` in green, the card stays inside the window.
+- **Agent pins grow up.** `labit pin` can ask (`--question`, or `--choice`), pin on words (`--quote`), pin many at once (`--file`), pin on boards (`--board`, `--frame`); the browser checks that the selector matches, the pin saves what it is on so it survives edits, a "Do it" button hands the pin back to the agent, and boards start with the page as it is now ("a").
+- **Drawings are quick actions.** The agent gets an `action:` line from the mark (X removes, a circle or wavy line fixes, an arrow moves…); Enter sends a drawing with no words; a red pen that follows pressure; Shift makes a line straight, a box a rectangle, a loop an ellipse; several marks in one drawing are listed one by one.
+- **One board.** The board page and the board that opens over a page are the same view; pin placing and panning on a board no longer lay the page out once per pin.
+- **Phones.** A thread or the chat opens at the right message and stays there, the sheet opens taller, the bars and the listening pill follow a sheet away and back.
+- **Steadier cards.** A pin and its card no longer lift on hover or pop when placed, a pin at the right edge opens its box to its left, a long paste in the reply box scrolls inside it, the section bar only scrolls on a tap and marks only new content, a pin whose words change stays in its section and the agent is told.
+- **Links that work on your phone.** A link to this lab in a reply (`localhost`, `127.0.0.1`) opens on the device you read it on, and a link to the same page is a `#section` shortcut that scrolls there, so nothing points at a dead address any more; the skill tells agents to write `#section`.
+- **Shortcuts.** The ¼ speed key can be rebound like the others; ⌥ and a moving cursor no longer send the motion control far away.
+
+### Removed
+
+- Select mode, the fluid selected-words dialog, ink on selected words, the pointer/comment switch (Option pins on anything now), and the `native` flag (the browser does the work, always).
+
+### Smaller and steadier
+
+- The npm package is about 8 KB smaller: shorter names in the server bundle, dead and repeated server code out, lab.css built minified, the skill text 9% shorter, the page script 4% smaller.
+- The built page script is no longer kept in git, so two changes to the widget no longer clash; labs from a checkout build it on start, CI and `npm pack` build it too.
+- Browser tests run on eight runners on the maintainer's Mac and only the tests a change can break; edge cases of the server (bad input, vanished folders, board names) no longer crash or escape.
+
+<details>
+<summary>Every change as it landed</summary>
+
 - **Status lines lapse, pin numbers are their own.** A pin's status line (`reply --progress`, or the plugin's) counts as a sign of life for 3 minutes, then the pin greys and comes back to the next wait as if it had none; the plugin renews a line only for the session's own tool calls, only on a pin somebody claimed, and says "session activity" (no helper commands). Each new pin takes its number when it is made (the page's highest + 1, even when several are made at once), so two pins on a page never share a number and a resolved pin's number is not given again; older pins keep the numbers they showed.
 - **A smaller package (−1.3 KB).** The server bundle drops code nothing reaches: the page-script builder that only a checkout uses is no longer in the npm bundle, the comments API works on the lab's own store directly (no Redis-style command layer), the lab's mark is read from the tab icon file instead of a second copy, and `--help` and a few helpers say the same things in fewer words. Nothing you can use changed.
 - Ink on selected words (the `inkOnText` experiment) is gone. Selecting words for a comment gives a pin on them, as it always did; an old `inkOnText` in a settings file gets the "not something being tried now" note and nothing else.
@@ -44,6 +74,8 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 - **Drawing edge cases fixed:** loops that stop short or run past their start, wavy and slightly crooked lines, a palm on the glass, a scroll mid-stroke, a stroke into a frame or off the window, D typed into the box, a cancelled stroke, a loop ending on its own start, long scribbles and ten-stroke drawings kept whole, drawing over links, buttons and earlier lines.
 - One board. `/_lab/board/<name>` is now the same board view a page's board link opens, over an empty page: a bar with the board's name, and "‹ back" when the address names its page (`?of=`). ⇧B, Esc on an empty board and the browser's back go there as before, and the camera stays in the address. The package ships one board file (`boardview.js`), not two.
 - Fluid goes. Shift-selecting words on a computer opens the ordinary comment card on them (pinned at the words, with your actions row), not the dialog that followed the words; on a phone, selecting words no longer brings up the comment · rewrite · cut bar (hold to comment as before). `fluid.ts`, its styles, `test/browser/fluid.mjs` and the `fluid` CI job go.
+
+</details>
 
 ## 0.7.0 · 2026-11-19
 
