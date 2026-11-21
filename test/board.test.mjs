@@ -94,7 +94,7 @@ test('the board of a page: named for the page, saved by the first PUT', async ()
   const a = await get(B, 'page=/sub/deep');
   assert.equal(a.body.name, 'sub--deep');
   assert.equal(a.body.exists, false);
-  assert.equal(a.body.frames[0].src, '/sub/deep');
+  assert.deepEqual(a.body.frames, [], 'a new board opens clean, with no copy of the page in it');
   assert.equal(fs.existsSync(path.join(DIR, '.lab/boards/sub--deep.json')), false);
   const r = await put(B, 'page=/sub/deep', { rev: 0, frames: [...a.body.frames, { id: 'b', src: '/sub/deep', w: 390, h: 844 }] });
   assert.equal(r.status, 200);

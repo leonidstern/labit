@@ -14,7 +14,7 @@ export const inFrame = (): boolean => {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Board = { busy?: () => boolean; key?: (k: Record<string, unknown>) => void } & Record<string, any>;
+type Board = { busy?: () => boolean; key?: (k: Record<string, unknown>) => unknown } & Record<string, any>;
 
 export function startFrame(script: HTMLScriptElement | null) {
   const board = () => (top as unknown as { __labBoard: Board }).__labBoard;
@@ -43,6 +43,10 @@ export function startFrame(script: HTMLScriptElement | null) {
     // Esc is the board's only when nothing in the page has the focus: with a field or a menu focused it is the page's first.
     if (e.key === 'Escape' && document.activeElement && document.activeElement !== document.body && document.activeElement !== document.documentElement) return;
     if (e.defaultPrevented || t?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t?.tagName || '')) return;
-    board()?.key?.({ key: e.key, code: e.code, shiftKey: e.shiftKey, metaKey: e.metaKey, ctrlKey: e.ctrlKey, altKey: e.altKey, repeat: e.repeat });
+    const k = { key: e.key, code: e.code, shiftKey: e.shiftKey, metaKey: e.metaKey, ctrlKey: e.ctrlKey, altKey: e.altKey, repeat: e.repeat };
+    // Not the board's: the widget's (D draws, E shows done, M, T, W...) as if pressed on the board's page: with the focus
+    // in a live frame D drew nothing (Mac test, 21 Nov).
+    if (!board()?.key?.(k)) top?.document.dispatchEvent(new KeyboardEvent('keydown', { ...k, bubbles: true, cancelable: true }));
   });
+  addEventListener('keyup', (e) => top?.document.dispatchEvent(new KeyboardEvent('keyup', { key: e.key, code: e.code, shiftKey: e.shiftKey, metaKey: e.metaKey, ctrlKey: e.ctrlKey, altKey: e.altKey, bubbles: true, cancelable: true })));
 }

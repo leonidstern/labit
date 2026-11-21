@@ -476,10 +476,10 @@ test('a device with a pass is the owner: board and picture actions, comment admi
   assert.equal((await dev('/_lab/api/image?board=phoneboard&page=/index&x=10&y=10', { method: 'POST', body: png(), headers: { 'content-type': 'image/png' } })).status, 200, 'a picture makes the board of a page that has none');
   const put = (rev, frames) => dev('/_lab/api/board?name=phoneboard', { method: 'PUT', body: { rev, frames } });
   const stored = json(await dev('/_lab/api/board?name=phoneboard'));
-  assert.deepEqual(stored.frames.map((f) => [f.id, f.guest === true]), [['a', false], ['b', true]], 'its picture says it came from a wifi guest');
-  assert.equal((await put(stored.rev, stored.frames.map((f) => (f.id === 'b' ? { ...f, label: 'mine' } : f)))).status, 200, 'replaces the board');
+  assert.deepEqual(stored.frames.map((f) => [f.id, f.guest === true]), [['a', true]], 'its picture says it came from a wifi guest');
+  assert.equal((await put(stored.rev, stored.frames.map((f) => (f.id === 'a' ? { ...f, label: 'mine' } : f)))).status, 200, 'replaces the board');
   const again = json(await dev('/_lab/api/board?name=phoneboard'));
-  assert.equal((await put(again.rev, again.frames.map((f) => (f.id === 'b' ? { ...f, state: 'archived' } : f)))).status, 200, 'archives a frame');
+  assert.equal((await put(again.rev, again.frames.map((f) => (f.id === 'a' ? { ...f, state: 'archived' } : f)))).status, 200, 'archives a frame');
   assert.equal((await dev('/_lab/api/board', { method: 'POST', body: { action: 'new', topic: 'From my phone', of: '/index' } })).status, 200, 'board new');
   assert.equal((await dev('/_lab/api/board', { method: 'POST', body: { action: 'pick', name: 'phoneboard', frames: ['a'] } })).status, 200, 'board pick');
   assert.equal((await dev('/_lab/api/image', { method: 'POST', body: png(), headers: { 'content-type': 'image/png' } })).status, 201, 'a comment picture');

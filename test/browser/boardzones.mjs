@@ -89,6 +89,9 @@ try {
       check(eng, 'the agent reads its lines in the frame\'s px', /type: drawing, \d+×\d+ px on frame b/.test(t2) && /lines \(px from the area's top left\): M/.test(t2) && /area on frame b:/.test(t2), t2.split('\n').filter((l) => /drawing|lines|area on/.test(l)).join(' | ').slice(0, 300));
       // zoomed, the drawing is as big in the frame as it was (Leo, 21 Nov: "zooming board and drawings doesnt work")
       const share = () => p.evaluate((r) => { const svg = new Function(`return ${r}`)().querySelector('.pin.ink svg'); return svg && window.__labBoard.box('b') ? svg.getBoundingClientRect().width / window.__labBoard.box('b').getBoundingClientRect().width : 0; }, widget);
+      // …and where it sits on the frame stays where it was drawn (it landed beside it, by its own size, after a zoom: 21 Nov)
+      const place = () => p.evaluate((r) => { const svg = new Function(`return ${r}`)().querySelector('.pin.ink svg'); const f = window.__labBoard.box('b')?.getBoundingClientRect(); const q = svg?.getBoundingClientRect(); return q && f ? [Math.round(((q.x - f.x) / f.width) * 100) / 100, Math.round(((q.y - f.y) / f.height) * 100) / 100] : null; }, widget);
+      const where0 = await place();
       const before = await share();
       const zb = await rect('b');
       await p.mouse.move(zb.x + zb.w / 2, zb.y + zb.h / 2);
@@ -99,9 +102,25 @@ try {
       const after = await share();
       const zb2 = await rect('b');
       check(eng, 'zoomed in, the drawing grows with its frame', zb2.w > zb.w * 1.3 && before > 0 && Math.abs(after - before) / before < 0.05, JSON.stringify({ before, after, w: [zb.w, zb2.w] }));
+      const where1 = await place();
+      check(eng, 'zoomed in, the drawing stays over what was circled', Boolean(where0 && where1) && Math.abs(where0[0] - where1[0]) < 0.03 && Math.abs(where0[1] - where1[1]) < 0.03, JSON.stringify({ where0, where1 }));
       await open();
       const inks = await until(async () => p.evaluate((r) => new Function(`return ${r}`)().querySelectorAll('.pin.ink svg path, svg.ink path').length, widget));
       check(eng, 'after a reload the drawing is drawn again', Boolean(inks));
+      // D with the keyboard focus inside a live frame's page still draws (it drew nothing there: Mac test, 21 Nov)
+      await p.evaluate(() => { const fr = window.__labBoard.frame('b'); fr?.contentWindow?.focus(); fr?.contentDocument?.body?.focus?.(); });
+      await sleep(200);
+      const inkCount = async () => (await comments()).filter((c) => c.anchor?.ink).length;
+      const had = await inkCount();
+      const fb2 = await rect('b');
+      await p.keyboard.down('d');
+      await p.mouse.move(fb2.x + fb2.w * 0.2, fb2.y + fb2.h * 0.2);
+      await p.mouse.down();
+      for (let i = 1; i <= 12; i++) await p.mouse.move(fb2.x + fb2.w * (0.2 + i * 0.03), fb2.y + fb2.h * (0.2 + (i % 3) * 0.05), { steps: 3 });
+      await p.mouse.up();
+      await p.keyboard.up('d');
+      const drew = await until(async () => ((await inkCount()) > had ? true : null));
+      check(eng, 'D with the focus inside a live frame draws', Boolean(drew), JSON.stringify({ had, now: await inkCount() }));
     } finally {
       await browser.close();
     }

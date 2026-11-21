@@ -93,11 +93,11 @@ test('a big picture is shown at 1440 on its long side, a banner is held to 200 p
   assert.deepEqual([banner.frame.w, banner.frame.h], [1440, 200 /* 72 held up to 200 */]);
 });
 
-test('a page that has no board yet gets the one its address shows, then the picture', async () => {
+test('a page that has no board yet gets a clean one, then the picture', async () => {
   const r = await post('board=pricing&page=/pricing&x=10&y=10', png(8, 6));
   assert.equal(r.status, 200, await r.clone().text());
   const b = await board('pricing');
-  assert.deepEqual(b.frames.map((f) => f.id), ['a', 'b']);
+  assert.deepEqual(b.frames.map((f) => f.id), ['a']);
   assert.equal(b.of, '/pricing');
   assert.equal((await post('board=nothing', png(8, 6))).status, 404, 'no board and no page');
 });

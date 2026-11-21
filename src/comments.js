@@ -82,6 +82,7 @@ import { bindKeys } from './widget/keys.ts';
     get agentOf() { return agentOf; },
     get anchorAt() { return anchorAt; },
     get begin() { return begin; },
+    get boards() { return BOARDS; },
     get sendDrawing() { return sendDrawing; },
     get addComment() { return addComment; },
     get bar() { return bar; },
@@ -168,6 +169,8 @@ import { bindKeys } from './widget/keys.ts';
   const part = (name) => (parts[name] ??= import(new URL(`${name}.js`, script?.src || location.href).href));
   // Shortcuts, action → key: these defaults, with what a project or you changed (labit.json or your settings.json
   // `shortcuts`, passed by the lab as data-keys; docs/settings.md).
+  // Boards are off unless the lab says so (setting `boards`, passed as data-boards): no +board, no sections, no board drawer.
+  const BOARDS = script?.dataset.boards === '1';
   const KEYS = { toggle: 'm', chat: 't', next: 'w', pause: 'p', slow: 's', draw: 'd', done: 'e', reply: 'r', resolve: 'e' };
   try {
     Object.assign(KEYS, JSON.parse(script?.dataset.keys || '{}'));
@@ -902,7 +905,7 @@ import { bindKeys } from './widget/keys.ts';
   // of same page?"); /_lab/board/<name> itself still works as a link from anywhere else. Any other way to a board keeps
   // the scroll under the page's key, so the board's back lands where you were. A page the browser gives back whole
   // (bfcache) has its scroll already, so the key goes, or a later reload would jump.
-  if (!S.board && self === top) {
+  if (BOARDS && !S.board && self === top) {
     const scrollKey = 'lab-scroll:' + location.pathname;
     document.addEventListener('click', (e) => {
       const a = /** @type {HTMLAnchorElement | null} */ (e.target instanceof Element ? e.target.closest('a[href]') : null);
@@ -1719,7 +1722,7 @@ import { bindKeys } from './widget/keys.ts';
     // +board (on a page; a guest too, who is the person on another device): a board for pictures and pages goes into the
     // page as a section at this spot, and opens; no pin is left (Leo, 21 Nov: "only board sections is enough"). The words
     // typed are its title. It is labit's own, not one of your list, so it looks different and sits at the right end.
-    if (!S.board && draft.anchor.kind !== 'board') {
+    if (BOARDS && !S.board && draft.anchor.kind !== 'board') {
       const own = Object.assign(actButton('+board'), { className: 'own', title: 'a board of pictures and pages, as a section of the page here' });
       own.addEventListener('mousedown', (e) => e.preventDefault());
       own.addEventListener('click', () => {
