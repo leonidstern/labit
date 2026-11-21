@@ -414,6 +414,7 @@ function teardown() {
   removeEventListener('scroll', scrolled);
   c.destroy();
   c.view.remove();
+  document.querySelector('[data-lab-comments]')?.removeAttribute('data-board-slide');
   delete (window as unknown as { __labBoard?: unknown }).__labBoard;
   const y = keepY;
   keepY = null;
@@ -445,6 +446,12 @@ function slide(view: HTMLElement, into: boolean, speed = 0) {
   // (Leo, 21 Nov: "do same easing for open close as we do for chat for board drawer", then "ease in ease out tokens,
   // slower opened fast closed"): in over --lab-t-slow on --lab-ease-out, out over --lab-t-quick on --lab-ease-in. Let go by a finger, it keeps the finger's speed (sheetmove.ts).
   const [ms, curve] = into ? (off || speed ? move.glide(way, speed, slow, quick) : [slow, ease('ease-out', 'cubic-bezier(0, 0, .58, 1)')]) : speed > 0 ? move.carry(way, speed, slow, quick) : [quick, ease('ease-in', 'cubic-bezier(.4, 0, 1, 1)')];
+  // What the widget holds to the board (its pins, an open card) is hidden for the slide, either way: gone with the first
+  // frame of a close, back once the view has come to rest (Leo, 21 Nov: "closing board have pins not immediately hidden,
+  // same opening not snappy"). Teardown lets go of it.
+  const host = document.querySelector('[data-lab-comments]');
+  host?.setAttribute('data-board-slide', '');
+  if (into) setTimeout(() => cur?.view === view && host?.removeAttribute('data-board-slide'), ms + 20);
   view.style.setProperty('--bv-e', curve);
   view.style.setProperty('--bv-t', `${ms}ms`);
   view.style.setProperty('--bv-y', `${into ? 0 : h + 8}px`);

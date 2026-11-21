@@ -128,6 +128,7 @@ button.pin.ink, button.pin.ink:is(:hover, :active, .open) { margin: 0; backgroun
 .pin.ink:is(.in, .arrive, .swap) { animation: none; } /* a drawing is not a pin: it doesn't pop in, arrive or bounce (Leo, 21 Nov: "dont do clicks animations on drawings like on pins") */
 .pin.ink, .pin.ink path:not(.hit) { transition: none; }
 .pin.ink:is(:hover, .open) { opacity: 1; }
+:host([data-board-slide]) .onb { opacity: 0 !important; transition: none; pointer-events: none; }
 .pin.ink:is(:hover, .open) path:not(.hit) { stroke-width: 4px; }
 /* A sent drawing settles (Leo's pick 7, drawing-lines lab, 20 Nov): bold as it lands, then it sinks to 35% so the page
    reads again; full on hover or open. */
@@ -447,7 +448,7 @@ button.btn.undo { color: var(--_fg); }
 /* Keys whisper: a small grey letter, no chip; a bit clearer while the pointer is on the bar. */
 kbd { font-size: 10px; letter-spacing: .012em; line-height: 17px; min-width: 0; padding: 0 1px; text-align: center; background: none;
       color: var(--_muted) !important; opacity: .45; }
-kbd, .motion-ctl { transition: opacity var(--_t-quick) var(--_ease-out); }
+kbd, .motion-ctl, .onb { transition: opacity var(--_t-quick) var(--_ease-out); } /* .onb: what the page holds to a board, back as its view rests */
 .bar:hover kbd { opacity: .75; }
 .bar button kbd { margin-left: -4px; } /* the hint sits close to its word: chat (c) */
 /* One bar of segments, a hairline between them; the less used ones in the ⋯ menu above it (phones too: same bar, bigger to tap). */

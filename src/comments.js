@@ -932,6 +932,7 @@ import { bindKeys } from './widget/keys.ts';
   // frame late (Leo, 19 Nov: "when on half board scrolling pins flickering weirdly"). n was just placed by the page's px.
   // A pin the browser holds (pinhold.ts) is tied to its frame's box and left alone.
   const onBoard = (/** @type {HTMLElement} */ n, /** @type {any} */ a) => {
+    n.classList.toggle('onb', a?.kind === 'board' && !heldPin(n)); // hidden while the view slides (styles.css)
     if (a?.kind !== 'board' || heldPin(n)) return void (n.style.position && (n.style.position = ''));
     n.style.position = 'fixed';
     n.style.left = `${parseFloat(n.style.left) - scrollX}px`;
