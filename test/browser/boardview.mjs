@@ -166,6 +166,17 @@ try {
         await p.keyboard.press('Escape');
         await sleep(600);
       }
+      // a page's pin above the half board, opened: the board goes, the card opens (Leo, 21 Nov: "comment opened behind the
+      // board on canvas not closing board and opening it over it")
+      await p.evaluate(() => { const r = document.getElementById('go2').getBoundingClientRect(); scrollBy(0, r.top - 200); });
+      await sleep(300);
+      await p.evaluate(() => (location.hash = '#board=other'));
+      await p.waitForFunction(() => document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board'), null, { timeout: 6000 });
+      await sleep(900);
+      await p.evaluate(() => { const r = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim')).shadowRoot; [...r.querySelectorAll('button.pin')].find((b) => !b.classList.contains('draft')).click(); });
+      await sleep(900);
+      const opened = await p.evaluate(() => { const r = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim')).shadowRoot; return { view: Boolean(document.querySelector('[data-lab-board-view]')), card: Boolean(r.querySelector('textarea')) }; });
+      check(eng, 'a page pin opened over a half board closes the board and opens its card', !opened.view && opened.card, JSON.stringify(opened));
       await ctx.close();
     } finally {
       await browser.close();

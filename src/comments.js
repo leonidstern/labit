@@ -1180,6 +1180,7 @@ import { bindKeys } from './widget/keys.ts';
           if (e.altKey && mayResolve(c)) return toggleResolved(c);
           // Phones: opening it goes through goTo, which moves the page so the pin sits above its sheet, not under it.
           if (coarse && S.openId !== c.id) return goTo(c);
+          if (S.openId !== c.id && c.anchor?.kind !== 'board') dispatchEvent(new Event('lab-board-yield')); // a half board makes way for a comment on the page
           S.openId = S.openId === c.id ? null : c.id;
           S.draft = null;
           render();
