@@ -211,7 +211,14 @@ export function readInk(strokes: P[][], say: (e: Element | null) => string | und
   }
   // What is under a point on the page itself: labit's own bars and layers (data-lab-comments) are skipped (sims, 20 Nov:
   // an arrow's start read as the section bar).
-  const at = (p?: P) => p && say(document.elementsFromPoint(p.x, p.y).find((e) => !e.closest('[data-lab-comments]')) || null);
+  // Over a board: the board's own frame there (its view keeps its frames in a shadow root, so the page's lookup stops at the
+  // view's box: an arrow on a board named "board pin-…" at both ends; Leo's drawings, 21 Nov).
+  const at = (p?: P) => {
+    if (!p) return;
+    const hit = document.elementsFromPoint(p.x, p.y).find((e) => !e.closest('[data-lab-comments]')) || null;
+    const inView = (hit as HTMLElement | null)?.shadowRoot?.elementsFromPoint(p.x, p.y).find((e) => e.closest('.f[data-id]'));
+    return say(inView?.closest('.f[data-id]') || hit);
+  };
   // An arrow keeps its shaft only, up to the tip: the page draws it a clean head (Leo's pick H, 20 Nov), whatever the
   // hand did at the end.
   const kept = out.mark === 'arrow' && shaft.length > 1 ? [shaft] : strokes.slice(0, 16);

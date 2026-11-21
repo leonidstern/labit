@@ -27,7 +27,7 @@ const px = (n: number) => `${Math.round(n * 100) / 100}px`;
 // it opens and when it grows; while scrolling they flipped it above and below its pin and pinned it to the screen's top).
 // A card is the exception: its place is the script's own (spot, lay), kept as offsets from its pin whatever the page
 // does, so scrolling can't move it relative to its pin; it is laid again only when its size or the window's changes.
-type Tie = { to: Element; x: number; y: number; frozen: boolean; pin?: boolean; rel?: Want };
+type Tie = { to: Element; x: number; y: number; frozen: boolean; pin?: boolean; rel?: Want; loose?: boolean };
 const rests = new Map<HTMLElement, Tie>();
 let watching: ResizeObserver | null = null;
 const rest = (node: HTMLElement) => {
@@ -93,9 +93,17 @@ function lay(node: HTMLElement) {
   const [ax, ay] = cornerOf(at);
   const { cx, cy, ay: up } = at.rel;
   const [l, t, side] = spot({ cx: ax + cx, cy: ay + cy, ay: ay + up }, node.offsetWidth, node.offsetHeight);
-  node.style.setProperty('position-try-fallbacks', 'none');
-  node.style.left = `calc(anchor(left) + ${px(l - ax)})`;
-  node.style.top = `calc(anchor(top) + ${px(t - ay)})`;
+  if (at.loose) {
+    // On the page's own px, in the layer with its pin: both scroll on the compositor together (anchor positioning
+    // followed a frame late in Chrome: the card trailed its pin by a wheel step; Leo, 21 Nov: "comment dialog still
+    // moving a little with scroll").
+    node.style.left = px(l + scrollX);
+    node.style.top = px(t + scrollY);
+  } else {
+    node.style.setProperty('position-try-fallbacks', 'none');
+    node.style.left = `calc(anchor(left) + ${px(l - ax)})`;
+    node.style.top = `calc(anchor(top) + ${px(t - ay)})`;
+  }
   node.style.transformOrigin = side === 'above' ? '14px 100%' : '';
   return true;
 }
@@ -132,7 +140,12 @@ export function tieToPin(node: HTMLElement, pin: HTMLElement | null | undefined,
   if (!pin.isConnected) W.layer.append(pin);
   let to: Element | null = kind === 'card' ? holdBox(node, pin) : null;
   if (to) node.style.removeProperty('position-anchor'); // tied by the page's rule now: an inline one would win
-  if (!to) {
+  // A card on a pin the script places on the page (not held by the browser, not on a board): laid on the page's px.
+  const loose = kind === 'card' && !to && !heldPin(pin) && W.pinData.get(pin)?.c.anchor?.kind !== 'board';
+  if (loose) {
+    to = pin;
+    node.style.removeProperty('position-anchor');
+  } else if (!to) {
     let name = pinNames.get(pin);
     if (!name) pinNames.set(pin, (name = `--lab-pin${(++tieCount).toString(36)}`));
     pin.style.setProperty('anchor-name', name);
@@ -152,7 +165,7 @@ export function tieToPin(node: HTMLElement, pin: HTMLElement | null | undefined,
   set('--lab-ay', want.ay - y);
   node.style.left = node.style.top = '';
   const rel = kind === 'card' ? { cx: want.cx - x, cy: want.cy - y, ay: want.ay - y } : undefined;
-  followPin(node, { to, x: 0, y: 0, frozen: false, pin: to === pin, rel });
+  followPin(node, { to, x: 0, y: 0, frozen: false, pin: to === pin, rel, loose });
   lay(node);
 }
 

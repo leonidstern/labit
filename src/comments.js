@@ -544,6 +544,7 @@ import { bindKeys } from './widget/keys.ts';
       if (moment) anchor = { ...anchor, moment };
     }
     S.draft = { anchor };
+    if (anchor.kind !== 'board') dispatchEvent(new Event('lab-board-yield')); // a half board over the page makes way
     keepSpot(anchor);
     ptr.classList.add('still'); // the new pin is where the drawn pointer is: it goes at once (it faded over the pin), back with the next move
     render();

@@ -13,11 +13,12 @@ const DIR = tmp('labit-boardview-');
 const PORT = claimPort(8300, 30);
 const B = `http://localhost:${PORT}`;
 fs.writeFileSync(path.join(DIR, 'pricing.html'), '<!doctype html><meta charset="utf-8"><title>Pricing</title><h1>Pricing one</h1><p>Plan two</p>');
-fs.writeFileSync(path.join(DIR, 'canvas.html'), '<!doctype html><meta charset="utf-8"><title>Canvas</title><h1>Canvas</h1><div style="height:1500px"></div><section><h2>Pins in scrolling boxes</h2><a class="pr-row" id="go" href="/_lab/board/pricing?of=%2Fcanvas">open the board</a></section><div style="height:2000px"></div>');
+fs.writeFileSync(path.join(DIR, 'canvas.html'), '<!doctype html><meta charset="utf-8"><title>Canvas</title><h1>Canvas</h1><div style="height:1500px"></div><section><h2>Pins in scrolling boxes</h2><a class="pr-row" id="go" href="/_lab/board/pricing?of=%2Fcanvas">open the board</a><div style="height:60px"></div><a class="pr-row" id="go2" href="/_lab/board/other?of=%2Fcanvas">open the other board</a></section><div style="height:2000px"></div>');
 fs.writeFileSync(path.join(DIR, 'labit.json'), JSON.stringify({ port: PORT, flags: { board: true } }));
 const server = startLab(DIR, labEnv());
 await labUp(B);
 await fetch(`${B}/_lab/api/board?name=pricing`, { method: 'PUT', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ v: 1, rev: 0, of: '/canvas', frames: [{ id: 'a', src: '/pricing', w: 390, h: 844, x: 0, y: 0 }, { id: 'b', src: '/pricing', w: 820, h: 600, x: 500, y: 0 }] }) });
+await fetch(`${B}/_lab/api/board?name=other`, { method: 'PUT', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ v: 1, rev: 0, of: '/canvas', frames: [{ id: 'z', src: '/pricing', w: 390, h: 844, x: 0, y: 0 }] }) });
 try {
   for (const eng of engines('chromium,webkit')) {
     const browser = await pw[eng].launch();
@@ -112,6 +113,31 @@ try {
       await sleep(500);
       const back = await p.evaluate(() => ({ y: scrollY, view: Boolean(document.querySelector('[data-lab-board-view]')), path: location.pathname }));
       check(eng, 'back closes it, same page, same scroll', !back.view && back.path === '/canvas' && Math.abs(back.y - y2) < 2, JSON.stringify(back));
+      // a link to another board, pressed while one is open at half: the other opens in its place, in one press
+      await p.evaluate(() => localStorage.setItem('lab-board-size:/canvas', '0.5'));
+      await p.evaluate(() => document.getElementById('go').scrollIntoView({ block: 'start' }));
+      await sleep(200);
+      await p.click('#go');
+      await p.waitForFunction(() => document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board .f[data-id="b"]'), null, { timeout: 6000 });
+      await sleep(600);
+      await p.evaluate(() => scrollBy(0, 0));
+      await p.click('#go2');
+      await sleep(900);
+      const two = await p.evaluate(() => ({ views: document.querySelectorAll('[data-lab-board-view]').length, name: document.querySelector('[data-lab-board-view]')?.getAttribute('data-lab-board-view'), hash: location.hash }));
+      check(eng, 'a link to another board, pressed while one is open, opens it in its place (Leo, 21 Nov: "opening new not closing board?")', two.views === 1 && two.name === 'other' && two.hash === '#board=other', JSON.stringify(two));
+      // a new comment on the page behind a half board (⌥-press): the board goes, the comment starts
+      await p.evaluate(() => (location.hash = ''));
+      await sleep(600);
+      await p.evaluate(() => document.querySelector('h2').scrollIntoView({ block: 'start' }));
+      await sleep(200);
+      await p.click('#go');
+      await p.waitForFunction(() => document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board .f[data-id="b"]'), null, { timeout: 6000 });
+      await sleep(600);
+      const hbox = await p.evaluate(() => { const r = document.querySelector('h2').getBoundingClientRect(); return { x: r.x + 20, y: r.y + r.height / 2 }; });
+      await withAlt(p, () => p.mouse.click(hbox.x, hbox.y));
+      await sleep(900);
+      const nc = await p.evaluate(() => ({ view: Boolean(document.querySelector('[data-lab-board-view]')), draft: Boolean(document.querySelector('[data-lab-comments]')?.shadowRoot?.querySelector('textarea')) }));
+      check(eng, 'a new comment on the page behind a half board closes the board and opens its box', !nc.view && nc.draft, JSON.stringify(nc));
       await ctx.close();
     } finally {
       await browser.close();

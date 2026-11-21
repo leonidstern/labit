@@ -125,6 +125,8 @@ button.pin.dragging { cursor: grabbing; transform: scale(1.1); opacity: 1; box-s
 button.pin.ink, button.pin.ink:is(:hover, :active, .open) { margin: 0; background: none; box-shadow: none; outline: 0; color: transparent; pointer-events: none; transform: none; scale: none; }
 .pin.ink > :not(svg), button.pin.ink::before, .pin.ink::after { display: none; }
 .pin.ink.done { opacity: .5; }
+.pin.ink:is(.in, .arrive, .swap) { animation: none; } /* a drawing is not a pin: it doesn't pop in, arrive or bounce (Leo, 21 Nov: "dont do clicks animations on drawings like on pins") */
+.pin.ink, .pin.ink path:not(.hit) { transition: none; }
 .pin.ink:is(:hover, .open) { opacity: 1; }
 .pin.ink:is(:hover, .open) path:not(.hit) { stroke-width: 4px; }
 /* A sent drawing settles (Leo's pick 7, drawing-lines lab, 20 Nov): bold as it lands, then it sinks to 35% so the page
