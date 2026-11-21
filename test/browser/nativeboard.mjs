@@ -63,7 +63,7 @@ try {
         }
       });
       await p.mouse.move(1100, 700);
-      await p.keyboard.down('Space'); // a plain drag is labit's; Space + drag pans (Leo, 19 Nov)
+      await p.keyboard.down('Space'); // a plain drag picks and moves frames; Space + drag pans
       await p.mouse.down();
       await p.mouse.move(950, 600, { steps: 12 });
       await p.mouse.up();

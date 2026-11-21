@@ -30,14 +30,14 @@ try {
       for (const d of ['1', '2', '0']) await p.keyboard.press(`Shift+Digit${d}`);
       await sleep(150);
       check(eng, 'Shift+1, Shift+2 and Shift+0 do nothing', !(await ls('lab-cursor')));
-      // Shift+D and Shift+M belong to the board; a plain D still shows and hides done pins.
-      await p.keyboard.press('Shift+KeyD');
+      // Shift+D and Shift+M belong to the board; a plain E shows and hides done pins.
+      await p.keyboard.press('Shift+KeyE');
       await p.keyboard.press('Shift+KeyM');
       await sleep(150);
-      check(eng, 'Shift+D does not hide done pins, Shift+M does not hide comments', !(await ls('lab-hide-done')) && (await ls('lab-on')) === '1');
-      await p.keyboard.press('KeyD');
+      check(eng, 'Shift+E does not hide done pins, Shift+M does not hide comments', !(await ls('lab-hide-done')) && (await ls('lab-on')) === '1');
+      await p.keyboard.press('KeyE');
       await sleep(150);
-      check(eng, 'a plain D still hides done pins', (await ls('lab-hide-done')) === '1');
+      check(eng, 'a plain E hides done pins', (await ls('lab-hide-done')) === '1');
       // Escape closes the new comment and says it did (the board's Esc, listening after, leaves the press alone).
       await p.evaluate(() => { window.__esc = []; addEventListener('keydown', (e) => e.key === 'Escape' && window.__esc.push(e.defaultPrevented)); });
       await p.mouse.click(150, 120);

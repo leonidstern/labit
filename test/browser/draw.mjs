@@ -194,13 +194,17 @@ try {
       check(eng, 'a drag without D still marks a box (no lines)', (await has(p, '.float textarea')) && (await has(p, '.zone.draft')) && !(await has(p, 'svg.ink.live')));
       await p.keyboard.press('Escape');
 
-      // D tapped alone shows or hides done pins, as before (on release).
+      // E shows or hides done pins (D moved to drawing only, 21 Nov); D tapped alone does nothing.
       const hidden = () => p.evaluate(() => localStorage.getItem('lab-hide-done'));
       const before = await hidden();
       await p.keyboard.press('d');
       await p.waitForTimeout(100);
+      const afterD = await hidden();
+      check(eng, 'D tapped alone does not touch done pins', before === afterD, `${before} -> ${afterD}`);
+      await p.keyboard.press('e');
+      await p.waitForTimeout(100);
       const after = await hidden();
-      check(eng, 'D tapped alone still shows or hides done pins', (before === '1') !== (after === '1'), `${before} -> ${after}`);
+      check(eng, 'E shows or hides done pins', (before === '1') !== (after === '1'), `${before} -> ${after}`);
       await ctx.close();
     } finally {
       await browser.close();

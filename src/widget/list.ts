@@ -1,6 +1,7 @@
 // Part of the comment widget (src/comments.js bundles it). Uses the widget's own parts through W, set once at startup.
 import { PROGRESS_MS } from '../../lib/schema.mjs';
 import { scrollPageTo } from './sheets.ts';
+import { pageBottom } from './anchoring.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let W: any;
@@ -16,6 +17,7 @@ export const goTo = (c, keys = false) => {
     if (view.__labBoard?.name === a.board) return void ((W.S.openId = c.id), (W.S.draft = null), W.render());
     return void view.__labBoardView?.show(a.board).then(() => setTimeout(() => ((W.S.openId = c.id), (W.S.draft = null), W.render()), 300));
   }
+  dispatchEvent(new Event('lab-board-yield')); // a half board over the page makes way for a comment on the page
   W.S.stepping = Boolean(W.S.openId);
   W.S.keepKeys = W.S.stepping && (keys || W.root.activeElement?.localName === 'textarea');
   W.S.openId = c.id;
@@ -24,11 +26,12 @@ export const goTo = (c, keys = false) => {
   // The pin comes into view: on phones in the middle of what the sheet leaves free above it; on a computer the pin
   // and its open card together, in the middle of the window when they fit, else from the pin down.
   const pinTop = W.position(c.anchor || {}).top;
-  let top = pinTop - Math.max(40, W.coarse && W.S.openCard?.isConnected ? (innerHeight - W.S.openCard.offsetHeight) / 2 : innerHeight / 3);
+  const room = pageBottom(); // what a half board view leaves of the window
+  let top = pinTop - Math.max(40, W.coarse && W.S.openCard?.isConnected ? (innerHeight - W.S.openCard.offsetHeight) / 2 : room / 3);
   if (!W.coarse && W.S.openCard?.isConnected) {
     const bottom = W.S.openCard.getBoundingClientRect().bottom + scrollY;
     const tall = bottom - pinTop + 28;
-    top = tall <= innerHeight - 80 ? pinTop - 28 - (innerHeight - tall) / 2 : pinTop - 40;
+    top = tall <= room - 80 ? pinTop - 28 - (room - tall) / 2 : pinTop - 40;
   }
   scrollPageTo(top); // with room below the page's end on phones, for a pin near it
 };

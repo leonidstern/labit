@@ -13,6 +13,7 @@ let S: any; // the widget's state (W.S), read once at startup
 export const showBoard = (name: string, of = '', push = true) =>
   W.part('boardview').then((m) => (W.host.setAttribute('data-board', ''), m.show(name, { page: S.page, of, push, onClose: () => {
     W.host.removeAttribute('data-board');
+    for (const pin of W.pinsById.values()) if (W.pinData.get(pin)) W.pinData.get(pin).covered = undefined; // opened again, it is looked at anew (a pin said covered stayed shown)
     sections(name);
     const open = S.comments.find((c) => c.id === S.openId);
     if (open?.anchor?.kind === 'board') S.openId = null;
@@ -72,7 +73,8 @@ const defineSection = () => {
     connectedCallback() {
       if (!this.shadowRoot) {
         // The click is the board's, never a pin on the page (onPageClick in comments.js listens on the document).
-        this.addEventListener('click', (e) => (e.stopPropagation(), void showBoard(this.getAttribute('name') || '')));
+        // Only its Open button opens it, not the whole strip (Leo, 21 Nov: "open board on click on open not on whole thing").
+        this.addEventListener('click', (e) => e.composedPath().some((n) => n instanceof HTMLButtonElement) && (e.stopPropagation(), void showBoard(this.getAttribute('name') || '')));
         void fillSection(this);
       }
     }
@@ -127,6 +129,9 @@ const followCamera = () => {
     if (S.openId === id && S.openCard?.isConnected) by(S.openCard, x - parseFloat(pin.style.left), y - parseFloat(pin.style.top));
     pin.style.left = `${x}px`;
     pin.style.top = `${y}px`;
+    // A drawing is as big as the area it covers: its lines go with the zoom (Leo, 21 Nov: "zooming board and drawings doesnt work").
+    const svg = at.zone && (pin.querySelector(':scope > svg.ink') as SVGElement | null);
+    if (svg && at.zone) [svg.style.width, svg.style.height] = [`${at.zone.width}px`, `${at.zone.height}px`];
     pin.style.visibility = at.clipped && S.openId !== id ? 'hidden' : '';
   }
   if (S.draft?.anchor?.kind === 'board') {

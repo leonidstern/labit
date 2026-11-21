@@ -22,7 +22,7 @@ fs.writeFileSync(
   `<!doctype html><meta charset="utf-8"><title>p</title><style>body{margin:0;font:17px/1.6 Georgia,serif}main{max-width:640px;margin:0 auto;padding:20px 16px 900px}</style><main>${Array.from({ length: 45 }, (_, i) => `<p id="p${i}">Paragraph ${i}. ${words.repeat(2)}</p>`).join('')}</main>`,
 );
 fs.writeFileSync(path.join(DIR, 'pricing.html'), '<!doctype html><meta charset="utf-8"><title>Pricing</title><h1>Pricing</h1><div style="height:3000px"></div>');
-fs.writeFileSync(path.join(DIR, 'labit.json'), JSON.stringify({ port: PORT }));
+fs.writeFileSync(path.join(DIR, 'labit.json'), JSON.stringify({ port: PORT, flags: { board: true } }));
 const server = startLab(DIR, labEnv());
 await labUp(B);
 const post = (body) => fetch(B + '/_lab/api/comments', { method: 'POST', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ page: '/index', ...body }) }).then((r) => r.json()).then((j) => j.comment);
@@ -125,6 +125,20 @@ try {
       }
       await p.setViewportSize({ width: 1200, height: 800 });
 
+      // A page pin's card beside a half board view stays in what the view leaves free (Leo, 21 Nov: "pin outside board should
+      // not go to board when opened"): its bottom is above the view's top.
+      {
+        await p.goto(B + '/index.html#board=cp');
+        await p.waitForFunction(() => document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board'), null, { timeout: 8000 });
+        await sleep(1200);
+        const top = await p.evaluate(() => document.querySelector('[data-lab-board-view]').getBoundingClientRect().top);
+        for (const [id, at] of [[15, 40], [5, 200], [25, 300]]) {
+          const s = await openAt(id, at);
+          check(eng, `a page pin at ${at}px beside a half board: its card is above the board, whole (board top ${top})`, s.card && s.card.b <= top - 4 && s.card.t >= 7 && inside({ ...s.reply }, { ...s, vh: top }), JSON.stringify([s.card, top]));
+          await close();
+        }
+      }
+      await ready('/');
       // A board: a pin near the screen's bottom, one near its top and one in the middle; the card is whole and off its pin.
       await ready('/_lab/board/cp');
       const frame = await p.evaluate(() => { const r = document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board .f[data-id="a"]').getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; });

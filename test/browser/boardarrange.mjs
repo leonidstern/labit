@@ -41,7 +41,7 @@ try {
       await p.keyboard.press('ArrowRight');
       await p.keyboard.press('Shift+ArrowDown');
       const [cx, cy] = at0;
-      await p.keyboard.down('Space'); // the hand: a plain drag on a frame draws an area, as on a page
+      await p.keyboard.down('Space'); // the hand: Space + drag pans the board
       await p.mouse.move(cx, cy);
       await p.mouse.down();
       await p.mouse.move(cx + 120, cy + 40, { steps: 6 });

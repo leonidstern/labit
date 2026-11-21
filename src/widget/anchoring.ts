@@ -1103,6 +1103,13 @@ export function position(anchor) {
   const covered = coveredAt(at.left - scrollX, at.top - scrollY); // told apart, so a scroll under the view only asks this again
   return { ...at, covered, why: at.hidden ? 'hidden' : doubt(), clipped: covered || at.hidden || clippedAt(findTarget(anchor), at.left - scrollX - (anchor.sx || 0), at.top - scrollY) }; // a pin beside its line: its line's spot is what a scroll box hides
 }
+/** Where the page ends on the screen for a card: the top of a half board view over it, else the window's bottom (Leo, 21 Nov:
+ * "pin outside board should not go to board when opened": a page pin's card stays in what the view leaves free). */
+export function pageBottom() {
+  const r = document.querySelector('[data-lab-board-view]')?.getBoundingClientRect();
+  const vh = document.documentElement.clientHeight;
+  return r && r.top > 40 && r.top < vh - 1 ? r.top : vh;
+}
 /** A pin whose tip is at this screen point is under a page's board view: its tip, or its far corner (a pin with its tip
  * just past the view's edge still lay over the board). */
 export function coveredAt(x: number, y: number) {

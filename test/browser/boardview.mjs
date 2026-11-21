@@ -18,6 +18,7 @@ fs.writeFileSync(path.join(DIR, 'labit.json'), JSON.stringify({ port: PORT, flag
 const server = startLab(DIR, labEnv());
 await labUp(B);
 await fetch(`${B}/_lab/api/board?name=pricing`, { method: 'PUT', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ v: 1, rev: 0, of: '/canvas', frames: [{ id: 'a', src: '/pricing', w: 390, h: 844, x: 0, y: 0 }, { id: 'b', src: '/pricing', w: 820, h: 600, x: 500, y: 0 }] }) });
+await fetch(`${B}/_lab/api/comments`, { method: 'POST', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ page: '/canvas', name: 'Sam', text: 'a page pin', anchor: { selector: '#go2', x: 0.5, y: 0.5, docX: 300, docY: 3000, width: 600 } }) });
 await fetch(`${B}/_lab/api/board?name=other`, { method: 'PUT', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ v: 1, rev: 0, of: '/canvas', frames: [{ id: 'z', src: '/pricing', w: 390, h: 844, x: 0, y: 0 }] }) });
 try {
   for (const eng of engines('chromium,webkit')) {
@@ -138,6 +139,44 @@ try {
       await sleep(900);
       const nc = await p.evaluate(() => ({ view: Boolean(document.querySelector('[data-lab-board-view]')), draft: Boolean(document.querySelector('[data-lab-comments]')?.shadowRoot?.querySelector('textarea')) }));
       check(eng, 'a new comment on the page behind a half board closes the board and opens its box', !nc.view && nc.draft, JSON.stringify(nc));
+      // an area drawn on the page behind a half board (⌥-drag): the board goes, the area's comment box opens
+      await p.evaluate(() => (location.hash = ''));
+      await sleep(600);
+      await p.evaluate(() => document.querySelector('h2').scrollIntoView({ block: 'start' }));
+      await sleep(200);
+      await p.click('#go');
+      await p.waitForFunction(() => document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board .f[data-id="b"]'), null, { timeout: 6000 });
+      await sleep(600);
+      await withAlt(p, async () => { await p.mouse.move(hbox.x, hbox.y - 10); await p.mouse.down(); await p.mouse.move(hbox.x + 120, hbox.y + 30, { steps: 6 }); await p.mouse.up(); });
+      await sleep(900);
+      const area = await p.evaluate(() => ({ view: Boolean(document.querySelector('[data-lab-board-view]')), draft: Boolean(document.querySelector('[data-lab-comments]')?.shadowRoot?.querySelector('textarea')) }));
+      check(eng, 'an area drawn on the page behind a half board closes the board and opens its box', !area.view && area.draft, JSON.stringify(area));
+      // a page's pin under a half board is hidden, every time the board is opened (it was shown the second time)
+      await p.evaluate(() => (location.hash = ''));
+      await sleep(500);
+      const hiddenPin = () => p.evaluate(() => { const r = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim')).shadowRoot; const pin = [...r.querySelectorAll('button.pin')].find((b) => !b.classList.contains('draft')); const q = pin?.getBoundingClientRect(); return pin ? { hidden: getComputedStyle(pin).visibility === 'hidden', y: Math.round(q.y), top: Math.round(document.querySelector('[data-lab-board-view]')?.getBoundingClientRect().top ?? -1) } : null; });
+      for (const round of [1, 2]) {
+        await p.evaluate(() => { const r = document.getElementById('go2').getBoundingClientRect(); scrollBy(0, r.top - 600); });
+        await sleep(300);
+        await p.evaluate(() => (location.hash = '#board=other'));
+        await p.waitForFunction(() => document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board'), null, { timeout: 6000 });
+        await sleep(1000);
+        const hp = await hiddenPin();
+        check(eng, `a page pin under the half board is hidden (opened ${round === 1 ? 'first' : 'again'})`, hp && hp.y > hp.top && hp.hidden, JSON.stringify(hp));
+        await p.keyboard.press('Escape');
+        await sleep(600);
+      }
+      // a page's pin above the half board, opened: the board goes, the card opens (Leo, 21 Nov: "comment opened behind the
+      // board on canvas not closing board and opening it over it")
+      await p.evaluate(() => { const r = document.getElementById('go2').getBoundingClientRect(); scrollBy(0, r.top - 200); });
+      await sleep(300);
+      await p.evaluate(() => (location.hash = '#board=other'));
+      await p.waitForFunction(() => document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board'), null, { timeout: 6000 });
+      await sleep(900);
+      await p.evaluate(() => { const r = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim')).shadowRoot; [...r.querySelectorAll('button.pin')].find((b) => !b.classList.contains('draft')).click(); });
+      await sleep(900);
+      const opened = await p.evaluate(() => { const r = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim')).shadowRoot; return { view: Boolean(document.querySelector('[data-lab-board-view]')), card: Boolean(r.querySelector('textarea')) }; });
+      check(eng, 'a page pin opened over a half board closes the board and opens its card', !opened.view && opened.card, JSON.stringify(opened));
       await ctx.close();
     } finally {
       await browser.close();

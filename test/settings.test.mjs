@@ -93,7 +93,7 @@ test('shortcuts merge key by key (the project\'s over yours over the defaults); 
   assert.equal(s.values.shortcuts.next, 'x', 'lowercased');
   assert.equal(s.values.shortcuts.comment, undefined, 'the old comment key (1) is gone');
   assert.equal(s.values.shortcuts.pin, undefined, 'and the pin key (C)');
-  assert.equal(s.values.shortcuts.done, 'd', 'two letters: refused, the default stays');
+  assert.equal(s.values.shortcuts.done, 'e', 'two letters: refused, the default stays');
   assert.ok(s.problems.some((p) => /bogus is not an action/.test(p)));
   assert.equal(s.values.shortcuts.pause, 'o', 'pause is an action again: the project can move it');
   assert.ok(!s.problems.some((p) => /\.pause /.test(p)), 'and it is not reported');

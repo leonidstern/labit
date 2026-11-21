@@ -42,6 +42,8 @@ const css = `
 #lab-board .f.off{content-visibility:hidden}
 @media (hover:hover){#lab-board:not(.alt,.grab) .f:hover{outline:calc(1px*var(--iz)) solid #1f7a4d}} /* what a click picks (Leo, 21 Nov: "cursor should have selection") */
 #lab-board .f.sel,#lab-board .f.pick{outline:calc(2px*var(--iz)) solid #1f7a4d;outline-offset:calc(1px*var(--iz))}
+#lab-board:not(.alt,.grab) .f.pick .b{cursor:move} /* a selected frame is dragged, with the others selected */
+#lab-board .marq{position:absolute;z-index:4;box-sizing:border-box;border:1px solid #1f7a4d;background:color-mix(in srgb,#1f7a4d 8%,transparent);pointer-events:none}
 #lab-board iframe,#lab-board img{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff;pointer-events:none}
 #lab-board .f.in iframe{pointer-events:auto}
 #lab-board .t{position:absolute;left:0;bottom:100%;white-space:nowrap;max-width:calc(100% / var(--iz));overflow:hidden;text-overflow:ellipsis;transform-origin:0 100%;transform:scale(var(--iz));padding-bottom:4px;opacity:.75}
@@ -113,13 +115,14 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   };
   measure();
   let latest: Board | null = null; // the board as last read: its rev and frames, for a change written back (a picture taken off)
-  const taken: { id: string; x?: number; y?: number }[] = []; // pictures this browser took off, newest last: ⌘Z puts the last one back
+  type Undo = { items: { id: string; x?: number; y?: number }[]; archived: boolean };
+  const taken: Undo[] = []; // what this browser took off or moved, newest last: ⌘Z puts the last one back
   let moved = false; // the person moved the camera: a resize no longer fits everything again
   let heldCam: Cam | null = null; // the camera when the hold began
   let camBack: Cam | null = null; // where the next resize puts it (the hold let go)
   let held = false; // a resize that isn't the person's (a phone's keyboard growing a half view): the board stays where it is on the screen
   let selected = '';
-  let picked = ''; // the frame a click picked (its ring): Backspace or Delete takes it off the board
+  let picks = new Set<string>(); // the frames a click or a box picked (their ring): Backspace or Delete takes them off the board, a drag moves them
   let entered = '';
   let focus = false; // the camera is fitted to one frame (a phone's first view, Tab): a swipe goes to the next
   let lastDown = 0;
@@ -359,7 +362,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       paint(c);
     }
     if (selected && !cards.some((c) => c.f.id === selected)) selected = entered = '';
-    pickFrame(picked);
+    pickFrames(picks);
     world.querySelector('.none')?.remove();
     if (!cards.length) text('div', 'No frames on this board.', world).className = 'none';
     measure(); // the box as it is now, for the fit
@@ -409,13 +412,14 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   const paint = (c: Card) => ((c.box.querySelector('.t') as HTMLElement).textContent = label(c.f));
 
   // ---------- the frame the camera is on, and entering ----------
-  // \`selected\` is the frame Tab last moved to; the open (entered) frame and the picked one wear the ring.
+  // \`selected\` is the frame Tab last moved to; the open (entered) frame and the picked ones wear the ring.
   const find = (id: string) => cards.find((c) => c.f.id === id);
-  // A click on a frame picks it, a click on the canvas lets it go; Backspace or Delete then takes it off the board (Leo,
-  // 21 Nov: "no need this on board > select and delete", the × over a picture's corner).
-  function pickFrame(id: string) {
-    picked = find(id) ? id : '';
-    for (const c of cards) c.box.classList.toggle('pick', c.f.id === picked);
+  // A click on a frame picks it, a click on the canvas lets go, a box drawn on the canvas picks the frames it touches, Shift
+  // adds or takes one off; Backspace or Delete then takes them off the board, a drag moves them (Leo, 21 Nov: "Plain drag
+  // selects, Space pans", "also moving stuff on board", "deleting them with delete").
+  function pickFrames(ids: Iterable<string>) {
+    picks = new Set([...ids].filter((id) => find(id)));
+    for (const c of cards) c.box.classList.toggle('pick', picks.has(c.f.id));
   }
   function select(id: string) {
     if (entered && entered !== id) leave();
@@ -482,16 +486,20 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   };
   const mine = (e: Event) => inside(e, root) || inside(e, handLayer);
   const pts = new Map<number, { x: number; y: number }>();
-  let down: { x: number; y: number; id: string; far: boolean; at: number; t: number; held?: boolean; hand?: boolean } | null = null;
+  // down.hand: this press pans (Space, the middle button, a finger); else (a mouse or pen, the primary button) it draws a box on the
+  // canvas (marq) or, on a frame, moves the picked ones (move), once it has gone 4 px. mid: the middle button (the hand without Space).
+  type Down = { x: number; y: number; id: string; far: boolean; at: number; t: number; held?: boolean; hand?: boolean; mid?: boolean; shift?: boolean; mode?: 'marq' | 'move'; base?: Set<string>; start?: Map<string, { x: number; y: number }> };
+  let down: Down | null = null;
   let holdTimer = 0;
   // A phone comments by holding, as on a page (Leo, 19 Nov: "can't leave a comment" on the board): a finger that stays
   // put for 400 ms with comments on drops a pin there; moving first is a pan or a swipe, as before.
   const boardWidget = () => (window as unknown as { __labBoardWidget?: { dismiss?: () => boolean; pinning: () => boolean; drawing?: () => boolean; holding?: () => boolean; hold?: (x: number, y: number) => void; place: (x: number, y: number) => void } }).__labBoardWidget;
   let tap = { at: 0, x: 0, y: 0 };
   let pinch = 0;
-  // On a computer a plain drag pans the board, as Space and a drag (the hand) or a trackpad's two fingers / the wheel do;
-  // ⌥ makes a click a pin and a drag an area, the widget's (Leo, 21 Nov: "regular cursor to operate on boards opt to call
-  // comment"). A finger pans, and a hold pins.
+  // On a computer a plain drag draws a box that picks frames, or moves the picked ones when it starts on a frame; the board
+  // pans with Space and a drag (the hand), the middle button, or a trackpad's two fingers / the wheel (Leo, 21 Nov: "Plain
+  // drag selects, Space pans"). ⌥ makes a click a pin and a drag an area, the widget's (Leo, 21 Nov: "regular cursor to
+  // operate on boards opt to call comment"). A finger pans, and a hold pins.
   let space = false;
   let theirs = false; // this press went to the widget (comment mode): its click isn't eaten
   // While Space is held one still layer lies over the whole board, frames and pins included, with the hand on it: no
@@ -499,8 +507,9 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   // flickering"). Put there once on the key going down, never on its repeats, and taken away when it is let go.
   let handLayer: HTMLElement | null = null;
   const hand = () => {
-    root.classList.toggle('grab', space);
-    root.classList.toggle('grabbing', space && Boolean(down?.hand));
+    const grab = space || Boolean(down?.mid);
+    root.classList.toggle('grab', grab);
+    root.classList.toggle('grabbing', grab && Boolean(down?.hand));
     if (space && !handLayer) {
       measure();
       handLayer = document.createElement('div');
@@ -548,8 +557,9 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       pinch = Math.hypot(a.x - b.x, a.y - b.y);
       if (down) down.far = true; // a second finger: this was no tap
     } else {
-      // A frame stays where the board put it: no drag moves one (Leo, 19 Nov: "make it simpler here, dont allow moving frames").
-      down = { x: e.clientX, y: e.clientY, id: at(e), far: false, at: performance.now(), t: e.timeStamp, hand: true }; // a plain drag pans, mouse or finger
+      // A mouse or pen's primary button picks and moves (Space or another button: the hand); a finger pans.
+      const plain = !coarse && e.pointerType !== 'touch' && e.button === 0 && !space;
+      down = { x: e.clientX, y: e.clientY, id: at(e), far: false, at: performance.now(), t: e.timeStamp, hand: !plain, mid: e.pointerType !== 'touch' && e.button === 1, shift: e.shiftKey };
       hand();
       clearTimeout(holdTimer);
       if (e.pointerType === 'touch') {
@@ -578,13 +588,65 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       return;
     }
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6) {
+    if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > (down.hand ? 6 : 4)) {
       down.far = true;
       clearTimeout(holdTimer);
     }
     if (down?.held) return; // the hold made a pin: the finger lifting off doesn't pan
     if (down?.far && down.hand) go(panBy(cam, dx, dy), true, true); // a finger or the hand: the board stops at its edge
+    else if (down?.far) drag(down, e);
   }, true);
+  // The box over the canvas (in the box's own px) while one is drawn.
+  const marq = Object.assign(document.createElement('div'), { className: 'marq', hidden: true });
+  marq.setAttribute('data-uncommentable', '');
+  root.append(marq);
+  // A press that is no pan, gone 4 px: on a frame it moves the picked frames (that frame becomes the pick first, with Shift one
+  // more), on the canvas it draws a box and the frames it touches are the pick (Shift: besides those picked already).
+  const drag = (d: Down, e: PointerEvent) => {
+    if (!d.mode) {
+      d.mode = d.id ? 'move' : 'marq';
+      if (d.mode === 'move') {
+        if (!picks.has(d.id)) pickFrames(d.shift ? [...picks, d.id] : [d.id]);
+        d.start = new Map([...picks].map((id) => [id, { x: find(id)!.f.x, y: find(id)!.f.y }]));
+      } else {
+        d.base = new Set(d.shift ? picks : []);
+        marq.hidden = false;
+      }
+    }
+    if (d.mode === 'move') {
+      for (const [id, s] of d.start!) {
+        const c = find(id);
+        if (!c) continue;
+        [c.f.x, c.f.y] = [Math.round(s.x + (e.clientX - d.x) / cam.z), Math.round(s.y + (e.clientY - d.y) / cam.z)]; // the camera's zoom: a screen px is 1/z of the board's
+        Object.assign(c.box.style, { left: `${c.f.x}px`, top: `${c.f.y}px` });
+      }
+      whole = true; // the pins on them go with them
+      draw();
+      return;
+    }
+    const [l, t, r, b] = [Math.min(d.x, e.clientX) - ox, Math.min(d.y, e.clientY) - oy, Math.max(d.x, e.clientX) - ox, Math.max(d.y, e.clientY) - oy];
+    Object.assign(marq.style, { left: `${l}px`, top: `${t}px`, width: `${r - l}px`, height: `${b - t}px` });
+    const hit = cards.filter((c) => (c.f.x + cam.x) * cam.z <= r && (c.f.x + c.f.w + cam.x) * cam.z >= l && (c.f.y + cam.y) * cam.z <= b && (c.f.y + c.f.h + cam.y) * cam.z >= t);
+    pickFrames([...d.base!, ...hit.map((c) => c.f.id)]);
+  };
+  // The drag ended: the box goes, moved frames are written (a cancel puts them back).
+  const drop = (d: Down, cancel: boolean) => {
+    marq.hidden = true;
+    if (d.mode !== 'move') return;
+    const to = [...d.start!].flatMap(([id]) => (find(id) ? [{ id, x: find(id)!.f.x, y: find(id)!.f.y }] : []));
+    const from = [...d.start!].map(([id, s]) => ({ id, ...s }));
+    if (cancel || to.every((p, i) => p.x === from[i].x && p.y === from[i].y)) {
+      for (const [id, s] of d.start!) {
+        const c = find(id);
+        if (c) [c.f.x, c.f.y] = [s.x, s.y];
+        if (c) Object.assign(c.box.style, { left: `${s.x}px`, top: `${s.y}px` });
+      }
+      whole = true;
+      return draw();
+    }
+    kept = moved = true; // the person arranged it: the camera stays where it is (a refit moved the whole view under the pointer)
+    void write(placed(to), { items: from, archived: false });
+  };
   const up = (e: PointerEvent) => {
     if (!pts.delete(e.pointerId)) return;
     eat(e);
@@ -612,12 +674,14 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       return;
     }
     if (d.far && coarse && focus && e.type === 'pointerup' && Math.abs(e.clientX - d.x) > 48 && Math.abs(e.clientX - d.x) > 2 * Math.abs(e.clientY - d.y) && !entered) return step(e.clientX < d.x ? 1 : -1); // a swipe on a phone: the next frame
+    if (d.far && !d.hand) return drop(d, e.type === 'pointercancel'); // a box drawn, or frames moved
     if (d.far || e.type === 'pointercancel') return;
     const widget = boardWidget();
     // An open comment or the chat: this tap only closes it, as a click outside one does on a page (Leo, 19 Nov: "clicking
     // outside comment should work here same as on page", "same with chat"). A drag (a pan) is no tap and closes nothing.
     if (widget?.dismiss?.()) return;
-    if (!coarse) pickFrame(d.id); // a click picks the frame under it (or none)
+    // A click picks the frame under it alone (none: lets go of all); with Shift it adds that frame or takes it off, and on the canvas leaves the rest.
+    if (!d.hand) pickFrames(d.id ? (d.shift ? (picks.has(d.id) ? [...picks].filter((id) => id !== d.id) : [...picks, d.id]) : [d.id]) : d.shift ? picks : []);
     // A double tap opens the frame under it to use it.
     const again = performance.now() - tap.at < 350 && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) < 24;
     tap = { at: performance.now(), x: e.clientX, y: e.clientY };
@@ -691,7 +755,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     else if (e.key === 'Escape') {
       // Heard in the frame, which keeps an Esc its page used (a menu closing) to itself: this one is ours.
       if (entered) leave();
-      else if (picked) pickFrame('');
+      else if (picks.size) pickFrames([]);
       else if (opts.back && !coarse) back(); // an empty board's Esc goes back to the page, as ⇧B does
       else return false;
     } else return false;
@@ -725,30 +789,53 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     n.className = 'note';
     setTimeout(() => n.remove(), 3000);
   };
-  // A picture off the board (archived: its file stays) and back: the owner's (this computer's browser, or a device with a pass),
-  // by Backspace / Delete with it picked (a click on it); ⌘Z puts the last one back where it was.
-  const setState = async (id: string, state: 'archived' | 'live', at?: { x?: number; y?: number }) => {
-    if (!latest) return;
-    const was = latest.frames.find((f) => f.id === id);
-    const frames = latest.frames.map((f) => ({ ...f, ...(f.id === id ? { state, ...at } : {}), ...(f.auto ? { x: undefined, y: undefined } : {}) }));
+  // The board written back, with one change to its frames (patch: what a frame becomes, or nothing), one at a time, and read again
+  // (a move, a frame or more taken off the board and ⌘Z). Taken off (archived: the file stays) and moved are the owner's (this
+  // computer's browser, or a device with a pass). A frame drawn in the lab's rows stays in them unless it is put somewhere:
+  // a move puts every frame where it is drawn now, so the ones that were not touched don't move to fill its place.
+  let saving: Promise<void> = Promise.resolve();
+  const write = (patch: (f: Frame) => Partial<Frame> | undefined, undo?: Undo) => (saving = saving.then(async () => {
+    if (!latest || signal.aborted) return;
+    const frames = latest.frames.map((f) => {
+      const p = patch(f);
+      return { ...f, ...p, ...(!p && f.auto ? { x: undefined, y: undefined } : {}) };
+    });
     const res = await fetch(api(), { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...latest, frames }) }).catch(() => null);
     if (res?.ok) {
-      if (state === 'archived' && was) taken.push({ id, ...(was.auto ? {} : { x: was.x, y: was.y }) }); // where it stood: an archived frame is listed without its place
+      if (undo) taken.push(undo);
       await load();
     } else {
       note(res?.status === 409 ? 'The board changed meanwhile: look, then try again.' : "Only the board's owner can do that.");
-      if (res?.status === 409) void load();
+      await load(); // the frames as they are (a move put them back)
     }
+  }));
+  // Every frame as drawn, but the ones in at (their new places).
+  const placed = (at: { id: string; x?: number; y?: number }[]) => (f: Frame): Partial<Frame> | undefined => {
+    const to = at.find((p) => p.id === f.id);
+    return f.state === 'archived' ? undefined : { x: f.x, y: f.y, ...to, auto: false };
   };
+  // Backspace or Delete with frames picked takes them all off, one ⌘Z puts them all back where they were; ⌘Z after a move puts those back.
   if (!coarse) {
     on('keydown', (e: KeyboardEvent) => {
       if (typing(e) || entered) return;
-      const gone = (e.key === 'Backspace' || e.key === 'Delete') && !e.metaKey && !e.ctrlKey && !e.altKey && Boolean(find(picked));
+      const gone = (e.key === 'Backspace' || e.key === 'Delete') && !e.metaKey && !e.ctrlKey && !e.altKey && picks.size > 0;
       const back = (e.metaKey || e.ctrlKey) && !e.shiftKey && e.code === 'KeyZ' && taken.length > 0;
       if (!gone && !back) return;
       e.preventDefault();
-      const last = gone ? null : taken.pop()!;
-      void (last ? setState(last.id, 'live', { x: last.x, y: last.y }) : setState(picked, 'archived'));
+      if (gone) {
+        const ids = new Set(picks);
+        const items = cards.filter((c) => ids.has(c.f.id)).map((c) => ({ id: c.f.id, ...(c.f.auto ? {} : { x: c.f.x, y: c.f.y }) })); // where each stood: an archived frame is listed without its place
+        pickFrames([]);
+        void write((f) => (ids.has(f.id) ? { state: 'archived' } : undefined), { items, archived: true });
+        return;
+      }
+      const last = taken.pop()!;
+      if (last.archived) {
+        void write((f) => {
+          const was = last.items.find((i) => i.id === f.id);
+          return was && { state: 'live', x: was.x, y: was.y };
+        }).then(() => pickFrames(last.items.map((i) => i.id))); // …and picked again, as they were
+      } else void write(placed(last.items));
     });
   }
   // One picture to the board at a world point, a ghost there while it goes; the board is read again as soon as it is there.

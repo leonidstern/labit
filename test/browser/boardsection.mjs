@@ -40,6 +40,20 @@ try {
       await p.waitForFunction(() => document.querySelector('lab-board')?.shadowRoot?.querySelector('.box'), null, { timeout: 8000 });
       const a = await seen(p);
       check(eng, 'on its own page the board shows as a section', a.h > 30 && /Board/.test(a.text), JSON.stringify(a));
+      // Only its Open button opens it, not the whole strip (Leo, 21 Nov: "open board on click on open not on whole thing").
+      {
+        const box = await p.evaluate(() => { const r = document.querySelector('lab-board').shadowRoot.querySelector('.box').getBoundingClientRect(); const b = document.querySelector('lab-board').shadowRoot.querySelector('button').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.bottom - 8, bx: b.x + b.width / 2, by: b.y + b.height / 2 }; });
+        await p.mouse.click(box.x, box.y);
+        await sleep(700);
+        const none = await p.evaluate(() => Boolean(document.querySelector('[data-lab-board-view]')));
+        check(eng, 'a click on the strip, off its Open button, opens nothing', !none);
+        await p.mouse.click(box.bx, box.by);
+        await p.waitForFunction(() => document.querySelector('[data-lab-board-view]'), null, { timeout: 6000 }).catch(() => {});
+        const opened = await p.evaluate(() => Boolean(document.querySelector('[data-lab-board-view]')));
+        check(eng, 'its Open button opens the board', opened);
+        await p.keyboard.press('Escape');
+        await sleep(700);
+      }
       for (const [at, why] of [['/b', 'a board that is gone shows nothing'], ['/c', 'the tag copied onto another page shows nothing']]) {
         await p.goto(B + at);
         await p.waitForFunction(() => document.querySelector('lab-board')?.shadowRoot, null, { timeout: 8000 });

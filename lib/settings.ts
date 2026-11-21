@@ -10,7 +10,7 @@ import { writeAtomic } from './board.ts';
 
 // The widget's own table (KEYS in src/comments.js), in its order (of two actions on one key the first keeps it), and
 // the one in docs/settings.md: test/settings.test.mjs holds the three together.
-const SHORTCUTS = { toggle: 'm', chat: 't', next: 'w', pause: 'p', slow: 's', done: 'd', reply: 'r', resolve: 'e' };
+const SHORTCUTS = { toggle: 'm', chat: 't', next: 'w', pause: 'p', slow: 's', draw: 'd', done: 'e', reply: 'r', resolve: 'e' };
 type Kind = 'number' | 'boolean' | 'string';
 // Each setting: its type, its default, and where it may be set (a project can't name you or open your lab to the
 // wifi; your own file can't say which folder or dev server a project uses).
@@ -143,7 +143,12 @@ export function loadSettings(here: string, flags: Record<string, unknown> = {}, 
     }
     if (s.type === 'shortcuts' && values[key]) {
       values[key] = { ...SHORTCUTS, ...values[key] };
-      const taken = Object.entries(values[key] as Record<string, string>).filter(([, k], i, all) => all.findIndex(([, k2]) => k2 === k) !== i);
+      // done and resolve share E on purpose (a thread open: E resolves it; else E shows or hides the done ones): not a clash.
+      const shared = (a: string, b: string) => (a === 'done' && b === 'resolve') || (a === 'resolve' && b === 'done');
+      const taken = Object.entries(values[key] as Record<string, string>).filter(([a, k], i, all) => {
+        const first = all.findIndex(([, k2]) => k2 === k);
+        return first !== i && !shared(a, all[first][0]);
+      });
       for (const [action, k] of taken) problems.push(`shortcuts: "${k}" is used twice (${action} too); the first action keeps it`);
     }
     if (!(key in values)) {
