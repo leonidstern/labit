@@ -73,6 +73,7 @@ Your `~/.config/labit/settings.json`:
 | `remindAfterMinutes` | `3` | `LAB_REMIND_MS` | A pin handed to your agent with no answer after this long is handed to it again. | both |
 | `archiveAfterDays` | `30` | | Done threads with nothing new for this long move to `.lab/archive/` when the lab starts. | both |
 | `updateCheck` | `true` | `LABIT_NO_UPDATE_CHECK=1` | Say when a newer labit is out (checked at most once a day). | both |
+| `boards` | `false` | `LABIT_BOARDS=1` | Boards: pictures and pages side by side, the `+board` chip, board sections in a page and the board drawer. Off for now; boards already made stay in `.lab/boards/`. | both |
 | `name` | none | | Your name on pins. The page asks once and keeps it here. | yours |
 | `model` | none | `--model`, `LAB_MODEL` | The model your agent runs on, shown on the page: "talking to Claude · Sonnet 5.5". | yours |
 | `pagesFolder` | `~/lab-pages` | | The one lab for pages that belong to no project (tries, demos, options). Agents add a page there, in a folder named for its topic, instead of starting a new lab. | yours |

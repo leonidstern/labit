@@ -125,7 +125,10 @@ const followCamera = () => {
   }
   const [sx, sy] = [scrollX, scrollY];
   for (const [id, pin, at] of moves) {
-    const [x, y] = [at.left - sx, at.top - sy]; // held to the screen (onBoard)
+    // A drawing is placed by its corner (its lines are laid from there), any other pin by its own spot: the corner where the
+    // drag ended is a drawing's pin spot too, which put it beside what was circled, by its own size, after a zoom (21 Nov, Mac test).
+    const ink = at.zone && pin.classList.contains('ink');
+    const [x, y] = [(ink ? at.zone.left : at.left) - sx, (ink ? at.zone.top : at.top) - sy]; // held to the screen (onBoard)
     if (S.openId === id && S.openCard?.isConnected) by(S.openCard, x - parseFloat(pin.style.left), y - parseFloat(pin.style.top));
     pin.style.left = `${x}px`;
     pin.style.top = `${y}px`;
@@ -164,7 +167,7 @@ export function bindBoardCam(w: unknown) {
   S = W.S;
   // A board page (src/board/): a tap in comment mode puts a pin on the board (anchoring.ts asks the board where a point is
   // and where a pin sits), and the pins move with the camera.
-  if (!S.board && self === top) {
+  if (W.boards && !S.board && self === top) {
     defineSection();
     Object.assign(window, { __labBoardView: { show: showBoard } });
     const bn = /^#board=([a-z0-9][a-z0-9_-]*)/i.exec(location.hash)?.[1];

@@ -364,7 +364,6 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     if (selected && !cards.some((c) => c.f.id === selected)) selected = entered = '';
     pickFrames(picks);
     world.querySelector('.none')?.remove();
-    if (!cards.length) text('div', 'No frames on this board.', world).className = 'none';
     measure(); // the box as it is now, for the fit
     const hash = opts.hash ? /^#(-?\d+),(-?\d+),([\d.]+)$/.exec(location.hash) : null;
     const was = !moved && !hash ? keptCam() : null; // where it was when last closed here
