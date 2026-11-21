@@ -644,6 +644,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       whole = true;
       return draw();
     }
+    kept = moved = true; // the person arranged it: the camera stays where it is (a refit moved the whole view under the pointer)
     void write(placed(to), { items: from, archived: false });
   };
   const up = (e: PointerEvent) => {

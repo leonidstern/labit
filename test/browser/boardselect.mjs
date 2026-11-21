@@ -112,11 +112,14 @@ try {
       // ----- drag the two picked frames
       await drag(empty.x, empty.y, Bb.x + Bb.w - 20, Bb.y + Bb.h / 2);
       const [dx, dy] = [30, 70];
+      const camBefore = await cam();
       await drag(A.x + 100, A.y + 200, A.x + 100 + dx, A.y + 200 + dy);
       await sleep(900);
       const f1 = file('sel').frames;
       const near = (f, ox) => Math.abs(f.x - ox - dx / z) <= 1 && Math.abs(f.y - dy / z) <= 1;
       check(eng, 'dragging a picked frame moves both picked frames by the drag, at this zoom', near(f1[0], 0) && near(f1[1], 500) && f1[2].x === 1000 && f1[2].y === 0, JSON.stringify(f1.map((f) => [f.id, f.x, f.y])));
+      const camAfter = await cam();
+      check(eng, 'moving frames leaves the camera where it is (no refit)', Math.abs(camAfter.x - camBefore.x) < 1 && Math.abs(camAfter.y - camBefore.y) < 1 && Math.abs(camAfter.z - camBefore.z) < 1e-3, JSON.stringify([camBefore, camAfter]));
       check(eng, 'both stay picked', (await picked()) === 'ab', await picked());
       await p.keyboard.press('Control+KeyZ');
       await sleep(900);
