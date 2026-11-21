@@ -4,6 +4,39 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 
 ## Unreleased
 
+## 0.7.1 · 2026-11-21
+
+A big round on top of 0.7.0: pins that find their place again after edits and dev-server reloads, a calmer widget on phones, questions you answer with a tap, pictures in comments, drawings that send themselves, and a board you can open over a page (off for now, see below). The full list as it landed is at the end.
+
+### Better
+
+- **Pins that stay put.** A pin is found again by one scored search and kept only when its words or place prove it; a doubtful one wears the unsure look, a lost one moves to the ⋯ menu and the agent is told. A reload puts back what you did to the page (scrolled boxes, opened details, typed words), and an open card stays beside its pin while the page scrolls.
+- **Dev servers.** Pins follow the app's own navigation, a save patches what it should and keeps what you typed, React, Vue and Astro pins name their source line, and page errors reach the agent with the pin.
+- **Pictures.** Paste, drop or `+` a picture into a comment or the chat; the agent reads each as an `image:` line.
+- **Questions with a tap.** A tap answers at once (undo for 5 s), keys 1 to 6 pick on a computer, each choice can carry a hint line, and the card stays inside the window.
+- **Drawings are quick actions.** The mark becomes the action the agent reads (X removes, a circle fixes, an arrow moves…); a drawing sends the moment you lift, with no box; a red pen that follows pressure; Shift makes a line straight and a box a rectangle.
+- **Agent pins grow up.** `labit pin` can ask (`--question`, `--choice`), pin on words (`--quote`), pin many at once (`--file`); "Do it" and ticks reach the agent; status lines lapse after 3 minutes.
+- **Wifi without a second lab.** `labit invite` turns wifi on in the running lab and prints the one-time link; links to this lab in a reply open on the device you read them on.
+- **Phones and motion.** Threads and the chat open at the right message, sheets carry on at the finger's speed, Reduce Motion crossfades, touch targets are 44 pt.
+- **Plugins for Codex, Cursor and opencode** (no MCP): live status and wake from one hook file, next to the Claude Code plugin.
+- **Shortcuts.** D draws (hold), E shows or hides done threads (and resolves an open one); the ¼ speed key can be rebound like the others.
+
+### Boards (a setting, off by default)
+
+Boards (pictures and pages side by side, `+board` sections in a page, a board drawer over it) are behind a new `boards` setting for now: set `"boards": true` in `labit.json` or your settings, or `LABIT_BOARDS=1`. Off, the page offers none of it, and boards already made stay in `.lab/boards/`. On, a board opens empty, a plain drag draws a selection box, Space pans, frames move and delete together, and a page comment opened over a half board closes it first.
+
+### Removed
+
+- Select mode, the fluid selected-words dialog, ink on selected words, the pointer/comment switch (Option pins on anything now), the actions editor on the page, and the `native` flag (the browser does the work, always).
+
+### Smaller and steadier
+
+- Page scripts ship brotli-packed and the page script is lazier (section bar, motion controls and the board are parts loaded when used); lab.css is built minified; the skill text is shorter.
+- Browser tests run on eight runners on the maintainer's Mac, only the ones a change can break; thousands of seeded cases hunt silent failures in dev sync, hot reload and agent sync.
+
+<details>
+<summary>Every change as it landed</summary>
+
 - **Status lines lapse, pin numbers are their own.** A pin's status line (`reply --progress`, or the plugin's) counts as a sign of life for 3 minutes, then the pin greys and comes back to the next wait as if it had none; the plugin renews a line only for the session's own tool calls, only on a pin somebody claimed, and says "session activity" (no helper commands). Each new pin takes its number when it is made (the page's highest + 1, even when several are made at once), so two pins on a page never share a number and a resolved pin's number is not given again; older pins keep the numbers they showed.
 - **A smaller package (−1.3 KB).** The server bundle drops code nothing reaches: the page-script builder that only a checkout uses is no longer in the npm bundle, the comments API works on the lab's own store directly (no Redis-style command layer), the lab's mark is read from the tab icon file instead of a second copy, and `--help` and a few helpers say the same things in fewer words. Nothing you can use changed.
 - Ink on selected words (the `inkOnText` experiment) is gone. Selecting words for a comment gives a pin on them, as it always did; an old `inkOnText` in a settings file gets the "not something being tried now" note and nothing else.
@@ -44,6 +77,8 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 - **Drawing edge cases fixed:** loops that stop short or run past their start, wavy and slightly crooked lines, a palm on the glass, a scroll mid-stroke, a stroke into a frame or off the window, D typed into the box, a cancelled stroke, a loop ending on its own start, long scribbles and ten-stroke drawings kept whole, drawing over links, buttons and earlier lines.
 - One board. `/_lab/board/<name>` is now the same board view a page's board link opens, over an empty page: a bar with the board's name, and "‹ back" when the address names its page (`?of=`). ⇧B, Esc on an empty board and the browser's back go there as before, and the camera stays in the address. The package ships one board file (`boardview.js`), not two.
 - Fluid goes. Shift-selecting words on a computer opens the ordinary comment card on them (pinned at the words, with your actions row), not the dialog that followed the words; on a phone, selecting words no longer brings up the comment · rewrite · cut bar (hold to comment as before). `fluid.ts`, its styles, `test/browser/fluid.mjs` and the `fluid` CI job go.
+
+</details>
 
 ## 0.7.0 · 2026-11-19
 
