@@ -383,6 +383,9 @@ export function show(name: string, o: Opts) {
     if (e.pointerType === 'touch' || e.button !== 0 || size >= 1 || o.own || e.altKey) return;
     const path = e.composedPath();
     if (path.includes(view) || path.some((n) => n instanceof Element && n.hasAttribute('data-lab-comments'))) return;
+    // A board's own link or section is not "the page": it opens that board in this one's place (Leo, 21 Nov: "opening new
+    // not closing board?"), instead of a first press that only closed this one and ate the click.
+    if (path.some((n) => n instanceof Element && (n.localName === 'lab-board' || (n instanceof HTMLAnchorElement && /^\/_lab\/board\/[a-z0-9]/i.test(n.pathname))))) return;
     swallow = true;
     e.preventDefault();
     e.stopImmediatePropagation();
@@ -394,9 +397,13 @@ export function show(name: string, o: Opts) {
     e.preventDefault();
     e.stopImmediatePropagation();
   };
+  // A new comment on the page behind (the widget starts it on ⌥-press and takes the press: it says so) closes a half board
+  // (Leo, 21 Nov: "opening new [comment] not closing board?").
+  const yielded = () => size < 1 && !o.own && close();
+  addEventListener('lab-board-yield', yielded);
   addEventListener('pointerdown', behind, true);
   for (const t of ['mousedown', 'pointerup', 'mouseup', 'click']) addEventListener(t, eat, true);
-  cur = { name, view, destroy: () => (removeEventListener('pointerdown', behind, true), ['mousedown', 'pointerup', 'mouseup', 'click'].forEach((t) => removeEventListener(t, eat, true)), ro.disconnect(), removeEventListener('focusin', focused), vv?.removeEventListener('resize', watch), vv?.removeEventListener('scroll', watch), cancelAnimationFrame(loop), board.destroy()), onClose: o.onClose, restoration, pushed };
+  cur = { name, view, destroy: () => (removeEventListener('lab-board-yield', yielded), removeEventListener('pointerdown', behind, true), ['mousedown', 'pointerup', 'mouseup', 'click'].forEach((t) => removeEventListener(t, eat, true)), ro.disconnect(), removeEventListener('focusin', focused), vv?.removeEventListener('resize', watch), vv?.removeEventListener('scroll', watch), cancelAnimationFrame(loop), board.destroy()), onClose: o.onClose, restoration, pushed };
   moved();
 }
 
@@ -407,6 +414,7 @@ function teardown() {
   removeEventListener('scroll', scrolled);
   c.destroy();
   c.view.remove();
+  document.querySelector('[data-lab-comments]')?.removeAttribute('data-board-slide');
   delete (window as unknown as { __labBoard?: unknown }).__labBoard;
   const y = keepY;
   keepY = null;
@@ -424,7 +432,7 @@ function teardown() {
 // (a tap on close: from rest, easing in). Its length in ms. No move is left on it once it rests (a moved box holds what
 // is fixed inside it, the board's own layers).
 function slide(view: HTMLElement, into: boolean, speed = 0) {
-  const [quick, base, slow] = ['quick', 'base', 'slow'].map(token);
+  const [quick, slow] = ['quick', 'slow'].map(token);
   const h = view.getBoundingClientRect().height;
   const off = /^\s*([\d.]+)px$/.exec(view.style.getPropertyValue('--bv-y'))?.[1];
   const now = off ? parseFloat(off) : into ? h + 8 : 0; // how far down it is now
@@ -435,9 +443,15 @@ function slide(view: HTMLElement, into: boolean, speed = 0) {
   }
   const way = into ? now : h + 8 - now;
   // Opened by a tap (from below the screen, at rest) or closed by one: the chat sheet's own motion, its curve and length
-  // (Leo, 21 Nov: "do same easing for open close as we do for chat for board drawer"): in over --lab-t-slow on --lab-ease,
-  // out over --lab-t-base on --lab-ease-in. Let go by a finger, it keeps the finger's speed (sheetmove.ts).
-  const [ms, curve] = into ? (off || speed ? move.glide(way, speed, slow, quick) : [slow, ease('ease', 'cubic-bezier(.2, .8, .2, 1)')]) : speed > 0 ? move.carry(way, speed, slow, quick) : [base, ease('ease-in', 'cubic-bezier(.4, 0, 1, 1)')];
+  // (Leo, 21 Nov: "do same easing for open close as we do for chat for board drawer", then "ease in ease out tokens,
+  // slower opened fast closed"): in over --lab-t-slow on --lab-ease-out, out over --lab-t-quick on --lab-ease-in. Let go by a finger, it keeps the finger's speed (sheetmove.ts).
+  const [ms, curve] = into ? (off || speed ? move.glide(way, speed, slow, quick) : [slow, ease('ease-out', 'cubic-bezier(0, 0, .58, 1)')]) : speed > 0 ? move.carry(way, speed, slow, quick) : [quick, ease('ease-in', 'cubic-bezier(.4, 0, 1, 1)')];
+  // What the widget holds to the board (its pins, an open card) is hidden for the slide, either way: gone with the first
+  // frame of a close, back once the view has come to rest (Leo, 21 Nov: "closing board have pins not immediately hidden,
+  // same opening not snappy"). Teardown lets go of it.
+  const host = document.querySelector('[data-lab-comments]');
+  host?.setAttribute('data-board-slide', '');
+  if (into) setTimeout(() => cur?.view === view && host?.removeAttribute('data-board-slide'), ms + 20);
   view.style.setProperty('--bv-e', curve);
   view.style.setProperty('--bv-t', `${ms}ms`);
   view.style.setProperty('--bv-y', `${into ? 0 : h + 8}px`);

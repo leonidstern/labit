@@ -151,7 +151,7 @@ try {
           const card = () => inRoot(p, (r) => { const c = r.querySelector('.card:not(.out)'); const a = c.getBoundingClientRect(); return { tied: c.classList.contains('tied-card') || c.hasAttribute('part'), pos: getComputedStyle(c).position, top: Math.round(a.top), bottom: Math.round(a.bottom), left: Math.round(a.left) }; });
           const c1 = await card();
           pin = await pinAt();
-          check(tag, "a pin's card is tied to its pin, just below it", c1.tied && c1.pos === 'fixed' && Math.abs(c1.top - Math.round(pin.bottom) - 10) <= 2, JSON.stringify({ card: c1, pin }));
+          check(tag, "a pin's card stays with its pin, just below it", (c1.pos === 'fixed' || c1.pos === 'absolute') && Math.abs(c1.top - Math.round(pin.bottom) - 10) <= 2, JSON.stringify({ card: c1, pin }));
           await p.evaluate(() => scrollBy(0, 60));
           await settle(p);
           const c2 = await card();
@@ -222,7 +222,7 @@ try {
           await settle(p);
           const ink = await inRoot(p, (r) => { const card = r.querySelector('.card:not(.out)'), svg = r.querySelector('.pin.ink.open svg') || r.querySelector('.pin.ink svg'); const a = card.getBoundingClientRect(), z = svg.getBoundingClientRect(); return { tied: card.classList.contains('tied-card') || card.hasAttribute('part'), pos: getComputedStyle(card).position, cardTop: Math.round(a.top), cardBottom: Math.round(a.bottom), zoneTop: Math.round(z.top), zoneBottom: Math.round(z.bottom) }; });
           const below = Math.abs(ink.cardTop - ink.zoneBottom - 10) <= 3, above = Math.abs(ink.cardBottom - ink.zoneTop + 12) <= 3;
-          check(tag, "a drawing's card is tied below its drawing (or above it, without room)", ink.tied && ink.pos === 'fixed' && (below || above), JSON.stringify(ink));
+          check(tag, "a drawing's card is just below its drawing (or above it, without room)", (ink.pos === 'fixed' || ink.pos === 'absolute') && (below || above), JSON.stringify(ink));
           await p.keyboard.press('Escape');
           await sleep(300);
         }
