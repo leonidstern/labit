@@ -385,7 +385,7 @@ export function show(name: string, o: Opts) {
     if (path.includes(view) || path.some((n) => n instanceof Element && n.hasAttribute('data-lab-comments'))) return;
     // A board's own link or section is not "the page": it opens that board in this one's place (Leo, 21 Nov: "opening new
     // not closing board?"), instead of a first press that only closed this one and ate the click.
-    if (path.some((n) => n instanceof Element && (n.localName === 'lab-board' || (n instanceof HTMLAnchorElement && /^\/_lab\/board\/[a-z0-9]/i.test(n.pathname))))) return;
+    if (path.some((n) => n instanceof Element && ((n instanceof HTMLButtonElement && n.getRootNode() instanceof ShadowRoot && (n.getRootNode() as ShadowRoot).host.localName === 'lab-board') || (n instanceof HTMLAnchorElement && /^\/_lab\/board\/[a-z0-9]/i.test(n.pathname))))) return;
     swallow = true;
     e.preventDefault();
     e.stopImmediatePropagation();
@@ -522,7 +522,7 @@ export function own(name: string) {
 // left out. A tap opens the board over the page. Outside the lab the tag is an empty element, and shows nothing.
 // In the page's own colours (its text colour; borders and fills from it), so it reads on a dark page as on a light one;
 // straight under <body> it keeps off the screen's edges (in the shadow: what is on <lab-board> itself is the file's).
-const STRIP = `:host{display:block!important;box-sizing:border-box!important;margin:16px 0!important;font:13px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:inherit;cursor:pointer}
+const STRIP = `:host{display:block!important;box-sizing:border-box!important;margin:16px 0!important;font:13px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:inherit}
 .edge{margin:0 16px}
 .box{border:1px solid color-mix(in srgb,currentColor 16%,transparent);border-radius:var(--_radius,12px);padding:10px;background:color-mix(in srgb,rgb(52,199,89) 7%,transparent)}
 .top{display:flex;align-items:center;gap:8px;margin:0 2px 8px}

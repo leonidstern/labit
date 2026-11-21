@@ -73,7 +73,8 @@ const defineSection = () => {
     connectedCallback() {
       if (!this.shadowRoot) {
         // The click is the board's, never a pin on the page (onPageClick in comments.js listens on the document).
-        this.addEventListener('click', (e) => (e.stopPropagation(), void showBoard(this.getAttribute('name') || '')));
+        // Only its Open button opens it, not the whole strip (Leo, 21 Nov: "open board on click on open not on whole thing").
+        this.addEventListener('click', (e) => e.composedPath().some((n) => n instanceof HTMLButtonElement) && (e.stopPropagation(), void showBoard(this.getAttribute('name') || '')));
         void fillSection(this);
       }
     }
