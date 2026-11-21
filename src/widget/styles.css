@@ -123,7 +123,7 @@ button.pin.dragging { cursor: grabbing; transform: scale(1.1); opacity: 1; box-s
 :host([data-lab-probe]) .ink path.hit { pointer-events: none; } /* draw.ts letterAt: asking the page what is under a point, the line is let through */
 .ink.live { left: 0; top: 0; width: 1px; height: 1px; }
 button.pin.ink, button.pin.ink:is(:hover, :active, .open) { margin: 0; background: none; box-shadow: none; outline: 0; color: transparent; pointer-events: none; transform: none; scale: none; }
-.pin.ink > :not(svg), button.pin.ink::before, .pin.ink::after { display: none; }
+.pin.ink > :not(svg), button.pin.ink::before, .pin.ink::after { display: none; animation: none; }
 .pin.ink.done { opacity: .5; }
 .pin.ink:is(.in, .arrive, .swap) { animation: none; } /* a drawing is not a pin: it doesn't pop in, arrive or bounce (Leo, 21 Nov: "dont do clicks animations on drawings like on pins") */
 .pin.ink, .pin.ink path:not(.hit) { transition: none; }
