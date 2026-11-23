@@ -3,6 +3,7 @@
 // Drag to mark: a mouse or a pen drags an area (or, holding D, a drawing) instead of a point; the ink at the end of a
 // drag; and the words selected with Shift + drag, offered as a comment on them.
 import { inkAnchor, liveInk } from './ink.ts';
+import { holdWhileDrawing } from './hold.ts';
 import { cut, openingTag, short, wholeWords, zoneAnchor, zoneEl, anchorAt } from './anchoring.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -54,10 +55,14 @@ export const endDrag = (e) => {
     setTimeout(() => (S.afterDrag = false), 0);
     S.drew = true;
     S.inking.strokes.pop(); // a cancelled stroke (the system took the pointer) is not part of the drawing
-    if (S.inking.strokes.length) S.inking.paint();
-    else {
+    if (S.inking.strokes.length) {
+      S.inking.paint();
+      clearTimeout(S.inkTimer);
+      S.inkTimer = setTimeout(endInk, 1000); // the strokes before it are sent as after a lift, never left holding reloads
+    } else {
       S.inking.svg.remove();
       S.inking = null;
+      letGo();
     }
     return;
   }
@@ -109,13 +114,22 @@ export const endDrag = (e) => {
   S.openId = null;
   W.begin(zoneAnchor(d));
 };
-// What a drawing sent with no words says: its mark, without the guess in brackets.
-export const inkSaid = (mark = '') => mark.replace(/\s*\(likely:.*\)$/, '') || 'drawing';
+export { inkSaid } from '../../lib/schema.mjs'; // what a drawing sent with no words says (the lab reads it back the same way)
+// A reload (the lab's or a dev server's) waits while a drawing is drawn and while drawings are being saved: a second
+// drawing begun while the first is still sent keeps it waiting. A save stops holding after 10 s (a lab that is down retries
+// for minutes; the drawing goes to a comment box if it fails).
+const letGo = () => !S.inking && !S.sendingInk && holdWhileDrawing(false);
 async function endInk() {
   clearTimeout(S.inkTimer);
   const ink = S.inking;
   S.inking = null;
-  if (!ink) return;
+  if (!ink) return letGo();
+  S.sendingInk = (S.sendingInk || 0) + 1;
+  await Promise.race([sendInk(ink).catch(() => {}), new Promise((r) => setTimeout(r, 10000))]);
+  S.sendingInk--;
+  letGo();
+}
+async function sendInk(ink) {
   const { readInk } = await W.part('draw').catch(() => ({ readInk: null }));
   ink.svg.remove();
   S.lastInk = ink.strokes; // a stroke drawn while its box is open, empty, joins it (above)
@@ -128,7 +142,7 @@ async function endInk() {
   const read = readInk(here, (e) => e && short(`${openingTag(e)} "${short(e.textContent, 40)}"${block(e) ? ` in ${openingTag(block(e))} "${short(block(e).textContent, 30)}"` : ''}`, 200));
   // Sent as it is, what it reads as its words, with no box to send it from (Leo, 21 Nov: "just draw maybe and send dont
   // open comment to send it, just send"); words are added in its thread after.
-  void W.sendDrawing(inkAnchor(read, ZONE_MIN));
+  await W.sendDrawing(inkAnchor(read, ZONE_MIN));
 }
 // Selecting words. Computers: Shift + drag (or Shift + double or triple click) selects words; a plain drag marks an area
 // wherever it starts, a click pins, and the page's text can't be selected without Shift (it shows the I-beam cursor,
@@ -219,6 +233,7 @@ export function bindDrag(w: unknown) {
             W.render();
           }
           if (!S.inking) W.layer.append((S.inking = liveInk()).svg);
+          holdWhileDrawing(true); // a dev server's reload waits until the drawing is sent (hold.ts)
           S.inking.strokes.push([{ x: S.drag.x0 + scrollX, y: S.drag.y0 + scrollY }]);
           // Held by the page till the pen lifts: a stroke run into a frame, or off the window, still ends here.
           try {
@@ -253,7 +268,10 @@ export function bindDrag(w: unknown) {
     S.dKey = false;
     if (S.inking && !S.drag) endInk();
   }, true);
-  addEventListener('blur', () => (S.dKey = false));
+  addEventListener('blur', () => {
+    S.dKey = false;
+    if (S.inking && !S.drag) endInk(); // D's keyup goes to another window: the drawing is done, as on the keyup
+  });
   // The drawing's box is open and focused, nothing typed yet: D pressed again types a "d" there. If a stroke starts
   // while it is still held, it was D held to draw on: the "d" goes and the stroke joins the drawing (edge tests, 20 Nov).
   addEventListener('keydown', (e) => {

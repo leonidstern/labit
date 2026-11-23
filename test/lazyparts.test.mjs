@@ -1,4 +1,4 @@
-// The section bar and the motion controls are their own files (public/_lab/sections.js, motion.js), loaded only when
+// The section bar and the motion menu are their own files (public/_lab/sections.js, motion.js), loaded only when
 // the page uses them: the page script (comments.js) must not carry their code, and each file must carry its own.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -10,10 +10,10 @@ const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'publi
 const read = (f) => fs.readFileSync(path.join(DIR, f), 'utf8');
 const PARTS = {
   'sections.js': ['sb-chip', 'sb-nav', 'lab-sections:', '.sbar{'],
-  'motion.js': ['motion-play', 'motion-slow', 'motion-ms', '.moment{'],
+  'motion.js': ['motion-speed', 'motion-menu', 'pick on page', '.moment{'],
 };
 
-test('the page script carries neither the section bar nor the motion controls', () => {
+test('the page script carries neither the section bar nor the motion menu', () => {
   const page = read('comments.js');
   for (const [file, marks] of Object.entries(PARTS)) for (const m of marks) assert.ok(!page.includes(m), `comments.js still has ${JSON.stringify(m)} (${file} has it)`);
 });

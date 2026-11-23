@@ -354,6 +354,24 @@ try {
       check(eng, 'the box says size, padding and display', /^\d+×\d+, padding 8 12 8 12, inline-block/.test(r.box || ''), JSON.stringify(r));
       check(eng, 'an Astro dev page names its source file and line', r.source === 'src/pages/index.astro:12:3', JSON.stringify(r));
       await p.close();
+      // ----- the state the control was in when the comment was made (#433); never what a field holds
+      const sp = await open(ctx, `<button id="menu" aria-expanded="true">Plans</button>
+        <div role="tablist"><button role="tab" aria-selected="true">Monthly</button><button role="tab" aria-selected="false">Yearly</button></div>
+        <button id="off" disabled>Pay</button><label><input id="tick" type="checkbox" checked> Remember me</label>
+        <dialog open aria-label="Delete project"><button id="del" aria-pressed="false">Delete</button></dialog>
+        <p id="plain">Plain words</p><input id="pw" type="password" value="hunter2">`);
+      const st = await sp.evaluate(() => Object.fromEntries(['#menu', '[role=tab]', '#off', '#tick', '#del', '#plain', '#pw'].map((s) => {
+        const b = document.querySelector(s).getBoundingClientRect();
+        return [s, A.anchorAt(b.left + 4, b.top + 4).state || ''];
+      })));
+      check(eng, 'an open menu button says it is open', st['#menu'] === 'button "Plans" open', JSON.stringify(st));
+      check(eng, 'the picked tab says it is selected', st['[role=tab]'] === 'tab "Monthly" selected', st['[role=tab]']);
+      check(eng, 'a disabled button says it is disabled', st['#off'] === 'button "Pay" disabled', st['#off']);
+      check(eng, 'a ticked checkbox says it is checked', st['#tick'] === 'input "Remember me" checked', st['#tick']);
+      check(eng, 'inside an open dialog: the button\'s state and the dialog', st['#del'] === 'button "Delete" not pressed; inside open dialog "Delete project"', st['#del']);
+      check(eng, 'plain words have no state', st['#plain'] === '', st['#plain']);
+      check(eng, 'a password field never gives what it holds', !/hunter2/.test(JSON.stringify(st)), st['#pw']);
+      await sp.close();
       await ctx.close();
     } finally {
       await browser.close();
