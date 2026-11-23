@@ -262,11 +262,11 @@ export function backFromReveal() {
 
 // Scrolls the page to top (smoothly, unless motion is reduced). A spot near the page's end can't scroll up into the
 // part a phone's sheet leaves free above it: the page gets room below its end while the sheet is open (--lab-room).
-export function scrollPageTo(top: number) {
+export function scrollPageTo(top: number, done?: () => void) {
   if (W.coarse) roomFor(top);
   const to = Math.max(0, top);
   cancelAnimationFrame(glideId);
-  if (W.still.matches || Math.abs(to - scrollY) < 2) return scrollTo({ top: to, behavior: 'auto' });
+  if (W.still.matches || Math.abs(to - scrollY) < 2) return void (scrollTo({ top: to, behavior: 'auto' }), done?.());
   // Its own glide, ease in and out and longer for a longer way: the browser's smooth scroll took 0.28 s for 500 px, which
   // reads as a jump (Leo, 21 Nov: "scrolling position to pin can be smoother"). A touch or a wheel hands the page back.
   const from = scrollY;
@@ -280,7 +280,7 @@ export function scrollPageTo(top: number) {
     const k = Math.min(1, Math.max(0, (now - t0) / ms));
     scrollTo({ top: from + (to - from) * (k < 0.5 ? 4 * k ** 3 : 1 - (-2 * k + 2) ** 3 / 2), behavior: 'instant' });
     if (k < 1) glideId = requestAnimationFrame(step);
-    else stop();
+    else (stop(), done?.());
   };
   glideId = requestAnimationFrame(step);
 }
