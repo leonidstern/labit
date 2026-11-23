@@ -1966,7 +1966,10 @@ async function unseen(scope = pages(), who = '') {
       `\nIf it will take more than about a minute (a build, a restart, a PR): send one ${CMD} reply <id> --progress "<what you're doing>" on each first (a status line, not a message), then start, and a new one when the step changes (about 3 minutes after your last, the page says no update; with the labit plugin, about 10 while this session keeps working); a quick ask needs none (an answer within 2 minutes counts). A plain "go" gets no words: resolve it when done.` +
       `\n${WRITE_SHORT}`
     : `\n\nAnswer each: ${CMD} reply <id> --done "what you did" (or --question) [--wait --bg]; the standing lines (read threads whole, --progress before long work, short answers) and rules as before.`;
-  const text = `In this message: ${count}. Read all of it; each one is marked handed to you.\n\n${whole.length ? '# New comments\n\n' : ''}${groups.length ? `${groups.join('\n')}\n\n` : ''}${blocks.join('\n\n')}` +
+  // Listen again first (Leo, 23 Nov: "why stopped"): a wait that ended with a pin while the agent went on to work left
+  // nobody listening for 13 minutes. Said at the top, where it is read before the work starts, not only in the answer line.
+  const again = `Listen again first: run ${CMD} wait --bg in the background now, before you work on these, so pins that come meanwhile are heard (answers then without --wait).`;
+  const text = `In this message: ${count}. Read all of it; each one is marked handed to you.\n${again}\n\n${whole.length ? '# New comments\n\n' : ''}${groups.length ? `${groups.join('\n')}\n\n` : ''}${blocks.join('\n\n')}` +
     standing +
     lost.map(({ page, c }) => `\n${UNMATCHED(c.id, page, c.anchor.selector)}`).join('') +
     (ticks.length ? `\nticked: ${ticks.length} of your ${own} pins (resolved by people since your last wait: ${ticks.map(({ page, c }) => `${page} id ${c.id} "${cut(c.text.replace(/\s+/g, ' '), 50)}"`).join('; ')}). Nothing to do.` : '') +

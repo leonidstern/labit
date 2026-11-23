@@ -25,7 +25,9 @@ video { width: 200px } #edge { position: absolute; right: 0; top: 260px; width: 
 #n1, #n2 { width: 36px; height: 36px; animation: pulse .9s infinite } #n1 { background: #444 } #n2 { background: #777 }</style>
 <div class="row"><div id="track"><div id="loop"></div></div><div id="dot"></div><video id="vid" src="v.webm" muted loop autoplay playsinline></video></div>
 <div class="row"><div id="n1"></div><div id="n2"></div></div>
-<div id="edge"></div><div id="low"></div><p>text</p>`);
+<div class="row"><div id="film" style="width:80px;height:45px;background:#999"></div><div id="flash" style="width:36px;height:36px;background:#bbb"></div></div>
+<div id="edge"></div><div id="low"></div><p>text</p>
+<script>document.getElementById('film').animate([{ opacity: 1 }, { opacity: 0.99 }], { duration: 120000 }); document.getElementById('flash').animate([{ opacity: 1 }, { opacity: 0.5 }], { duration: 3000 });</script>`);
 const server = startLab(DIR, labEnv(), { port: PORT });
 await labUp(B);
 const ROOT = "[...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim'))?.shadowRoot";
@@ -47,7 +49,7 @@ try {
       await sleep(800);
       const canPlay = await p.evaluate(() => document.getElementById('vid').readyState >= 2);
       // Each one, at its own spot: the menu is about that thing, at the pointer or pulled back on screen near an edge.
-      for (const [id, want, fx, fy] of [['loop', /^loop /, 0.5, 0.5], ['dot', /^loop /, 0.5, 0.5], ['vid', /^video /, 0.3, 0.7], ['edge', /^loop /, 0.5, 0.5], ['low', /^loop /, 0.5, 0.5], ['n1', /^loop /, 0.3, 0.5], ['n2', /^loop /, 0.7, 0.5]]) {
+      for (const [id, want, fx, fy] of [['loop', /^loop /, 0.5, 0.5], ['dot', /^loop /, 0.5, 0.5], ['vid', /^video /, 0.3, 0.7], ['edge', /^loop /, 0.5, 0.5], ['low', /^loop /, 0.5, 0.5], ['n1', /^loop /, 0.3, 0.5], ['n2', /^loop /, 0.7, 0.5], ['film', /^animation /, 0.5, 0.5]]) {
         if (id === 'vid' && !canPlay) continue;
         const r = await box(p, id);
         const x = r.left + r.width * fx, y = r.top + r.height * fy;
@@ -67,6 +69,13 @@ try {
         await tapItem(p, 'play');
         await sleep(200);
       }
+      // A short animation that ends is a moment, not motion: a right-click on it is the browser's (no labit menu).
+      const fr = await box(p, 'flash');
+      await p.mouse.click(fr.left + fr.width / 2, fr.top + fr.height / 2, { button: 'right' });
+      await sleep(200);
+      const short = await menu(p);
+      await p.keyboard.press('Escape');
+      check(eng, 'a short animation that ends gets no motion menu', !short, JSON.stringify(short));
       const none = await inRoot(p, "Boolean(r.querySelector('.motion-ctl, .motions'))") || (await menu(p));
       check(eng, 'no menu open: nothing of labit on the page', !none);
       await ctx.close();
