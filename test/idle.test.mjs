@@ -95,3 +95,13 @@ test('a parked lab keeps its port: another folder skips it, and its own folder s
   assert.ok(fs.existsSync(path.join(home, 'parked', parked[b])), "B's record untouched");
   again.kill();
 });
+
+test('under --dev a parked lab ends the watcher too, so nothing is left running', async () => {
+  const dir = fs.realpathSync(tmp('idle-dev'));
+  fs.writeFileSync(path.join(dir, 'index.html'), '<h1>Hi</h1>');
+  const port = String(claimPort(5500, 90));
+  const lab = spawnLab(dir, port, { flags: ['--dev'], env: { ...process.env, LABIT_HOME: tmp('idle-home'), LABIT_IDLE_MS: '1500' } });
+  kids.push(lab);
+  const code = await Promise.race([new Promise((r) => lab.on('exit', r)), sleep(10000).then(() => 'still running')]);
+  assert.notEqual(code, 'still running', '--dev and its watcher ended with the parked lab');
+});

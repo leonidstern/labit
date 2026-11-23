@@ -5,7 +5,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { apiOn, BODY_MAX, callApi, decoderFor, encodingFor, onLan, packBody, sendBody, sendFile, sendPacked } from './lib/dev.ts';
@@ -2921,14 +2921,9 @@ const handler = async (req, res) => {
         // From npm: its own version through npx (npx's cache folder may be gone); a newer one is the person's choice, from
         // the ⋯ menu. Otherwise the path it was started by: through the edge script's link, that is the newest build.
         const asParked = () => spawn(process.execPath, [...p.execArgv, ...args], { cwd: p.root, env, detached: true, stdio: 'ignore' }).unref();
-        if (p.npx) {
-          // Offline, or npm can't be reached: npx gives up at once, and the lab starts on the version it parked on.
-          const since = Date.now();
-          const npx = spawn('npx', ['--yes', `@leonidstern/labit@${p.version || 'latest'}`, ...args.slice(1)], { cwd: p.root, env, detached: true, stdio: 'ignore' });
-          npx.on('error', asParked);
-          npx.on('exit', (code) => code && Date.now() - since < 30000 && asParked());
-          npx.unref();
-        } else asParked();
+        // Offline, or npm can't be reached: the lab starts on the version it parked on.
+        if (p.npx) fromNpm(p.version || 'latest').then((file) => (file ? spawn(process.execPath, [file, ...args.slice(1)], { cwd: p.root, env, detached: true, stdio: 'ignore' }).unref() : asParked()));
+        else asParked();
         // The lab takes its parked record itself once it runs (and with it the session that listened last).
         console.log(`[lab] started ${p.name} again on ${n}`);
         return answer(res, { ok: true });
@@ -2947,7 +2942,7 @@ const handler = async (req, res) => {
       if (action === 'update') {
         if (!UPDATE) return res.writeHead(409).end('no newer labit');
         console.log(`[lab] updating to labit ${UPDATE.version}`);
-        handOver(process.env.LABIT_NPX || 'npx', ['--yes', `@leonidstern/labit@${UPDATE.version}`]);
+        fromNpm(UPDATE.version).then((file) => (file ? handOver(process.execPath, [file]) : console.log(`[lab] npm did not give labit ${UPDATE.version}: this lab keeps running`)));
         return answer(res, { ok: true, ...UPDATE });
       }
       if (!['stop', 'park', 'archive', 'archive-page', 'unarchive-page'].includes(action)) return res.writeHead(400).end('action: stop, park, archive, unarchive, start, archive-page or unarchive-page');
@@ -3326,6 +3321,9 @@ server.on('listening', async () => {
 // Parked: a record of how it was started (in ~/.labit/parked), so the switcher (⌘K) in another lab, or labit run in
 // its folder again, starts it the same way.
 const park = (archived = false, why = '') => {
+  // Under --dev the lab's parent is node --watch, which would start it again at the next save and runs on meanwhile
+  // (130 MB with the --dev process waiting on it): a parked lab ends it, and with it --dev.
+  if (process.env.LAB_DEV) process.on('exit', () => process.kill(process.ppid));
   try {
     fs.mkdirSync(PARKED, { recursive: true });
     // Run from npm: started again through npx at this version, not from this version's folder in npx's cache.
@@ -3373,7 +3371,19 @@ let followed = false;
 process.on('SIGUSR2', () => {
   followed = true;
 });
-// Starts `command` (node and a script, or npx and a version) in this lab's place and goes once it says it loaded.
+// A release from npm, as the file node runs (null when npm can't give it). npx only fetches it and says where it is: a
+// lab started through npx kept npm's own process (82 MB, more than the lab) running beside it for as long as it ran.
+const fromNpm = (version) =>
+  new Promise((resolve) =>
+    execFile(process.env.LABIT_NPX || 'npx', ['--yes', '-p', `@leonidstern/labit@${version}`, 'which', 'labit'], { timeout: 120000 }, (err, out) => {
+      try {
+        resolve(err ? null : fs.realpathSync(out.trim()));
+      } catch {
+        resolve(null);
+      }
+    }),
+  );
+// Starts `command` (node and a script) in this lab's place and goes once it says it loaded.
 let switchedAt = 0;
 const handOver = (command, first, more = []) => {
   /** @type {number | 'ignore'} */

@@ -66,6 +66,8 @@ test('replies are signed by the agent that runs reply', async () => {
     [{ AMP_CURRENT_THREAD_ID: 'T-1', CLAUDECODE: '1' }, 'Amp · session T-1'], // Amp also sets CLAUDECODE
     [{ CURSOR_AGENT: '1' }, 'Cursor'],
     [{ OPENCODE_CLIENT: 'cli' }, 'opencode'],
+    [{ CURSOR_AGENT: '1', CURSOR_CONVERSATION_ID: 'conv-1234567' }, 'Cursor · session conv-123'], // what the Cursor CLI sets in its shells
+    [{ OPENCODE: '1', OPENCODE_SESSION_ID: 'ses_df7ace91' }, 'opencode · session ses_df7a'], // what opencode 2 sets in its shells
     [{ ANTIGRAVITY_AGENT: '1' }, 'Antigravity'],
     [{ LAB_AGENT: 'copilot' }, 'Copilot'],
     [{ LAB_AGENT: 'My Bot' }, 'My Bot'],
