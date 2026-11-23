@@ -240,7 +240,7 @@ try {
         const r = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim'))?.shadowRoot;
         const m = r?.querySelector('.motion-menu');
         const open = Boolean(m && !m.hidden && (!m.popover || m.matches(':popover-open')));
-        const b = m?.getBoundingClientRect();
+        const b = m && { left: m.offsetLeft, top: m.offsetTop }; // at rest, not mid-rise (the ⋯ menu's entrance)
         return { open, head: m?.querySelector('.lab-head')?.textContent, items: [...(m?.querySelectorAll(':scope > button') || [])].map((n) => n.textContent),
           speed: m?.querySelector('.motion-speed button[aria-pressed="true"]')?.textContent, at: b && { x: b.left, y: b.top },
           onPage: Boolean(r?.querySelector('.motions, .motion-ctl')),

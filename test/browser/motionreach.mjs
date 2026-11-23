@@ -30,7 +30,7 @@ const server = startLab(DIR, labEnv(), { port: PORT });
 await labUp(B);
 const ROOT = "[...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim'))?.shadowRoot";
 const inRoot = (p, js) => p.evaluate(`(() => { const r = ${ROOT}; return ${js}; })()`);
-const menu = (p) => inRoot(p, "(() => { const m = r?.querySelector('.motion-menu'); if (!m || m.hidden || (m.popover && !m.matches(':popover-open'))) return null; const b = m.getBoundingClientRect(); return { head: m.querySelector('.lab-head')?.textContent, items: [...m.querySelectorAll(':scope > button')].map((n) => n.textContent), l: b.left, t: b.top, r: b.right, btm: b.bottom }; })()");
+const menu = (p) => inRoot(p, "(() => { const m = r?.querySelector('.motion-menu'); if (!m || m.hidden || (m.popover && !m.matches(':popover-open'))) return null; const l = m.offsetLeft, t = m.offsetTop; return { head: m.querySelector('.lab-head')?.textContent, items: [...m.querySelectorAll(':scope > button')].map((n) => n.textContent), l, t, r: l + m.offsetWidth, btm: t + m.offsetHeight }; })()");
 const tapItem = (p, label) => inRoot(p, `[...r.querySelectorAll('.motion-menu button')].find((b) => b.textContent === ${JSON.stringify(label)})?.click()`);
 const loaded = (p) => p.waitForFunction(() => performance.getEntriesByType('resource').some((e) => /\/_lab\/motion\.js/.test(e.name)), null, { timeout: 3000 }).catch(() => {});
 const box = (p, id) => p.evaluate((i) => document.getElementById(i).getBoundingClientRect().toJSON(), id);
