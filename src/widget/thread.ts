@@ -359,7 +359,7 @@ export function threadCard(c, fresh = new Set(), focus = false) {
       box.append(q);
     }
     box.append(...W.readable(item.text));
-    if (item.images) W.part('attach').then((m) => m.show(box.appendChild(W.el('div')), item)); // "1 image attached", in the attach part (it counts only names it would build from the id)
+    if (item.images) W.part('attach').then((m) => m.show(box.appendChild(W.el('div')), item)); // "1 image attached" (a tap shows them), in the attach part (it builds the names from the id, never reads a path)
     if (item.session && Array.isArray(item.choices) && item.choices.length) {
       box.classList.add('asks');
       box.append(choicesEl(c, item, card));

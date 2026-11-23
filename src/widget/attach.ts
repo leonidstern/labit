@@ -74,17 +74,34 @@ export async function send<T>(wrap: HTMLElement, list: Pic[], fn: (att: { attach
 }
 
 /** A message's pictures, as one quiet line ("2 images attached"), not thumbnails (Leo, 22 Nov, #424: they are there for
- *  the agent, and big thumbnails that opened in a new tab made short comments tall). The files stay as they are for the
- *  agent. Counted only for names this part would build from the comment's id (a record with another n or type, or an id
- *  that is not 12 hex digits, shows nothing). */
-export function show(box: HTMLElement, item: { id: string; images?: Image[] }) {
+ *  the agent, and big thumbnails that opened in a new tab made short comments tall). A tap on the line opens them in
+ *  the message, a second closes them (Leo, 23 Nov: "a way to look at image?"); nothing opens a tab. The name is built here
+ *  from the comment's id, never read from the record (a record with another n or type, or an id that is not 12 hex
+ *  digits, shows nothing). */
+export function show(box: HTMLElement, item: { id: string; images?: (Image & { w?: number; h?: number })[] }) {
   if (!/^[a-f0-9]{12}$/.test(item.id)) return;
-  const n = (item.images || []).filter((i) => Number.isInteger(i.n) && i.n >= 1 && i.n <= MAX && /^(png|jpg|webp|gif)$/.test(i.type)).length;
-  if (!n) return;
+  const ok = (item.images || []).filter((i) => Number.isInteger(i.n) && i.n >= 1 && i.n <= MAX && /^(png|jpg|webp|gif)$/.test(i.type));
+  if (!ok.length) return;
   styled(box);
-  const said = `${n} image${n > 1 ? 's' : ''} attached`;
-  const line = Object.assign(document.createElement('span'), { className: 'att', textContent: said });
-  line.setAttribute('aria-label', said);
+  const said = `${ok.length} image${ok.length > 1 ? 's' : ''} attached`;
+  const line = Object.assign(document.createElement('button'), { className: 'att', type: 'button', textContent: said, title: 'show' });
+  line.setAttribute('aria-expanded', 'false');
   line.insertAdjacentHTML('afterbegin', '<svg viewBox="0 0 12 12" aria-hidden="true"><rect x="1" y="2" width="10" height="8" rx="1.5"/><path d="M1.5 9 4.5 6l2 2 1.5-1.5L10.5 9"/></svg>');
+  let pics: HTMLElement | null = null;
+  line.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = line.getAttribute('aria-expanded') !== 'true';
+    line.setAttribute('aria-expanded', String(open));
+    line.title = open ? 'hide' : 'show';
+    if (!pics) {
+      pics = Object.assign(document.createElement('div'), { className: 'att-pics' });
+      for (const i of ok) {
+        const src = new URL(`/_lab/attachments/${item.id}-${i.n}.${i.type}`, import.meta.url).href;
+        pics.append(Object.assign(document.createElement('img'), { src, decoding: 'async', alt: `picture ${i.w || ''}×${i.h || ''}`, width: i.w || undefined, height: i.h || undefined }));
+      }
+      line.after(pics);
+    }
+    pics.hidden = !open;
+  });
   box.append(line);
 }
