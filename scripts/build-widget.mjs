@@ -102,7 +102,9 @@ if (watch) {
   });
   const shared = [...inScripts].filter(([, e]) => e.scripts.length > 1).sort(([a], [b]) => a.localeCompare(b));
   const sharedBytes = shared.reduce((n, [, e]) => n + e.bytes.reduce((s, b) => s + b, 0) - Math.max(...e.bytes), 0);
-  fs.writeFileSync(path.join(path.dirname(outfile), 'bundles.json'), JSON.stringify({ sharedBytes, shared: Object.fromEntries(shared.map(([f, e]) => [f, e.scripts])) }, null, 2) + '\n');
+  // The gate counts copies, not bytes: the bytes of the same module move by a few as the minifier renames around it.
+  const copies = shared.reduce((n, [, e]) => n + e.scripts.length - 1, 0);
+  fs.writeFileSync(path.join(path.dirname(outfile), 'bundles.json'), JSON.stringify({ copies, sharedBytes, shared: Object.fromEntries(shared.map(([f, e]) => [f, e.scripts])) }, null, 2) + '\n');
   // The npm package carries each script brotli-packed (<name>.js.br, package.json "files"): npm's gzip leaves 8 KB more in
   // it. The lab sends the packed bytes as they are to a browser that takes brotli and unpacks them for one that doesn't
   // (sendPacked in lib/dev.ts); a checkout serves the plain .js beside them. Same bytes in, same bytes out, so a repeat
