@@ -214,8 +214,14 @@ export function composer({ placeholder, onSubmit, autofocus = false, opened = fa
     }
   };
   let busy = false;
+  // Pictures pasted, dropped or picked but not in the list yet (the part still loading): a send waits for them. Enter right
+  // after a paste sent the comment without its picture, which then showed up in the box (Leo, 23 Nov: "image stuck there").
+  let adding: Promise<unknown> = Promise.resolve();
   const go = async () => {
     if (busy) return;
+    busy = true;
+    await adding;
+    busy = false;
     const said = tidy(text.value) || empty;
     if (!said && !pics.length) return text.focus();
     if (!name.value.trim()) {
@@ -283,7 +289,7 @@ export function composer({ placeholder, onSubmit, autofocus = false, opened = fa
       file.value = ''; // (the same file can be picked again)
       if (dt?.types.includes('Files')) e.preventDefault(); // a file dropped here is ours, never the browser's (it would leave the page for it)
       const words = e.clipboardData?.getData('text'); // read now: the clipboard is closed once this event is over (the part loads later)
-      if (e.type !== 'dragover' && files.length) void d.part('attach').then((m) => m.add(wrap, pics, files, words));
+      if (e.type !== 'dragover' && files.length) adding = Promise.all([adding, d.part('attach').then((m) => m.add(wrap, pics, files, words))]).catch(() => {});
     };
     wrap.addEventListener('paste', pic as EventListener); // the name field too
     for (const t of ['dragover', 'drop', 'change']) wrap.addEventListener(t, pic as EventListener); // anywhere on the card of the box, the strip too; change: the picker's
