@@ -32,7 +32,10 @@ export const goTo = (c, keys = false) => {
     const tall = bottom - pinTop + 28;
     top = tall <= room - 80 ? pinTop - 28 - (room - tall) / 2 : pinTop - 40;
   }
-  scrollPageTo(top); // with room below the page's end on phones, for a pin near it
+  // The card was placed before the page moved: with its pin off screen it was kept on screen where the page then was, and
+  // the glide left it there, far from its pin (Leo, 23 Nov: "new" from the page's end opened a card down there). Once
+  // the page is where it goes, the card goes back by its pin.
+  scrollPageTo(top, () => W.S.openId === c.id && W.followOpen?.()); // with room below the page's end on phones, for a pin near it
 };
 
 // Turning the phone (or resizing the window) with a thread's sheet open: the page has reflowed under it, and the pin may
