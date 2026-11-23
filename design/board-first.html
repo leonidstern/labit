@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Board-first layout</title>
+<style>
+:root{--bg:#fbfaf7;--fg:#1d1c1a;--mut:#6b675f;--line:#d9d5cc;--card:#fff;--ok:#1f8a5b;--code:#f2efe9;--page:#e9e6df;
+--w-bg:#fff;--w-fg:#141414;--w-mut:rgba(0,0,0,.5);--w-soft:rgba(0,0,0,.05);--w-line:rgba(0,0,0,.12);--w-shadow:0 0 0 .5px rgba(0,0,0,.14),0 1px 2px rgba(0,0,0,.04),0 8px 28px rgba(0,0,0,.08);--board:#f7f7f7;--ph:rgba(0,0,0,.06)}
+@media (prefers-color-scheme:dark){:root{--bg:#151514;--fg:#ecebe7;--mut:#9d998f;--line:#3a3934;--card:#1d1d1b;--ok:#5cc596;--code:#24231f;--page:#262522;
+--w-bg:#1c1c1e;--w-fg:#f4f4f5;--w-mut:rgba(255,255,255,.5);--w-soft:rgba(255,255,255,.06);--w-line:rgba(255,255,255,.14);--w-shadow:0 0 0 1px rgba(255,255,255,.14),0 10px 32px rgba(0,0,0,.5);--board:#1b1b1a;--ph:rgba(255,255,255,.07)}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1000px;margin:0 auto;padding:40px 16px 80px}
+h1{font-size:28px;margin:0 0 6px;letter-spacing:-.01em}
+h2{font-size:19px;margin:0 0 6px}
+h3{font-size:15px;margin:0 0 6px}
+p{margin:0 0 10px}
+.lede{color:var(--mut);max-width:70ch}
+section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px 22px;margin:22px 0}
+code{font:13px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--code);padding:1px 5px;border-radius:4px}
+.opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:14px}
+.opt{border:1px solid var(--line);border-radius:10px;padding:14px}
+.opt.rec{border-color:var(--ok);box-shadow:0 0 0 1px var(--ok)}
+.tag{font-size:12px;font-weight:600;color:var(--ok);margin-left:6px}
+.cap{font-size:13px;color:var(--mut);margin:10px 0 0}
+.stage{position:relative;background:var(--page);border-radius:8px;overflow:hidden;height:230px}
+.stage.phone{width:200px;height:380px;margin:0 auto;border-radius:22px;border:6px solid var(--line)}
+.pg{position:absolute;inset:0;padding:14px}
+.pg i{display:block;height:8px;border-radius:4px;background:var(--ph);margin:0 0 8px}
+/* the ⌘K box, drawn with the switcher's own rules (switcher.css) */
+.sw{background:var(--w-bg);color:var(--w-fg);border-radius:12px;box-shadow:var(--w-shadow);font-size:14px;overflow:hidden}
+.sw .in{padding:10px 12px 8px;border-bottom:1px solid var(--w-line);color:var(--w-mut);font-size:14px}
+.sw .ls{padding:4px 6px 6px}
+.row{display:flex;justify-content:space-between;gap:10px;padding:6px 8px;border-radius:6px}
+.row .t{flex:none;white-space:nowrap}
+.row .m{color:var(--w-mut);font-size:12px;min-width:0;text-align:right}
+.row .m b{font-weight:500;color:var(--w-fg)}
+.grp{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--w-mut);padding:10px 8px 2px;margin-top:4px;border-top:1px solid var(--w-line)}
+.seg{display:flex;gap:4px;padding:8px 10px 0}
+.seg span{padding:3px 10px;border-radius:6px;font-size:13px;color:var(--w-mut)}
+.seg span.on{background:var(--w-soft);color:var(--w-fg)}
+/* the board view, drawn with overlay.ts's bar */
+.bv{position:absolute;left:0;right:0;bottom:0;background:var(--board);color:var(--w-fg);display:flex;flex-direction:column;box-shadow:0 -1px 0 rgba(0,0,0,.12),0 -8px 24px rgba(0,0,0,.08)}
+.bar{flex:none;display:flex;align-items:center;gap:4px;height:34px;padding:0 6px;border-bottom:1px solid var(--w-line);font-size:12.5px;position:relative}
+.bar span.b{padding:3px 8px;border-radius:6px}
+.bar .nm{flex:1;min-width:0;text-align:center;opacity:.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar .b{flex:none;white-space:nowrap}
+.bar.bot{border-bottom:0;border-top:1px solid var(--w-line);justify-content:space-around}
+.cv{flex:1;position:relative}
+.fr{position:absolute;background:var(--w-bg);border-radius:4px;box-shadow:0 0 0 .5px rgba(0,0,0,.18)}
+.pin{position:absolute;width:14px;height:14px;border-radius:50% 50% 50% 0;background:#1d1c1a;rotate:-45deg}
+@media (prefers-color-scheme:dark){.pin{background:#f4f4f5}}
+.grip{position:absolute;left:50%;top:-6px;width:30px;height:4px;margin-left:-15px;border-radius:2px;background:currentColor;opacity:.25}
+/* a board on a page: the strip (overlay.ts STRIP) */
+.strip{border:1px solid color-mix(in srgb,currentColor 16%,transparent);border-radius:10px;padding:8px;background:color-mix(in srgb,rgb(52,199,89) 7%,transparent);font-size:12px;color:var(--fg)}
+.strip .top{display:flex;align-items:center;gap:6px;margin:0 2px 6px}
+.strip .top span{opacity:.65;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.strip .top em{font-style:normal;border-radius:10px;padding:2px 9px;background:rgba(52,199,89,.18)}
+.strip .th{display:flex;gap:6px}.strip .th i{flex:none;width:70px;height:48px;border-radius:5px;background:color-mix(in srgb,currentColor 6%,transparent)}
+.line{font-size:12.5px;color:var(--fg);padding:6px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);display:flex;gap:6px}
+.line span{opacity:.65}.line u{margin-left:auto;text-decoration:none;font-weight:500}
+.mark{position:absolute;right:10px;font-size:11.5px;padding:2px 8px;border-radius:10px;background:var(--w-bg);color:var(--w-fg);box-shadow:var(--w-shadow)}
+.split{position:absolute;inset:0;display:grid;grid-template-columns:1fr 1fr}
+.split .bv{position:relative;border-left:1px solid var(--w-line);box-shadow:none}
+ol.notes{margin:8px 0 0;padding-left:20px;color:var(--mut);font-size:14px}
+</style>
+</head>
+<body>
+<main>
+<h1>Board-first layout</h1>
+<p class="lede">Issue #422 makes a board its own thing in a lab: its own address, its own comments, found from ⌘K, opened on its own, and only shown on a page as a link. The issue already settles four things: phones get a full-screen board, boards get their own place in the lab list, a page shows a board only as a preview or a small marker, and board comments belong to the board. These five questions are what's left for you to decide about how it looks. Pin a number on each section (for example "2B"). The recommended one is outlined.</p>
+
+<!-- 1 -->
+<section id="list">
+<h2>1. Where boards show in ⌘K</h2>
+<p class="lede">Today a board is a row after all the pages, "board name", with its lab, frames and when it was saved.</p>
+<div class="opts">
+  <div class="opt">
+    <h3>1A · One list, by last activity</h3>
+    <div class="sw"><div class="in">Go to a page or board</div><div class="ls">
+      <div class="row"><span class="t">Page title <span style="color:var(--w-mut);font-size:12px">/path</span></span><span class="m">lab · 2m ago</span></div>
+      <div class="row"><span class="t">board name</span><span class="m">lab · 5m ago</span></div>
+      <div class="row"><span class="t">Page title <span style="color:var(--w-mut);font-size:12px">/path</span></span><span class="m">lab · 1h ago</span></div>
+    </div></div>
+    <p class="cap">Boards and pages mixed, newest first. No headings, like the list is today. A board can get buried under pages.</p>
+  </div>
+  <div class="opt rec">
+    <h3>1B · A "boards" group under the pages<span class="tag">recommended</span></h3>
+    <div class="sw"><div class="in">Go to a page or board</div><div class="ls">
+      <div class="row"><span class="t">Page title <span style="color:var(--w-mut);font-size:12px">/path</span></span><span class="m">lab · 2m ago</span></div>
+      <div class="row"><span class="t">Page title <span style="color:var(--w-mut);font-size:12px">/path</span></span><span class="m">lab · 1h ago</span></div>
+      <div class="grp">boards</div>
+      <div class="row"><span class="t">board name</span><span class="m">lab · 5m ago</span></div>
+    </div></div>
+    <p class="cap">Uses the same heading as the "archived" group. Boards are always in one place, and typing still searches both.</p>
+  </div>
+  <div class="opt">
+    <h3>1C · Pages | Boards switch</h3>
+    <div class="sw"><div class="seg"><span class="on">Pages</span><span>Boards</span></div><div class="in">Go to a board</div><div class="ls">
+      <div class="row"><span class="t">board name</span><span class="m">lab · 5m ago</span></div>
+      <div class="row"><span class="t">board name</span><span class="m">lab · 3d ago</span></div>
+    </div></div>
+    <p class="cap">A separate list for boards. It's tidiest once there are many boards, but it adds a new control and a click.</p>
+  </div>
+</div>
+</section>
+
+<!-- 2 -->
+<section id="row">
+<h2>2. What a board's row says</h2>
+<p class="lede">The issue asks for open, working and needs-reply activity on the row. On 18 Nov you asked for "last activity, no comment count" on page rows. Here are the board row and the page row side by side.</p>
+<div class="opts">
+  <div class="opt">
+    <h3>2A · As today</h3>
+    <div class="sw"><div class="ls">
+      <div class="row"><span class="t">board name</span><span class="m">lab · 3 frames · 5m ago</span></div>
+    </div></div>
+    <p class="cap">Doesn't show whether anything is waiting for you.</p>
+  </div>
+  <div class="opt rec">
+    <h3>2B · Only what needs you<span class="tag">recommended</span></h3>
+    <div class="sw"><div class="ls">
+      <div class="row"><span class="t">board name</span><span class="m">lab · <b>needs your reply</b> · 5m ago</span></div>
+      <div class="row"><span class="t">board name</span><span class="m">lab · agent on it · 1h ago</span></div>
+      <div class="row"><span class="t">board name</span><span class="m">lab · 3d ago</span></div>
+    </div></div>
+    <p class="cap">One status in words, using the widget's own status names. Shows "needs your reply" first, then "agent on it", otherwise nothing. No counts.</p>
+  </div>
+  <div class="opt">
+    <h3>2C · Counts</h3>
+    <div class="sw"><div class="ls">
+      <div class="row"><span class="t">board name</span><span class="m">lab · 5 open · 2 on it · 1 needs reply</span></div>
+    </div></div>
+    <p class="cap">Exactly what the issue describes, but the time drops off the row and page rows would show no counts.</p>
+  </div>
+</div>
+</section>
+
+<!-- 3 -->
+<section id="desk">
+<h2>3. Opening a board on a computer</h2>
+<p class="lede">Today a board opens over the bottom half of the page, and you can drag it taller or switch it to full. The issue wants one focused board, so only one thing takes your clicks and drags at a time. On 21 Nov you asked for boards to open at half height.</p>
+<div class="opts">
+  <div class="opt">
+    <h3>3A · Half over the page, as today</h3>
+    <div class="stage"><div class="pg"><i style="width:60%"></i><i></i><i style="width:80%"></i><i style="width:40%"></i></div>
+      <div class="bv" style="height:55%"><div class="grip"></div><div class="bar"><span class="b">close</span><span class="nm">board name</span><span class="b r">full</span></div>
+        <div class="cv"><div class="fr" style="left:14%;top:14%;width:30%;height:60%"></div><div class="fr" style="left:52%;top:14%;width:30%;height:60%"></div><div class="pin" style="left:30%;top:30%"></div></div></div></div>
+    <p class="cap">The page and board both stay live. This is where the mixed-up gestures and pins come from.</p>
+  </div>
+  <div class="opt rec">
+    <h3>3B · The whole window<span class="tag">recommended</span></h3>
+    <div class="stage">
+      <div class="bv" style="height:100%"><div class="bar"><span class="b">← page title</span><span class="nm">board name</span><span class="b" style="visibility:hidden">← page title</span></div>
+        <div class="cv"><div class="fr" style="left:10%;top:12%;width:24%;height:62%"></div><div class="fr" style="left:38%;top:12%;width:24%;height:62%"></div><div class="fr" style="left:66%;top:12%;width:24%;height:62%"></div><div class="pin" style="left:50%;top:30%"></div></div></div></div>
+    <p class="cap">The view at the board's own address. Back takes you to the page where you left it. Same on phone and computer, with no resize handle and no half size.</p>
+  </div>
+  <div class="opt">
+    <h3>3C · Side by side</h3>
+    <div class="stage"><div class="split"><div class="pg" style="position:relative"><i style="width:60%"></i><i></i><i style="width:80%"></i></div>
+      <div class="bv"><div class="bar"><span class="b">close</span><span class="nm">board name</span><span class="b" style="visibility:hidden">close</span></div>
+        <div class="cv"><div class="fr" style="left:14%;top:14%;width:72%;height:34%"></div><div class="fr" style="left:14%;top:54%;width:72%;height:34%"></div></div></div></div></div>
+    <p class="cap">Page on the left, board on the right. Good for comparing, but both are still live. The issue lists this as a later option.</p>
+  </div>
+</div>
+</section>
+
+<!-- 4 -->
+<section id="phone">
+<h2>4. The board on a phone</h2>
+<p class="lede">Full screen is already decided. What's left is how you comment and draw without a keyboard. Today drawing means holding D, which a phone doesn't have.</p>
+<div class="opts">
+  <div class="opt rec">
+    <h3>4A · Draw in the top bar<span class="tag">recommended</span></h3>
+    <div class="stage phone"><div class="bv" style="height:100%"><div class="bar"><span class="b">← back</span><span class="nm">board name</span><span class="b r">draw</span></div>
+      <div class="cv"><div class="fr" style="left:12%;top:8%;width:76%;height:40%"></div><div class="fr" style="left:12%;top:53%;width:76%;height:40%"></div><div class="pin" style="left:60%;top:22%"></div></div></div></div>
+    <p class="cap">The bar you know, plus one word. Tap a frame to pin it. "draw" switches drawing on until you tap "done". One finger pans unless drawing is on.</p>
+  </div>
+  <div class="opt">
+    <h3>4B · Bar at the bottom</h3>
+    <div class="stage phone"><div class="bv" style="height:100%"><div class="bar"><span class="nm">board name</span></div>
+      <div class="cv"><div class="fr" style="left:12%;top:8%;width:76%;height:40%"></div><div class="fr" style="left:12%;top:53%;width:76%;height:40%"></div></div>
+      <div class="bar bot"><span class="b">← back</span><span class="b">comment</span><span class="b">draw</span></div></div></div>
+    <p class="cap">Easier to reach with a thumb, but it adds a second bar, and comment becomes a mode too.</p>
+  </div>
+  <div class="opt">
+    <h3>4C · No buttons: hold, then drag</h3>
+    <div class="stage phone"><div class="bv" style="height:100%"><div class="bar"><span class="b">← back</span><span class="nm">board name</span><span class="b" style="visibility:hidden">← back</span></div>
+      <div class="cv"><div class="fr" style="left:12%;top:8%;width:76%;height:40%"></div><div class="fr" style="left:12%;top:53%;width:76%;height:40%"></div></div></div></div>
+    <p class="cap">Tap pins, and holding a finger down then dragging draws. Nothing on screen, but nobody would find it, and it clashes with holding to select a frame.</p>
+  </div>
+</div>
+</section>
+
+<!-- 5 -->
+<section id="place">
+<h2>5. A board on a page</h2>
+<p class="lede">This is only a link into the board now. Pages where labit can't safely insert the strip (React, Next, Vue) get the small marker from 5C anyway, so this choice is about plain HTML pages.</p>
+<div class="opts">
+  <div class="opt rec">
+    <h3>5A · The strip as today, plus status<span class="tag">recommended</span></h3>
+    <div class="strip"><div class="top"><b>Board</b><span>3 on it · needs your reply</span><em>Open</em></div><div class="th"><i></i><i></i><i></i></div></div>
+    <p class="cap">The existing strip with the row's status from 2 added. Nothing new to build.</p>
+  </div>
+  <div class="opt">
+    <h3>5B · One line</h3>
+    <div class="line"><b>Board</b><span>board name · needs your reply</span><u>Open</u></div>
+    <p class="cap">Plain text, no thumbnails. Fits any page, but you can't see what's on the board.</p>
+  </div>
+  <div class="opt">
+    <h3>5C · A small marker</h3>
+    <div class="stage" style="height:120px"><div class="pg"><i style="width:60%"></i><i></i><i style="width:80%"></i><i style="width:50%"></i></div><span class="mark" style="top:10px">board name</span></div>
+    <p class="cap">Sits on the section's edge and doesn't change the page layout. Always used on React, Next and Vue pages.</p>
+  </div>
+</div>
+</section>
+
+<section>
+<h2>Decided by the issue, not asked here</h2>
+<ol class="notes">
+  <li>Board comments move to the board, keeping their ids. There's a backup first, and running it twice changes nothing.</li>
+  <li>Picking a frame never resolves its comments.</li>
+  <li>Only one board is open and taking input at a time.</li>
+  <li>The order of work: fix drawing and the phone sheets first, then boards in ⌘K and the full-window board, then importing several images at once, then page markers, then scenarios.</li>
+</ol>
+</section>
+</main>
+</body>
+</html>
