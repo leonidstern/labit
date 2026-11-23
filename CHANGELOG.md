@@ -4,7 +4,7 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 
 ## Unreleased
 
-- **A board lets go of an open frame when you click beside it.** A double-click opens a frame to use its page; a click on the empty board now closes it again, as Esc does, so the board's keys, paste and drag work without a reload. Pasting several pictures at once puts each one on the board, not only the first.
+- **A board lets go of an open frame when you click beside it.** A double-click opens a frame to use its page; a click on the empty board now closes it again, as Esc does, so the board's keys, paste and drag work without a reload. Pasting several pictures at once puts each one on the board, side by side in the order pasted, not only the first.
 - **Arrows land as you drew them.** A drawing keeps every stroke, an arrow's own head too; the clean head that was drawn at the end of its line landed on a barb or past a jitter, small or backwards. An arrow with a curl at its end no longer reads as scribbled over.
 - **Shift draws straight as you go.** With Shift held the line is straight from where it began while you draw, so it no longer jumps when you lift; a box or loop still comes out neat. A line through a heading is read as crossed out wherever it slopes (it was asked once, at its middle). The chat's send arrow no longer flies off, as in a comment.
 - **Arrows land as big as drawn.** The clean head is as long as the head you drew (12 to 60 px; it was always 12), the light smoothing no longer trails your hand or cuts an arrowhead short, and an arrow's end in empty space below a page says "empty space on the page" instead of quoting the page's script.

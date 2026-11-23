@@ -211,7 +211,9 @@ try {
           document.body.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true, composed: true }));
         });
         const both = await until(async () => (await frames(name)).length === n2 + 2);
+        const [m1, m2] = (await frames(name)).slice(-2);
         check(eng, 'two pictures pasted at once are two image frames', Boolean(both), JSON.stringify((await frames(name)).map((f) => f.id)));
+        check(eng, 'side by side in the order pasted, tops in line, not piled up', Boolean(both) && m2.x === m1.x + m1.w + 80 && m2.y === m1.y, JSON.stringify([m1, m2]));
       }
     } finally {
       await browser.close();

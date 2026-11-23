@@ -850,33 +850,35 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       } else void write(placed(last.items));
     });
   }
-  // One picture to the board at a world point, a ghost there while it goes; the board is read again as soon as it is there.
-  const put = async (file: Blob, wx: number, wy: number, pin = false) => {
+  // One picture to the board at a world point (its centre; corner: its top left), a ghost there while it goes; the board is
+  // read again as soon as it is there. Gives the frame as placed, or null.
+  const put = async (file: Blob, wx: number, wy: number, pin = false, corner = false) => {
     const ghost = text('div', 'adding image…', world);
-    Object.assign(ghost.style, { left: `${wx}px`, top: `${wy}px` });
+    Object.assign(ghost.style, { left: `${wx}px`, top: `${wy}px` }, corner ? { margin: '0' } : {});
     ghost.className = 'ghost';
     try {
-      const out = await (await import(new URL('pics.js', import.meta.url).href) as typeof import('../widget/pics.ts')).send<{ frame: { id: string } }>(`?board=${encodeURIComponent(name)}${of ? `&page=${encodeURIComponent(of)}` : ''}&x=${Math.round(wx)}&y=${Math.round(wy)}`, file, 25 * 1024 * 1024, 2400);
+      const out = await (await import(new URL('pics.js', import.meta.url).href) as typeof import('../widget/pics.ts')).send<{ frame: Frame }>(`?board=${encodeURIComponent(name)}${of ? `&page=${encodeURIComponent(of)}` : ''}&x=${Math.round(wx)}&y=${Math.round(wy)}${corner ? '&corner=1' : ''}`, file, 25 * 1024 * 1024, 2400);
       await load();
       const c = find(out.frame.id);
       const r = pin && c?.box.getBoundingClientRect();
       if (r) boardWidget()?.place(r.left + r.width / 2, r.top + r.height / 2);
+      return out.frame;
     } catch (err) {
       note((err as Error).message);
-      return false;
+      return null;
     } finally {
       ghost.remove();
     }
-    return true;
   };
-  // Pictures one after another; each after the first 40 px down and right of the one before. The first error stops it.
+  // Pictures one after another, the first centred where asked and each next one beside the one before, in the order given,
+  // tops in line (Leo, 23 Nov: pasted pictures "pile up"). The first error stops it.
   const putAll = async (files: Blob[], at?: { x: number; y: number }, pin = false) => {
     measure();
-    let [wx, wy] = at ? [(at.x - ox) / cam.z - cam.x, (at.y - oy) / cam.z - cam.y] : [view.w / 2 / cam.z - cam.x, view.h / 2 / cam.z - cam.y];
-    for (const f of files.slice(0, 6)) {
-      if (!(await put(f, wx, wy, pin && f === files[0]))) break;
-      wx += 40;
-      wy += 40;
+    const [wx, wy] = at ? [(at.x - ox) / cam.z - cam.x, (at.y - oy) / cam.z - cam.y] : [view.w / 2 / cam.z - cam.x, view.h / 2 / cam.z - cam.y];
+    let prev = await put(files[0], wx, wy, pin);
+    for (const f of files.slice(1, 6)) {
+      if (!prev) break;
+      prev = await put(f, prev.x + prev.w + 80, prev.y, false, true);
     }
   };
   const pictures = (dt: DataTransfer | null) => [...(dt?.files || [])].filter((f) => f.type.startsWith('image/'));
