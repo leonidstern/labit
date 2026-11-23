@@ -125,6 +125,7 @@ import { bindKeys } from './widget/keys.ts';
     get pinCursorStyle() { return pinCursorStyle; },
     get placeBar() { return placeBar; },
     get position() { return position; },
+    get placeOf() { return placeOf; },
     get readable() { return readable; },
     get recheck() { return recheck; },
     get reflow() { return reflow; },
@@ -626,6 +627,13 @@ import { bindKeys } from './widget/keys.ts';
     return data;
   }
   const placed = [];
+  // Where a thread's pin goes (anchoring.ts). A board pin whose element is not shown (a closed menu or tab) would leave its
+  // board out of reach with it, so it goes to the ⋯ menu as a moved pin until its element is back (Leo, 23 Nov: "be sure
+  // board pin wont became stray out of viewport").
+  const placeOf = (c) => {
+    const at = /** @type {any} */ (position(c.anchor || {}));
+    return at.why === 'hidden' && S.pinBoards?.has(c.id) ? { ...at, moved: true, why: 'lost' } : at;
+  };
   // Undo, 3 s after a new pin is sent (Leo, 19 Nov): its card opens with "undo" in the resolve key's place (thread.ts).
   // A tap deletes it (this computer as admin, anyone else with the pin's own key, which the lab takes for a fresh pin
   // nobody answered) and closes the card: no comment box, no words kept anywhere.
@@ -990,7 +998,7 @@ import { bindKeys } from './widget/keys.ts';
     // messages; Leo, 17 Nov: "message scrolled up" on a phone).
     const prevAtEnd = prevBody ? prevBody.scrollHeight - prevBody.scrollTop - prevBody.clientHeight < 48 : false;
     // Every pin's place is read before anything is written, so the page lays out once per render, not once per pin.
-    const places = new Map(S.on ? threads().filter((c) => c.anchor?.kind !== 'page').map((c) => [c.id, position(c.anchor || {})]) : []);
+    const places = new Map(S.on ? threads().filter((c) => c.anchor?.kind !== 'page').map((c) => [c.id, placeOf(c)]) : []);
     readPins(threads().map((c) => (c.anchor?.kind === 'board' ? frameBox(c.anchor) : c.anchor && c.anchor.kind !== 'page' && !places.get(c.id)?.moved ? findTarget(c.anchor) : null)));
     // A pin that is still there stays the same element, updated in place, so what runs on it (the agent's ring, a pop, a
     // swap, a hover or open transition) carries on instead of starting again (Leo, 18 Nov: clicking or leaving a pin
@@ -1072,7 +1080,7 @@ import { bindKeys } from './widget/keys.ts';
       if (isPage(c)) return; // in the chat, not on the page
       // Done pins with nothing new in them step aside when done ones are hidden (D); an open one stays.
       if (!S.showDone && S.openId !== c.id && (c.resolved || workState(c)[0] === 'done') && !unread(c).length) return;
-      const { left, top, moved, zone, clipped, covered, why } = places.get(c.id) || position(c.anchor || {});
+      const { left, top, moved, zone, clipped, covered, why } = places.get(c.id) || placeOf(c);
       // A pin whose spot is gone is off the page: the ⋯ menu lists them ("moved · N"); an open one shows, to drop on a
       // new spot (drag) or close. The agent finishing one closes it.
       if (moved) {
@@ -1866,7 +1874,7 @@ import { bindKeys } from './widget/keys.ts';
     viewW = document.documentElement.clientWidth;
     const all = threads().filter((c) => c.anchor?.kind !== 'page');
     const skip = (c) => scrolled && heldPin(pinsById.get(c.id));
-    const places = all.filter((c) => !skip(c)).map((c) => [pinsById.get(c.id), position(c.anchor || {}), c]).filter(([, at]) => !at.moved);
+    const places = all.filter((c) => !skip(c)).map((c) => [pinsById.get(c.id), placeOf(c), c]).filter(([, at]) => !at.moved);
     readPins(places.map(([, , c]) => (c.anchor?.kind === 'board' ? frameBox(c.anchor) : findTarget(c.anchor || {}))));
     if (places.length + all.filter(skip).length !== pinsById.size || places.some(([pin]) => !pin)) return render(); // one lost or found its spot
     for (const [pin, { left, top, clipped, covered, zone }, c] of places) {

@@ -13,6 +13,9 @@
 // 8. ⌘Z within those seconds takes it back too, and closes its board if open; ⌘Z later only closes the pin (its board
 //    and pictures stay). Opening the pin's card leaves its board's threads unread; a thread's card on the board opens
 //    without an error. +board asking for a name first, then sent as other words, is a plain pin.
+// 9. Never stray out of view (Leo, 23 Nov): a board pin whose element is past the window's edge on a page that can't scroll
+//    sideways sits at that edge, on a computer and a phone, and its card opens in the window; one whose element is hidden
+//    goes to the ⋯ menu (its card there still opens the board) and comes back when the element shows again.
 // Not part of `npm test`. Run: node test/browser/boardpin.mjs (needs playwright; NODE_PATH can point at a node_modules that has it).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -224,6 +227,47 @@ try {
       const plain = (await list()).find((c) => !c.parent);
       check(eng, '8. +board abandoned for other words sends a plain pin, with no board', plain?.text === 'just a plain comment' && !fs.existsSync(boardFile(`pin-${plain.id}`)) && !(await view()), JSON.stringify({ text: plain?.text }));
       check(eng, 'no page errors', !errors.length, errors.join(' | '));
+
+      // ----- 9. never stray out of view
+      for (const c of (await list()).filter((x) => !x.parent)) await api({ action: 'delete', id: c.id });
+      fs.writeFileSync(path.join(DIR, 's.html'), '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>s</title><style>body{margin:0;overflow-x:hidden}</style>\n<h1>Page s</h1>\n<div style="width:1500px"><span id="far" style="margin-left:1400px">far right</span></div>\n<p id="hid">in a menu</p>\n<div style="height:900px"></div>\n');
+      const sApi = (body) => fetch(B + '/_lab/api/comments', { method: 'POST', headers: { 'content-type': 'application/json', origin: B, 'x-lab-admin': keys().token }, body: JSON.stringify({ page: '/s', ...body }) }).then((r) => r.json());
+      const mk = async (sel, text) => {
+        const { comment } = await sApi({ name: 'leo', text, anchor: { kind: 'element', selector: sel, x: 0.5, y: 0.5, width: 1000, height: 800 } });
+        await fetch(B + '/_lab/api/board', { method: 'POST', headers: { 'content-type': 'application/json', origin: B, 'x-lab-admin': keys().token }, body: JSON.stringify({ action: 'new', name: `pin-${comment.id}`, of: `/s#pin-${comment.id}`, topic: text }) });
+        return comment;
+      };
+      await mk('#far', 'far refs');
+      await mk('#hid', 'menu refs');
+      for (const vp of [{ width: 1000, height: 800 }, { width: 390, height: 844 }]) {
+        await p.setViewportSize(vp);
+        await p.goto(B + '/s');
+        await sleep(1500);
+        const pins = () => shadow(() => { return [...r.querySelectorAll('button.pin:not(.draft)')].filter((b) => b.style.visibility !== 'hidden').map((b) => { const q = b.getBoundingClientRect(); return { label: b.getAttribute('aria-label'), left: q.left, right: q.right, w: innerWidth }; }); });
+        const shown = await pins();
+        const inView = shown.length === 2 && shown.every((q) => q.left >= 0 && q.right <= q.w);
+        check(eng, `9. at ${vp.width} px wide, a board pin whose element is past the edge sits inside the window`, inView, JSON.stringify(shown));
+        await shadow(`[...r.querySelectorAll('button.pin:not(.draft)')].find((b) => b.style.visibility !== 'hidden' && /comment 1 by/.test(b.getAttribute('aria-label') || '')).click();`);
+        await until(async () => (await strip()) && (await strip()) !== 'empty', 4000);
+        const card = await shadow(() => { const c = r.querySelector('.card'); if (!c) return null; const q = c.getBoundingClientRect(); return { left: q.left, right: q.right, w: innerWidth }; });
+        check(eng, `9. at ${vp.width} px wide, its card opens inside the window with its board`, Boolean(card) && card.left >= 0 && card.right <= card.w + 1 && /Board/.test((await strip()) || ''), JSON.stringify(card));
+        await p.keyboard.press('Escape');
+        await sleep(400);
+        await p.evaluate(() => { document.getElementById('hid').style.display = 'none'; });
+        await p.evaluate(() => dispatchEvent(new Event('resize')));
+        await sleep(900);
+        const menu = await shadow(() => { const m = r.querySelector('.moved-btn'); return { moved: m?.textContent || '', shown: m ? !m.hidden : false }; });
+        check(eng, `9. at ${vp.width} px wide, a board pin whose element is hidden goes to the ⋯ menu`, menu.shown && /1/.test(menu.moved) && (await pins()).length === 1, JSON.stringify(menu));
+        await shadow(() => { r.querySelector('.more').click(); r.querySelector('.moved-btn').click(); });
+        await until(async () => (await strip()) && (await strip()) !== 'empty', 4000);
+        check(eng, `9. at ${vp.width} px wide, opened from the menu, its card still holds the board`, /menu refs/.test((await strip()) || ''), String(await strip()));
+        await p.keyboard.press('Escape');
+        await sleep(400);
+        await p.evaluate(() => { document.getElementById('hid').style.display = ''; });
+        await p.evaluate(() => dispatchEvent(new Event('resize')));
+        await sleep(900);
+        check(eng, `9. at ${vp.width} px wide, its element shown again, the pin is back on the page`, (await pins()).length === 2);
+      }
       await ctx.close();
     } finally {
       await browser.close();

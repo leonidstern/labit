@@ -1122,9 +1122,19 @@ export function position(anchor) {
   };
   if (at.moved) return { ...at, from: at.left, left: edgeFor(anchor), why: 'lost' };
   if (anchor.kind === 'board') return at;
+  if (!at.zone) at.left = reachable(at.left);
   // A page's board view covers what is under it: the page's pins there hide (overlay.ts).
   const covered = coveredAt(at.left - scrollX, at.top - scrollY); // told apart, so a scroll under the view only asks this again
   return { ...at, covered, why: at.hidden ? 'hidden' : doubt(), clipped: covered || at.hidden || clippedAt(findTarget(anchor), at.left - scrollX - (anchor.sx || 0), at.top - scrollY) }; // a pin beside its line: its line's spot is what a scroll box hides
+}
+// A pin is never left where the page can't be scrolled to (Leo, 23 Nov: "be sure board pin wont became stray out of
+// viewport"): its element past the window's right edge on a page that cuts off sideways scrolling (overflow-x hidden), or
+// left of the page, puts the pin at that edge instead. A page that scrolls sideways keeps it where its element is.
+function reachable(left: number) {
+  const h = document.documentElement;
+  if (left >= 4 && left <= h.clientWidth - 4) return left;
+  const cut = [h, document.body].some((n) => n && /hidden|clip/.test(getComputedStyle(n).overflowX));
+  return Math.min(Math.max(left, 4), (cut ? h.clientWidth : Math.max(h.scrollWidth, h.clientWidth)) - 4);
 }
 /** Where the page ends on the screen for a card: the top of a half board view over it, else the window's bottom (Leo, 21 Nov:
  * "pin outside board should not go to board when opened": a page pin's card stays in what the view leaves free). */
