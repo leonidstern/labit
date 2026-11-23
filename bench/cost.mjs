@@ -1,7 +1,7 @@
 // What a task costs an agent: runs a bench task through Claude Code (claude -p, stream-json) several times per arm, each
 // in a fresh copy, and records what each run spent and whether it was right. Issue #426: cost per correct answer, not
 // the size of the text.
-//   node bench/cost.mjs situations   [--arms full,lean] [--runs 10] [--model haiku] [--jobs 3]
+//   node bench/cost.mjs situations   [--arms full,lean] [--runs 10] [--model sonnet] [--jobs 3]
 //   node bench/cost.mjs situations-2 [...]
 //   node bench/cost.mjs --summary bench/results/cost/<file>.json      (prints a saved run again)
 // Arms are what the agent is handed: full (the saved agent text) or lean (what a wait hands over: LEAN_SKIP lines left out).
@@ -173,7 +173,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   const name = argv[0];
   const task = TASKS[name];
   if (!task) {
-    console.error(`usage: node bench/cost.mjs <${Object.keys(TASKS).join('|')}> [--arms full,lean] [--runs 10] [--model haiku] [--jobs 3]`);
+    console.error(`usage: node bench/cost.mjs <${Object.keys(TASKS).join('|')}> [--arms full,lean] [--runs 10] [--model sonnet] [--jobs 3]`);
     process.exit(2);
   }
   const arms = opt('arms', 'full,lean').split(',');
@@ -182,7 +182,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
     process.exit(2);
   }
   const runs = Number(opt('runs', 10));
-  const model = opt('model', 'haiku');
+  const model = opt('model', 'sonnet');
   const jobs = Number(opt('jobs', 3));
   const text = readFileSync(join(HERE, task.text), 'utf8');
   const queue = arms.flatMap((arm) => Array.from({ length: runs }, () => arm)).sort(() => Math.random() - 0.5);

@@ -111,7 +111,7 @@ The code blocks in `situations/b2-guide.html` are written by `situations-2-guide
 `cost.mjs` runs a task above through Claude Code several times per arm, each in a fresh copy, and records what each run spent and whether it was right. The numbers are the host's own: model calls, uncached input, cache-write and cache-read input, output tokens, turns, tool calls by kind, bytes of tool results, pictures opened, wall time and cost in USD at list price. A number the host doesn't report stays unknown, never zero. Runs of different arms are shuffled together.
 
 ```
-node bench/cost.mjs situations --arms full,lean --runs 10 --model haiku    # also situations-2
+node bench/cost.mjs situations --arms full,lean --runs 10 --model sonnet    # also situations-2
 node bench/cost.mjs --summary bench/results/cost/<file>.json
 ```
 
