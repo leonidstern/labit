@@ -94,7 +94,17 @@ try {
       const att = (sel) => p.evaluate((s) => { const r = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector(s))?.shadowRoot; const a = r?.querySelector(s); return a && { text: a.textContent, label: a.getAttribute('aria-label'), h: a.getBoundingClientRect().height, img: Boolean(a.closest('.msg')?.querySelector('img:not(.atts img)')), link: Boolean(a.closest('.msg')?.querySelector('a[target="_blank"]')) }; }, sel);
       let seen;
       await until(async () => (seen = await att('.att'))?.text);
-      check(eng, 'the thread says "1 image attached" in one short line, no thumbnail, no new-tab link', seen?.text === '1 image attached' && seen.label === '1 image attached' && seen.h <= 20 && !seen.img && !seen.link, JSON.stringify(seen));
+      check(eng, 'the thread says "1 image attached" in one short line, no thumbnail, no new-tab link', seen?.text === '1 image attached' && seen.h <= 20 && !seen.img && !seen.link, JSON.stringify(seen));
+      // A tap on the line shows the picture in the message (loaded, no tab), a second tap hides it.
+      const tapAtt = () => p.evaluate(() => [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.att'))?.shadowRoot.querySelector('.att').click());
+      const pic = () => p.evaluate(() => { const r = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.att'))?.shadowRoot; const i = r?.querySelector('.att-pics img'); return { shown: Boolean(i && i.offsetHeight > 0 && i.naturalWidth > 0), expanded: r?.querySelector('.att')?.getAttribute('aria-expanded'), link: Boolean(r?.querySelector('.att-pics a, a[target="_blank"]')) }; });
+      await tapAtt();
+      let opened;
+      await until(async () => (opened = await pic()).shown);
+      check(eng, 'a tap on the line shows the picture in the message, loaded, no link', opened?.shown && opened.expanded === 'true' && !opened.link, JSON.stringify(opened));
+      await tapAtt();
+      const closed = await pic();
+      check(eng, 'a second tap hides it again', !closed.shown && closed.expanded === 'false', JSON.stringify(closed));
       // a drop on a reply box carries one too
       const reply = p.locator('textarea').first();
       await reply.focus();

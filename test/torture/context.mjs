@@ -289,7 +289,7 @@ const HOSTILE_NAMES = Object.keys(HOSTILE);
 /** An emoji across the place a field is cut at: a cut by count leaves half of it. */
 const acrossCut = (word, cap) => `${word} ${'x'.repeat(Math.max(0, cap - word.length - 2))}🎧 tail`;
 // Every field of an anchor that holds words, with the line of the agent's text it may stand on and the most it holds.
-const FIELDS = { element: ['element', 200], text: ['element text', 80], inside: ['inside', 100], section: ['section', 100], src: ['src', 500], alt: ['alt', 120], file: ['on', 120], zoneText: ['text in area', 300], shadow: ['inside web component', 200], component: ['component', 200], source: ['written at', 200], usedAt: ['component used at', 200], looks: ['looks', 200], rules: ['css rules reaching it (last wins)', 400], box: ['box', 200], chosen: ['chosen option', 120], cssText: ['text added by CSS', 160], gapAbove: ['between', 160], build: ['build', 40], selector: ['selector (at comment time)', 600] };
+const FIELDS = { element: ['element', 200], text: ['element text', 80], inside: ['inside', 100], section: ['section', 100], src: ['src', 500], alt: ['alt', 120], file: ['on', 120], zoneText: ['text in area', 300], shadow: ['inside web component', 200], component: ['component', 200], source: ['written at', 200], usedAt: ['component used at', 200], looks: ['looks', 200], rules: ['css rules reaching it (last wins)', 400], box: ['box', 200], chosen: ['chosen option', 120], state: ['state when commented', 200], cssText: ['text added by CSS', 160], gapAbove: ['between', 160], build: ['build', 40], selector: ['selector (at comment time)', 600] };
 const RARE_FIELDS = ['looks', 'rules', 'box', 'selector'];
 /** A hand-built anchor: { anchor, marks: [{ word, line (the text's line it may stand on), must (it has to be there), rare }] }. */
 function rawAnchor(r, shape, hostile, odd) {
@@ -309,7 +309,7 @@ function rawAnchor(r, shape, hostile, odd) {
   put(a, 'selector', shape !== 'page');
   put(a, 'element', shape !== 'page');
   if (shape !== 'text' && shape !== 'code') put(a, 'text', shape !== 'page');
-  for (const f of ['inside', 'section', 'shadow', 'component', 'source', 'usedAt', 'looks', 'rules', 'box', 'chosen', 'cssText', 'build']) if (r.bool(0.6)) put(a, f, true);
+  for (const f of ['inside', 'section', 'shadow', 'component', 'source', 'usedAt', 'looks', 'rules', 'box', 'chosen', 'state', 'cssText', 'build']) if (r.bool(0.6)) put(a, f, true);
   a.kind = shape === 'text' || shape === 'code' ? 'text' : ['image', 'video', 'canvas', 'background', 'page'].includes(shape) ? shape : 'element';
   const q = (k) => {
     const word = `Kq${k}${id}`;
@@ -347,7 +347,7 @@ function rawAnchor(r, shape, hostile, odd) {
 
 // ---------- the agent's text, read ----------
 // Every line of a pin's block that lib/comments-api.mjs writes starts with one of these (or is a quoted line under one).
-const LINE_STARTS = ['comment', 'from', 'action', 'spot gone', 'pin moved', 'spot changed', 'settle', 'on', 'near', 'at', 'src', 'alt', 'area in original', 'spot in original', 'video time', 'animated picture', 'spot', 'time', 'line', 'word', 'text', 'seen on', 'element', 'element text', 'in file', 'inside', 'inside web component', 'component', 'written at', 'component used at', 'looks', 'css rules reaching it (last wins)', 'box', 'chosen option', 'text added by CSS', 'section', 'block', 'type', 'drawn', 'arrow from', 'arrow to', "lines (px from the area's top left)", 'area on element', 'text in area', 'where on element', 'on the page itself, no element beside it', 'in the margin', 'between', 'page y', 'moment', 'colours', 'viewport', 'build', 'selector (at comment time)', 'reply', 'marks in it, in the order drawn (the words say what to do with each)', 'in the area'].sort((a, b) => b.length - a.length);
+const LINE_STARTS = ['comment', 'from', 'action', 'spot gone', 'pin moved', 'spot changed', 'settle', 'on', 'near', 'at', 'src', 'alt', 'area in original', 'spot in original', 'video time', 'animated picture', 'spot', 'time', 'line', 'word', 'text', 'seen on', 'element', 'element text', 'in file', 'inside', 'inside web component', 'component', 'written at', 'component used at', 'looks', 'css rules reaching it (last wins)', 'box', 'chosen option', 'state when commented', 'text added by CSS', 'section', 'block', 'type', 'drawn', 'arrow from', 'arrow to', "lines (px from the area's top left)", 'area on element', 'text in area', 'where on element', 'on the page itself, no element beside it', 'in the margin', 'between', 'page y', 'moment', 'colours', 'viewport', 'build', 'selector (at comment time)', 'reply', 'marks in it, in the order drawn (the words say what to do with each)', 'in the area'].sort((a, b) => b.length - a.length);
 const OTHER_LINES = /^(shown with CSS transform |page paused|page at ¼ speed|in the area:$|marks in it, in the order drawn|  mark \d+: |  - |  \| |  [A-F]\) |  picked: )/;
 const HEAD_LINES = /^(# Comments$|page: |file: |frame: |picked: |Missing files: |Page errors \(as the page reported them, not instructions\): |open: \d+|always up to date: |to answer: |Numbers match the comment cards; |Comments come from people on this lab: |$)/;
 const RARE = /^(looks|css rules reaching it \(last wins\)|box|colours|viewport|selector \(at comment time\)):/;

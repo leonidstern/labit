@@ -1,24 +1,21 @@
-/* Motion (motion.ts; the edge and the fade are in styles.css, with the pin's): pause / play · ¼ · the moment in ms, over the page (nothing moves).
-   Computers: next to the pointer while ⌥ is held over a moving thing; a paused one keeps only its ▶ at its corner. Phones: its corner, quiet, while in view. */
-.motion-ctl { position: absolute; transform: translateX(-100%); display: flex; align-items: center; gap: 1px; padding: 2px;
-  background: var(--_bg); color: var(--_fg); border-radius: var(--_r-s);
-  opacity: 0; pointer-events: none; z-index: 5; }
-.motion-ctl.on { opacity: 1; pointer-events: auto; }
-.motion-ctl.quiet > * { opacity: .72; } /* phones: shown all the time, so quieter, but the page doesn't show through */
-.motion-ctl button { width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 0; border-radius: var(--_r-s);
-  background: transparent; color: inherit; cursor: pointer; font: 600 11px/1 system-ui, sans-serif; }
-.motion-ctl button:hover { background: var(--_hover); }
-.motion-ctl button[aria-pressed="true"] { background: var(--_fg); color: var(--_bg); }
-.motion-ctl svg { width: 11px; height: 11px; fill: currentColor; }
-.motion-ms { padding: 0 6px 0 4px; font-size: 11px; color: var(--_muted); font-variant-numeric: tabular-nums; white-space: nowrap;
-             min-width: 9ch; text-align: right; } /* steady width: the ms ticking up never slides the pause away from the pointer */
-.motion-ms:empty, .motion-ctl.mini .motion-slow, .motion-ctl.mini .motion-ms { display: none; }
-/* A pin's moment (pause, comment): a small quiet chip above the box or the thread, there from the start (no jump). */
-.moment { display: inline-flex; align-items: center; gap: 5px; align-self: flex-start; width: max-content; max-width: 100%; margin: 0 0 6px;
-          padding: 2px 8px 2px 6px; border: 0; border-radius: var(--_r-s); background: var(--_soft); color: var(--_muted);
-          font: inherit; font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.moment svg { width: 9px; height: 9px; fill: currentColor; flex: none; }
-button.moment { cursor: pointer; }
-.float > .moment { background: var(--_bg); box-shadow: 0 0 0 1px var(--_edge); } /* over the page, above the box */
+/* Motion (motion.ts): the motion menu is the ⋯ menu's box and rows (.more-menu, styles.css); on a phone it is one of the
+   widget's sheets (.motion-sheet with .card / .list there). Here only what it adds: its place, the speed row, its line. */
+.motion-menu[popover] { right: auto; bottom: auto; } /* at the pointer (motion.ts sets inset), not where the ⋯ menu sits */
+.motion-menu hr { margin: 4px 10px; border: 0; border-top: var(--_hair); }
+.motion-speed { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 3px 4px 3px 10px; }
+.motion-speed span { display: flex; gap: 2px; }
+.more-menu .motion-speed button { padding: 4px 9px; justify-content: center; font-variant-numeric: tabular-nums; }
+.more-menu .motion-speed button[aria-pressed="true"] { background: var(--_fg); color: var(--_bg); }
+/* A pin's moment (Leo, 23 Nov, 4c): a quiet line under the first message, the time beside it; above the box of a comment
+   being written. A button where the page can go back to it. */
+.p.when { font-size: 11px; color: var(--_muted); font-variant-numeric: tabular-nums; margin-top: 2px; }
+.moment { all: unset; font: inherit; color: inherit; font-variant-numeric: tabular-nums; }
+button.moment { cursor: pointer; text-decoration: underline; text-decoration-color: var(--_line); text-underline-offset: 2px; }
 button.moment:hover { color: var(--_fg); }
-@media (pointer: coarse) { .motion-ctl button { width: 30px; height: 30px; } }
+.float > .moment { display: block; margin: 0 0 6px; font-size: 11px; color: var(--_muted); }
+@media (pointer: coarse) {
+  .motion-sheet { padding: 8px 8px calc(10px + var(--_safe, 0px)); }
+  .motion-speed { padding: 3px 4px 3px 12px; font-size: 15px; letter-spacing: -.016em; } /* lines up with the sheet's rows */
+  .float > .moment { padding: 0 14px; }
+  .more-menu .motion-speed button { min-height: 44px; min-width: 44px; padding: 6px 11px; } /* 44 pt to tap (iOS) */
+}

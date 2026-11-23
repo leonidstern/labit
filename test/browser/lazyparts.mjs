@@ -1,6 +1,6 @@
-// The section bar and the motion controls are their own files (public/_lab/sections.js, motion.js), fetched only when the
+// The section bar and the motion menu are their own files (public/_lab/sections.js, motion.js), fetched only when the
 // page uses them. A page with no sections and nothing that moves asks for neither; headings, a looping animation or a
-// video bring the one each needs; ⌥, P or S bring motion on a still page; a pin with a moment brings it too.
+// video bring the one each needs; P or S bring motion on a still page, ⌥ no longer does; a pin with a moment brings it too.
 // Not part of `npm test`. Run: node test/browser/lazyparts.mjs (NODE_PATH to a playwright). ENGINES picks the engines.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -49,30 +49,30 @@ try {
       is('a page with a video asks for motion only', (await asked('video.html')).got, 'motion');
       is('headings drawn late bring the section bar', (await asked('late.html', 3600)).got, 'sections');
 
-      // Still page: ⌥ brings motion; P too (the page pauses, the key works the first time).
+      // Still page: ⌥ is for commenting only (Leo, 23 Nov: the motion menu is a right-click), so it asks for nothing.
       await still.p.bringToFront();
       await still.p.keyboard.down('Alt');
       await sleep(600);
       await still.p.keyboard.up('Alt');
       await sleep(200);
       const gotAlt = await still.p.evaluate(() => performance.getEntriesByType('resource').some((e) => /\/_lab\/motion\.js/.test(e.name)));
-      check(eng, 'on a still page, ⌥ asks for motion', gotAlt);
+      check(eng, 'on a still page, ⌥ asks for nothing', !gotAlt);
       await still.p.close();
 
-      // An animation a script starts late (no event says so), on a page that has asked for nothing so far: ⌥ over it shows its control at once.
+      // An animation a script starts late (no event says so), on a page that has asked for nothing so far: the pointer
+      // moving over it brings motion, and a right-click on it opens its menu.
       const script = await ctx.newPage();
       await script.goto(`${B}/script.html`);
       await sleep(2300);
       const at = await script.evaluate(() => { const r = document.getElementById('box').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+      await script.mouse.move(at.x - 5, at.y);
       await script.mouse.move(at.x, at.y);
-      await script.keyboard.down('Alt');
-      let shown = false;
-      for (let i = 0; i < 20 && !shown; i++) {
-        shown = await script.evaluate(() => Boolean([...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim'))?.shadowRoot.querySelector('.motion-ctl.on')));
-        if (!shown) await sleep(50);
-      }
-      await script.keyboard.up('Alt');
-      check(eng, 'a script-started animation: ⌥ over it shows its control, the pointer not moved since', shown);
+      for (let i = 0; i < 20 && !(await script.evaluate(() => performance.getEntriesByType('resource').some((e) => /\/_lab\/motion\.js/.test(e.name)))); i++) await sleep(50);
+      await sleep(200);
+      await script.mouse.click(at.x, at.y, { button: 'right' });
+      await sleep(200);
+      const shown = await script.evaluate(() => { const m = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim'))?.shadowRoot.querySelector('.motion-menu'); return Boolean(m && !m.hidden); });
+      check(eng, 'a script-started animation: the pointer over it brings motion, and a right-click opens its menu', shown);
       await script.close();
 
       const keys = await ctx.newPage();

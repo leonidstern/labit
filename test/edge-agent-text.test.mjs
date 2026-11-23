@@ -128,7 +128,7 @@ test('a wait\'s hand-off and comments.md: the same comment stays quoted there to
   assert.deepEqual(starts(out, /^# /), ['# New comments']);
   assert.deepEqual(starts(out, /^In this message: /).length, 1);
   assert.deepEqual(starts(out, /^Answer each: /).length, 1);
-  assert.match(starts(out, /^Answer each: /)[0], /reply <id> "what you did"/);
+  assert.match(starts(out, /^Answer each: /)[0], /reply <id> --done "what you did"/);
   assert.deepEqual(starts(out, /^(to answer|How the person wants answers|page|file|from|comment|action): /).map((l) => l.split(':')[0]).sort(), ['action', 'comment', 'file', 'from', 'page']);
   for (const line of INJECTED) assert.ok(!out.split('\n').includes(line), `"${line}" is not a line of its own in the hand-off`);
   // A reply in a thread the session has: the short thread form.

@@ -45,6 +45,7 @@ type Anchor = {
   rules?: string;
   box?: string;
   chosen?: string;
+  state?: string;
   cssText?: string;
   quote?: Quote;
   /** What proves its element is the one pinned (see fingerprint). */
@@ -71,12 +72,16 @@ type Anchor = {
   pinY?: number;
   /** On a board: the frame a pin is on, in px from its top left. */
   frame?: string;
+  /** On a board: its name, and the point in the board's own px (a drawing not within one frame: its corner). */
+  board?: string;
+  bx?: number;
+  by?: number;
   time?: number;
   /** The page's videos and animations were paused when this was written. */
   paused?: boolean;
   /** Then: the moment showing, in ms. */
   atMs?: number;
-  /** The page's motion ran at ¼ speed. */
+  /** The page's motion, or the thing pinned, ran slowed (¼ or ½ speed). */
   slow?: boolean;
   /** A data-lab-action button's words, and whether the agent confirms before doing it. */
   act?: string;
@@ -87,7 +92,7 @@ type Anchor = {
   zoneItems?: string[];
   zoneText?: string;
   /** A drawing (hold D and drag, draw.ts): what its lines read as, and the lines in 0–1000 of the area. */
-  ink?: { mark: string; from?: string; to?: string; pts: number[][]; w?: number[][]; marks?: string[] };
+  ink?: { mark: string; from?: string; to?: string; pts: number[][]; w?: number[][]; marks?: string[]; cut?: number };
   shownFor?: number;
   build?: string;
 };
@@ -557,6 +562,26 @@ function quoteAt(cx, cy, shadowRoots = []) {
   return quote;
 }
 
+// The state the person saw the control in (#433): the element and the few around it that are open, picked, pressed, ticked,
+// current or off, and the open dialog it is in. Never what a field holds.
+const FLAGS = [['expanded', 'open', 'closed'], ['selected', 'selected'], ['pressed', 'pressed', 'not pressed'], ['checked', 'checked', 'not checked'], ['current', 'current']];
+function stateOf(el) {
+  const out = [];
+  for (let e = el, i = 0; e && e !== document.body && i < 4; e = e.parentElement, i++) {
+    const says = FLAGS.map(([a, yes, no]) => {
+      const v = e.getAttribute(`aria-${a}`) ?? (a === 'checked' && /^(checkbox|radio)$/.test(e.type) ? `${e.checked}` : null);
+      return v === 'false' ? no : v === 'mixed' ? `partly ${yes}` : v != null ? yes : '';
+    });
+    if (e.localName === 'details') says.push(e.open ? 'open' : 'closed');
+    if (e.matches(':disabled, [aria-disabled="true"]')) says.push('disabled');
+    const on = says.filter(Boolean);
+    if (on.length) out.push(`${e.getAttribute('role') || e.localName} "${short(e.getAttribute('aria-label') || e.labels?.[0]?.textContent || e.textContent, 30)}" ${on.join(', ')}`);
+  }
+  const dialog = el.closest('dialog[open], [role="dialog"], [role="alertdialog"]');
+  if (dialog) out.push(`inside open dialog "${short(dialog.getAttribute('aria-label') || dialog.querySelector('h1, h2, h3, [id]')?.textContent, 40)}"`);
+  return short(out.join('; '), 200);
+}
+
 export function openingTag(node) {
   const attrs = [...node.attributes]
     .filter((a) => /^(id|class|alt|role|aria-label|href|data-(?!lab-(?!action))[\w-]+)$/.test(a.name))
@@ -638,6 +663,8 @@ export function anchorAt(clickX, clickY, words = false, onto = null) {
   if (select && select.selectedIndex >= 0) {
     anchor.chosen = short(`${select.selectedIndex + 1} of ${select.options.length}: "${select.options[select.selectedIndex].text}"`, 120);
   }
+  const state = stateOf(target);
+  if (state) anchor.state = state;
   // Text that CSS adds with ::before / ::after content (a badge, a label): it isn't in the HTML.
   for (const el of [target, target.parentElement]) {
     if (!el || el === document.body) continue;
@@ -1506,7 +1533,14 @@ export function zoneAnchor({ x0, y0, x1, y1 }) {
     const B = (window as unknown as { __labBoard?: { anchor: (x: number, y: number) => Anchor; size?: (id: string) => { w: number; h: number } | null } }).__labBoard;
     const [p, q] = [B?.anchor(left, top), B?.anchor(right, bottom)];
     const size = p?.frame && p.frame === q?.frame ? B?.size?.(p.frame) : null;
-    if (!p || !q || !size) return anchor;
+    if (!p || !q) return anchor;
+    // Not within one frame (an arrow from one frame to another, a ring on the canvas): on the board itself, its corner and its
+    // size in the board's px, so it keeps its lines and goes with the board's camera. It was a point, and its lines were lost (issue 423).
+    if (!size) {
+      const { kind, board, selector, x, y, docX, docY, width, height, dpr, element, eh } = p;
+      const world: Anchor = { kind, board, selector, x, y, docX, docY, width, height, dpr, element, eh, bx: p.bx, by: p.by, zw: 1, zh: 1, docW: Math.max(1, Math.round(q.bx - p.bx)), docH: Math.max(1, Math.round(q.by - p.by)), pinX: x1 >= x0 ? 1 : 0, pinY: y1 >= y0 ? 1 : 0 };
+      return world;
+    }
     const [w, h] = [Math.round(q.fx - p.fx), Math.round(q.fy - p.fy)];
     return Object.assign(p, { zw: w / size.w, zh: h / size.h, fw: size.w, fh: size.h, docW: w, docH: h, pinX: x1 >= x0 ? 1 : 0, pinY: y1 >= y0 ? 1 : 0, ...(p.nw && { imgX2: q.imgX, imgY2: q.imgY }) });
   }
@@ -1536,7 +1570,7 @@ export function zoneAnchor({ x0, y0, x1, y1 }) {
   });
   Object.assign(anchor, schemeAt(box), { eh: Math.round(r.height) });
   // The area is on the box: its heading, the box it sits in, its component are the box's, not those of the element under the middle.
-  for (const k of ['inside', 'section', 'block', 'component', 'source', 'usedAt', 'chosen', 'cssText', 'shadow']) delete (anchor as Record<string, unknown>)[k];
+  for (const k of ['inside', 'section', 'block', 'component', 'source', 'usedAt', 'chosen', 'state', 'cssText', 'shadow']) delete (anchor as Record<string, unknown>)[k];
   Object.assign(anchor, box === document.body ? {} : around(box));
   if (box !== document.body) for (const [k, v] of Object.entries(componentAt(box))) if (v) anchor[k] = short(v, 200);
   anchor.fp = box === document.body ? undefined : fingerprint(box); // the box's, not the element under the middle

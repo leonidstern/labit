@@ -41,7 +41,7 @@ codex plugin marketplace add leonidstern/labit
 mkdir -p .opencode/plugins && curl -fsSL https://raw.githubusercontent.com/leonidstern/labit/main/hooks/agent.mjs -o .opencode/plugins/labit.js
 ```
 
-Each gives your agent the skill and two hooks, with no MCP: while the session works, the pins it claimed show a live "session activity" line, and a pin that lands after it stopped listening comes in as its next turn (Codex and Cursor when the turn ends, opencode when the session goes idle). Without the hooks the agent still answers with `wait` and `reply`, as below.
+Each gives your agent the skill and two hooks, with no MCP: while the session works, the pins it claimed show a live "session activity" line, and a pin that lands after it stopped listening comes in as its next turn (Cursor when the turn ends, opencode when the session goes idle, Codex when the turn ends or with your next message, since Codex can't be woken while idle). Without the hooks the agent still answers with `wait` and `reply`, as below.
 
 **Any other agent:** tell it to run these in your project.
 
