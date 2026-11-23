@@ -550,6 +550,12 @@ export function startLive() {
     };
     // A page with scripts of its own is reloaded instead: patching it toward its file would undo what its scripts built.
     const ownScripts = () => scriptsOf(document).length > 0;
+    const plainPage = () =>
+      !ownScripts() && !document.querySelector('iframe[src], object[data], embed[src], video, audio') && !document.fonts?.size &&
+      !performance.getEntriesByType('resource').some((e: any) => {
+        const p = new URL(e.name).pathname;
+        return /fetch|xml/.test(e.initiatorType) && !p.startsWith('/_lab/') && p !== '/favicon.ico' && p !== location.pathname;
+      });
     let morphRun = 0;
     const morphPage = async () => {
       if (board) return;
@@ -721,7 +727,9 @@ export function startLive() {
           if (board || (listed && !v.changed.some(usedHere))) W.script.dataset.version = String(v.files);
           // Saves missed, or a burst too big to list (a branch switch): a page with no scripts, frames or objects of its
           // own that fetched nothing uses only its file, its styles and its pictures, so it catches up in place (issue 428).
-          else if (!listed && !ownScripts() && !document.querySelector('iframe[src], object[data], embed[src]') && !performance.getEntriesByType('resource').some((e: any) => /fetch|xml/.test(e.initiatorType) && !new URL(e.name).pathname.startsWith('/_lab/'))) {
+          // Fonts, video and sound aren't refreshed in place: a page with them reloads. The widget's own asks (the
+          // page itself, the tab icon, /_lab/) are not the page's.
+          else if (!listed && plainPage()) {
             W.script.dataset.version = String(v.files);
             catchUp();
           } else reload(); // held while something is open: the comments below still come in (the agent's answer, read marks)

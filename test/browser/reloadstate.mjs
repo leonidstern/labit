@@ -186,9 +186,12 @@ try {
       // #428: a burst too big to list (a branch switch: 60 files at once), none of them this page's: a page with no scripts
       // of its own catches up in place instead of reloading. (Saves missed while away take the same path.)
       const pl = await open('/plain');
+      // Patched in place first: the widget fetched the page and the tab icon itself, which are not the page's own asks.
+      save('plain.html', `<!doctype html><meta charset="utf-8"><title>p</title><h1>Plain, saved</h1>${lines(20)}`);
+      await pl.waitForFunction(() => document.querySelector('h1').textContent === 'Plain, saved', null, { timeout: 5000 }).catch(() => {});
       for (let i = 0; i < 60; i++) save(`burst-${i}.md`, `# ${i}`);
       await sleep(4000);
-      check(eng, 'a burst too big to list: a page with no scripts of its own is not reloaded', await pl.evaluate(() => window.__kept === 1));
+      check(eng, 'a burst too big to list: a page with no scripts of its own is not reloaded, after a patch fetched it', await pl.evaluate(() => window.__kept === 1 && document.querySelector('h1').textContent === 'Plain, saved' && performance.getEntriesByType('resource').some((e) => e.initiatorType === 'fetch' && new URL(e.name).pathname === '/plain')));
       await pl.close();
       await ctx.close();
     } finally {

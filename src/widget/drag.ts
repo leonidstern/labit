@@ -55,11 +55,14 @@ export const endDrag = (e) => {
     setTimeout(() => (S.afterDrag = false), 0);
     S.drew = true;
     S.inking.strokes.pop(); // a cancelled stroke (the system took the pointer) is not part of the drawing
-    if (S.inking.strokes.length) S.inking.paint();
-    else {
+    if (S.inking.strokes.length) {
+      S.inking.paint();
+      clearTimeout(S.inkTimer);
+      S.inkTimer = setTimeout(endInk, 1000); // the strokes before it are sent as after a lift, never left holding reloads
+    } else {
       S.inking.svg.remove();
       S.inking = null;
-      holdWhileDrawing(false);
+      letGo();
     }
     return;
   }
@@ -113,18 +116,19 @@ export const endDrag = (e) => {
 };
 // What a drawing sent with no words says: its mark, without the guess in brackets.
 export const inkSaid = (mark = '') => mark.replace(/\s*\(likely:.*\)$/, '') || 'drawing';
+// A reload (the lab's or a dev server's) waits while a drawing is drawn and while drawings are being saved: a second
+// drawing begun while the first is still sent keeps it waiting. A save stops holding after 10 s (a lab that is down retries
+// for minutes; the drawing goes to a comment box if it fails).
+const letGo = () => !S.inking && !S.sendingInk && holdWhileDrawing(false);
 async function endInk() {
   clearTimeout(S.inkTimer);
   const ink = S.inking;
   S.inking = null;
-  if (!ink) return holdWhileDrawing(false);
-  S.sendingInk = true; // a reload waits until the drawing is saved too (live.ts busy, hold.ts)
-  try {
-    await sendInk(ink);
-  } finally {
-    S.sendingInk = false;
-    holdWhileDrawing(false);
-  }
+  if (!ink) return letGo();
+  S.sendingInk = (S.sendingInk || 0) + 1;
+  await Promise.race([sendInk(ink).catch(() => {}), new Promise((r) => setTimeout(r, 10000))]);
+  S.sendingInk--;
+  letGo();
 }
 async function sendInk(ink) {
   const { readInk } = await W.part('draw').catch(() => ({ readInk: null }));
@@ -265,7 +269,10 @@ export function bindDrag(w: unknown) {
     S.dKey = false;
     if (S.inking && !S.drag) endInk();
   }, true);
-  addEventListener('blur', () => (S.dKey = false));
+  addEventListener('blur', () => {
+    S.dKey = false;
+    if (S.inking && !S.drag) endInk(); // D's keyup goes to another window: the drawing is done, as on the keyup
+  });
   // The drawing's box is open and focused, nothing typed yet: D pressed again types a "d" there. If a stroke starts
   // while it is still held, it was D held to draw on: the "d" goes and the stroke joins the drawing (edge tests, 20 Nov).
   addEventListener('keydown', (e) => {
