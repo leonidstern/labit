@@ -1935,7 +1935,9 @@ import { bindKeys } from './widget/keys.ts';
   const navigated = () => {
     if (!host.isConnected && document.body) {
       document.body.append(host);
+      sized?.observe(document.body); // a new <body>: its size is the one to follow now
       fit();
+      writingIn?.focus({ preventScroll: true }); // the words being written go on where they were
     }
     if (!pageStyle.isConnected) document.head.append(pageStyle);
     if (!pinCursorStyle.isConnected) document.head.append(pinCursorStyle);
@@ -1957,11 +1959,24 @@ import { bindKeys } from './widget/keys.ts';
   // page's own history is left as it is.
   /** @type {any} */ (window).navigation.addEventListener('currententrychange', () => queueMicrotask(navigated));
   document.addEventListener('astro:after-swap', navigated);
+  // A framework's hot update that writes the whole <body> again (or swaps it) takes the widget out with it, and with it an
+  // unsent comment (issue 428): it is put back at once, its words and cursor as they were. Only <html>'s and <body>'s own
+  // children are watched, not the page below them.
+  /** @type {HTMLElement | null} */
+  let writingIn = null; // the box being written in, kept through its host being taken out (no blur to trust then)
+  root.addEventListener('focusin', (e) => (writingIn = /** @type {HTMLElement} */ (e.target)));
+  root.addEventListener('focusout', () => host.isConnected && (writingIn = null));
+  const keepOn = new MutationObserver(() => {
+    if (document.body) keepOn.observe(document.body, { childList: true });
+    if (!host.isConnected) navigated();
+  });
+  keepOn.observe(document.documentElement, { childList: true });
   // Pick up comments others left while this tab was in the background.
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && !S.draft && !root.activeElement) load();
   });
-  if ('ResizeObserver' in window) new ResizeObserver(reflow).observe(document.body);
+  const sized = 'ResizeObserver' in window ? new ResizeObserver(reflow) : null;
+  sized?.observe(document.body);
 
   // The rules that act on the page itself (the pinning cursor, a drag's no-select, a sheet's overscroll), not on the
   // widget: a stylesheet in the document's head, since the widget's own live in its shadow root. The font is the system's
@@ -2098,6 +2113,7 @@ import { bindKeys } from './widget/keys.ts';
     document.head.append(pageStyle, pinCursorStyle);
     refreshPinCursor();
     document.body.append(host);
+    keepOn.observe(document.body, { childList: true });
     fit();
     // The page's own selection while commenting, and the quoted words of an open text comment.
     // A soft green, so the quoted words stay readable in the page's own colour, on light and dark pages.
