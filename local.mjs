@@ -786,20 +786,35 @@ const agentText = async (page) => {
   const local = text.replaceAll(`${ROOT}/`, '').replace(/^to answer: POST .*$/m, `to answer: ${CMD} reply <id> "what you did" [--resolve], run in ${ROOT}`).replace(/^settle: pin /gm, `settle: ${CMD} pin `);
   const file = fileFor(page);
   const lines = [file && `file: ${file}`, missingFor(page), errorsFor(page)].filter(Boolean);
-  const out = sourceLines(lines.length ? local.replace(/^(page: .*)$/m, `$1\n${lines.join('\n')}`) : local, ROOT) + pageBoards(page); // a framework's `written at:` line is checked against its file now
+  const out = withPageBoards(page, sourceLines(lines.length ? local.replace(/^(page: .*)$/m, `$1\n${lines.join('\n')}`) : local, ROOT)); // a framework's `written at:` line is checked against its file now
   return boardText(page, file ? lineHints(out, file) : out);
 };
 // The boards on this page's pins (+board, src/widget/boardcam.ts: board pin-<id> on comment <id>), and any older
-// <lab-board> section of the same name: what the person put on each, so an agent working on the page has their references. The page itself (its first frame)
-// and archived frames are left out; a board with nothing else says nothing.
-const pageBoards = (page) => B.names(ROOT).flatMap((name) => {
-  const b = name.startsWith('pin-') && boardGet(name);
-  const shown = b && boardHome(b) === page ? b.frames.filter((f) => f.state !== 'archived' && f.src.split(/[?#]/)[0] !== page) : [];
-  if (!shown.length) return [];
-  const what = (f) => (f.file ? `picture .lab/boards/${name}/${f.file}` : f.src.startsWith('/_lab/') ? `.lab/boards/${name}/${f.id}.html` : `page ${f.src}`);
-  const pin = commentsOf(page).find((c) => c.id === name.slice(4));
-  return [`\nboard ${pin ? `on pin ${numberOf(pin, commentsOf(page))}` : 'in the page'}${b.title ? ` "${b.title}"` : ''}: ${name} (the person's references; open the files)\n${shown.map((f) => `  frame ${f.id}: ${what(f)}${f.label ? ` "${f.label}"` : ''}`).join('\n')}`];
-}).join('');
+// <lab-board> section of the same name: what the person put on each, so an agent working on the page has their references.
+// Said inside the pin's own block, right under its words (a hand-off of that pin carries them; at the end of the page
+// they landed in whichever thread came last: bench, 23 Nov), and that the words name the board, not a request. A board
+// whose pin is not listed (closed) is said at the end. The page itself (its first frame) and archived frames are left out.
+const withPageBoards = (page, text) => {
+  const all = commentsOf(page);
+  let tail = '';
+  for (const name of B.names(ROOT)) {
+    const b = name.startsWith('pin-') && boardGet(name);
+    if (!b || boardHome(b) !== page) continue;
+    const shown = b.frames.filter((f) => f.state !== 'archived' && f.src.split(/[?#]/)[0] !== page);
+    const what = (f) => (f.file ? `picture .lab/boards/${name}/${f.file}` : f.src.startsWith('/_lab/') ? `.lab/boards/${name}/${f.id}.html` : `page ${f.src}`);
+    const frames = shown.map((f) => `  frame ${f.id}: ${what(f)}${f.label ? ` "${f.label}"` : ''}`);
+    const pin = all.find((c) => c.id === name.slice(4));
+    const head = text.match(new RegExp(`^## \\d+\\. .* · id ${name.slice(4)}$`, 'm'));
+    if (pin && head) {
+      const said = `board: ${name}${b.title ? ` "${b.title}"` : ''} — this pin holds the person's references; its words name the board, they are not a request. Threads on it say "on: the board ${name}".${shown.length ? '' : ' Nothing on it yet.'}`;
+      const at = head.index + head[0].length;
+      const next = text.indexOf('\n\n## ', at);
+      const end = next < 0 ? text.length : next;
+      text = `${text.slice(0, end)}\n${[said, ...frames].join('\n')}${text.slice(end)}`;
+    } else if (shown.length) tail += `\nboard ${pin ? `on pin ${numberOf(pin, all)}` : 'in the page'}${b.title ? ` "${b.title}"` : ''}: ${name} (the person's references; open the files)\n${frames.join('\n')}`;
+  }
+  return text + tail;
+};
 // A plain HTML page: each comment's element is found in the file by its words, and its line said next to it
 // (`in file: pricing.html:30`), so an agent opens the file there instead of searching (sims, 20 Nov: a drawing's
 // action took 4-5 tool calls, most of them looking for the spot).

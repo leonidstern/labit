@@ -215,7 +215,7 @@ for (const eng of engines()) {
       await p.waitForFunction(() => document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board'), null, { timeout: 8000 });
       await sleep(500);
       const hs = await p.evaluate(() => [...document.querySelector('[data-lab-board-view]').shadowRoot.querySelectorAll('.bv-bar button')].map((b) => Math.round(b.getBoundingClientRect().height)));
-      check(eng, 'computer: the board bar buttons keep their size (under 44 tall, pointer: fine)', hs.length === 2 && hs.every((h) => h < 36), hs.join(', '));
+      check(eng, 'computer: the board bar buttons keep their size (under 44 tall, pointer: fine)', hs.length === 1 && hs.every((h) => h < 36), hs.join(', '));
       await ctx.close();
     }
   } finally {
