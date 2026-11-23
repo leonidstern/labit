@@ -129,3 +129,5 @@ Situations (batch 1), Sonnet 5.5, Claude Code 2.1.330, 20 runs per arm in two se
 | lean | 21 of 600 | 9 / 20 | $0.236 (0.220–0.252) | $0.525 | 7.5 | 340k |
 
 The lean text is about 25% shorter and costs the same per run: more than 90% of the input is the conversation read again from cache on each call, and the pin text is about 2k tokens of it. It gets more wrong (Fisher's exact test, p ≈ 0.02). Of the misses the second set names, dark mode is 5 of 10 lean runs against 1 of 10 full ones: lean leaves out the `colours:` line, the only one that says the page was dark.
+
+With `colours:` back in the lean text (20 runs per arm, `results/cost/situations-sonnet-2026-11-23-08-55.json`): full 8 of 600 wrong, 14 / 20 all right, $0.236 a run; lean 8 of 600 wrong, 15 / 20 all right, $0.242 a run. Dark mode missed in 1 of 20 runs of each. The gap is gone, and the cost is still the same.

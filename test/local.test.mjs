@@ -204,10 +204,11 @@ test('a retried post with the same nonce gives back the first comment, not a sec
 
 test('a reply in a thread the agent has comes with its thread, the new one marked; reply --wait answers and listens in one go', async () => {
   await up();
-  const { comment } = await post({ page: '/index', name: 'Leo', text: 'make the heading bigger', anchor: { selector: '#t', x: 0.1, y: 0.5, docX: 0.1, docY: 20, width: 1000, element: '<h1 id="t">', looks: 'text 32px', rules: '#t (site.css)', box: '300×40, block', viewport: '1000×800' } });
+  const { comment } = await post({ page: '/index', name: 'Leo', text: 'make the heading bigger', anchor: { selector: '#t', x: 0.1, y: 0.5, docX: 0.1, docY: 20, width: 1000, element: '<h1 id="t">', looks: 'text 32px', rules: '#t (site.css)', box: '300×40, block', viewport: '1000×800', scheme: 'dark', background: '#111111' } });
   const first = await run(['wait', '--timeout', '5']);
   assert.match(first.out, /make the heading bigger/);
   assert.doesNotMatch(first.out, /^looks:|^viewport:|^css rules|^box:/m, 'rare details stay in the full text');
+  assert.match(first.out, /^colours: dark \(background #111111\)$/m, 'dark mode is said in the hand-off: without it agents missed what a pin on a dark page meant');
   assert.match(await (await fetch(B + "/_lab/agent/index")).text(), /^ *css rules reaching it \(last wins\): #t \(site\.css\)\n? *box: 300×40, block/m, 'the full text names the rules and the box');
   const waiting = run(['reply', comment.id, 'On it', '--wait', '--timeout', '10']);
   await sleep(600);
