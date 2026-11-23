@@ -419,6 +419,16 @@ const writeAtomic = (file, text, mode) => {
     throw e;
   }
 };
+// What each file was last written with: a write that would change nothing is skipped. comments.md (the whole text,
+// 65 KB in a lab of 200 pins) was written again on every wait, progress line and restart, a page file twice when one
+// round of changes covered several pages, server.json on every mode change it doesn't hold (#427). A file deleted
+// meanwhile is written again.
+const lastWrite = new Map();
+const writeChanged = (file, text, mode) => {
+  if (lastWrite.get(file) === text && fs.existsSync(file)) return;
+  writeAtomic(file, text, mode);
+  lastWrite.set(file, text);
+};
 // The lab's small state, in one file: .lab/state.json as { name, reads, opened, archived, handed, claims, seen }, each
 // described where it is used below. Saved whole through a .tmp, a moment after its last change. A damaged
 // one is put aside (never read again or written over) and the lab starts without it. Before 19 Nov each part was a
@@ -499,8 +509,11 @@ const savePage = (page, dir = STORE) => {
   const h = db.get(`lab:comments:${page}`);
   const file = path.join(dir, storeName(page));
   const home = homes.get(page);
-  if (h?.size) writeAtomic(file, `{"v":${SCHEMA},"page":${JSON.stringify(page)},${home ? `"file":${JSON.stringify(home[0])},"fid":"${home[1]}",` : ''}"comments":{${[...h].map(([id, v]) => `${JSON.stringify(id)}:${v}`).join(',')}}}`);
-  else fs.rmSync(file, { force: true });
+  if (h?.size) writeChanged(file, `{"v":${SCHEMA},"page":${JSON.stringify(page)},${home ? `"file":${JSON.stringify(home[0])},"fid":"${home[1]}",` : ''}"comments":{${[...h].map(([id, v]) => `${JSON.stringify(id)}:${v}`).join(',')}}}`);
+  else {
+    fs.rmSync(file, { force: true });
+    lastWrite.delete(file);
+  }
 };
 let saved = {};
 // What each wait was handed, kept beside the comments (.lab/state.json, handed) and not in them: { comment id: [the stamp it
@@ -886,6 +899,11 @@ let version = { files: 0, comments: 0, commentPages: [], lab: randomBytes(4).toS
 // and rebuilt only when that page changed, so a comment costs the same with 10 comments or 20,000. The request that
 // changed something doesn't wait for the files.
 const texts = new Map(); // page → its agent text
+// comments.md as the last lab left it: a start with nothing changed writes it no more.
+const MD = path.join(LAB, 'comments.md');
+try {
+  lastWrite.set(MD, fs.readFileSync(MD, 'utf8'));
+} catch {}
 const dirty = new Set(); // pages whose text must be rebuilt
 const unsaved = new Set(); // pages whose file must be rewritten
 // Each page's comments list as last sent, per kind of request, kept until that page changes: a busy page's list is
@@ -1053,7 +1071,7 @@ function flush() {
           ? `Nobody is listening on ${deaf.map((p) => `${p.page} (${p.waiting} waiting)`).join(', ')}. ` +
             `Those pins wait until a session listens there: \`${CMD} wait --pages ${deaf.map((p) => p.page.replace(/^\//, '')).join(',')}\`\n\n`
           : '');
-      writeAtomic(path.join(LAB, 'comments.md'), head + (all.map((p) => texts.get(p)).filter(Boolean).join('\n') || 'No comments yet.\n'));
+      writeChanged(MD, head + (all.map((p) => texts.get(p)).filter(Boolean).join('\n') || 'No comments yet.\n'));
     } while (again || dirty.size || (unsaved.size && !failed));
   })().finally(() => (writing = null));
   return writing;
@@ -1276,7 +1294,7 @@ const register = () => {
 let serverSaved = true;
 const saveServer = () => {
   try {
-    writeAtomic(SERVER, JSON.stringify({ port: PORT, pid: process.pid, token: TOKEN, agent: AGENT_KEY, session }, null, 2), 0o600);
+    writeChanged(SERVER, JSON.stringify({ port: PORT, pid: process.pid, token: TOKEN, agent: AGENT_KEY, session }, null, 2), 0o600);
     serverSaved = true;
   } catch (e) {
     if (serverSaved) console.error(`[lab] could not write ${path.relative(ROOT, SERVER)}: ${/** @type {Error} */ (e).message}`);
