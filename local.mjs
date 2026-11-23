@@ -66,9 +66,10 @@ const HELP = `labit ${VERSION}: comment on local pages; your agent answers on th
 
 For the agent:
   labit wait [--bg] [--timeout 1500] [--pages /a,/b] [--name project] [--model model]
-  labit reply <id> "text" [--done|--on-it|--question] [--resolve] [--wait] [--page /path]
+  labit reply <id> "text" [--done [--checked how]|--on-it|--question] [--resolve] [--wait] [--page /path]
   labit reply <id> --progress "status" | "question" --choice A [--hint why] --choice B [--recommend B]
   labit resolve <id> [--page /path]
+  labit thread <id>   one thread whole, every message, resolved too
   labit pin <selector> "text" [--page /path] [--at x,y] [--quote words] [--question|--choice …] [--no-check]
   labit pin --file points.json | --board <name> [--frame <id>] <selector|-> "text"
   labit board new topic --of /page [--variants 3|--widths 390,820|--flow /a,/b] | list [board]
@@ -113,7 +114,7 @@ const HERE = fs.realpathSync(path.resolve(opts.dir || '.'));
 // ---------- settings (lib/settings.ts) ----------
 // labit.json in the project and ~/.config/labit/settings.json fill in what the flags and variables leave out, by
 // setting them here, so everything below (and the commands) reads them as before.
-const COMMANDS = ['publish', 'preview', 'list', 'pages', 'wait', 'reply', 'resolve', 'pin', 'invite', 'board', 'update', 'settings', 'skill'];
+const COMMANDS = ['publish', 'preview', 'list', 'pages', 'wait', 'reply', 'resolve', 'thread', 'pin', 'invite', 'board', 'update', 'settings', 'skill'];
 // Your list of actions is written into your settings once, when a lab starts (or `labit settings` shows it) with none there yet.
 if (!pos[0] || !COMMANDS.includes(pos[0]) || pos[0] === 'settings') {
   try {
@@ -167,7 +168,7 @@ if (pos[0] === 'settings') {
 }
 
 // The commands that answer and exit (publish, preview, list, pages, wait, reply, resolve, pin, invite): lib/commands.ts.
-if (['publish', 'preview', 'list', 'pages', 'wait', 'reply', 'resolve', 'pin', 'invite', 'board', 'update'].includes(pos[0])) {
+if (['publish', 'preview', 'list', 'pages', 'wait', 'reply', 'resolve', 'thread', 'pin', 'invite', 'board', 'update'].includes(pos[0])) {
   await runCommand({ pos, opts, HERE, CMD, ME, die });
 }
 
@@ -215,7 +216,7 @@ const alreadyRunning = Boolean(await runningServer());
 
 // A folder that a running lab already serves (the lab's own folder or one inside it): use that lab, don't start another.
 // Two labs on one project split its comments, and each one is another server running.
-if (!alreadyRunning && !opts.new && !['wait', 'reply', 'resolve', 'pin', 'board'].includes(pos[0])) {
+if (!alreadyRunning && !opts.new && !['wait', 'reply', 'resolve', 'thread', 'pin', 'board'].includes(pos[0])) {
   const home = runningLabs().find((lab) => ROOT.startsWith(lab.root + path.sep));
   if (home) {
     const url = `http://localhost:${home.port}/${path.relative(home.root, ROOT).split(path.sep).map(encodeURIComponent).join('/')}/`;
@@ -778,10 +779,10 @@ const setErrors = (page, device, list) => {
   if (pageErrors.size > 50) pageErrors.delete(pageErrors.keys().next().value);
   if (errorsFor(page) !== was) refreshText([page]);
 };
-const agentText = async (page) => {
+const agentText = async (page, thread = '') => {
   // Asked with the lab's own address, so the links the text gives are right as written. (It used to be asked as
   // http://localhost and every such string replaced afterwards, a comment's own "http://localhost:3000" included.)
-  const res = await api.GET(new Request(`${origin || 'http://localhost'}/api?format=text&page=${encodeURIComponent(page)}`, { headers: { host: 'localhost' } }));
+  const res = await api.GET(new Request(`${origin || 'http://localhost'}/api?format=text&page=${encodeURIComponent(page)}${thread ? `&thread=${encodeURIComponent(thread)}` : ''}`, { headers: { host: 'localhost' } }));
   const text = await res.text();
   // Paths inside the project as the project sees them (src/pages/Orders.jsx), not the whole path on this computer.
   const local = text.replaceAll(`${ROOT}/`, '').replace(/^to answer: POST .*$/m, `to answer: ${CMD} reply <id> "what you did" [--resolve], run in ${ROOT}`).replace(/^settle: pin /gm, `settle: ${CMD} pin `);
@@ -1776,7 +1777,7 @@ function threadText(page, root, replies, fresh, spot, when) {
     ...imagesOf(root).map((i) => `    ${imageLine(root, i)}`),
     ...spot.map((l) => `  ${l}`),
   ];
-  if (from) out.push(`- … ${from} earlier message${from === 1 ? '' : 's'} (read them first, the whole thread: http://localhost:${PORT}/_lab/agent${page})`);
+  if (from) out.push(`- … ${from} earlier message${from === 1 ? '' : 's'} (read them first: ${CMD} thread ${root.id} prints the whole thread)`);
   for (const r of replies.slice(from)) {
     const state = r.session ? STATE[r.intent] : '';
     // A pick on a question with choices says which question it answers (the words already say which choice).
@@ -2954,7 +2955,7 @@ const handler = async (req, res) => {
     }
     if (pathname.startsWith('/_lab/agent/')) {
       res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
-      const said = await agentText(pathname.slice('/_lab/agent'.length));
+      const said = await agentText(pathname.slice('/_lab/agent'.length), url.searchParams.get('thread') || ''); // ?thread=<id>: that thread whole, resolved too
       return res.end(isLoopback(req) || isAgent(req) ? said : forGuestText(said));
     }
     // Read marks, shared by name: GET ?name=&page= gives the ids read there; POST { name, page, ids } adds to them.

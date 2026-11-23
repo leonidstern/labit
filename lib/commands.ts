@@ -187,7 +187,7 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
   }
 
   // ---------- Claude's side: wait, reply, resolve, pin ----------
-  if (['wait', 'reply', 'resolve', 'pin', 'invite'].includes(pos[0])) {
+  if (['wait', 'reply', 'resolve', 'thread', 'pin', 'invite'].includes(pos[0])) {
     // `pin move <id> <selector>` and `pin gone <id>` settle a pin that is already there; any other `pin` makes one.
     const settle = pos[0] === 'pin' && (pos[1] === 'move' || pos[1] === 'gone') ? pos[1] : '';
     const [cmd, ref, ...words] = settle ? [pos[0], ...pos.slice(2)] : pos;
@@ -474,6 +474,13 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
       hit = hits[0];
     }
     if (!hit) die(`No open comment ${ref || ''}${want ? ` on ${want}` : ''}. See .lab/comments.md.`);
+    // thread <id>: the whole thread, every message, resolved or not (a long one is cut short in a hand-off, #425).
+    if (cmd === 'thread') {
+      const out = await call(`/_lab/agent${hit.page}?thread=${encodeURIComponent(hit.id)}`, {});
+      if (out.status >= 300) die(`Could not read it: ${out.text}`);
+      process.stdout.write(out.text);
+      process.exit(0);
+    }
     // pin move / pin gone: the agent that changed the page settles a pin the page was unsure of (its words changed, a copy,
     // a spot that cannot be told). move puts it on the element <selector> finds (and --quote on words in it); gone says
     // its spot has been removed: the page draws a ghost where it stood. Nothing is told to the agent about it again.
