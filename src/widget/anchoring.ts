@@ -1506,7 +1506,13 @@ export function zoneAnchor({ x0, y0, x1, y1 }) {
     const B = (window as unknown as { __labBoard?: { anchor: (x: number, y: number) => Anchor; size?: (id: string) => { w: number; h: number } | null } }).__labBoard;
     const [p, q] = [B?.anchor(left, top), B?.anchor(right, bottom)];
     const size = p?.frame && p.frame === q?.frame ? B?.size?.(p.frame) : null;
-    if (!p || !q || !size) return anchor;
+    if (!p || !q) return anchor;
+    // Not within one frame (an arrow from one frame to another, a ring on the canvas): on the board itself, its corner and its
+    // size in the board's px, so it keeps its lines and goes with the board's camera. It was a point, and its lines were lost (#423).
+    if (!size) {
+      const { kind, board, selector, x, y, docX, docY, width, height } = p;
+      return { kind, board, selector, x, y, docX, docY, width, height, bx: p.bx, by: p.by, zw: 1, zh: 1, docW: Math.max(1, Math.round(q.bx - p.bx)), docH: Math.max(1, Math.round(q.by - p.by)), pinX: x1 >= x0 ? 1 : 0, pinY: y1 >= y0 ? 1 : 0 };
+    }
     const [w, h] = [Math.round(q.fx - p.fx), Math.round(q.fy - p.fy)];
     return Object.assign(p, { zw: w / size.w, zh: h / size.h, fw: size.w, fh: size.h, docW: w, docH: h, pinX: x1 >= x0 ? 1 : 0, pinY: y1 >= y0 ? 1 : 0, ...(p.nw && { imgX2: q.imgX, imgY2: q.imgY }) });
   }
