@@ -98,3 +98,13 @@ test('a wake not acted on is sent once more at the next stop, then not again', a
   await post('and the header', '/pricing');
   assert.match(JSON.parse(await stop('A')).reason, /^labit: 2 new pins/, 'a new pin is a new set: woken again');
 });
+
+test('a pin handed to a wait with no word back is listed as quiet until the agent says something on it', async () => {
+  await wait('B', { pages: ['/dashboard'], ack: true });
+  const q = (await pending('B')).quiet || [];
+  assert.ok(q.length >= 1, 'handed, not answered: quiet');
+  assert.ok(q.every((x) => x.id && x.at));
+  const id = q[0].id;
+  await call('/_lab/api/comments', { page: '/dashboard', action: 'progress', id, text: 'after the build' }, 'B');
+  assert.ok(!(await pending('B')).quiet.some((x) => x.id === id), 'a status line takes it off the list');
+});
