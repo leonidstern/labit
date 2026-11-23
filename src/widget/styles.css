@@ -329,8 +329,10 @@ button.btn.undo { color: var(--_fg); }
 .chatwin .chat { flex: none; background: var(--_bg); padding: 6px 6px 8px; }
 .msgs { display: flex; flex-direction: column; gap: 8px; padding: 4px 10px 8px; overflow-x: hidden; }
 .msgs > :first-child { margin-top: auto; } /* a short conversation sits by the box, like a chat */
-/* A long chat lays out only the messages near the screen; each keeps its last height while away. */
-.msgs > .msg { content-visibility: auto; contain-intrinsic-size: auto 64px; }
+/* A long chat lays out only the messages near the screen; each keeps its last height while away. Not a thread card's:
+   its first frame drew each message at the 64 px guess, then the card grew and jumped when the next pin was clicked
+   (#467, Leo: "clicking new glitching"). */
+.chatwin .msgs > .msg { content-visibility: auto; contain-intrinsic-size: auto 64px; }
 /* The agent's folded "on it" messages: one small muted row ("2 updates ›"), a tap opens them in place. */
 .msgs > .updates { align-self: flex-start; background: none; border: 0; padding: 2px 4px; margin: 0; font: inherit; font-size: 12px; letter-spacing: 0; color: var(--_muted); cursor: pointer; border-radius: var(--_radius); }
 .msgs > .updates:hover, .msgs > .updates:focus-visible { color: var(--_fg); }

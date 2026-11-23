@@ -1257,7 +1257,13 @@ import { bindKeys } from './widget/keys.ts';
         S.stepping = S.keepKeys = false;
         next.push(card);
         const boardPin = c.anchor?.kind === 'board' && !heldPin(pin); // held to the screen by the script (onBoard), not tied
-        placeCard(card, zone ? left + 14 : left, zone ? zone.top + zone.height : top, nativeTie() && !boardPin ? pin : null, zone ? zone.top - 12 : top - 40);
+        // An area's card goes past the area (so it doesn't hide it) only while that edge is near the pin: a tall area
+        // with its pin far from the edge put the card hundreds of px from its pin (#467, Leo: "pin should be connected
+        // to window"). Then it goes by the pin, as a point's does.
+        const near = 120;
+        const under = zone && zone.top + zone.height - top < near ? zone.top + zone.height : top;
+        const over = zone && top - zone.top < near ? zone.top - 12 : top - 40;
+        placeCard(card, zone ? left + 14 : left, under, nativeTie() && !boardPin ? pin : null, over);
         if (boardPin && !sheetMode.matches) onBoard(card, c.anchor);
         // A question with choices on quoted words: by its quote, in the margin or under it (thread.ts). Drawn again after
         // the pick, it stays where it was instead of jumping back under its pin.

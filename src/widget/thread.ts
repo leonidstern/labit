@@ -59,8 +59,9 @@ function followPin(node: HTMLElement, tie: Tie) {
 // Where a card goes, in the window's own px: want's cx / cy are its corner below its pin, ay its bottom above it. In
 // this order: below, above, beside (right, then left) a pin that is a point; the first that has the card whole in the
 // window (12 px in from the sides, 8 from the top and bottom, the reply box with it). The side it was on goes first,
-// so the card stays where it is while it still fits and a small change never turns it over. Where none fits, below
-// it, held inside the window while its pin is in sight.
+// so the card stays where it is while it still fits and a small change never turns it over. Beside counts only while
+// the card is level with its pin. Where none fits, below or above (the side with more room), held inside the window
+// while its pin is in sight.
 type Side = 'below' | 'above' | 'right' | 'left';
 let kept: [unknown, Side] | null = null;
 function spot(want: Want, w: number, h: number, bottom?: number): [number, number, Side] {
@@ -74,10 +75,14 @@ function spot(want: Want, w: number, h: number, bottom?: number): [number, numbe
   const was = kept?.[0] === id && W.S.shown === id ? kept[1] : null; // a thread opened afresh starts from the order
   const whole = (s: Side | null) => {
     const p = s && at[s];
-    return Boolean(p && p[0] >= 11.5 && p[0] + w <= vw - 11.5 && p[1] >= 7.5 && p[1] + h <= vh - 7.5);
+    // Beside, the card has to stay level with its pin (its top no lower than the pin's, its bottom no higher than the
+    // pin's): held inside the window with the pin past its edge, it floated mid-page with nothing tying it (#467).
+    const level = s === 'right' || s === 'left' ? Boolean(p && p[1] <= cy - 45.5 && p[1] + h >= cy - 22) : true;
+    return Boolean(p && level && p[0] >= 11.5 && p[0] + w <= vw - 11.5 && p[1] >= 7.5 && p[1] + h <= vh - 7.5);
   };
   const fits = [was, 'below', 'above', 'right', 'left'].find((s) => whole(s as Side | null)) as Side | undefined;
-  const side = fits || was || 'below';
+  // None fits: never beside (that floats off its pin), but below or above, whichever has more room (#467).
+  const side = fits || (was === 'below' || was === 'above' ? was : vh - cy >= ay ? 'below' : 'above');
   if (id) kept = [id, side];
   const [l, t] = at[side] || at.below!;
   return [l, fits || cy < 0 || cy > vh ? t : Math.max(8, Math.min(t, vh - 8 - h)), side];
