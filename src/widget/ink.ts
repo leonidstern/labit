@@ -78,14 +78,29 @@ const smooth = (pts: number[]) => {
   for (let i = 0; i < n - 1; i++) d += curve(pts, i);
   return d;
 };
+// A pen width, to the half px: the segments a line is drawn in join into one path while their width rounds the same.
+const half = (tenths: number) => Math.round(tenths / 5) / 2;
+// At most this many segments a path (a growing path is read again whole each time it grows).
+const RUN = 64;
 function widths(pts: number[], w?: number[]) {
   if (!w || w.length * 2 !== pts.length) return [path(smooth(pts))];
   const out: SVGPathElement[] = [];
-  for (let i = 1; i < w.length; i++) {
-    const p = path(`M${pts[(i - 1) * 2]} ${pts[(i - 1) * 2 + 1]}${curve(pts, i - 1)}`);
-    p.style.strokeWidth = `${((w[i - 1] + w[i]) / 20).toFixed(1)}px`;
+  let [d, wd, n] = ['', -1, 0];
+  const flush = () => {
+    if (!d) return;
+    const p = path(d);
+    p.style.strokeWidth = `${wd}px`;
     out.push(p);
+  };
+  for (let i = 1; i < w.length; i++) {
+    const wv = half((w[i - 1] + w[i]) / 2);
+    if (wv === wd && n < RUN) [d, n] = [d + curve(pts, i - 1), n + 1];
+    else {
+      flush();
+      [d, wd, n] = [`M${pts[(i - 1) * 2]} ${pts[(i - 1) * 2 + 1]}${curve(pts, i - 1)}`, wv, 1];
+    }
   }
+  flush();
   return out.length ? out : [path(smooth(pts))];
 }
 
@@ -97,31 +112,56 @@ export function liveInk() {
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('class', 'ink live');
   const strokes: P[][] = [];
-  // Segment i of a stroke, from point i - 1 to i, its curve read on the points around it (two before, one after).
+  const at = (q: P) => [Math.round(q.x), Math.round(q.y)];
+  // Segment i of a stroke, from point i - 1 to i: its curve, read on the points around it (two before, one after), and its width.
   const seg = (s: P[], i: number) => {
     const from = Math.max(0, i - 2);
-    const near = s.slice(from, i + 2);
-    const p = path(`M${Math.round(s[i - 1].x)} ${Math.round(s[i - 1].y)}${curve(near.flatMap((q) => [Math.round(q.x), Math.round(q.y)]), i - 1 - from)}`);
-    p.style.strokeWidth = `${((Math.round((s[i - 1].w || 3) * 10) + Math.round((s[i].w || 3) * 10)) / 20).toFixed(1)}px`;
-    return p;
+    return { c: curve(s.slice(from, i + 2).flatMap(at), i - 1 - from), w: half((Math.round((s[i - 1].w || 3) * 10) + Math.round((s[i].w || 3) * 10)) / 2) };
   };
-  const grow = (g: SVGGElement, s: P[]) => {
-    g.lastChild?.remove();
-    for (let i = g.childElementCount + 1; i < s.length; i++) g.append(seg(s, i));
+  // A stroke's group: its settled segments, joined into paths while their width rounds the same (as a saved drawing's, above),
+  // and its last segment on its own (its curve still leans on the point to come).
+  type G = { g: SVGGElement; done: number; run: SVGPathElement | null; d: string; w: number; n: number; tail: SVGPathElement | null };
+  const groups: G[] = [];
+  const grow = (G: G, s: P[]) => {
+    for (; G.done < s.length - 2; G.done++) {
+      const i = G.done + 1;
+      const { c, w } = seg(s, i);
+      if (G.run && w === G.w && G.n < RUN) {
+        G.d += c;
+        G.n++;
+        G.run.setAttribute('d', G.d);
+      } else {
+        const [x, y] = at(s[i - 1]);
+        G.d = `M${x} ${y}${c}`;
+        G.run = path(G.d);
+        G.run.style.strokeWidth = `${w}px`;
+        [G.w, G.n] = [w, 1];
+        G.g.insertBefore(G.run, G.tail);
+      }
+    }
+    if (s.length < 2) return;
+    const { c, w } = seg(s, s.length - 1);
+    const [x, y] = at(s[s.length - 2]);
+    G.tail ??= G.g.appendChild(path(''));
+    G.tail.setAttribute('d', `M${x} ${y}${c}`);
+    G.tail.style.strokeWidth = `${w}px`;
   };
   const group = (s: P[]) => {
-    const g = document.createElementNS(NS, 'g');
-    grow(g, s);
-    return g;
+    const G: G = { g: document.createElementNS(NS, 'g'), done: 0, run: null, d: '', w: -1, n: 0, tail: null };
+    groups.push(G);
+    grow(G, s);
+    return G.g;
   };
   // All of it again: a stroke taken back or made neat.
-  const paint = () => svg.replaceChildren(...strokes.map(group));
+  const paint = () => {
+    groups.length = 0;
+    svg.replaceChildren(...strokes.map(group));
+  };
   // The last stroke's new points (a stroke begun since: its group too).
   const add = () => {
-    if (svg.childElementCount === strokes.length - 1) svg.append(document.createElementNS(NS, 'g'));
-    if (svg.childElementCount !== strokes.length) return paint();
-    const s = strokes.at(-1);
-    if (s) grow(svg.lastChild as SVGGElement, s);
+    if (groups.length === strokes.length - 1) svg.append(group([]));
+    if (groups.length !== strokes.length) return paint();
+    grow(groups[groups.length - 1], strokes[strokes.length - 1]);
   };
   return { svg, strokes, paint, add };
 }
