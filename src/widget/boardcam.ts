@@ -20,30 +20,31 @@ export const showBoard = (name: string, of = '', push = true) =>
     if (S.draft?.anchor?.kind === 'board') S.draft = null;
     W.render();
   } })), () => W.say("the board couldn't load"));
-/** +board: the comment just sent is a board pin (Leo, 23 Nov, issue 422, pick 6C): a board for pictures and pages named after it
- * (pin-<id>, the lab's own, kept out of every list), its card holds it, and it opens. Nothing is written into the page. */
-export const boardOnPin = async (c: { id: string }, title: string) => {
-  const name = `pin-${c.id}`;
-  const made = await fetch('/_lab/api/board', { method: 'POST', headers: W.headers(), body: JSON.stringify({ action: 'new', name, of: `${S.page}#${name}`, topic: title }) }).then((r) => r.ok, () => false);
-  if (!made) return W.say("the board couldn't be made");
-  S.pinBoards.add(c.id);
-  W.render();
-  return showBoard(name);
-};
 /** A board pin taken back (undo, ⌘Z): its board went with it, so it is no longer one, and its view closes if open. */
 export const pinBoardGone = (id: string) => {
   if (!S.pinBoards?.delete(id)) return;
   void W.part('boardview').then((m) => m.hide(`pin-${id}`), () => {});
 };
-// The pins on this page that hold a board (pin-<id> boards about this page), read from the lab's list of boards.
+// This page's boards, read from the lab's list: the bar's "boards" part lists them (Leo, 23 Nov, S5: every board of a
+// page in one place, no hidden ones). Pins that hold a board (pin-<id>, made by +board before) still show it in their card.
+type Listed = { name: string; of?: string; title?: string; frames: number };
 const loadPinBoards = () =>
   fetch('/_lab/api/board', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null), () => null).then((d) => {
     if (!d?.boards) return;
-    const ids = (d.boards as { name: string; of?: string }[]).filter((b) => b.name.startsWith('pin-') && b.of === `${S.page}#${b.name}`).map((b) => b.name.slice(4));
-    const same = ids.length === S.pinBoards.size && ids.every((id) => S.pinBoards.has(id));
+    const mine = (d.boards as Listed[]).filter((b) => (b.of || '').split('#')[0] === S.page);
+    const ids = mine.filter((b) => b.name.startsWith('pin-') && b.of === `${S.page}#${b.name}`).map((b) => b.name.slice(4));
+    const was = JSON.stringify([...S.pinBoards, S.pageBoards]);
     S.pinBoards = new Set(ids);
-    if (!same) W.render();
+    S.pageBoards = mine;
+    if (JSON.stringify([...S.pinBoards, S.pageBoards]) !== was) W.render();
   });
+/** "+ New board" in the boards list: a board of this page, named after it, and it opens. */
+export const newBoard = async () => {
+  const made = await fetch('/_lab/api/board', { method: 'POST', headers: W.headers(), body: JSON.stringify({ action: 'new', of: S.page }) }).then((r) => (r.ok ? r.json() : null), () => null);
+  if (!made?.board) return W.say("the board couldn't be made");
+  void loadPinBoards();
+  return showBoard(made.board.name);
+};
 /** A board pin's card holds its board: the strip of what is on it and Open (the strip a board section had, overlay.ts). */
 export const boardStrip = (c: { id: string }) => {
   if (!S.pinBoards?.has(c.id)) return null;
@@ -166,6 +167,7 @@ export function bindBoardCam(w: unknown) {
   // A board page (src/board/): a tap in comment mode puts a pin on the board (anchoring.ts asks the board where a point is
   // and where a pin sits), and the pins move with the camera.
   S.pinBoards = new Set<string>();
+  S.pageBoards = [] as Listed[];
   if (W.boards && !S.board && self === top) {
     defineSection();
     void loadPinBoards();

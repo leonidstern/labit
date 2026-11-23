@@ -4,6 +4,12 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 
 ## Unreleased
 
+- **A page's boards are in the bar.** "boards · N" shows while the page has boards, yours and the agent's (`labit board new --of /page`); its click lists them with "new board", and the ⋯ menu has "new board" for a page with none. The comment box no longer has `+board`, and boards are no longer pins (those made before still open from their pin).
+- **Fine lines in pictures on a board no longer sparkle as you zoom in Safari.** Each picture is its own layer, scaled as it is, and far out it is drawn from a smaller copy of itself near its size on screen.
+- **A picked frame on a board has the same thin outline as hover.** No thicker ring.
+- **A board is made on the page you asked on.** `labit board new` without `--of` is about the page of the pins the agent was handed, a board pin there; with no such page it asks which page instead of making a board of its own. The skill says the same.
+- **A drawing lands as you drew it.** Every point you drew is kept (up to 500 a line, was thinned to half a px and 200) and placed to a tenth, so the line that lands is the line you saw.
+- **A click with the ⋯ menu open only closes it.** It no longer also starts a pin.
 - **The listening mark sits in the bar.** It is the bar's last part, after ⋯, on the bar's own colour, so it reads on a black page too (it showed only its eye there). Its words open above the bar's end.
 - **A board lets go of an open frame when you click beside it.** A double-click opens a frame to use its page; a click on the empty board now closes it again, as Esc does, so the board's keys, paste and drag work without a reload. Pasting several pictures at once puts each one on the board, side by side in the order pasted, not only the first.
 - **Arrows land as you drew them.** A drawing keeps every stroke, an arrow's own head too; the clean head that was drawn at the end of its line landed on a barb or past a jitter, small or backwards. An arrow with a curl at its end no longer reads as scribbled over.

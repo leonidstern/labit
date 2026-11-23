@@ -490,6 +490,7 @@ kbd, .onb { transition: opacity var(--_t-quick) var(--_ease-out); } /* .onb: wha
 /* A pin left by the agent: labit's mark in place of a letter. */
 .pin .agentmark { width: 60%; height: 60%; display: block; }
 .more-menu kbd { margin: 0; }
+.more-menu .n { color: var(--_muted); } /* a board's frame count in the boards list */
 /* Which labit this is: the menu's last line, small and quiet, selectable to paste into a bug report. */
 .more-menu .labit-version { margin: 4px 10px 2px; padding-top: 6px; border-top: var(--_hair); font-size: 11px;
   color: var(--_muted); user-select: text; overflow-wrap: anywhere; }

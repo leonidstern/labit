@@ -6,7 +6,8 @@ type P = { x: number; y: number; w?: number };
 type Ink = { mark: string; from?: string; to?: string; pts: number[][]; w?: number[][]; marks?: string[]; cut?: number; head?: number; whole?: boolean };
 type Read = { mark: string; from?: string; to?: string; box: { l: number; t: number; r: number; b: number }; lines: P[][]; marks?: string[]; cut?: number; head?: number; whole?: boolean };
 
-// The drawing as an area comment: the area (at least min each way), plus the lines as 0–1000 across and down it.
+// The drawing as an area comment: the area (at least min each way), plus the lines as 0–1000 across and down it, to a
+// tenth (whole steps moved points of a wide drawing by up to 3 px as it landed).
 export function inkAnchor({ mark, from, to, box, lines, marks, cut, whole }: Read, min: number) {
   for (const [a, b] of [['l', 'r'], ['t', 'b']] as const) {
     if (box[b] - box[a] >= min) continue;
@@ -14,7 +15,7 @@ export function inkAnchor({ mark, from, to, box, lines, marks, cut, whole }: Rea
     [box[a], box[b]] = [mid - min / 2, mid + min / 2];
   }
   const anchor = zoneAnchor({ x0: box.l, y0: box.t, x1: box.r, y1: box.b });
-  const fit = (v: number, a: number, b: number) => Math.round(((v - a) / (b - a)) * 1000);
+  const fit = (v: number, a: number, b: number) => Math.round(((v - a) / (b - a)) * 10000) / 10;
   anchor.ink = { mark, from, to, pts: lines.map((s) => s.flatMap((p) => [fit(p.x, box.l, box.r), fit(p.y, box.t, box.b)])) };
   // The pen's width at each point, in tenths of a px (pressure with a pen, speed otherwise): Leo's pick 4, 20 Nov.
   if (marks?.length) anchor.ink.marks = marks;
@@ -116,7 +117,7 @@ export function liveInk() {
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('class', 'ink live');
   const strokes: P[][] = [];
-  const at = (q: P) => [Math.round(q.x), Math.round(q.y)];
+  const at = (q: P) => [Math.round(q.x * 10) / 10, Math.round(q.y * 10) / 10]; // to a tenth, as the sent line is kept: whole px moved the line a little as it landed (Leo, 23 Nov, Safari)
   // Segment i of a stroke, from point i - 1 to i: its curve, read on the points around it (two before, one after), and its width.
   const seg = (s: P[], i: number) => {
     const from = Math.max(0, i - 2);

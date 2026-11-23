@@ -67,6 +67,9 @@ export function drawList(places?: Map<string, { moved?: boolean }>) {
   const gone = movedPins(places);
   W.movedBtn.hidden = !W.S.on || !gone.length;
   W.movedBtn.textContent = `moved · ${gone.length}`;
+  const boards = W.S.pageBoards?.length || 0; // this page's boards (boardcam.ts): the bar's part while there are any
+  W.boardsBtn.hidden = !W.S.on || !boards;
+  W.boardsBtn.textContent = `boards · ${boards}`;
   W.doneBtn.hidden = !W.S.on;
   W.doneBtn.disabled = !doneCount && !W.S.showDone;
   W.doneBtn.classList.toggle('quiet', W.doneBtn.disabled);

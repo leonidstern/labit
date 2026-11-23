@@ -66,6 +66,18 @@ try {
           check(eng, `the ⋯ menu fades out after ${how === 'esc' ? 'Esc' : 'the ⋯ button'}`, shown.length >= 3 && shown[1] < 1 && fr[fr.length - 1] === null, `${shown.length} frames shown, second frame opacity ${shown[1]}`);
           await sleep(200);
         }
+        // A click on the page with the menu open only closes it: no new pin, no comment box (Leo, 23 Nov)
+        await open();
+        await p.mouse.click(300, 300);
+        await sleep(600);
+        const after = await sh(p, `({ menu: !r.querySelector('.more-menu').hidden, box: r.querySelectorAll('textarea').length })`);
+        check(eng, 'a click on the page with the ⋯ menu open closes it and pins nothing', !after.menu && after.box === 0, JSON.stringify(after));
+        await p.mouse.click(300, 300);
+        await sleep(600);
+        const again = await sh(p, `r.querySelectorAll('textarea').length`);
+        check(eng, 'the next click on the page pins as usual', again === 1, String(again));
+        await p.keyboard.press('Escape');
+        await sleep(300);
         // Over the page's own top-layer dialog (non-modal) and a fixed element at the highest z-index: is the menu's first item what a click would hit?
         await p.evaluate('document.getElementById("dlg").show()');
         const b = await sh(p, `(() => { const q = r.querySelector('.more').getBoundingClientRect(); return [q.x + q.width / 2, q.y + q.height / 2]; })()`);

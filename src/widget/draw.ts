@@ -41,13 +41,15 @@ const winding = (s: P[]) => {
   }
   return Math.abs(sum);
 };
-// At most 200 points a line, thinned evenly over its whole length (cutting the list dropped the end). Thinned only
-// by half a px while it fits, so the drawing lands in the shape it was drawn (80 points by 1.5 px straightened its
-// curves as it landed, Leo 23 Nov: "blinking after mouse release").
+// A line lands with every point it was drawn with, so it is the line you saw (Leo, 23 Nov: "i want them land as they
+// drawed"; thinning by half a px still moved its curves). Only a line of more than 500 points is thinned, evenly over
+// its whole length (cutting the list dropped the end).
+const MAX_PTS = 500;
 const thin = (s: P[]) => {
+  if (s.length <= MAX_PTS) return s;
   let eps = 0.5;
   let c = cut(s, eps);
-  while (c.length > 200) c = cut(s, (eps *= 1.5));
+  while (c.length > MAX_PTS) c = cut(s, (eps *= 1.5));
   return c;
 };
 // The area a line closes (shoelace): next to none for a line drawn there and back.
