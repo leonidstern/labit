@@ -38,6 +38,7 @@
   "classes": {
     "pinboard": "the host of a board pin's strip in its card (boardcam.ts); the board's part draws the strip inside it, so no rule of the widget's styles it",
     "copy-all": "the copy-link button: a row of the ⋯ menu (its rules), or hidden in the corner when comments are off; comments.js looks it up",
+    "boards-btn": "the page's \"boards · N\" part of the bar (comments.js looks it up, list.ts fills it); a bar segment like the others, no rule of its own",
     "moved-btn": "the 'moved' button in the bar; comments.js looks it up and the browser tests click it",
     "nm": "the name box in the first-comment form; the tests fill it",
     "ini": "the pointer's inner mark; comments.js sets its text and the tests read it",
