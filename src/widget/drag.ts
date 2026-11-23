@@ -66,6 +66,14 @@ export const endDrag = (e) => {
     }
     return;
   }
+  // Holding D, a press that hardly moved is no click (it opened an empty box, and the next D typed a "d" into it, which
+  // then kept every stroke after it from drawing; issue 423): the drawing waits on, as after a stroke.
+  if (d.ink && !d.active && e.type !== 'pointercancel') {
+    S.afterDrag = true;
+    setTimeout(() => (S.afterDrag = false), 0);
+    if (S.inking) S.inkTimer = setTimeout(endInk, 1000);
+    return;
+  }
   if (!d.active || e.type === 'pointercancel') return;
   // The click that follows this pointerup belongs to the drag, not a new pin.
   S.afterDrag = true;
@@ -247,14 +255,15 @@ export function bindDrag(w: unknown) {
         const st = S.inking.strokes.at(-1);
         const q = st.at(-1);
         const now = e.timeStamp;
-        const x = e.clientX + scrollX;
-        const y = e.clientY + scrollY;
+        // The move's own place on the page: asking the window how far it is scrolled made the browser lay the page out
+        // again on every move (the ink had just changed), most of what a move took (issue 423).
+        const { pageX: x, pageY: y } = e;
         const speed = q ? Math.hypot(x - q.x, y - q.y) / Math.max(1, now - (S.inkT || now - 16)) : 0; // px a ms
         S.inkT = now;
         // A pen's pressure sets the width; a mouse or finger draws thinner the faster it moves (Leo's pick 4, 20 Nov).
         const want = e.pointerType === 'pen' && e.pressure > 0 ? 1.5 + e.pressure * 4 : Math.max(1.6, Math.min(5, 5 - speed * 1.8));
         st.push({ x, y, w: q?.w ? (q.w + want) / 2 : want });
-        return void S.inking.paint();
+        return void S.inking.add();
       }
       S.zoneFrame ||= requestAnimationFrame(paintZone);
     },
