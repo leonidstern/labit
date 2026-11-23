@@ -314,12 +314,13 @@ export function bindMotion(w: unknown) {
   box = W.el('div', { class: `more-menu motion-menu${W.coarse ? ' motion-sheet' : ''}`, role: 'menu', 'aria-label': 'motion', hidden: '' });
   (W.root.querySelector('.ui') || W.root).append(box);
   if (W.coarse) W.swipeDown(box, closeMotion);
-  else if ('showPopover' in HTMLElement.prototype) {
-    box.popover = 'auto';
-    box.addEventListener('toggle', (e) => (e as ToggleEvent).newState === 'closed' && ((open = false), (box.hidden = true))); // a press elsewhere, or Esc
-  } else {
+  else {
+    // A manual popover: above the page's own dialogs, closed here on a press elsewhere, Esc or leaving the window. An
+    // auto one closed again in WebKit on the lift of the very right-click that opened it.
+    if ('showPopover' in HTMLElement.prototype) box.popover = 'manual';
     addEventListener('pointerdown', (e) => open && !e.composedPath().includes(box) && closeMotion(), true);
-    addEventListener('keydown', (e) => open && e.key === 'Escape' && closeMotion(), true);
+    addEventListener('keydown', (e) => open && e.key === 'Escape' && (swallow(e), closeMotion()), true);
+    addEventListener('blur', () => closeMotion());
   }
   // Computers: a right-click on a moving thing (Leo, 23 Nov, 1a); anywhere else, or with ⇧, or with comments hidden, the
   // browser's own menu. Full screen is the browser's.
