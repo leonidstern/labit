@@ -35,7 +35,7 @@ codex plugin marketplace add leonidstern/labit
 
 **Cursor:** install labit from the repository as a plugin (it carries the skill and the hooks).
 
-**opencode:** one file, in your project (or `~/.config/opencode/plugins/` for every project), and the skill from the CLI:
+**opencode** (2.x): one file, in your project (or `~/.config/opencode/plugins/` for every project), and the skill from the CLI:
 
 ```sh
 mkdir -p .opencode/plugins && curl -fsSL https://raw.githubusercontent.com/leonidstern/labit/main/hooks/agent.mjs -o .opencode/plugins/labit.js
