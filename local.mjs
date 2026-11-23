@@ -1752,7 +1752,7 @@ async function threadsText(page, threads, who = '') {
     boardTold.set(`${who}\n${page}`, frames);
     head = `${frames.trim()}\n${head}`;
   }
-  // Lean: details an agent rarely needs (computed looks, colours, window size, the CSS path) stay in the full text at
+  // Lean: details an agent rarely needs (computed looks, the CSS rules and path, the box) stay in the full text at
   // /_lab/agent/<page>; the pin's words, element, text, section and file stay here.
   const parts = text.split('\n## ').slice(1).filter((b) => threads.some((id) => b.split('\n')[0].endsWith(`· id ${id}`))).map((b) => b.split('\n').filter((l) => !LEAN_SKIP.test(l)).join('\n'));
   const ids = threads.filter((id) => parts.some((b) => b.split('\n')[0].endsWith(`· id ${id}`)));
