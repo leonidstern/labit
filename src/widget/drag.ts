@@ -109,8 +109,7 @@ export const endDrag = (e) => {
   S.openId = null;
   W.begin(zoneAnchor(d));
 };
-// What a drawing sent with no words says: its mark, without the guess in brackets.
-export const inkSaid = (mark = '') => mark.replace(/\s*\(likely:.*\)$/, '') || 'drawing';
+export { inkSaid } from '../../lib/schema.mjs'; // what a drawing sent with no words says (the lab reads it back the same way)
 async function endInk() {
   clearTimeout(S.inkTimer);
   const ink = S.inking;
