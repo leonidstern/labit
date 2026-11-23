@@ -1841,7 +1841,14 @@ async function unseen(scope = pages(), who = '') {
     if (block) {
       blocks.push(block.text);
       block.ids.forEach((id) => sent.add(`${page}\n${id}`));
-      if (block.file) sameFile.set(block.file, [...(sameFile.get(block.file) || []), ...block.pins.filter((p) => p.n).map((p) => ({ page, n: p.n }))]);
+      // A pin's file is where its element is written (`written at:`, a component's file on a framework's page), else
+      // the page's own: pins on one header component from two pages are one job too (#420).
+      for (const pin of block.pins.filter((p) => p.n)) {
+        // (The page sends `source`, a guest's page too: only a plain path to a file that is there in the folder counts.)
+        const src = String(commentsOf(page).find((c) => c.id === pin.id)?.anchor?.source || '').replace(/(:\d+){1,2}$/, '');
+        const file = (/^[\w@-][\w@./-]{0,200}$/.test(src) && !src.split('/').includes('..') && fs.existsSync(path.join(ROOT, src)) && src) || block.file;
+        if (file) sameFile.set(file, [...(sameFile.get(file) || []), { page, n: pin.n }]);
+      }
     }
   }
   // Pins on the same file are one job for one writer: say so once ("Same file: options.html: 2, 5, 7"), only for 2 or more.
@@ -2651,11 +2658,19 @@ const handler = async (req, res) => {
       // (claimed for half an hour so an all-pages wait doesn't take them): those are the very pages the session that
       // listened last is woken for, and leaving them out kept every `wait --pages` session from ever being woken.
       const heard = new Set(waiters.flatMap((w) => scopeOf(w)));
-      const fresh = freshIn(pages().filter((p) => !heard.has(p)));
+      const unheard = freshIn(pages().filter((p) => !heard.has(p)));
+      // A hook that names its session (?for=<id>, #420) is told only that session's pins: a page a session claimed
+      // (its wait named it, half an hour) is that session's; any other page is the one that listened last's, whose
+      // `wait` for every page hears it. Two sessions on two pages each get woken for their own (before, only the one
+      // that listened last was, and its wait couldn't take the other's pins). No session said: every pin, as before.
+      const asker = (url.searchParams.get('for') || '').slice(0, 80);
+      const owners = [...claims].filter(([p, at]) => Date.now() - at < CLAIM_MS && claimOwner.get(p)).map(([p]) => [p, claimOwner.get(p)]);
+      const ownerOf = (page) => owners.find(([p]) => covers([p], page))?.[1] || session?.id || '';
+      const fresh = asker ? unheard.filter(({ page }) => ownerOf(page) === asker) : unheard;
       const ids = fresh.map(({ c }) => c.id).sort();
       // The threads someone claimed (a status line from --progress, or an "on it" reply, since the person's last words):
       // the plugin's hook renews that line while its own session runs tools. A pin nobody claimed gets none.
-      const working = pages().flatMap((page) => commentsOf(page).filter((c) => !c.parent && !c.resolved && c.handedAt).flatMap((c) => {
+      const working = pages().flatMap((page) => commentsOf(page).filter((c) => !c.parent && !c.resolved && c.handedAt && !(asker && (handoff[c.id]?.[1] || ownerOf(page)) !== asker)).flatMap((c) => {
         const msgs = commentsOf(page).filter((r) => r.parent === c.id);
         const lastAt = (mine) => [c, ...msgs].filter((m) => Boolean(m.session) === mine).map((m) => m.createdAt).sort().pop() || '';
         const reply = msgs.filter((m) => m.session).sort((a, b) => a.createdAt.localeCompare(b.createdAt)).pop();
@@ -2667,8 +2682,10 @@ const handler = async (req, res) => {
         fresh: ids.length,
         pages: [...new Set(fresh.map(({ page }) => page))],
         key: createHash('sha1').update(ids.join(',')).digest('hex').slice(0, 12),
-        listening: waiters.length > 0,
+        // Asked for a session: whether that session has a wait open (another session's wait on other pages hears none of its pins).
+        listening: asker ? waiters.some((w) => w.sid === asker) : waiters.length > 0,
         last: session?.id || '',
+        ...(asker ? { for: asker } : {}),
         dir: ROOT,
         cmd: CMD,
         url: `http://localhost:${PORT}`,
