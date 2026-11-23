@@ -92,7 +92,7 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
 
   // `labit gc`: what each lab keeps in its .lab and what could go. Only reports (lib/gc.ts).
   if (pos[0] === 'gc') {
-    console.log(await (await import('./gc.ts')).gcReport());
+    console.log((await import('./gc.ts')).gcReport());
     process.exit(0);
   }
 

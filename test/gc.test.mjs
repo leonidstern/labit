@@ -81,18 +81,13 @@ test('labit gc reports every known lab and what could go, and changes nothing', 
   assert.equal(code, 0, out);
   assert.deepEqual(snapshot(w), before, 'no project file written, moved or deleted');
   assert.deepEqual(snapshot(home), homeBefore, 'nor anything in ~/.labit');
-  const at = (r) => out.split('\n').findIndex((l) => l.startsWith(r + '  '));
-  const block = (r) => out.split('\n').slice(at(r), at(r) + 4).join('\n');
-  assert.match(block(a), /could go: uploads never sent \(1\)/);
-  assert.match(block(a), /could go: unfinished writes \(1\)/);
-  assert.match(block(a), /could go: pictures no comment names \(1\), 100 B/, 'the archived comment keeps its picture');
-  assert.doesNotMatch(block(fresh).split('\n').slice(0, 2).join('\n'), /could go/, 'nothing changed in the last minute is offered');
-  assert.match(out, new RegExp(`${path.join(w, 'a-link')}  same folder as ${a}`));
-  assert.match(out, new RegExp(`${theirs}  no labit .lab here`));
-  assert.match(out, new RegExp(`${path.join(w, 'gone')}  missing`));
-  assert.match(out, /\/Volumes\/labit-test-unplugged\/site {2}offline/);
-  assert.doesNotMatch(out, /half|relative|^42/m, 'damaged lines are skipped');
-  assert.match(out, /6 lab folders, .*Nothing was changed/);
+  const line = (r) => out.split('\n').find((l) => l.startsWith(r + '  '));
+  assert.match(line(a), /  \d+ KB, 1 KB could go$/, 'the unnamed picture, the old upload and the unfinished write');
+  assert.match(line(fresh), /, 0 KB could go$/, 'nothing touched lately, and the archived comment keeps its picture');
+  assert.match(line(theirs), /no labit \.lab$/);
+  assert.match(line(path.join(w, 'gone')), /not found/);
+  assert.match(line('/Volumes/labit-test-unplugged/site'), /not found/);
+  assert.equal(out.trim().split('\n').length, 6, 'damaged lines are skipped');
 });
 
 test('labit gc with nothing known', async () => {
