@@ -13,7 +13,7 @@ import { parseArgs, WRITE_SHORT } from './lib/args.ts';
 import { addRule, dropRule, rulesText } from './lib/replies.ts';
 import { AGENTS } from './lib/agents.ts';
 import { watchTree } from './lib/watch.ts';
-import { PARKED, REGISTRY, askPages, keyFor, parkedLabs, runningLabs } from './lib/labs.ts';
+import { PARKED, REGISTRY, askPages, keyFor, parkedLabs, rememberRoot, runningLabs } from './lib/labs.ts';
 import { alive, setWifi } from './lib/labcall.ts';
 import { CLAIM_LIFE_MS, DO_IT, PROGRESS_MS, RENEWAL, REQUESTS, UNMATCHED, numberOf, slim, upgrade, VERSION as SCHEMA } from './lib/schema.mjs';
 import { LEAN_SKIP, pagePath, sameKey } from './lib/comments-api.mjs';
@@ -62,6 +62,7 @@ const HELP = `labit ${VERSION}: comment on local pages; your agent answers on th
   labit publish <page.html|folder> [--name topic] [--dev]
   labit invite [name] [--page /path]
   labit list | pages [--all] | settings | skill | update | preview [folder]
+  labit gc   what every lab on this computer keeps in its .lab, and what could go (only reports)
 
 For the agent:
   labit wait [--bg] [--timeout 1500] [--pages /a,/b] [--name project] [--model model]
@@ -113,7 +114,7 @@ const HERE = fs.realpathSync(path.resolve(opts.dir || '.'));
 // ---------- settings (lib/settings.ts) ----------
 // labit.json in the project and ~/.config/labit/settings.json fill in what the flags and variables leave out, by
 // setting them here, so everything below (and the commands) reads them as before.
-const COMMANDS = ['publish', 'preview', 'list', 'pages', 'wait', 'reply', 'resolve', 'thread', 'pin', 'invite', 'board', 'update', 'settings', 'skill'];
+const COMMANDS = ['publish', 'preview', 'list', 'pages', 'wait', 'reply', 'resolve', 'thread', 'pin', 'invite', 'board', 'update', 'settings', 'skill', 'gc'];
 // Your list of actions is written into your settings once, when a lab starts (or `labit settings` shows it) with none there yet.
 if (!pos[0] || !COMMANDS.includes(pos[0]) || pos[0] === 'settings') {
   try {
@@ -166,8 +167,8 @@ if (pos[0] === 'settings') {
   process.exit(SETTINGS.problems.length ? 1 : 0);
 }
 
-// The commands that answer and exit (publish, preview, list, pages, wait, reply, resolve, pin, invite): lib/commands.ts.
-if (['publish', 'preview', 'list', 'pages', 'wait', 'reply', 'resolve', 'thread', 'pin', 'invite', 'board', 'update'].includes(pos[0])) {
+// The commands that answer and exit (publish, preview, list, pages, gc, wait, reply, resolve, thread, pin, invite): lib/commands.ts.
+if (['publish', 'preview', 'list', 'pages', 'wait', 'reply', 'resolve', 'thread', 'pin', 'invite', 'board', 'update', 'gc'].includes(pos[0])) {
   await runCommand({ pos, opts, HERE, CMD, ME, die });
 }
 
@@ -3303,6 +3304,7 @@ server.on('listening', async () => {
     fs.rmSync(path.join(PARKED, `${was.port}.json`), { force: true });
   }
   register();
+  rememberRoot(ROOT);
   await persist();
   console.log(`[lab] ${origin}  ·  labit ${VERSION}  ·  ${PROXY ? `pages from the dev server at ${PROXY.origin}, comments in` : 'pages from'} ${ROOT}`);
   console.log(WIFI ? `[lab] other devices on this wifi need a one-time link: run \`${CMD} invite\`, or ask Claude for one`
@@ -3388,8 +3390,10 @@ let switchedAt = 0;
 const handOver = (command, first, more = []) => {
   /** @type {number | 'ignore'} */
   let out = 'ignore';
+  // The newer build's output goes on at the end; past 1 MB the file starts over, so years of hand-overs stay small.
   try {
-    out = fs.openSync(path.join(LAB, 'lab.log'), 'a');
+    const log = path.join(LAB, 'lab.log');
+    out = fs.openSync(log, (fs.statSync(log, { throwIfNoEntry: false })?.size ?? 0) > 1e6 ? 'w' : 'a');
   } catch {}
   const args = process.argv.slice(2).filter((a) => a !== '--no-open' && !(more.length && /^--(no-)?wifi$/.test(a)));
   followed = false;

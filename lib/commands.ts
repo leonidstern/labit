@@ -90,6 +90,12 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
     process.exit(0);
   }
 
+  // `labit gc`: what each lab keeps in its .lab and what could go. Only reports (lib/gc.ts).
+  if (pos[0] === 'gc') {
+    console.log((await import('./gc.ts')).gcReport());
+    process.exit(0);
+  }
+
   // `labit list`: what runs, so an agent reuses a lab instead of starting another.
   if (pos[0] === 'list') {
     const labs = runningLabs();
@@ -146,6 +152,10 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
     }
     const out = path.join(HERE, '.lab', 'lab-pages.md');
     fs.mkdirSync(path.dirname(out), { recursive: true });
+    // Run in a folder no lab has served, this makes its .lab: git skips it as it skips a lab's (local.mjs ignoreLab).
+    try {
+      fs.writeFileSync(path.join(path.dirname(out), '.gitignore'), '*\n', { flag: 'wx' });
+    } catch {}
     fs.writeFileSync(out, (lines.join('\n').trim() || (opts.all ? 'No labs running.' : 'No labs for this folder. `pages --all` lists every lab on this computer.')) + '\n');
     console.log(out);
     process.exit(0);
