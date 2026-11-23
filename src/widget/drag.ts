@@ -87,20 +87,17 @@ export const endDrag = (e) => {
     const last = end?.at(-1);
     if (last && S.inkAt && Math.hypot(S.inkAt.x - last.x, S.inkAt.y - last.y) > 0.5) {
       end.push({ ...S.inkAt, w: last.w });
+      if (S.inkAll && end[0] === S.inkAll[0]) S.inkAll.push(end.at(-1));
       S.inking.add();
     }
     S.inkAt = null;
     // Shift held as the pen lifts: a stroke that runs about straight becomes a straight line, flat, upright or at 45°
     // (Leo's pick S1, 20 Nov); a rough box or loop a clean rectangle or ellipse (S2). Anything else stays as drawn.
     const st = S.inking?.strokes.at(-1);
+    const line = e.shiftKey && st?.length > 1 && straightOf(S.inkAll || st, st.at(-1));
     if (e.shiftKey && st?.length > 1) {
-      const [a, b] = [st[0], st.at(-1)];
-      const chord = Math.hypot(b.x - a.x, b.y - a.y);
-      const run = st.reduce((n, p, i) => (i ? n + Math.hypot(p.x - st[i - 1].x, p.y - st[i - 1].y) : 0), 0);
-      if (chord > 12 && run < chord * 1.35) {
-        const ang = Math.round(Math.atan2(b.y - a.y, b.x - a.x) / (Math.PI / 4)) * (Math.PI / 4);
-        const w = st.reduce((n, p) => n + (p.w || 3), 0) / st.length;
-        st.splice(0, st.length, { x: a.x, y: a.y, w }, { x: a.x + chord * Math.cos(ang), y: a.y + chord * Math.sin(ang), w });
+      if (line) {
+        st.splice(0, st.length, ...line);
         S.inking.paint();
       } else {
         // A rough box or loop comes out neat: a rectangle or an ellipse (Leo's pick S2). The reading part is loaded
@@ -134,6 +131,17 @@ export { inkSaid } from '../../lib/schema.mjs'; // what a drawing sent with no w
 // A reload (the lab's or a dev server's) waits while a drawing is drawn and while drawings are being saved: a second
 // drawing begun while the first is still sent keeps it waiting. A save stops holding after 10 s (a lab that is down retries
 // for minutes; the drawing goes to a comment box if it fails).
+// A stroke that runs about straight, as a straight line from its start to the point: flat, upright or at 45° (Leo's pick
+// S1, 20 Nov). Null for anything else (a box, a loop).
+function straightOf(st: { x: number; y: number; w?: number }[], b: { x: number; y: number }) {
+  const a = st[0];
+  const chord = Math.hypot(b.x - a.x, b.y - a.y);
+  const run = st.reduce((n, p, i) => (i ? n + Math.hypot(p.x - st[i - 1].x, p.y - st[i - 1].y) : 0), 0);
+  if (chord <= 12 || run >= chord * 1.35) return null;
+  const ang = Math.round(Math.atan2(b.y - a.y, b.x - a.x) / (Math.PI / 4)) * (Math.PI / 4);
+  const w = st.reduce((n, p) => n + (p.w || 3), 0) / st.length;
+  return [{ x: a.x, y: a.y, w }, { x: a.x + chord * Math.cos(ang), y: a.y + chord * Math.sin(ang), w }];
+}
 const letGo = () => !S.inking && !S.sendingInk && holdWhileDrawing(false);
 async function endInk() {
   clearTimeout(S.inkTimer);
@@ -266,6 +274,7 @@ export function bindDrag(w: unknown) {
           if (!S.inking) W.layer.append((S.inking = liveInk()).svg);
           holdWhileDrawing(true); // a dev server's reload waits until the drawing is sent (hold.ts)
           S.inking.strokes.push([{ x: S.drag.x0 + scrollX, y: S.drag.y0 + scrollY }]);
+          S.inkAll = null;
           // Held by the page till the pen lifts: a stroke run into a frame, or off the window, still ends here.
           try {
             document.documentElement.setPointerCapture(e.pointerId);
@@ -293,11 +302,21 @@ export function bindDrag(w: unknown) {
         // (Leo, 23 Nov: "i draw big one but it draws it weirdly small").
         const turn = q && r && Math.hypot(r.x - q.x, r.y - q.y) > 2 ? Math.atan2(y - r.y, x - r.x) - Math.atan2(r.y - q.y, r.x - q.x) : 0;
         const sharp = Math.abs(Math.atan2(Math.sin(turn), Math.cos(turn))) > 0.9; // over about 50°
-        if (sharp) st.push({ x: r.x, y: r.y, w });
         const k = !q || sharp ? 1 : Math.min(1, 0.7 + speed * 0.3);
         const from = sharp ? r : q;
         S.inkAt = { x, y };
-        st.push({ x: from ? from.x + (x - from.x) * k : x, y: from ? from.y + (y - from.y) * k : y, w });
+        // Shift held: the line is straight as it is drawn, flat, upright or at 45° from where it began, as it lands (Leo,
+        // 23 Nov: "lines with shift should be straight line right away"; the wobbly line turning straight on lift blinked).
+        // The hand's own line is kept beside it: once it stops running straight (a box, a loop) that is what shows.
+        const all = (S.inkAll ||= [...st]);
+        if (sharp) all.push({ x: r.x, y: r.y, w });
+        all.push({ x: from ? from.x + (x - from.x) * k : x, y: from ? from.y + (y - from.y) * k : y, w });
+        const line = e.shiftKey && straightOf(all, { x, y });
+        if (line || st[0] !== all[0]) {
+          st.splice(0, st.length, ...(line || all));
+          return void S.inking.paint();
+        }
+        st.push(...all.slice(st.length));
         return void S.inking.add();
       }
       S.zoneFrame ||= requestAnimationFrame(paintZone);

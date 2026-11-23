@@ -4,6 +4,7 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 
 ## Unreleased
 
+- **Shift draws straight as you go.** With Shift held the line is straight from where it began while you draw, so it no longer jumps when you lift; a box or loop still comes out neat. A line through a heading is read as crossed out wherever it slopes (it was asked once, at its middle). The chat's send arrow no longer flies off, as in a comment.
 - **Arrows land as big as drawn.** The clean head is as long as the head you drew (12 to 60 px; it was always 12), the light smoothing no longer trails your hand or cuts an arrowhead short, and an arrow's end in empty space below a page says "empty space on the page" instead of quoting the page's script.
 - **Shorter status lines.** Under your message only what the ticks don't say: on it, quiet, 2nd in line, no answer (✓ and ✓✓ already say sent and picked up). An agent's done answer shows just "checked", how it checked on hover, and nothing when it didn't; the long line ran out of the chat column.
 - **Wake-ups for opencode 2 and the Cursor CLI.** The opencode plugin is now in opencode 2's shape (`{ id, setup }`; opencode 2 refused the old one, so it never loaded) and wakes an idle session through `session.prompt`. `wait` and `reply` sign with the session ids these agents put in their shells (`OPENCODE_SESSION_ID`, `CURSOR_CONVERSATION_ID`): the Cursor CLI doesn't pass its start hook's env on, so a Cursor session was never recognised as the one that listened.

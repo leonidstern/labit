@@ -222,9 +222,6 @@ export function composer({ placeholder, onSubmit, autofocus = false, opened = fa
     rememberMe(name.value.trim()); // so the next lab on this computer knows you already
     refreshPinCursor(); // the pointer shows your initial
     syncReads();
-    sendBtn.classList.remove('sent');
-    void sendBtn.offsetWidth; // restart the arrow's flight on a quick second send
-    sendBtn.classList.add('sent');
     busy = true;
     // The words are in flight: a box rebuilt while they are on their way leaves them alone, instead of reading
     // them back in as if they had never been sent.

@@ -299,7 +299,7 @@ button.btn.undo { color: var(--_fg); }
 .send.ready { background: var(--_accent); color: var(--_accent-fg); animation: lab-ready var(--_t-quick) var(--_ease-out); }
 /* The first letter typed: the arrow turns dark with a tiny pop, so you see it's ready (lab A5, Leo 16 Nov). */
 @keyframes lab-ready { 50% { transform: scale(1.04); } }
-/* The send sign: a paper plane, one filled shape cut with clip-path (crisp at any size, no joins); it flies off on send. */
+/* The send sign: a paper plane, one filled shape cut with clip-path (crisp at any size, no joins). */
 .send .arr { display: block; position: relative; left: -1px; width: 12px; height: 11px; background: currentColor; clip-path: polygon(0 42%, 100% 0, 66% 100%, 46% 60%); }
 .send * { color: inherit; }
 .act { grid-area: send; display: flex; align-items: center; gap: 4px; }
@@ -335,10 +335,8 @@ button.btn.undo { color: var(--_fg); }
 .msgs > .updates { align-self: flex-start; background: none; border: 0; padding: 2px 4px; margin: 0; font: inherit; font-size: 12px; letter-spacing: 0; color: var(--_muted); cursor: pointer; border-radius: var(--_radius); }
 .msgs > .updates:hover, .msgs > .updates:focus-visible { color: var(--_fg); }
 .msgs > .updates:focus-visible { outline: 2px solid var(--_accent); outline-offset: 1px; } /* keyboard focus is seen on the small row */
-/* Something just sent eases in; the arrow flies off and comes back. */
+/* Something just sent eases in. The arrow stays put, in the chat as in a comment (Leo, 23 Nov: "no need plane animation"). */
 .fresh { animation: lab-in var(--_t-base) var(--_ease); } /* a message arrives as a card does */
-.send.sent .arr { animation: lab-fly var(--_t-slow) var(--_ease); }
-@keyframes lab-fly { 45% { transform: translate(9px, -9px) scale(.6); opacity: 0; } 46% { transform: translate(-7px, 7px) scale(.6); opacity: 0; } }
 .msg { max-width: 85%; padding: 7px 10px; border-radius: var(--_radius); background: var(--_soft); align-self: flex-start; }
 .msg.mine { align-self: flex-end; color: var(--_fg); } /* yours: soft green, dark text */
 /* One soft green: your bubbles, and a question's pick (not the reply box's grey, Leo's 5b) */

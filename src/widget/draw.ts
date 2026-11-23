@@ -205,8 +205,13 @@ export function readInk(strokes: P[][], say: (e: Element | null) => string | und
     } else if (straight(s) && h < Math.max(18, w * 0.06) && w > 24) {
       const y = (box.t + box.b) / 2;
       const mid = (box.l + box.r) / 2;
-      const on = letterAt(mid, y);
-      if (on && y > on.top + on.height * 0.25 && y < on.bottom - on.height * 0.2) {
+      // Asked at five places along the line itself, not once at the middle of its box: a hand's line slopes, and its
+      // middle may fall on a space or past the words (Leo, 23 Nov: a line through a heading read as underlined).
+      const probes = [0.2, 0.35, 0.5, 0.65, 0.8].map((f) => s[Math.round(f * (s.length - 1))]).map((q) => ({ q, on: letterAt(q.x, q.y) }));
+      const hits = probes.filter((h) => h.on);
+      const through = hits.filter(({ q, on }) => q.y > on!.top + on!.height * 0.25 && q.y < on!.bottom - on!.height * 0.2);
+      const on = through[0]?.on;
+      if (on && through.length * 2 > hits.length) {
         out.mark = 'crossed out (likely: remove this)';
         [box.t, box.b] = [on.top, on.bottom];
       } else {
