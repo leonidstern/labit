@@ -113,7 +113,6 @@ import { bindKeys } from './widget/keys.ts';
     get markSeen() { return markSeen; },
     get ms() { return ms; },
     get mine() { return mine; },
-    get motions() { return motions; },
     get nameLine() { return nameLine; },
     get numberOf() { return numberOf; },
     get openSheet() { return openSheet; },
@@ -142,6 +141,7 @@ import { bindKeys } from './widget/keys.ts';
     get foldStatus() { return foldStatus; },
     get isStatus() { return isStatus; },
     get stamped() { return stamped; },
+    get swipeDown() { return swipeDown; },
     get still() { return still; },
     get store() { return store; },
     get syncReads() { return syncReads; },
@@ -298,7 +298,6 @@ import { bindKeys } from './widget/keys.ts';
     <div class="scrim"></div>
     <i class="fit" aria-hidden="true"></i>
     <div class="layer"></div>
-    <div class="motions"></div>
     <div class="ui"><div class="hint" role="status" hidden></div>
     <div class="list chatwin" hidden><div class="tabs"></div><div class="msgs"></div><div class="chat"></div></div>
     <div class="left"><button class="secondary copy-all" type="button" hidden>copy link</button></div>
@@ -337,7 +336,6 @@ import { bindKeys } from './widget/keys.ts';
   // The bar's "new" pill: J/K step through the new comments, R replies, E resolves.
   const listBtn = /** @type {HTMLButtonElement} */ ($('.list-btn'));
   const doneBtn = /** @type {HTMLButtonElement} */ ($('.done-btn'));
-  const motions = $('.motions');
   const movedBtn = /** @type {HTMLButtonElement} */ ($('.moved-btn'));
   const tabTitle = { base: '' };
   // Done pins show unless hidden (Leo, 17 Nov): closed ones are faded on the page, and D hides them.
@@ -604,7 +602,7 @@ import { bindKeys } from './widget/keys.ts';
     if (S.paused && payload.anchor && !payload.action) payload = { ...payload, anchor: { ...payload.anchor, paused: true, atMs: mo.msOf(mo.pausedEl(payload.anchor)) } };
     const moment = payload.anchor && !payload.action && !payload.anchor.moment ? mo?.momentFor(payload.anchor) : undefined;
     if (moment) payload = { ...payload, anchor: { ...payload.anchor, moment } };
-    if ((S.slow || mo?.slowEls.size) && payload.anchor && !payload.action) payload = { ...payload, anchor: { ...payload.anchor, slow: true } }; // at ¼ speed
+    if ((S.slow || mo?.anySlow()) && payload.anchor && !payload.action) payload = { ...payload, anchor: { ...payload.anchor, slow: true } }; // at ¼ speed
     if (!payload.action && !payload.nonce) payload = { ...payload, nonce: Math.random().toString(36).slice(2) + Date.now().toString(36) };
     for (let tries = 0; !res; tries++) {
       try {
@@ -795,8 +793,20 @@ import { bindKeys } from './widget/keys.ts';
       void switcher().then((m) => m?.openSwitcher());
     });
   }
+  // The motion part (src/widget/motion.ts, loaded below), once it is: declared here, as the bar reads it.
+  /** @type {any} */
+  let mo = null;
+  /** @type {Promise<any> | null} */
+  let moAsked = null;
+  // Phones (Leo, 23 Nov, 3a): ⋯ → motion opens the motion sheet; there once the page has something that moves.
+  const motionBtn = el('button', { type: 'button' }, 'motion');
+  motionBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setMenu(false);
+    mo?.openMotion();
+  });
   function placeBar() {
-    const inMenu = !S.on ? [] : [...(labHead ? [labHead, labsBtn] : []), doneBtn, movedBtn, copyBtn, toggleBtn, ...(versionLine ? [versionLine] : [])];
+    const inMenu = !S.on ? [] : [...(labHead ? [labHead, labsBtn] : []), doneBtn, movedBtn, copyBtn, ...(coarse && mo ? [motionBtn] : []), toggleBtn, ...(versionLine ? [versionLine] : [])];
     // In this order every time: a part that came back (hide comments, after showing them again) went to the end, below
     // the version line.
     if (S.on && (inMenu.some((b, i) => moreMenu.children[i] !== b) || moreMenu.children.length !== inMenu.length)) moreMenu.replaceChildren(...inMenu);
@@ -1041,7 +1051,7 @@ import { bindKeys } from './widget/keys.ts';
     );
     toggleBtn.classList.toggle('secondary', S.on);
     host.toggleAttribute('data-labs', Boolean(!coarse && S.labsOpen)); // the page dims behind labs & pages (the widget's .scrim)
-    host.toggleAttribute('data-sheet', Boolean((coarse && S.labsOpen) || (S.on && (S.draft || S.openId || S.chatOpen)))); // phones: the sheet has the screen's bottom
+    host.toggleAttribute('data-sheet', Boolean((coarse && (S.labsOpen || S.motionOpen)) || (S.on && (S.draft || S.openId || S.chatOpen)))); // phones: the sheet has the screen's bottom
     if (coarse && appear && now) { // a sheet opening slides in once its first frame is drawn (see data-opening in styles.css)
       host.setAttribute('data-opening', '');
       requestAnimationFrame(() => requestAnimationFrame(() => host.removeAttribute('data-opening')));
@@ -1280,9 +1290,10 @@ import { bindKeys } from './widget/keys.ts';
         },
       });
       float.append(el('div', { class: 'handle' }));
-      // Paused: the moment this pin will carry, so you know it is kept (Leo, 19 Nov: "some info in pin where it was").
-      const chip = anchor.moment && S.momentChip?.(anchor.moment); // only a paused video has one (Leo, 21 Nov)
-      if (chip) float.append(chip);
+      // The moment this pin will carry, so you know it is kept (Leo, 19 Nov: "some info in pin where it was"): a quiet
+      // line, as under the sent pin's first message (Leo, 23 Nov, 4c).
+      const when = anchor.moment && S.momentLine?.(anchor.moment);
+      if (when) float.append(when);
       const row = quickRow(draft, box);
       if (row?.children.length) float.append(row);
       float.append(box);
@@ -1314,7 +1325,7 @@ import { bindKeys } from './widget/keys.ts';
     S.draft = S.on ? keptDraft() : null; // hidden, a new comment lets go of the screen; its words wait, and come back when comments do
     S.openId = null;
     render();
-    mo?.drawMotion(); // the pause / play beside each moving thing goes and comes with the comments
+    if (!S.on) mo?.closeMotion(); // the motion menu goes with the comments
   };
   toggleBtn.addEventListener('click', () => setOn(!S.on));
   // The ⋯ menu is a disclosure: the button says whether it's open; opening puts focus on its first item, and Escape
@@ -1369,21 +1380,18 @@ import { bindKeys } from './widget/keys.ts';
       e.stopPropagation();
     }
   }, true);
-  // Motion (src/widget/motion.ts: pause and ¼ speed, the controls beside what moves, a pin's moment) is its own file, loaded
+  // Motion (src/widget/motion.ts: pause and speed from a right-click or ⋯ → motion, a pin's moment) is its own file, loaded
   // once something on the page moves (a video, an animation: looked for a second after the page starts, when one
-  // starts, and on a phone each second), when ⌥ is held, P or S is pressed, or a comment has a moment; mo: the module, once it is.
-  /** @type {any} */
-  let mo = null;
-  /** @type {Promise<any> | null} */
-  let moAsked = null;
-  const loadMotion = () => (moAsked ??= part('motion').then((m) => (m.bindMotion(W), (mo = m))).catch(() => (moAsked = null)));
+  // starts, and on a phone each second), when P or S is pressed, or a comment has a moment; mo: the module, once it is.
+  const loadMotion = () => (moAsked ??= part('motion').then((m) => (m.bindMotion(W), (mo = m), placeBar(), m)).catch(() => (moAsked = null))); // placeBar: phones get ⋯ → motion
   const lookForMotion = () => {
     if (!moAsked && (document.querySelector('video') || document.getAnimations().some((a) => !root.contains(/** @type {any} */ (a.effect)?.target)))) void loadMotion();
   };
-  addEventListener('keydown', (e) => {
-    if (e.key === 'Alt' && !coarse && !mo) void loadMotion().then((m) => m?.altMotionSet(!e.metaKey && !e.ctrlKey && !e.shiftKey)); // its own keys come once it is there: this press is its first
-  }, true);
   for (const type of ['animationstart', 'play']) addEventListener(type, lookForMotion, true);
+  // Computers: an animation a script started says nothing; the pointer moving over the page looks again (once a second),
+  // so a right-click on it opens the motion menu.
+  let lookedAt = 0;
+  if (!coarse) addEventListener('pointermove', () => !moAsked && performance.now() - lookedAt > 1000 && ((lookedAt = performance.now()), lookForMotion()), { capture: true, passive: true });
   setTimeout(lookForMotion, 1000);
   if (coarse) {
     const phone = setInterval(() => (moAsked ? clearInterval(phone) : document.hidden || lookForMotion()), 1000);
@@ -1585,8 +1593,9 @@ import { bindKeys } from './widget/keys.ts';
   const scrim = /** @type {HTMLElement} */ (root.querySelector('.scrim'));
   // The open sheet (phones): a thread, a new comment, the list or the chat.
   /** @returns {HTMLElement | null} */
-  const openSheet = () => (S.labsOpen && labs?.switcherSheet()) || root.querySelector('.card:not(.out), .float:not(.out)') || (S.chatOpen ? chatEl : null);
+  const openSheet = () => (S.motionOpen && mo?.motionSheet()) || (S.labsOpen && labs?.switcherSheet()) || root.querySelector('.card:not(.out), .float:not(.out)') || (S.chatOpen ? chatEl : null);
   const closeAll = () => {
+    if (S.motionOpen) return mo?.closeMotion(); // the motion sheet sits over the others: only it goes
     if (S.labsOpen) return labs?.closeSwitcher(); // labs & pages sits over the others: only it goes
     S.draft = null;
     S.openId = null;

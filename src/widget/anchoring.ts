@@ -77,7 +77,7 @@ type Anchor = {
   paused?: boolean;
   /** Then: the moment showing, in ms. */
   atMs?: number;
-  /** The page's motion ran at ¼ speed. */
+  /** The page's motion, or the thing pinned, ran slowed (¼ or ½ speed). */
   slow?: boolean;
   /** A data-lab-action button's words, and whether the agent confirms before doing it. */
   act?: string;
