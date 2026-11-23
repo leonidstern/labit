@@ -2,7 +2,7 @@ import { expect, mock, test } from 'claude-code/testing';
 
 // A lab at /p/.lab/server.json; the session is /p/sub; /_lab/pending answers what each test sets.
 // `more` changes the world: another folder for the session (`cwd`), more files (`files`: path -> text), `pending` per port.
-const world = (on: any, pending: Record<string, unknown>, me = 'S1', more: { cwd?: string; files?: Record<string, string>; byPort?: Record<number, Record<string, unknown>> } = {}) => {
+const world = (on: any, pending: Record<string, unknown>, me = 'S1', more: { submit?: (e: any) => any; cwd?: string; files?: Record<string, string>; byPort?: Record<number, Record<string, unknown>> } = {}) => {
   const sent: string[] = [];
   const asked: number[] = [];
   const looked = { n: 0 };
@@ -33,6 +33,8 @@ const world = (on: any, pending: Record<string, unknown>, me = 'S1', more: { cwd
     return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ fresh: 0, pages: [], key: '', listening: false, last: 'S1', dir: '/p', cmd: 'labit', url: `http://localhost:${port}`, ...pending, ...more.byPort?.[port] }) } };
   });
   on('prompt.submit', (_: any, e: any) => {
+    const r = more.submit?.(e);
+    if (r) return r;
     sent.push(e.text);
     return { text: e.text };
   });
@@ -276,6 +278,25 @@ test('a turn the person started still gets pins queued behind it', async ($, on)
   await $.session.start({ cwd: '/p/sub', surface: 'terminal', isInteractive: true } as any);
   await turnStart($); // no wake before it: the person's own message
   await clock.advance(8000);
+  expect(w.sent.length).toBe(1);
+  expect(w.sent[0]).toContain('queued while you were busy');
+});
+
+test('a wake Claude Code refuses (the session was stopped) is no try: the next turn the person starts brings it', async ($, on) => {
+  const clock = mock.clock(on);
+  let refuse = true;
+  let refusedN = 0;
+  const w = world(on, { fresh: 1, pages: ['/a'], key: 'k1' }, 'S1', {
+    submit: () => { if (refuse) { refusedN++; throw new Error('refused: the session was stopped and nobody has sent input since'); } return null; },
+  });
+  await $.session.start({ cwd: '/p/sub', surface: 'terminal', isInteractive: true } as any);
+  await clock.advance(4000);
+  expect(refusedN).toBe(1);
+  await clock.advance(120000); // refused: no more submits while nobody writes
+  expect(refusedN).toBe(1);
+  refuse = false;
+  await turnStart($); // the person writes
+  await clock.advance(8000); // two looks while busy: queued behind their turn
   expect(w.sent.length).toBe(1);
   expect(w.sent[0]).toContain('queued while you were busy');
 });
