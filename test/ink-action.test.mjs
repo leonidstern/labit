@@ -27,3 +27,12 @@ test('words in a reply later count too', async () => {
   await post({ parent: comment.id, text: 'just compare them, no move' });
   assert.doesNotMatch(await block(comment.id), /^action:/m);
 });
+
+test('a drawing of several marks leaves out the box around them all: each mark says what it is on', async () => {
+  const anchor = { ...drawn('3 strokes, unclear mark'), zoneText: 'digest Alerts Integrations', zoneItems: ['<h2> · "Alerts"'] };
+  anchor.ink.marks = ['arrow from <h2> "Integrations" to <h2> "Weekly digest"', 'circled on <h2> "Alerts"'];
+  const { comment } = await post({ text: '3 strokes, unclear mark', anchor });
+  const b = await block(comment.id);
+  assert.match(b, /^ {2}mark 2: circled on <h2> "Alerts"$/m);
+  assert.doesNotMatch(b, /^in the area:|^text in area:/m);
+});
