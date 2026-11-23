@@ -3435,7 +3435,9 @@ const handOver = (command, first, more = []) => {
     const log = path.join(LAB, 'lab.log');
     out = fs.openSync(log, (fs.statSync(log, { throwIfNoEntry: false })?.size ?? 0) > 1e6 ? 'w' : 'a');
   } catch {}
-  const args = process.argv.slice(2).filter((a) => a !== '--no-open' && !(more.length && /^--(no-)?wifi$/.test(a)));
+  // --port and --no-open are put back once below: kept from the last hand-over, each one added another copy (a lab that updated itself
+  // three times ran with "--port 4620" four times).
+  const args = process.argv.slice(2).filter((a, i, all) => a !== '--no-open' && a !== '--port' && all[i - 1] !== '--port' && !a.startsWith('--port=') && !(more.length && /^--(no-)?wifi$/.test(a)));
   followed = false;
   spawn(command, [...first, ...args, ...more, '--no-open', '--port', String(PORT)], {
     cwd: process.cwd(),
