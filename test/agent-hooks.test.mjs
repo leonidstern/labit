@@ -106,7 +106,8 @@ test('the session is found from any folder through the lab registry', async () =
 test('Cursor: the start hook says the session to the shells, and wait signs with it', async () => {
   assert.deepEqual(JSON.parse(await hook('start', cursor('conv-1', { hook_event_name: 'sessionStart' }))), { env: { LAB_SESSION_ID: 'conv-1' } });
   assert.equal(await hook('start', codex('S1', { hook_event_name: 'SessionStart' })), '', 'Codex has its own id');
-  const out = await cli(['wait', '--timeout', '1', '--no-open'], { cwd: DIR, env: { ...env, CURSOR_AGENT: '1', LAB_SESSION_ID: 'conv-1' } });
+  // The Cursor CLI doesn't pass the start hook's env on to shells (seen on 2026.11.22); it sets CURSOR_CONVERSATION_ID.
+  const out = await cli(['wait', '--timeout', '1', '--no-open'], { cwd: DIR, env: { ...env, CURSOR_AGENT: '1', CURSOR_CONVERSATION_ID: 'conv-1' } });
   assert.doesNotMatch(out.out, /Error/i);
   assert.equal((await pending()).last, 'conv-1');
 });
@@ -139,4 +140,37 @@ test("Codex: a background wait doesn't confirm its hand-off, so the pin comes ba
   assert.match(back.out, /left while codex sat idle/);
   await sleep(2000);
   assert.equal((await pending()).fresh, 0);
+});
+
+// opencode 2 (seen on 2.3.2): the plugin is { id, setup(ctx) }, the shells carry OPENCODE_SESSION_ID, and an idle
+// session gets the wake as a new message through ctx.session.prompt.
+test('opencode 2: the plugin loads as { id, setup }, and an idle session that listened last is sent its pins', async () => {
+  const plugin = (await import(HOOK + '?opencode')).default;
+  assert.equal(plugin.id, 'labit');
+  const hooks = {};
+  const prompts = [];
+  const ctx = {
+    location: { directory: DIR },
+    tool: { hook: (name, fn) => { hooks['tool.' + name] = fn; return () => {}; } },
+    session: { hook: (name, fn) => { hooks['session.' + name] = fn; return () => {}; }, prompt: async (m) => { prompts.push(m); } },
+  };
+  const off = plugin.setup(ctx);
+  assert.equal(typeof hooks['tool.execute.after'], 'function');
+  const sid = 'ses_oc1';
+  const out = await cli(['wait', '--timeout', '1', '--no-open'], { cwd: DIR, env: { ...env, OPENCODE: '1', OPENCODE_SESSION_ID: sid } });
+  assert.doesNotMatch(out.out, /Error/i);
+  assert.equal((await pending()).last, sid, 'wait signs with the id opencode puts in its shells');
+  await post('left while opencode sat idle', '/index');
+  await sleep(300);
+  hooks['session.experimental.idle']({ sessionID: sid, background: [{ id: 'job' }] });
+  await sleep(500);
+  assert.equal(prompts.length, 0, 'a job still running in the background: no wake');
+  hooks['session.experimental.idle']({ sessionID: 'ses_other', background: [] });
+  hooks['session.experimental.idle']({ sessionID: sid, background: [] });
+  for (let i = 0; i < 40 && !prompts.length; i++) await sleep(50);
+  assert.equal(prompts.length, 1, 'only the session that listened last');
+  assert.equal(prompts[0].sessionID, sid);
+  assert.match(prompts[0].text, /^labit: .*new pin/);
+  off();
+  await call('/_lab/wait', { timeout: 1, pages: null }, sid); // hand it over, so later tests start clean
 });
