@@ -60,6 +60,7 @@ const options = {
   write: false, // shortNames writes each file
   plugins: [minifiedCss, shortNames],
   define: { 'globalThis.__LAB_DEBUG__': 'false' },
+  metafile: true, // what each script is made of: code built into two of them is counted (bundles.json, below)
 };
 // Parts the page script loads only when they are used (part(name) in src/comments.js): each one an ES module beside
 // it, <name>.js, with its own styles in it. The lab serves them with the script (public/_lab/*.js), and its widget
@@ -83,7 +84,25 @@ if (watch) {
   for (const o of builds) await (await esbuild.context(o)).watch();
   fs.watch('src/lab.css', () => void labCss());
 } else {
-  await Promise.all(builds.map((o) => esbuild.build(o)));
+  const results = await Promise.all(builds.map((o) => esbuild.build(o)));
+  // Code shipped twice (Leo, 23 Nov: "add check so this wont happen again when you duplicating things"): a module built
+  // into the page script and a part, or into two parts, is downloaded twice. bundles.json lists each such module with
+  // the scripts that carry it, and sharedBytes, the minified bytes of every copy after the first; ci/metrics.mjs gates it.
+  const inScripts = new Map();
+  results.forEach((r, i) => {
+    for (const out of Object.values(r.metafile.outputs)) {
+      for (const [file, { bytesInOutput }] of Object.entries(out.inputs)) {
+        if (!bytesInOutput) continue;
+        const e = inScripts.get(file) || { scripts: [], bytes: [] };
+        e.scripts.push(path.basename(builds[i].outfile));
+        e.bytes.push(bytesInOutput);
+        inScripts.set(file, e);
+      }
+    }
+  });
+  const shared = [...inScripts].filter(([, e]) => e.scripts.length > 1).sort(([a], [b]) => a.localeCompare(b));
+  const sharedBytes = shared.reduce((n, [, e]) => n + e.bytes.reduce((s, b) => s + b, 0) - Math.max(...e.bytes), 0);
+  fs.writeFileSync(path.join(path.dirname(outfile), 'bundles.json'), JSON.stringify({ sharedBytes, shared: Object.fromEntries(shared.map(([f, e]) => [f, e.scripts])) }, null, 2) + '\n');
   // The npm package carries each script brotli-packed (<name>.js.br, package.json "files"): npm's gzip leaves 8 KB more in
   // it. The lab sends the packed bytes as they are to a browser that takes brotli and unpacks them for one that doesn't
   // (sendPacked in lib/dev.ts); a checkout serves the plain .js beside them. Same bytes in, same bytes out, so a repeat

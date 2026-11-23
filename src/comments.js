@@ -129,6 +129,7 @@ import { bindKeys } from './widget/keys.ts';
     get readable() { return readable; },
     get recheck() { return recheck; },
     get reflow() { return reflow; },
+    get followOpen() { return followOpen; },
     get relook() { return relook; },
     letPin,
     get render() { return render; },

@@ -48,6 +48,10 @@ const METRICS = {
     kind: "ratchet", dir: "down", ideal: 0,
     hint: "public/_lab/comments.js doesn't match a fresh build of src/comments.js. Run npm run build (the built files are not kept in git).",
   },
+  sharedScriptBytes: {
+    kind: "ratchet", dir: "down", ideal: 0,
+    hint: "Code is built into more than one shipped script (public/_lab/bundles.json lists which): load it from the script that has it (part() in src/comments.js, import() of that script) instead of importing it into another.",
+  },
   readmeClaimsWrong: {
     kind: "ratchet", dir: "down", ideal: 0, agent: false,
     hint: "README size claims no longer match. Shrink back, or update the README.",
@@ -128,6 +132,10 @@ function collect() {
     const parts = readdirSync(dirname(fresh)).filter((f) => f !== "comments.js");
     m.staleBuild = [readFileSync(fresh).equals(readFileSync(PAGE_SCRIPT)), ...parts.map((f) => existsSync(join(dirname(PAGE_SCRIPT), f)) && readFileSync(join(dirname(fresh), f)).equals(readFileSync(join(dirname(PAGE_SCRIPT), f))))].every(Boolean) ? 0 : 1;
   }
+
+  // Code built into more than one shipped script (scripts/build-widget.mjs writes bundles.json as it builds).
+  const bundles = join(dirname(PAGE_SCRIPT), "bundles.json");
+  if (existsSync(bundles)) m.sharedScriptBytes = read(bundles).sharedBytes;
 
   m.readmeClaims = checkReadme(m);
   m.readmeClaimsWrong = m.readmeClaims.length;

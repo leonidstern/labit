@@ -316,6 +316,14 @@ button.btn.undo { color: var(--_fg); }
         display: flex; flex-direction: column; background: var(--_bg); color: var(--_fg); border-radius: var(--_radius); box-shadow: var(--_shadow); font-size: 13px; letter-spacing: -.006em; }
 .list .tabs { display: flex; flex-wrap: wrap; gap: 2px; flex: none; padding: 12px 8px 6px; }
 .msgs { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+/* A list scrolled down fades out at its top edge (Leo, 23 Nov: a message cut in half at the top read as a glitch): the
+   first 16 px of scrolling bring in a 16 px fade, so a message going under the edge fades instead of being sliced. At
+   the top nothing fades. Browsers without scroll timelines keep the plain edge. */
+@supports (animation-timeline: scroll()) {
+  .msgs, .card > .body { mask: linear-gradient(transparent, #000 16px) 0 -16px / 100% calc(100% + 16px) no-repeat;
+                         animation: lab-scrolled-top linear both; animation-timeline: scroll(self); animation-range: 0 16px; }
+}
+@keyframes lab-scrolled-top { to { mask-position: 0 0; } }
 .list .none { padding: 8px; color: var(--_muted); }
 /* Thin scrollbars inside the dialogs (chat, threads, the list), like macOS overlay ones, on a clear track. */
 /* Leo, 20 Nov (pick C): a 4 px bar flush against the box's edge, no inset. Safari and Chrome draw it from the
