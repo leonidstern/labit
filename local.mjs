@@ -2436,7 +2436,7 @@ const boardApi = async (req, res, url) => {
     const env = { root: ROOT, origin, proxied: Boolean(PROXY), open: (key) => commentsOf(key).filter((c) => !c.parent && !c.resolved).length, titleOf: (p) => { const f = fileFor(boardPage(p)); return f ? titleOf(path.join(ROOT, f)) : ''; }, fileOf: (p) => fileFor(boardPage(p)) };
     // A board an agent makes about a page is a board pin on that page, as +board makes one: every board of a page shows on
     // it, none is only reachable by its address (Leo, 23 Nov: "we need to be sure no hidden boards like this"). The pin
-    // is the agent's, at the page's top left, worded with the topic; its board is pin-<id>.
+    // is the agent's, at the start of the page's title (its h1), worded with the topic; its board is pin-<id>.
     const pinPage = String(b.action) === 'new' && !b.name && typeof b.of === 'string' && B.labPath(b.of.split('#')[0]) ? pagePath(boardPage(b.of.split('#')[0])) : null;
     const pin = pinPage ? await boardPinFor(pinPage, String(b.topic || ''), sessionFrom(req).agent) : null;
     if (pinPage && !pin) return json(500, { error: "the board's pin couldn't be made", text: "the board's pin couldn't be made" });
@@ -2541,7 +2541,7 @@ const boardPinFor = async (page, topic, who) => {
   const res = await api.POST(new Request('http://localhost/api', {
     method: 'POST',
     headers: { host: 'localhost', 'content-type': 'application/json', 'x-lab-agent': '1', 'x-lab-admin': TOKEN, 'x-forwarded-for': '127.0.0.1' },
-    body: JSON.stringify({ page, name: who, text: topic.slice(0, 200) || 'Board', anchor: { selector: 'body', x: 0, y: 0, docX: 24, docY: 24, width: 1280 } }),
+    body: JSON.stringify({ page, name: who, text: topic.slice(0, 200) || 'Board', anchor: { selector: 'h1', x: 0, y: 0, docX: 0.02, docY: 24, width: 1280 } /* on the page's title, at its start (docX, a share of the page's width, and docY until a page finds it) */ }),
   }));
   if (!res.ok) return null;
   const { comment } = await res.json();
