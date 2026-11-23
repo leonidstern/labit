@@ -30,7 +30,7 @@ export function holdWhileOpen(isOpen: boolean) {
   update();
 }
 
-/** Called as a drawing starts and is sent (drag.ts): a reload mid-drawing would lose its strokes (#428). */
+/** Called as a drawing starts and is sent (drag.ts): a reload mid-drawing would lose its strokes (issue 428). */
 export function holdWhileDrawing(on: boolean) {
   if (drawing === on) return;
   drawing = on;

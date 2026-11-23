@@ -99,7 +99,7 @@ export function startLive() {
     // reloads once you close it, where you were.
     // A newer version reloads the page when it's safe: not while you read a thread or the chat (it waits
     // until they're closed, so nothing moves under you), type, have words in a box, place a new comment, have a phone's
-    // keyboard up, are drawing (until the drawing is sent, #428) or have just touched the page.
+    // keyboard up, are drawing (until the drawing is sent, issue 428) or have just touched the page.
     for (const t of ['pointerdown', 'keydown', 'wheel', 'touchstart']) addEventListener(t, () => (touchedAt = performance.now()), { capture: true, passive: true });
     const frame = Boolean(W.S.frame); // a board's frame (frame.ts): the board holds the stream and says when it is busy
     // A board page (its key is /_board/<name>) holds its frames, which name the files it "uses": a save of a page, a .json
@@ -564,7 +564,7 @@ export function startLive() {
         const tag = doc.querySelector('script[data-live]') as HTMLScriptElement | null;
         if (!res.ok || !tag) return;
         // The page's file is as it was when this one loaded (a lab restart with nothing saved meanwhile): nothing to do. A
-        // page with scripts of its own was reloaded here every time (#428).
+        // page with scripts of its own was reloaded here every time (issue 428).
         if (tag.dataset.sum && tag.dataset.sum === W.script.dataset.sum) return;
         if (ownScripts() || scriptsOf(doc).join('\n') !== scriptsOf(document).join('\n') || sheetsOf(doc).join('\n') !== sheetsOf(document).join('\n')) return reload();
         // What you're looking at stays put: an element a third down the window keeps its place on screen. Found before
@@ -720,7 +720,7 @@ export function startLive() {
           const listed = v.files - +W.script.dataset.version === 1 && Array.isArray(v.changed) && v.changed.length;
           if (board || (listed && !v.changed.some(usedHere))) W.script.dataset.version = String(v.files);
           // Saves missed, or a burst too big to list (a branch switch): a page with no scripts, frames or objects of its
-          // own that fetched nothing uses only its file, its styles and its pictures, so it catches up in place (#428).
+          // own that fetched nothing uses only its file, its styles and its pictures, so it catches up in place (issue 428).
           else if (!listed && !ownScripts() && !document.querySelector('iframe[src], object[data], embed[src]') && !performance.getEntriesByType('resource').some((e: any) => /fetch|xml/.test(e.initiatorType) && !new URL(e.name).pathname.startsWith('/_lab/'))) {
             W.script.dataset.version = String(v.files);
             catchUp();
