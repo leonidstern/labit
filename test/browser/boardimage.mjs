@@ -175,9 +175,12 @@ try {
       const bBefore = (await frames(name)).find((f) => f.id === 'e');
       const rb3 = await rect('e');
       check(eng, 'no × on a picture', await p.locator('.f .rm').count() === 0);
+      const nameShown = () => p.evaluate(() => getComputedStyle(document.querySelector('[data-lab-board-view]').shadowRoot.querySelector('#lab-board .f[data-id="e"] .t')).visibility === 'visible');
+      check(eng, 'a picture\'s file name is not shown till it is picked', !(await nameShown()));
       await p.mouse.click(rb3.x + rb3.w / 2, rb3.y + rb3.h / 2);
       await sleep(250);
       check(eng, 'a click picks the picture: its ring', await p.locator('.f[data-id="e"].pick').count() === 1);
+      check(eng, 'and its file name shows', await nameShown());
       await p.keyboard.press('Backspace');
       check(eng, 'Backspace on a picked picture takes it off the board (archived)', Boolean(await until(async () => (await frames(name)).find((f) => f.id === 'e')?.state === 'archived')));
       check(eng, 'the picture is gone from the board, its file kept', Boolean(await until(async () => (await rect('e')) == null)) && (await fetch(`${B}/_lab/board/${name}/e`)).status === 200);
