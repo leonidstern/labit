@@ -144,8 +144,12 @@ export function composer({ placeholder, onSubmit, autofocus = false, opened = fa
   box.append(text, el('div', { class: 'line' }), who, tail);
   wrap.append(box, error);
   // The box is taller than its one line of text: a tap anywhere on it (not the name or send) puts the cursor in, at the end.
+  // Only a press that started there too: a drag selecting words in the text that ends beside them (by "+" or send)
+  // clicks the box as well, and moving the cursor to the end lost the selection (#467, Leo: "near + it cancels my select").
+  let pressed: EventTarget | null = null;
+  box.addEventListener('pointerdown', (e) => (pressed = e.target), true);
   box.addEventListener('click', (e) => {
-    if (e.target !== box && !(e.target as Element).classList?.contains('line')) return;
+    if (pressed !== e.target || (e.target !== box && !(e.target as Element).classList?.contains('line'))) return;
     text.focus({ preventScroll: true });
     text.setSelectionRange(text.value.length, text.value.length);
   });

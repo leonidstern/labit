@@ -164,6 +164,23 @@ try {
       check(eng, 'another pin clicked: its card has its height from the first frame', Math.max(...hs) - Math.min(...hs) < 2, `heights ${[...new Set(hs)].join(", ")}`);
       const jumps = fresh2.slice(1).map((f, i) => Math.abs(f[1] - fresh2[i][1]));
       check(eng, 'another pin clicked: its card does not jump', Math.max(0, ...jumps) < 12, `largest step ${Math.max(0, ...jumps).toFixed(1)}, ends at ${last}`);
+      // #467 ("selecting near + cancels my select"): words selected in the reply box by a drag that ends on "+" stay selected.
+      for (const end of ['.clip', '.send']) {
+        await shadow((r) => { const t = r.querySelector('.card textarea'); t.value = 'select these words please'; t.focus(); t.setSelectionRange(0, 0); });
+        const [from, to2] = await shadow((r, e) => {
+          const t = r.querySelector('.card textarea').getBoundingClientRect();
+          const b = r.querySelector(`.card ${e}`)?.getBoundingClientRect();
+          return [[t.left + 3, t.top + t.height / 2], b && [b.left + b.width / 2, b.top + b.height / 2]];
+        }, end);
+        if (!to2) continue;
+        await p.mouse.move(...from);
+        await p.mouse.down();
+        await p.mouse.move(to2[0], to2[1], { steps: 8 });
+        await p.mouse.up();
+        await sleep(200);
+        const sel = await shadow((r) => { const t = r.querySelector('.card textarea'); return [t.selectionStart, t.selectionEnd]; });
+        check(eng, `a drag selecting the reply's words that ends on ${end}: they stay selected`, sel[1] - sel[0] > 5, JSON.stringify(sel));
+      }
       await p.keyboard.press('Escape');
       await p.close();
       await ctx.close();
