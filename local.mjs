@@ -826,7 +826,7 @@ const lineHints = (text, file) => {
   return text.replace(/^(element text|text in area): "([^"\n]*)"$/gm, (all, k, words) => {
     const n = lineOf(words);
     return n ? `${all}\nin file: ${file}:${n}` : all;
-  }).replace(/^(arrow from|arrow to|at): (<[^>\n]+> )"([^"\n]*)"(?= in <|$)/gm, (all, k, tag, words) => {
+  }).replace(/^((?:arrow|line) from|(?:arrow|line) to|at): (<[^>\n]+> )"([^"\n]*)"(?= in <|$)/gm, (all, k, tag, words) => {
     const n = lineOf(words);
     return n ? `${all} (${file}:${n})` : all;
   }).replace(/^(  mark \d+: .*?)(?: on| from| to) (<[^>\n]+> )"([^"\n]*)"/gm, (all, head, tag, words) => {
