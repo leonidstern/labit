@@ -78,36 +78,38 @@ const smooth = (pts: number[]) => {
   for (let i = 0; i < n - 1; i++) d += curve(pts, i);
   return d;
 };
-// A pen width, to the half px: the segments a line is drawn in join into one path while their width rounds the same.
+// A pen width, to the half px: the segments of a line that round to one width are drawn as one path.
 const half = (tenths: number) => Math.round(tenths / 5) / 2;
-// At most this many segments a path (a growing path is read again whole each time it grows).
-const RUN = 64;
+// A path for each width the pen had (they are one colour under one opacity, so which lies over which doesn't show):
+// a run of segments of that width is a piece of its path, begun again (M) where the run begins.
 function widths(pts: number[], w?: number[]) {
   if (!w || w.length * 2 !== pts.length) return [path(smooth(pts))];
-  const out: SVGPathElement[] = [];
-  let [d, wd, n] = ['', -1, 0];
-  const flush = () => {
-    if (!d) return;
-    const p = path(d);
-    p.style.strokeWidth = `${wd}px`;
-    out.push(p);
-  };
+  const by = new Map<number, string>();
+  let was = -1;
   for (let i = 1; i < w.length; i++) {
     const wv = half((w[i - 1] + w[i]) / 2);
-    if (wv === wd && n < RUN) [d, n] = [d + curve(pts, i - 1), n + 1];
-    else {
-      flush();
-      [d, wd, n] = [`M${pts[(i - 1) * 2]} ${pts[(i - 1) * 2 + 1]}${curve(pts, i - 1)}`, wv, 1];
-    }
+    by.set(wv, (by.get(wv) || '') + (wv === was ? '' : `M${pts[(i - 1) * 2]} ${pts[(i - 1) * 2 + 1]}`) + curve(pts, i - 1));
+    was = wv;
   }
-  flush();
+  const out = [...by].map(([wv, d]) => {
+    const p = path(d);
+    p.style.strokeWidth = `${wv}px`;
+    return p;
+  });
   return out.length ? out : [path(smooth(pts))];
 }
 
 // The strokes as they are drawn, in page coordinates (kept that way as they come in, so a scroll mid-stroke leaves the
-// part already drawn on the words it was drawn on). One group a stroke, one path a segment (as wide as the pen was there).
-// A move adds to the last stroke only: its last segment again (its curve leaned on the point that had not come yet) and
-// the new one. Every line was made again on every move, 15 ms a move by 2,000 points (bench/drawings/ink-bench.mjs, issue 423).
+// part already drawn on the words it was drawn on). One group a stroke. A move adds to the last stroke only: its last
+// segment again (its curve leaned on the point that had not come yet) and the new one. Every line was made again on
+// every move, 15 ms a move by 2,000 points (bench/drawings/ink-bench.mjs, issue 423).
+// The newest segments are runs of one width, a path each, of RUN segments at most: when a path grows the browser
+// draws it again whole, and whatever else reaches into its box, so a path that is still growing is kept short. Every
+// BLOCK segments the runs are joined into one path a width, as a saved drawing's: fewer elements, and each stays in
+// its own stretch of the stroke (one path a width for the whole stroke was 13 elements by 2,000 points, and five to
+// ten times the work of drawing them: test/ink.test.mjs holds add() to what paint() makes).
+const RUN = 32;
+const BLOCK = 128;
 export function liveInk() {
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('class', 'ink live');
@@ -118,27 +120,40 @@ export function liveInk() {
     const from = Math.max(0, i - 2);
     return { c: curve(s.slice(from, i + 2).flatMap(at), i - 1 - from), w: half((Math.round((s[i - 1].w || 3) * 10) + Math.round((s[i].w || 3) * 10)) / 2) };
   };
-  // A stroke's group: its settled segments, joined into paths while their width rounds the same (as a saved drawing's, above),
-  // and its last segment on its own (its curve still leans on the point to come).
-  type G = { g: SVGGElement; done: number; run: SVGPathElement | null; d: string; w: number; n: number; tail: SVGPathElement | null };
+  type Run = { el: SVGPathElement; w: number; d: string; n: number };
+  // A stroke's group: its settled segments (the runs since the last block was joined), and its last segment on its own
+  // (its curve still leans on the point to come).
+  type G = { g: SVGGElement; done: number; runs: Run[]; tail: SVGPathElement | null };
   const groups: G[] = [];
   const grow = (G: G, s: P[]) => {
+    const write = new Set<Run>(); // the paths that changed: each is written once, however many points came
     for (; G.done < s.length - 2; G.done++) {
       const i = G.done + 1;
       const { c, w } = seg(s, i);
-      if (G.run && w === G.w && G.n < RUN) {
-        G.d += c;
-        G.n++;
-        G.run.setAttribute('d', G.d);
-      } else {
+      let r = G.runs.at(-1);
+      if (r?.w === w && r.n < RUN) r.d += c;
+      else {
         const [x, y] = at(s[i - 1]);
-        G.d = `M${x} ${y}${c}`;
-        G.run = path(G.d);
-        G.run.style.strokeWidth = `${w}px`;
-        [G.w, G.n] = [w, 1];
-        G.g.insertBefore(G.run, G.tail);
+        G.runs.push((r = { el: G.g.insertBefore(path(''), G.tail), w, d: `M${x} ${y}${c}`, n: 0 }));
+        r.el.style.strokeWidth = `${w}px`;
       }
+      r.n++;
+      write.add(r);
+      if (i % BLOCK) continue;
+      const by = new Map<number, Run>();
+      for (const r of G.runs) {
+        const first = by.get(r.w);
+        if (!first) by.set(r.w, r);
+        else {
+          first.d += r.d;
+          r.el.remove();
+          write.delete(r);
+          write.add(first);
+        }
+      }
+      G.runs = [];
     }
+    for (const r of write) r.el.setAttribute('d', r.d);
     if (s.length < 2) return;
     const { c, w } = seg(s, s.length - 1);
     const [x, y] = at(s[s.length - 2]);
@@ -147,7 +162,7 @@ export function liveInk() {
     G.tail.style.strokeWidth = `${w}px`;
   };
   const group = (s: P[]) => {
-    const G: G = { g: document.createElementNS(NS, 'g'), done: 0, run: null, d: '', w: -1, n: 0, tail: null };
+    const G: G = { g: document.createElementNS(NS, 'g'), done: 0, runs: [], tail: null };
     groups.push(G);
     grow(G, s);
     return G.g;

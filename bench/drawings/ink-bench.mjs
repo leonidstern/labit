@@ -1,7 +1,7 @@
 // How long the live ink takes per pointer move while a drawing is drawn (hold D and drag), on a lab page in Chromium:
 // script time a move at points 1–100, ~1000 and ~2000 of one long stroke (mouse, and pen with pressure), and over ten
-// strokes of 300, with the lines' elements made and thrown away. Moves are sent inside the page, so the times are the
-// widget's own work, not the test driver's.
+// strokes of 300, with the lines' elements made and thrown away, and the main thread's time a frame with the moves
+// sent two a frame. Moves are sent inside the page, so the times are the widget's own work, not the test driver's.
 //   node bench/drawings/ink-bench.mjs [repo root to run, default this one]   (build it first: npm run build)
 import fs from 'node:fs';
 import os from 'node:os';
@@ -73,6 +73,34 @@ try {
     for (let k = 0; k < 10; k++) all.push(await stroke(300, 100 + k * 20, 150 + k * 50, false));
     return { lastStroke: all.at(-1), made: all.reduce((n, r) => n + r.made, 0), gone: all.reduce((n, r) => n + r.gone, 0), total: all.reduce((n, r) => n + r.total, 0) };
   });
+  // The same moves two a frame, the browser drawing in between: the main thread's time a frame (Chrome's own count),
+  // script, style and layout apart, the rest being paint and the frame's other work. Drawing the pixels is not in it
+  // (other threads do that).
+  const cdp = await ctx.newCDPSession(p);
+  await cdp.send('Performance.enable');
+  const count = async () => Object.fromEntries((await cdp.send('Performance.getMetrics')).metrics.map((m) => [m.name, m.value]));
+  for (const pen of [false, true]) {
+    await one(`a frame: 1000 moves, two a frame, ${pen ? 'pen pressure' : 'mouse'}`, async () => {
+      await p.mouse.move(100, 300);
+      await p.mouse.down();
+      await p.mouse.move(112, 302);
+      const a = await count();
+      const frames = await p.evaluate(([pen]) => new Promise((done) => {
+        let i = 1, frames = 0;
+        const frame = () => {
+          frames++;
+          for (let k = 0; k < 2; k++, i++) document.body.dispatchEvent(new PointerEvent('pointermove', { pointerId: 1, pointerType: pen ? 'pen' : 'mouse', isPrimary: true, pressure: pen ? 0.3 + 0.4 * Math.abs(Math.sin(i / 30)) : 0.5, buttons: 1, clientX: 100 + (i % 600) * 1.5, clientY: 300 + 60 * Math.sin(i / 40) + Math.floor(i / 600) * 40, bubbles: true, composed: true, cancelable: true }));
+          if (i <= 1000) requestAnimationFrame(frame);
+          else done(frames);
+        };
+        requestAnimationFrame(frame);
+      }), [pen]);
+      const b = await count();
+      await p.mouse.up();
+      const ms = (k) => Math.round(((b[k] - a[k]) * 1e6) / frames) / 1000;
+      return { frames, task: ms('TaskDuration'), script: ms('ScriptDuration'), style: ms('RecalcStyleDuration'), layout: ms('LayoutDuration') };
+    });
+  }
 } finally {
   await browser.close();
   lab.kill();

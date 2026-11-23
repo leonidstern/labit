@@ -240,8 +240,9 @@ export function bindDrag(w: unknown) {
         const st = S.inking.strokes.at(-1);
         const q = st.at(-1);
         const now = e.timeStamp;
-        const x = e.clientX + scrollX;
-        const y = e.clientY + scrollY;
+        // The move's own place on the page: asking the window how far it is scrolled made the browser lay the page out
+        // again on every move (the ink had just changed), most of what a move took (issue 423).
+        const { pageX: x, pageY: y } = e;
         const speed = q ? Math.hypot(x - q.x, y - q.y) / Math.max(1, now - (S.inkT || now - 16)) : 0; // px a ms
         S.inkT = now;
         // A pen's pressure sets the width; a mouse or finger draws thinner the faster it moves (Leo's pick 4, 20 Nov).
