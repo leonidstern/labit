@@ -195,6 +195,24 @@ try {
       await p.keyboard.press('Backspace');
       await sleep(600);
       check(eng, 'Backspace with nothing picked takes nothing off', (await frames(name)).find((f) => f.id === 'd')?.state !== 'archived');
+      // several pictures pasted at once: each one is a frame, not only the first (Leo, 23 Nov)
+      if (c) {
+        const n2 = (await frames(name)).length;
+        await p.mouse.move(600, 400);
+        await sleep(150);
+        await p.evaluate(async () => {
+          const dt = new DataTransfer();
+          for (const [i, col] of [['1', '#a37'], ['2', '#37a']]) {
+            const cv = Object.assign(document.createElement('canvas'), { width: 80, height: 60 });
+            const g = cv.getContext('2d');
+            g.fillStyle = col; g.fillRect(0, 0, 80, 60);
+            dt.items.add(new File([await new Promise((r) => cv.toBlob(r, 'image/png'))], `multi${i}.png`, { type: 'image/png' }));
+          }
+          document.body.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true, composed: true }));
+        });
+        const both = await until(async () => (await frames(name)).length === n2 + 2);
+        check(eng, 'two pictures pasted at once are two image frames', Boolean(both), JSON.stringify((await frames(name)).map((f) => f.id)));
+      }
     } finally {
       await browser.close();
     }

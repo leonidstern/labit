@@ -679,6 +679,9 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     // An open comment or the chat: this tap only closes it, as a click outside one does on a page (Leo, 19 Nov: "clicking
     // outside comment should work here same as on page", "same with chat"). A drag (a pan) is no tap and closes nothing.
     if (widget?.dismiss?.()) return;
+    // A click on the canvas or on another frame closes the open one, as Esc does: the board's keys, paste and drag work again
+    // (Leo, 23 Nov: a double-click opened a frame and the board took nothing until a reload).
+    if (entered && d.id !== entered) leave();
     // A click picks the frame under it alone (none: lets go of all); with Shift it adds that frame or takes it off, and on the canvas leaves the rest.
     if (!d.hand) pickFrames(d.id ? (d.shift ? (picks.has(d.id) ? [...picks].filter((id) => id !== d.id) : [...picks, d.id]) : [d.id]) : d.shift ? picks : []);
     // A double tap opens the frame under it to use it.
@@ -879,12 +882,12 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   const pictures = (dt: DataTransfer | null) => [...(dt?.files || [])].filter((f) => f.type.startsWith('image/'));
   on('paste', (e: ClipboardEvent) => {
     if (typing(e, false) || entered) return; // a text box, or an open frame (its page gets it), has its own paste
-    const [file] = pictures(e.clipboardData);
-    if (!file) return; // a text paste stays untouched
+    const got = pictures(e.clipboardData);
+    if (!got.length) return; // a text paste stays untouched
     measure();
     if (!last && !(view.w >= innerWidth - 2 && view.h >= innerHeight - 2)) return; // a half view: the pointer is off the board, the paste is the page's
     eat(e);
-    void putAll([file], last || undefined, alt);
+    void putAll(got, last || undefined, alt); // every picture pasted, not only the first (Leo, 23 Nov)
   }, true);
   const files = (e: DragEvent) => e.dataTransfer?.types.includes('Files');
   on('dragover', (e: DragEvent) => {
