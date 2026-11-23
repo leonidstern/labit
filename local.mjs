@@ -25,7 +25,7 @@ import { runCommand } from './lib/commands.ts';
 import { findDevServer as find, tilde, othersNote } from './lib/devserver.ts';
 import * as B from './lib/board.ts';
 import * as act from './lib/boardact.ts';
-import { imageInfo, MAX_IMAGE } from './lib/images.mjs';
+import { IMAGE_FILE, imageInfo, MAX_IMAGE } from './lib/images.mjs';
 import { IMAGE_TYPES, IMAGES_SAID, imageLine, imageName, imagesOf, MAX_IMAGES, wordsOf } from './lib/schema.mjs';
 import { proxy as makeProxy } from './lib/proxy.ts';
 import { newer, fetchNotes } from './lib/update.ts';
@@ -2524,6 +2524,23 @@ const imageApi = async (req, res, url) => {
   if (bytes === null) return json(413, tooBig);
   const info = imageInfo(bytes);
   if (!info || info.type !== req.headers['content-type']) return json(415, { error: "That isn't a png, jpeg, webp or gif picture." });
+  // A preview of a picture already on the board (?preview=<frame>): its long side one of the preview sizes, under the picture's own.
+  const of = url.searchParams.get('preview');
+  if (of !== null) {
+    const b = name && boardGet(name);
+    const f = b && b.frames.find((x) => x.id === of && x.kind === 'image');
+    const size = Math.max(info.w, info.h);
+    if (!f || !B.PREVIEWS.includes(size) || size >= Math.max(f.iw || 0, f.ih || 0) || info.ext === 'gif') return json(400, { error: 'a preview is of a picture on the board, its long side one of ' + B.PREVIEWS.join(', ') });
+    for (const n of fs.readdirSync(path.dirname(B.imageFile(ROOT, name, f.file)))) if (n.startsWith(`${of}-p${size}.`)) fs.rmSync(path.join(path.dirname(B.imageFile(ROOT, name, f.file)), n), { force: true });
+    writeAtomic(B.imageFile(ROOT, name, B.previewFile(of, size, info.ext)), bytes);
+    const board = { ...b, frames: b.frames.map((x) => (x.id === of ? { ...x, pv: [...new Set([...(x.pv || []), size])].sort((p, q) => q - p) } : x)) };
+    board.rev++;
+    B.save(ROOT, board);
+    boardCache.delete(name);
+    boardList = null;
+    watchBoards();
+    return json(200, { pv: board.frames.find((x) => x.id === of).pv });
+  }
   if (name === null) {
     const token = randomBytes(12).toString('hex');
     fs.mkdirSync(STAGED, { recursive: true, mode: 0o700 });
@@ -2990,10 +3007,13 @@ const handler = async (req, res) => {
     // ---------- boards: a variant's page, and the board's data (lib/board.ts) ----------
     // /_lab/board/<name> is the board page, /_lab/board/<name>/<frame> a variant's own page.
     if (pathname.startsWith('/_lab/board/') || pathname === '/_lab/api/board' || pathname === '/_lab/api/image') {
-      const m = /^\/_lab\/board\/([a-z0-9][a-z0-9_-]{0,79})\/([a-z][a-z0-9]*)$/.exec(pathname);
+      const m = /^\/_lab\/board\/([a-z0-9][a-z0-9_-]{0,79})\/([a-z][a-z0-9]*)(?:-p(\d{2,4}))?$/.exec(pathname);
       if (m && (req.method === 'GET' || req.method === 'HEAD')) {
         const pic = boardGet(m[1])?.frames.find((f) => f.id === m[2] && f.kind === 'image');
-        const file = pic ? B.imageFile(ROOT, m[1], pic.file) : B.frameFile(ROOT, m[1], m[2]);
+        if (m[3] && !pic?.pv?.includes(+m[3])) return notFound(req, res, pathname);
+        const shown = m[3] ? fs.readdirSync(path.dirname(B.imageFile(ROOT, m[1], pic.file))).find((n) => n.startsWith(`${m[2]}-p${m[3]}.`) && IMAGE_FILE.test(n)) : pic?.file;
+        if (m[3] && !shown) return notFound(req, res, pathname);
+        const file = pic ? B.imageFile(ROOT, m[1], shown) : B.frameFile(ROOT, m[1], m[2]);
         if (!fs.existsSync(file)) return notFound(req, res, pathname);
         if (pic) return sendFile(req, res, file, { 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; sandbox", 'content-disposition': 'inline' });
         return sendBody(req, res, 200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
