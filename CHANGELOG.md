@@ -5,6 +5,7 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 ## Unreleased
 
 - **A picture's file name on a board shows only once it is picked.** Pages keep their names.
+- **What you type in a comment stays in the comment.** A page that binds Space or other keys (a video player, a slide deck) no longer hears keys typed in labit's boxes, so Space no longer plays the page and the comment keeps its spaces. ⌘/Control keys and Esc still work as before.
 - **A page's boards are in the bar.** "boards · N" shows while the page has boards, yours and the agent's (`labit board new --of /page`); its click lists them with "new board", and the ⋯ menu has "new board" for a page with none. The comment box no longer has `+board`, and boards are no longer pins (those made before still open from their pin).
 - **Fine lines in pictures on a board no longer sparkle as you zoom in Safari.** Each picture is its own layer, scaled as it is, and drawn small it shows a preview: 1024, 512, 256 and 128 px, made once by the board's page and kept by the lab beside the picture (`<id>-p256.webp`). A smaller preview comes at once as you zoom out; a bigger one only once the zoom rests.
 - **A picked frame on a board has the same thin outline as hover.** No thicker ring.
