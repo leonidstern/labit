@@ -100,7 +100,7 @@ export function waitSeconds(opts: Opts, isTTY = false): { seconds: number; cappe
 // --fast / --no-fast switched the quick model, removed 15 Nov: still accepted, so older scripts keep working; they do nothing.
 // How answers should read, said with every pin (the page shows short blocks and '- ' lists as such).
 export const WRITE_SHORT = "Write answers short: they're read in a small window, often on a phone. One point per line or two, a blank line between points, '- ' lines for lists.";
-const VALUED = ['--port', '--name', '--page', '--pages', '--timeout', '--dir', '--proxy', '--model', '--suggest-rule', '--at', '--progress', '--choice', '--hint', '--recommend', '--of', '--variants', '--widths', '--flow', '--label', '--width', '--after', '--quote', '--file', '--board', '--frame'];
+const VALUED = ['--port', '--name', '--page', '--pages', '--timeout', '--dir', '--proxy', '--model', '--suggest-rule', '--checked', '--at', '--progress', '--choice', '--hint', '--recommend', '--of', '--variants', '--widths', '--flow', '--label', '--width', '--after', '--quote', '--file', '--board', '--frame'];
 // Flags given more than once, each time adding one (reply --choice "A" --choice "B"): a list, in the order given.
 const REPEATED = ['--choice', '--hint'];
 // The command line's words (pos) and options (opts), and any --flag it doesn't know.

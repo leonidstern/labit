@@ -3,6 +3,7 @@
 // Drag to mark: a mouse or a pen drags an area (or, holding D, a drawing) instead of a point; the ink at the end of a
 // drag; and the words selected with Shift + drag, offered as a comment on them.
 import { inkAnchor, liveInk } from './ink.ts';
+import { holdWhileDrawing } from './hold.ts';
 import { cut, openingTag, short, wholeWords, zoneAnchor, zoneEl, anchorAt } from './anchoring.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -54,11 +55,23 @@ export const endDrag = (e) => {
     setTimeout(() => (S.afterDrag = false), 0);
     S.drew = true;
     S.inking.strokes.pop(); // a cancelled stroke (the system took the pointer) is not part of the drawing
-    if (S.inking.strokes.length) S.inking.paint();
-    else {
+    if (S.inking.strokes.length) {
+      S.inking.paint();
+      clearTimeout(S.inkTimer);
+      S.inkTimer = setTimeout(endInk, 1000); // the strokes before it are sent as after a lift, never left holding reloads
+    } else {
       S.inking.svg.remove();
       S.inking = null;
+      letGo();
     }
+    return;
+  }
+  // Holding D, a press that hardly moved is no click (it opened an empty box, and the next D typed a "d" into it, which
+  // then kept every stroke after it from drawing; issue 423): the drawing waits on, as after a stroke.
+  if (d.ink && !d.active && e.type !== 'pointercancel') {
+    S.afterDrag = true;
+    setTimeout(() => (S.afterDrag = false), 0);
+    if (S.inking) S.inkTimer = setTimeout(endInk, 1000);
     return;
   }
   if (!d.active || e.type === 'pointercancel') return;
@@ -69,6 +82,14 @@ export const endDrag = (e) => {
   // A stroke of a drawing: more may follow while D is held. It is done when D is let go, or a second after the last.
   if (d.ink) {
     S.drew = true;
+    // The smoothed line catches up: its last point is where the pen lifted (an arrow's tip lands where it was drawn).
+    const end = S.inking?.strokes.at(-1);
+    const last = end?.at(-1);
+    if (last && S.inkAt && Math.hypot(S.inkAt.x - last.x, S.inkAt.y - last.y) > 0.5) {
+      end.push({ ...S.inkAt, w: last.w });
+      S.inking.add();
+    }
+    S.inkAt = null;
     // Shift held as the pen lifts: a stroke that runs about straight becomes a straight line, flat, upright or at 45°
     // (Leo's pick S1, 20 Nov); a rough box or loop a clean rectangle or ellipse (S2). Anything else stays as drawn.
     const st = S.inking?.strokes.at(-1);
@@ -110,15 +131,24 @@ export const endDrag = (e) => {
   W.begin(zoneAnchor(d));
 };
 export { inkSaid } from '../../lib/schema.mjs'; // what a drawing sent with no words says (the lab reads it back the same way)
+// A reload (the lab's or a dev server's) waits while a drawing is drawn and while drawings are being saved: a second
+// drawing begun while the first is still sent keeps it waiting. A save stops holding after 10 s (a lab that is down retries
+// for minutes; the drawing goes to a comment box if it fails).
+const letGo = () => !S.inking && !S.sendingInk && holdWhileDrawing(false);
 async function endInk() {
   clearTimeout(S.inkTimer);
   const ink = S.inking;
   S.inking = null;
-  if (!ink) return;
+  if (!ink) return letGo();
+  S.sendingInk = (S.sendingInk || 0) + 1;
+  await Promise.race([sendInk(ink).catch(() => {}), new Promise((r) => setTimeout(r, 10000))]);
+  S.sendingInk--;
+  letGo();
+}
+async function sendInk(ink) {
   const { readInk } = await W.part('draw').catch(() => ({ readInk: null }));
-  ink.svg.remove();
   S.lastInk = ink.strokes; // a stroke drawn while its box is open, empty, joins it (above)
-  if (!readInk) return;
+  if (!readInk) return ink.svg.remove();
   W.showAgain();
   S.openId = null;
   // An arrow's ends are named with the card or section they are in: "Shared availability" is in two plans (sims, 20 Nov).
@@ -127,7 +157,23 @@ async function endInk() {
   const read = readInk(here, (e) => e && short(`${openingTag(e)} "${short(e.textContent, 40)}"${block(e) ? ` in ${openingTag(block(e))} "${short(block(e).textContent, 30)}"` : ''}`, 200));
   // Sent as it is, what it reads as its words, with no box to send it from (Leo, 21 Nov: "just draw maybe and send dont
   // open comment to send it, just send"); words are added in its thread after.
-  void W.sendDrawing(inkAnchor(read, ZONE_MIN));
+  const was = S.posted;
+  try {
+    await W.sendDrawing(inkAnchor(read, ZONE_MIN));
+  } finally {
+    landed(ink.svg, S.posted !== was && S.posted);
+  }
+}
+// The live lines stay until the sent drawing is on the page, and go in the same frame it shows: Safari painted one
+// frame with neither between them (Leo, 23 Nov: "blinking after mouse release slightly on safari"). A frame's
+// callbacks run before it is painted, so the sent one, drawn by then, takes the live one's place with no gap or overlap.
+function landed(svg: SVGElement, id: string | false, tries = 0) {
+  requestAnimationFrame(() => {
+    const pin = id && W.pinsById.get(id);
+    const drawn = pin?.isConnected && pin.querySelector('svg')?.getBoundingClientRect().width;
+    if (drawn || !id || tries > 30) svg.remove();
+    else landed(svg, id, tries + 1);
+  });
 }
 // Selecting words. Computers: Shift + drag (or Shift + double or triple click) selects words; a plain drag marks an area
 // wherever it starts, a click pins, and the page's text can't be selected without Shift (it shows the I-beam cursor,
@@ -218,6 +264,7 @@ export function bindDrag(w: unknown) {
             W.render();
           }
           if (!S.inking) W.layer.append((S.inking = liveInk()).svg);
+          holdWhileDrawing(true); // a dev server's reload waits until the drawing is sent (hold.ts)
           S.inking.strokes.push([{ x: S.drag.x0 + scrollX, y: S.drag.y0 + scrollY }]);
           // Held by the page till the pen lifts: a stroke run into a frame, or off the window, still ends here.
           try {
@@ -231,14 +278,19 @@ export function bindDrag(w: unknown) {
         const st = S.inking.strokes.at(-1);
         const q = st.at(-1);
         const now = e.timeStamp;
-        const x = e.clientX + scrollX;
-        const y = e.clientY + scrollY;
+        // The move's own place on the page: asking the window how far it is scrolled made the browser lay the page out
+        // again on every move (the ink had just changed), most of what a move took (issue 423).
+        const { pageX: x, pageY: y } = e;
         const speed = q ? Math.hypot(x - q.x, y - q.y) / Math.max(1, now - (S.inkT || now - 16)) : 0; // px a ms
         S.inkT = now;
         // A pen's pressure sets the width; a mouse or finger draws thinner the faster it moves (Leo's pick 4, 20 Nov).
         const want = e.pointerType === 'pen' && e.pressure > 0 ? 1.5 + e.pressure * 4 : Math.max(1.6, Math.min(5, 5 - speed * 1.8));
-        st.push({ x, y, w: q?.w ? (q.w + want) / 2 : want });
-        return void S.inking.paint();
+        // A light smoothing (Leo, 23 Nov): a point goes part of the way to the pointer, more of it the faster the hand moves,
+        // so a slow hand's shake is taken out and a quick line keeps up. The stroke ends on the pointer (endDrag).
+        const k = q ? Math.min(1, 0.35 + speed * 0.4) : 1;
+        S.inkAt = { x, y };
+        st.push({ x: q ? q.x + (x - q.x) * k : x, y: q ? q.y + (y - q.y) * k : y, w: q?.w ? (q.w + want) / 2 : want });
+        return void S.inking.add();
       }
       S.zoneFrame ||= requestAnimationFrame(paintZone);
     },
@@ -252,7 +304,10 @@ export function bindDrag(w: unknown) {
     S.dKey = false;
     if (S.inking && !S.drag) endInk();
   }, true);
-  addEventListener('blur', () => (S.dKey = false));
+  addEventListener('blur', () => {
+    S.dKey = false;
+    if (S.inking && !S.drag) endInk(); // D's keyup goes to another window: the drawing is done, as on the keyup
+  });
   // The drawing's box is open and focused, nothing typed yet: D pressed again types a "d" there. If a stroke starts
   // while it is still held, it was D held to draw on: the "d" goes and the stroke joins the drawing (edge tests, 20 Nov).
   addEventListener('keydown', (e) => {

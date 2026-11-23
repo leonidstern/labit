@@ -51,6 +51,10 @@ const SUBMIT_MS = 15000;
 const TRIES = 3; // wakes for one set of pins, at most
 const tries = new Map<string, number>(); // port:key -> wakes sent for it
 let woke = false; // the running turn is one a wake started
+// Claude Code refuses a submit after the person stopped the session (Escape) until they send something: the submit
+// resolves with { drop: why } (it doesn't reject). A refused wake was never a try: it doesn't count, and no wake is sent until a turn starts again (the person's), which ends by
+// waking the session for the pins still unheard.
+let refused = false;
 // The lab answers for this session (`for`); a lab from before #420 doesn't, and then only the one that listened last counts.
 const mine = (p: Pending | null, me: string) => Boolean(p) && (p!.for ? p!.for === me : p!.last === me);
 const ask = ($: any, lab: Lab, me: string) =>
@@ -139,12 +143,22 @@ async function progress($: any, e: any): Promise<void> {
   if (e?.tool && e.agentId === undefined) await note($, LINE);
 }
 
+// A wake that never got in: the try is taken back, and nothing more is sent until a turn starts (the person's).
+function undelivered(key: string, port: number): void {
+  tries.set(key, Math.max(0, (tries.get(key) || 1) - 1));
+  told.delete(port);
+  submittedAt = 0;
+  queued = false;
+  refused = true;
+}
+
 async function look($: any): Promise<void> {
   if (submittedAt) {
     if ((await $.clock.now()) - submittedAt < SUBMIT_MS) return;
     submittedAt = 0;
     told.clear();
   }
+  if (refused) return; // the session was stopped: nothing gets in until the person writes
   if (queued) return; // already in the queue behind the running turn; its end starts the clock
   if (busy && woke) return; // the wake's own turn is running: it listens again at its end
   const me = await $.session.id();
@@ -175,12 +189,16 @@ async function look($: any): Promise<void> {
     const n = p.fresh === 1 ? 'A new pin' : `${p.fresh} new pins`;
     // No page names here: this text is a turn of its own, and a page's path is whatever a comment was posted to (a
     // guest on the wifi can post one). `wait` names the pages, in text marked as the lab's.
-    void $.prompt.submit({
+    const key = `${lab.port}:${p.key}`;
+    void Promise.resolve($.prompt.submit({
       text:
         `labit: ${n} (${p.url}) while you weren't listening${busy ? ' (queued while you were busy)' : ''}. ` +
         `Run \`${p.cmd} wait --timeout 5\` in ${p.dir} to read them (nothing new means you already have them), ` +
         `read each thread whole (the page or section is not the question), answer each on its pin with reply, then listen again in the background as before (\`wait --bg\`).`,
-    });
+    })).then(
+      (r: any) => { if (r?.drop !== undefined) undelivered(key, lab.port); }, // { drop: why }: refused, or taken out of the queue
+      () => undelivered(key, lab.port),
+    );
     return;
   }
   heard = ''; // nothing waiting: the next pin starts its count again
@@ -195,6 +213,7 @@ export const register: Register = (on) => {
   on('turn.start', ($, e, next) => {
     if (e.agentId === undefined) {
       busy = true;
+      refused = false;
       woke = Boolean(submittedAt || queued); // the wake's turn (a queued one starts right after the turn it waited for)
       submittedAt = 0;
       queued = false;

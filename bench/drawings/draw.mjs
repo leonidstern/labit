@@ -1,7 +1,7 @@
 // Drawings as quick actions, part 1: the real widget draws each mark on pricing.html (hold D, drag, let go), the lab
 // sends it on lift, and the agent text for each one is saved to out/<id>.txt, with what the page read it as.
 //   NODE_PATH=<folder with playwright-core>/node_modules node bench/drawings/draw.mjs
-// Runs its own lab on a copy of this folder (port 4499); needs Chrome (channel 'chrome').
+// Runs its own lab on a copy of this folder (port 4499), in Playwright's Chromium.
 import { cpSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -31,8 +31,10 @@ for (let i = 0; i < 40; i++) {
   await new Promise((r) => setTimeout(r, 250));
 }
 
-const browser = await chromium.launch({ channel: 'chrome' });
+const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+// A name, as a person who has commented before has: with none, the drawing's box waits for one and nothing is sent.
+await page.addInitScript(() => localStorage.setItem('lab-name', 'leo'));
 page.on('console', (m) => process.env.ONLY && console.log('page:', m.text()));
 await page.goto(`http://localhost:${PORT}/pricing`);
 await page.waitForTimeout(1500);
@@ -50,7 +52,7 @@ const boxOf = async (sel, scroll = true) => {
 const seen = new Set();
 const results = [];
 for (const s of SCENARIOS.filter((x) => !process.env.ONLY || process.env.ONLY.split(",").includes(x.id))) {
-  await page.reload(); // each drawing on a fresh page, as a person comes back to it
+  await page.goto(`http://localhost:${PORT}/pricing`); // each drawing on a fresh page, as a person comes back to it
   await page.waitForTimeout(1200);
   const from = await boxOf(s.on);
   const to = s.to ? await boxOf(s.to, false) : null;
@@ -68,8 +70,7 @@ for (const s of SCENARIOS.filter((x) => !process.env.ONLY || process.env.ONLY.sp
   await page.waitForTimeout(1600); // sent a second after the last stroke
   await page.keyboard.up('d');
   await page.waitForTimeout(300);
-  await page.keyboard.press('Enter'); // the box opens with the lines: Enter sends the drawing as it is, no words
-  await page.waitForTimeout(700);
+  await page.waitForTimeout(700); // a drawing sends itself on lift (an Enter here would follow a link it was drawn on)
   const text = await (await fetch(`http://localhost:${PORT}/_lab/agent/pricing`)).text();
   const blocks = text.split(/\n(?=## \d+\. )/).slice(1);
   const mine = blocks.find((b) => !seen.has(/id ([0-9a-f]{12})/.exec(b)?.[1])) || '';

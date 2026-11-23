@@ -20,6 +20,7 @@
 .sw-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 5px; font-size: 12px; color: var(--_muted); min-width: 0; white-space: nowrap; }
 .sw-port, .sw-path { font-size: 12px; color: var(--_muted); }
 .sw-name b { color: var(--_fg); font-weight: 600; font-size: 13px; }
+.sw-row .sw-m b { color: var(--_fg); font-weight: 500; } /* a page's "board needs your reply" (issue 422) */
 .sw-row.armed .sw-m { color: var(--_red); } /* ⇧⌥A once: archiving the whole lab waits for a second press */
 .sw-row { display: flex; justify-content: space-between; gap: 12px; width: 100%; border: 0; background: none; text-align: left; padding: 7px 10px;
   border-radius: var(--_r-s); font-size: 14px; color: var(--_fg); }

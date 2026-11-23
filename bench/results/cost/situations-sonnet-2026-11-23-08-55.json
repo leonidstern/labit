@@ -1,0 +1,1232 @@
+{
+  "task": "situations",
+  "model": "sonnet",
+  "commit": "716a6c4",
+  "host": "2.1.330 (Claude Code)",
+  "node": "v22.23.5",
+  "at": "2026-11-23T08:55:08.080Z",
+  "arms": {
+    "lean": {
+      "runs": 20,
+      "allRight": 15,
+      "meanScore": 0.9866666666666667,
+      "costUsd": {
+        "median": 0.23621925,
+        "p90": 0.26341413,
+        "mean95": {
+          "mean": 0.24203949999999996,
+          "low": 0.22713275092406504,
+          "high": 0.2569462490759349
+        }
+      },
+      "costPerAllRightRun": 0.3227193333333333,
+      "calls": {
+        "median": 7.5,
+        "p90": 9.100000000000001
+      },
+      "turns": {
+        "median": 9,
+        "p90": 10.200000000000003
+      },
+      "uncached": {
+        "median": 14,
+        "p90": 17.200000000000003
+      },
+      "cacheWrite": {
+        "median": 38103.5,
+        "p90": 42469.6
+      },
+      "cacheRead": {
+        "median": 396829.5,
+        "p90": 499920.3000000001
+      },
+      "output": {
+        "median": 4785,
+        "p90": 5877.500000000002
+      },
+      "toolCalls": {
+        "median": 8,
+        "p90": 9.200000000000003
+      },
+      "toolBytes": {
+        "median": 56023.5,
+        "p90": 63500.200000000004
+      },
+      "pictures": {
+        "median": 0,
+        "p90": 0.20000000000000284
+      },
+      "seconds": {
+        "median": 41.5,
+        "p90": 50.90000000000001
+      }
+    },
+    "full": {
+      "runs": 20,
+      "allRight": 14,
+      "meanScore": 0.9866666666666666,
+      "costUsd": {
+        "median": 0.22599595,
+        "p90": 0.26241812,
+        "mean95": {
+          "mean": 0.236095785,
+          "low": 0.2245619800206392,
+          "high": 0.2476295899793608
+        }
+      },
+      "costPerAllRightRun": 0.3372796928571429,
+      "calls": {
+        "median": 7.5,
+        "p90": 9
+      },
+      "turns": {
+        "median": 9,
+        "p90": 10.100000000000001
+      },
+      "uncached": {
+        "median": 14.5,
+        "p90": 17
+      },
+      "cacheWrite": {
+        "median": 36208.5,
+        "p90": 42850.9
+      },
+      "cacheRead": {
+        "median": 398383,
+        "p90": 510179.2
+      },
+      "output": {
+        "median": 4361.5,
+        "p90": 4831.7
+      },
+      "toolCalls": {
+        "median": 8,
+        "p90": 9.100000000000001
+      },
+      "toolBytes": {
+        "median": 51377,
+        "p90": 65845.3
+      },
+      "pictures": {
+        "median": 0,
+        "p90": 0.20000000000000284
+      },
+      "seconds": {
+        "median": 38,
+        "p90": 40
+      }
+    }
+  },
+  "runs": [
+    {
+      "arm": "lean",
+      "calls": 6,
+      "uncached": 12,
+      "cacheWrite": 29618,
+      "cacheRead": 286955,
+      "output": 4206,
+      "turns": 7,
+      "costUsd": 0.18925150000000002,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 1,
+        "Bash": 5
+      },
+      "toolCalls": 6,
+      "toolBytes": 39940,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 36,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "full",
+      "calls": 7,
+      "uncached": 13,
+      "cacheWrite": 36146,
+      "cacheRead": 365650,
+      "output": 4265,
+      "turns": 8,
+      "costUsd": 0.22382499999999997,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 2,
+        "Bash": 5
+      },
+      "toolCalls": 7,
+      "toolBytes": 51719,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 37,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "full",
+      "calls": 8,
+      "uncached": 15,
+      "cacheWrite": 36271,
+      "cacheRead": 422445,
+      "output": 4528,
+      "turns": 10,
+      "costUsd": 0.2326385,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 3,
+        "Bash": 6
+      },
+      "toolCalls": 9,
+      "toolBytes": 47084,
+      "pictures": 2,
+      "finished": true,
+      "seconds": 38,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "lean",
+      "calls": 6,
+      "uncached": 12,
+      "cacheWrite": 42414,
+      "cacheRead": 316580,
+      "output": 5334,
+      "turns": 8,
+      "costUsd": 0.254678,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 2,
+        "Bash": 5
+      },
+      "toolCalls": 7,
+      "toolBytes": 66819,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 46,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "full",
+      "calls": 7,
+      "uncached": 14,
+      "cacheWrite": 32051,
+      "cacheRead": 352898,
+      "output": 4442,
+      "turns": 8,
+      "costUsd": 0.2079418,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 1,
+        "Bash": 6
+      },
+      "toolCalls": 7,
+      "toolBytes": 44810,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 38,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "lean",
+      "calls": 8,
+      "uncached": 15,
+      "cacheWrite": 34584,
+      "cacheRead": 421279,
+      "output": 4719,
+      "turns": 9,
+      "costUsd": 0.2276839,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 1,
+        "Bash": 7
+      },
+      "toolCalls": 8,
+      "toolBytes": 47766,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 41,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "lean",
+      "calls": 9,
+      "uncached": 17,
+      "cacheWrite": 30428,
+      "cacheRead": 463824,
+      "output": 4737,
+      "turns": 9,
+      "costUsd": 0.2154984,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 1,
+        "Bash": 7
+      },
+      "toolCalls": 8,
+      "toolBytes": 38482,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 43,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "full",
+      "calls": 8,
+      "uncached": 15,
+      "cacheWrite": 31346,
+      "cacheRead": 412802,
+      "output": 4928,
+      "turns": 9,
+      "costUsd": 0.2159742,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 1,
+        "Bash": 7
+      },
+      "toolCalls": 8,
+      "toolBytes": 39550,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 40,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "full",
+      "calls": 7,
+      "uncached": 13,
+      "cacheWrite": 34740,
+      "cacheRead": 361345,
+      "output": 4169,
+      "turns": 8,
+      "costUsd": 0.21681050000000002,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 2,
+        "Bash": 5
+      },
+      "toolCalls": 7,
+      "toolBytes": 47684,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 35,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "full",
+      "calls": 9,
+      "uncached": 17,
+      "cacheWrite": 33693,
+      "cacheRead": 485223,
+      "output": 4384,
+      "turns": 9,
+      "costUsd": 0.2271683,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 1,
+        "Bash": 7
+      },
+      "toolCalls": 8,
+      "toolBytes": 46107,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 38,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "lean",
+      "calls": 7,
+      "uncached": 13,
+      "cacheWrite": 34428,
+      "cacheRead": 352226,
+      "output": 5262,
+      "turns": 9,
+      "costUsd": 0.22558060000000002,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 1,
+        "Bash": 7
+      },
+      "toolCalls": 8,
+      "toolBytes": 46069,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 44,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "lean",
+      "calls": 6,
+      "uncached": 11,
+      "cacheWrite": 40534,
+      "cacheRead": 306120,
+      "output": 4956,
+      "turns": 8,
+      "costUsd": 0.24233,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 2,
+        "Bash": 5
+      },
+      "toolCalls": 7,
+      "toolBytes": 60873,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 40,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "full",
+      "calls": 7,
+      "uncached": 13,
+      "cacheWrite": 35587,
+      "cacheRead": 362989,
+      "output": 4553,
+      "turns": 9,
+      "costUsd": 0.22420289999999998,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 4,
+        "Bash": 4
+      },
+      "toolCalls": 8,
+      "toolBytes": 49000,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 38,
+      "score": {
+        "pass": 29,
+        "of": 30,
+        "missed": [
+          "other-canvas-chart"
+        ]
+      }
+    },
+    {
+      "arm": "full",
+      "calls": 8,
+      "uncached": 15,
+      "cacheWrite": 43615,
+      "cacheRead": 426596,
+      "output": 4775,
+      "turns": 9,
+      "costUsd": 0.2648996,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 2,
+        "Bash": 6
+      },
+      "toolCalls": 8,
+      "toolBytes": 67729,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 39,
+      "score": {
+        "pass": 29,
+        "of": 30,
+        "missed": [
+          "code-identical-lines"
+        ]
+      }
+    },
+    {
+      "arm": "lean",
+      "calls": 7,
+      "uncached": 13,
+      "cacheWrite": 34989,
+      "cacheRead": 364344,
+      "output": 4617,
+      "turns": 8,
+      "costUsd": 0.22258640000000002,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 1,
+        "Bash": 6
+      },
+      "toolCalls": 7,
+      "toolBytes": 48710,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 39,
+      "score": {
+        "pass": 28,
+        "of": 30,
+        "missed": [
+          "photo-svg-shape",
+          "other-canvas-chart"
+        ]
+      }
+    },
+    {
+      "arm": "full",
+      "calls": 6,
+      "uncached": 11,
+      "cacheWrite": 34313,
+      "cacheRead": 297755,
+      "output": 4016,
+      "turns": 6,
+      "costUsd": 0.20720950000000002,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 1,
+        "Bash": 4
+      },
+      "toolCalls": 5,
+      "toolBytes": 48603,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 34,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "lean",
+      "calls": 9,
+      "uncached": 17,
+      "cacheWrite": 34256,
+      "cacheRead": 480505,
+      "output": 4500,
+      "turns": 10,
+      "costUsd": 0.23010850000000002,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 2,
+        "Bash": 7
+      },
+      "toolCalls": 9,
+      "toolBytes": 46897,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 39,
+      "score": {
+        "pass": 29,
+        "of": 30,
+        "missed": [
+          "code-same-command-two-blocks"
+        ]
+      }
+    },
+    {
+      "arm": "lean",
+      "calls": 8,
+      "uncached": 15,
+      "cacheWrite": 41457,
+      "cacheRead": 449502,
+      "output": 5034,
+      "turns": 9,
+      "costUsd": 0.2611482,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 1,
+        "Bash": 7
+      },
+      "toolCalls": 8,
+      "toolBytes": 63154,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 42,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "full",
+      "calls": 9,
+      "uncached": 17,
+      "cacheWrite": 40701,
+      "cacheRead": 510280,
+      "output": 4821,
+      "turns": 11,
+      "costUsd": 0.26207600000000003,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 4,
+        "Bash": 6
+      },
+      "toolCalls": 10,
+      "toolBytes": 60466,
+      "pictures": 3,
+      "finished": true,
+      "seconds": 40,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "full",
+      "calls": 7,
+      "uncached": 13,
+      "cacheWrite": 35338,
+      "cacheRead": 369450,
+      "output": 4058,
+      "turns": 8,
+      "costUsd": 0.21890300000000001,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 1,
+        "Bash": 6
+      },
+      "toolCalls": 7,
+      "toolBytes": 50478,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 34,
+      "score": {
+        "pass": 28,
+        "of": 30,
+        "missed": [
+          "photo-svg-shape",
+          "other-canvas-chart"
+        ]
+      }
+    },
+    {
+      "arm": "lean",
+      "calls": 12,
+      "uncached": 23,
+      "cacheWrite": 50114,
+      "cacheRead": 723721,
+      "output": 7204,
+      "turns": 19,
+      "costUsd": 0.3449141,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 11,
+        "Bash": 7
+      },
+      "toolCalls": 18,
+      "toolBytes": 62689,
+      "pictures": 9,
+      "finished": true,
+      "seconds": 59,
+      "score": {
+        "pass": 28,
+        "of": 30,
+        "missed": [
+          "photo-svg-shape",
+          "other-canvas-chart"
+        ]
+      }
+    },
+    {
+      "arm": "lean",
+      "calls": 6,
+      "uncached": 12,
+      "cacheWrite": 35904,
+      "cacheRead": 297542,
+      "output": 4326,
+      "turns": 7,
+      "costUsd": 0.21665419999999996,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 1,
+        "Bash": 5
+      },
+      "toolCalls": 6,
+      "toolBytes": 54334,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 36,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "full",
+      "calls": 7,
+      "uncached": 13,
+      "cacheWrite": 33790,
+      "cacheRead": 362193,
+      "output": 3917,
+      "turns": 7,
+      "costUsd": 0.2105753,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 1,
+        "Bash": 5
+      },
+      "toolCalls": 6,
+      "toolBytes": 47240,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 33,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "full",
+      "calls": 12,
+      "uncached": 23,
+      "cacheWrite": 42766,
+      "cacheRead": 702662,
+      "output": 6070,
+      "turns": 13,
+      "costUsd": 0.3020762,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 2,
+        "Bash": 9,
+        "TaskStop": 1
+      },
+      "toolCalls": 12,
+      "toolBytes": 62055,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 166,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "lean",
+      "calls": 7,
+      "uncached": 13,
+      "cacheWrite": 41030,
+      "cacheRead": 366674,
+      "output": 4592,
+      "turns": 8,
+      "costUsd": 0.2467334,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 2,
+        "Bash": 5
+      },
+      "toolCalls": 7,
+      "toolBytes": 62864,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 40,
+      "score": {
+        "pass": 29,
+        "of": 30,
+        "missed": [
+          "other-dark-mode"
+        ]
+      }
+    },
+    {
+      "arm": "lean",
+      "calls": 8,
+      "uncached": 15,
+      "cacheWrite": 40089,
+      "cacheRead": 430639,
+      "output": 4821,
+      "turns": 9,
+      "costUsd": 0.2516599,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 2,
+        "Bash": 6
+      },
+      "toolCalls": 8,
+      "toolBytes": 59974,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 42,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "full",
+      "calls": 7,
+      "uncached": 13,
+      "cacheWrite": 35434,
+      "cacheRead": 360626,
+      "output": 4107,
+      "turns": 7,
+      "costUsd": 0.2188946,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 1,
+        "Bash": 5
+      },
+      "toolCalls": 6,
+      "toolBytes": 51035,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 35,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "lean",
+      "calls": 9,
+      "uncached": 17,
+      "cacheWrite": 37740,
+      "cacheRead": 491612,
+      "output": 4952,
+      "turns": 9,
+      "costUsd": 0.24967519999999999,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 1,
+        "Bash": 7
+      },
+      "toolCalls": 8,
+      "toolBytes": 54483,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 42,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "lean",
+      "calls": 7,
+      "uncached": 13,
+      "cacheWrite": 42970,
+      "cacheRead": 372380,
+      "output": 4749,
+      "turns": 8,
+      "costUsd": 0.256634,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 2,
+        "Bash": 5
+      },
+      "toolCalls": 7,
+      "toolBytes": 66616,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 40,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "full",
+      "calls": 8,
+      "uncached": 15,
+      "cacheWrite": 42171,
+      "cacheRead": 425693,
+      "output": 4267,
+      "turns": 9,
+      "costUsd": 0.2539533,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 2,
+        "Bash": 6
+      },
+      "toolCalls": 8,
+      "toolBytes": 65636,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 36,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "full",
+      "calls": 8,
+      "uncached": 15,
+      "cacheWrite": 39619,
+      "cacheRead": 440738,
+      "output": 4339,
+      "turns": 9,
+      "costUsd": 0.2459698,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 2,
+        "Bash": 6
+      },
+      "toolCalls": 8,
+      "toolBytes": 59473,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 37,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "full",
+      "calls": 6,
+      "uncached": 11,
+      "cacheWrite": 37931,
+      "cacheRead": 313076,
+      "output": 4177,
+      "turns": 9,
+      "costUsd": 0.2248236,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 2,
+        "Bash": 6
+      },
+      "toolCalls": 8,
+      "toolBytes": 56100,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 35,
+      "score": {
+        "pass": 29,
+        "of": 30,
+        "missed": [
+          "other-canvas-chart"
+        ]
+      }
+    },
+    {
+      "arm": "lean",
+      "calls": 5,
+      "uncached": 9,
+      "cacheWrite": 38945,
+      "cacheRead": 241723,
+      "output": 4181,
+      "turns": 7,
+      "costUsd": 0.22178029999999999,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 1,
+        "Bash": 5
+      },
+      "toolCalls": 6,
+      "toolBytes": 59334,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 35,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "full",
+      "calls": 9,
+      "uncached": 17,
+      "cacheWrite": 38001,
+      "cacheRead": 510168,
+      "output": 4445,
+      "turns": 10,
+      "costUsd": 0.24750480000000002,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 1,
+        "Bash": 8
+      },
+      "toolCalls": 9,
+      "toolBytes": 55955,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 38,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "full",
+      "calls": 7,
+      "uncached": 13,
+      "cacheWrite": 41946,
+      "cacheRead": 383964,
+      "output": 4812,
+      "turns": 9,
+      "costUsd": 0.2543264,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 2,
+        "Bash": 6
+      },
+      "toolCalls": 8,
+      "toolBytes": 63827,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 40,
+      "score": {
+        "pass": 29,
+        "of": 30,
+        "missed": [
+          "text-area-part-of-line"
+        ]
+      }
+    },
+    {
+      "arm": "lean",
+      "calls": 6,
+      "uncached": 11,
+      "cacheWrite": 38467,
+      "cacheRead": 302941,
+      "output": 4223,
+      "turns": 7,
+      "costUsd": 0.2264141,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 1,
+        "Bash": 5
+      },
+      "toolCalls": 6,
+      "toolBytes": 57564,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 35,
+      "score": {
+        "pass": 28,
+        "of": 30,
+        "missed": [
+          "photo-svg-shape",
+          "other-canvas-chart"
+        ]
+      }
+    },
+    {
+      "arm": "lean",
+      "calls": 9,
+      "uncached": 17,
+      "cacheWrite": 32078,
+      "cacheRead": 471706,
+      "output": 5012,
+      "turns": 10,
+      "costUsd": 0.22563659999999996,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 1,
+        "Bash": 8
+      },
+      "toolCalls": 9,
+      "toolBytes": 41656,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 43,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "full",
+      "calls": 8,
+      "uncached": 15,
+      "cacheWrite": 44252,
+      "cacheRead": 423344,
+      "output": 4277,
+      "turns": 9,
+      "costUsd": 0.2621424,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 2,
+        "Bash": 6
+      },
+      "toolCalls": 8,
+      "toolBytes": 70301,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 38,
+      "score": {
+        "pass": 28,
+        "of": 30,
+        "missed": [
+          "other-canvas-chart",
+          "other-dark-mode"
+        ]
+      }
+    },
+    {
+      "arm": "lean",
+      "calls": 10,
+      "uncached": 19,
+      "cacheWrite": 42125,
+      "cacheRead": 574695,
+      "output": 5780,
+      "turns": 12,
+      "costUsd": 0.2838075,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 3,
+        "Bash": 8
+      },
+      "toolCalls": 11,
+      "toolBytes": 58919,
+      "pictures": 2,
+      "finished": true,
+      "seconds": 50,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    },
+    {
+      "arm": "lean",
+      "calls": 8,
+      "uncached": 15,
+      "cacheWrite": 34532,
+      "cacheRead": 423072,
+      "output": 6755,
+      "turns": 10,
+      "costUsd": 0.24801520000000002,
+      "models": [
+        "claude-sonnet-5-5"
+      ],
+      "tools": {
+        "Read": 1,
+        "Bash": 6,
+        "TaskStop": 1,
+        "Write": 1
+      },
+      "toolCalls": 9,
+      "toolBytes": 42766,
+      "pictures": 0,
+      "finished": true,
+      "seconds": 170,
+      "score": {
+        "pass": 30,
+        "of": 30,
+        "missed": []
+      }
+    }
+  ]
+}

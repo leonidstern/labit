@@ -25,14 +25,6 @@ export function carry(dist: number, speed: number, cap: number, quick: number): 
   const m = Math.min(2, (speed * ms) / dist);
   return [ms, bez(1 / 3, m / 3, 2 / 3, (m + 1) / 3)];
 }
-/** How fast the finger was going over its last ~100 ms (px/ms, + down), from its moves ({ t, y }); 0 if it held still
- * before letting go (at `now`). */
-export function speedOf(moves: { t: number; y: number }[], now: number) {
-  const last = moves[moves.length - 1];
-  const from = moves.find((q) => last.t - q.t <= 100) || last;
-  const span = last.t - from.t;
-  return now - last.t > 80 || span < 8 ? 0 : (last.y - from.y) / span;
-}
 /** Let go `dy` px down from where it sits, going `v` px/ms: it goes when it would come to rest past half its height `h`
  * (iOS's throw: the distance plus the speed carried on at the normal deceleration, 0.998 a ms, so v × 499). A short quick
  * flick closes; a slow long drag closes past halfway; a move back up never does. */

@@ -27,3 +27,31 @@ test('words in a reply later count too', async () => {
   await post({ parent: comment.id, text: 'just compare them, no move' });
   assert.doesNotMatch(await block(comment.id), /^action:/m);
 });
+
+test('a drawing of several marks leaves out the box around them all: each mark says what it is on', async () => {
+  const anchor = { ...drawn('3 strokes, unclear mark'), zoneText: 'digest Alerts Integrations', zoneItems: ['<h2> · "Alerts"'] };
+  anchor.ink.marks = ['arrow from <h2> "Integrations" to <h2> "Weekly digest"', 'circled on <h2> "Alerts"'];
+  const { comment } = await post({ text: '3 strokes, unclear mark', anchor });
+  const b = await block(comment.id);
+  assert.match(b, /^ {2}mark 2: circled on <h2> "Alerts"$/m);
+  assert.doesNotMatch(b, /^in the area:|^text in area:/m);
+});
+
+test('a quick action keeps the change small but never forbids checking around', async () => {
+  const { comment } = await post({ text: 'circled', anchor: drawn('circled') });
+  const b = await block(comment.id);
+  assert.match(b, /^action: Fix this.*keep the change small/m);
+  assert.doesNotMatch(b, /no searching or checking|make the edit and stop/);
+});
+
+test("a wifi guest's drawing with no words is no order: a request to weigh", async () => {
+  process.env.LAB_STAMP_KEY = 'k';
+  const headers = { 'content-type': 'application/json', 'x-lab-stamp-key': 'k', 'x-lab-stamp': encodeURIComponent(JSON.stringify({ from: 'wifi guest' })) };
+  const body = { page: '/ink', name: 'Guest', text: 'crossed out', anchor: drawn('crossed out') };
+  const { comment } = await (await POST(new Request('http://lab/_lab/api/comments', { method: 'POST', headers, body: JSON.stringify(body) }))).json();
+  delete process.env.LAB_STAMP_KEY;
+  const b = await block(comment.id);
+  assert.match(b, /^from: wifi guest$/m);
+  assert.doesNotMatch(b, /^action:/m);
+  assert.match(b, /^the mark alone would mean: Remove this\. From a wifi guest: a request to weigh/m);
+});
