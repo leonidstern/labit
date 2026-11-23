@@ -1968,6 +1968,7 @@ function deliver(res, got, who = '', ack = false, key = '', label = 'Claude') {
     unacked.set(delivery, {
       who,
       key,
+      pins: got.marks.map(([page, id]) => ({ page, id })), // still the session's to see until it confirms (/_lab/pending)
       timer: setTimeout(() => takeBack(delivery), ACK_MS).unref(),
       back: () => {
         // Only marks still as this hand-off left them: a pin moved since and handed to another wait stays theirs.
@@ -2678,7 +2679,11 @@ const handler = async (req, res) => {
       const asker = (url.searchParams.get('for') || '').slice(0, 80);
       const owners = [...claims].filter(([p, at]) => Date.now() - at < CLAIM_MS && claimOwner.get(p)).map(([p]) => [p, claimOwner.get(p)]);
       const ownerOf = (page) => owners.find(([p]) => covers([p], page))?.[1] || session?.id || '';
-      const fresh = asker ? unheard.filter(({ page }) => ownerOf(page) === asker) : unheard;
+      // Pins handed to this session's wait that it hasn't confirmed yet count as not handed: a background wait in Codex
+      // hands them to output nobody reads (and doesn't confirm), so its Stop hook must still see them (#420).
+      const held = asker ? [...unacked.values()].filter((d) => d.who === asker).flatMap((d) => d.pins || []) : [];
+      const mine = asker ? unheard.filter(({ page }) => ownerOf(page) === asker) : unheard;
+      const fresh = [...mine, ...held.filter((h) => !mine.some((f) => f.c.id === h.id)).map(({ page, id }) => ({ page, c: { id } }))];
       const ids = fresh.map(({ c }) => c.id).sort();
       // The threads someone claimed (a status line from --progress, or an "on it" reply, since the person's last words):
       // the plugin's hook renews that line while its own session runs tools. A pin nobody claimed gets none, and neither
