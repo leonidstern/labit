@@ -176,7 +176,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   const mips = async (c: Card, img: HTMLImageElement) => {
     const list: HTMLImageElement[] = [];
     let from: CanvasImageSource = img;
-    for (let w = img.naturalWidth, h = img.naturalHeight; w >= 256 && !signal.aborted && img.isConnected; ) {
+    for (let w = img.naturalWidth, h = img.naturalHeight; w >= 96 && !signal.aborted && img.isConnected; ) {
       [w, h] = [Math.round(w / 2), Math.round(h / 2)];
       const cv = Object.assign(document.createElement('canvas'), { width: w, height: h });
       const x = cv.getContext('2d');
