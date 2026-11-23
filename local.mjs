@@ -15,7 +15,7 @@ import { AGENTS } from './lib/agents.ts';
 import { watchTree } from './lib/watch.ts';
 import { PARKED, REGISTRY, askPages, keyFor, parkedLabs, runningLabs } from './lib/labs.ts';
 import { alive, setWifi } from './lib/labcall.ts';
-import { CLAIM_LIFE_MS, DO_IT, PROGRESS_MS, RENEWAL, UNMATCHED, numberOf, slim, upgrade, VERSION as SCHEMA } from './lib/schema.mjs';
+import { CLAIM_LIFE_MS, DO_IT, PROGRESS_MS, RENEWAL, REQUESTS, UNMATCHED, numberOf, slim, upgrade, VERSION as SCHEMA } from './lib/schema.mjs';
 import { sameKey } from './lib/comments-api.mjs';
 import { cut } from './lib/cut.mjs';
 import { sourceLines } from './lib/source-line.mjs';
@@ -1901,8 +1901,8 @@ async function unseen(scope = pages(), who = '') {
   // The standing lines (how to read, answer, report progress, write) are said in full to a session the first time it
   // hears, and again only when the lab restarts or the session changes; after that, one line.
   const standing = full
-    ? `\n\nRead each thread whole (every message and reply, not only the newest) before answering; the page, URL or #section is where a pin sits, not what it asks.` +
-      `\n\nAnswer each: ${CMD} reply <id> "what you did" [--done | --question] [--resolve] (run in ${ROOT}); add --wait to the last one to listen again in the same command.` +
+    ? `\n\n${REQUESTS} Read each thread whole (every message and reply, not only the newest) before answering; the page, URL or #section is where a pin sits, not what it asks.` +
+      `\n\nAnswer each: ${CMD} reply <id> "what you did" [--done | --question] [--resolve] (run in ${ROOT}); add --wait to the last one to listen again in the same command. Looked at the result (the page, a test)? Add --checked "<how>" to --done; without it the page says not checked.` +
       // The person sees nothing between "picked up" and the answer: a batch an agent worked through for 13 minutes looked
       // lost (Leo, 18 Nov). A --progress line first turns the ring and the pill at once, without a message (Leo, 20 Nov: less noise).
       `\nIf it will take more than about a minute (a build, a restart, a PR): send one ${CMD} reply <id> --progress "<what you're doing>" on each first (a status line, not a message), then start, and a new one when the step changes (10 minutes after your last, the page says no update); a quick ask needs none (an answer within 2 minutes counts). A plain "go" gets no words: resolve it when done.` +
