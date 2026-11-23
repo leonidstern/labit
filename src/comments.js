@@ -1396,8 +1396,14 @@ import { bindKeys } from './widget/keys.ts';
     if (!popMenu) setMenu(moreMenu.hidden || moreMenu.classList.contains('out')); // leaving counts as closed (a popover: the browser)
   });
   moreMenu.addEventListener('click', () => setTimeout(() => setMenu(false, true), 0));
+  // A press outside the open menu only closes it: the click it ends pins nothing (Leo, 23 Nov: "if menu opened click on
+  // canvas closing menu not opening pin"). A popover closes itself (light dismiss); the click is still the page's.
   addEventListener('pointerdown', (e) => {
-    if (!popMenu && !moreMenu.hidden && !e.composedPath().some((n) => n === moreMenu || n === moreBtn)) setMenu(false);
+    S.menuShut = 0;
+    const open = popMenu ? moreMenu.matches(':popover-open') : !moreMenu.hidden && !moreMenu.classList.contains('out');
+    if (!open || e.composedPath().some((n) => n === moreMenu || n === moreBtn)) return;
+    S.menuShut = Date.now();
+    if (!popMenu) setMenu(false);
   }, true);
   addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !popMenu && !moreMenu.hidden) {
@@ -1814,6 +1820,7 @@ import { bindKeys } from './widget/keys.ts';
   function onPageClick(e) {
     if (e.composedPath().includes(host)) return;
     if (S.undoLetGo && Date.now() - S.undoLetGo < 2000) return void (S.undoLetGo = 0); // this click let a sent pin's undo card go (above)
+    if (S.menuShut && Date.now() - S.menuShut < 1500) return void (S.menuShut = 0); // this click closed the ⋯ menu (above)
     if (S.draft || S.openId) {
       // Typed text doesn't keep it open (Leo, 18 Nov): the click closes it and the words stay as a draft (the box saves them as
       // they are typed, and the spot is kept, so it comes back); Escape discards them.
