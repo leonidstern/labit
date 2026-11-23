@@ -62,7 +62,7 @@ function head(pts: number[], w: number, h: number) {
   return [p];
 }
 // A line as one path, or, with widths, a path a segment so each can be as wide as the pen was there.
-// Curves through the kept points (Catmull-Rom), from point i to i+1: a thinned line (80 points at most) stops looking
+// Curves through the kept points (Catmull-Rom), from point i to i+1: a thinned line (200 points at most) stops looking
 // jagged (Leo's pick G, 20 Nov). The line you click (.hit) stays straight segments.
 function curve(pts: number[], i: number) {
   const n = pts.length / 2;

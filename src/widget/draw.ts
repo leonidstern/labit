@@ -41,11 +41,13 @@ const winding = (s: P[]) => {
   }
   return Math.abs(sum);
 };
-// At most 80 points a line, thinned evenly over its whole length (cutting the list at 80 dropped the end).
+// At most 200 points a line, thinned evenly over its whole length (cutting the list dropped the end). Thinned only
+// by half a px while it fits, so the drawing lands in the shape it was drawn (80 points by 1.5 px straightened its
+// curves as it landed, Leo 23 Nov: "blinking after mouse release").
 const thin = (s: P[]) => {
-  let eps = 1.5;
+  let eps = 0.5;
   let c = cut(s, eps);
-  while (c.length > 80) c = cut(s, (eps *= 1.5));
+  while (c.length > 200) c = cut(s, (eps *= 1.5));
   return c;
 };
 // The area a line closes (shoelace): next to none for a line drawn there and back.
