@@ -192,6 +192,37 @@ try {
       await p.keyboard.press('Control+z');
       const back = await until(async () => { const f = (await frames(name)).find((g) => g.id === 'e'); return f?.state === 'live' ? f : null; });
       check(eng, '⌘Z puts it back, in the same place', Boolean(back) && back.x === bBefore.x && back.y === bBefore.y && Boolean(await until(async () => (await rect('e')) != null)), JSON.stringify([bBefore, back]));
+      // one ⌘Z undoes only the newest thing: a pin put after a picture moved goes, the picture stays (Leo, 23 Nov: "cmd z on
+      // drawings or pins reverting also image positions"); the next ⌘Z moves the picture back
+      {
+        await p.keyboard.press('Escape');
+        const r0 = await rect('e');
+        await p.mouse.move(r0.x + r0.w / 2, r0.y + r0.h / 2);
+        await p.mouse.down();
+        await p.mouse.move(r0.x + r0.w / 2 + 20, r0.y + r0.h / 2, { steps: 4 });
+        await p.mouse.move(r0.x + r0.w / 2 + 40, r0.y + r0.h / 2, { steps: 4 });
+        await p.mouse.up();
+        const movedTo = await until(async () => { const f = (await frames(name)).find((g) => g.id === 'e'); return f && f.x !== back.x ? f : null; });
+        await sleep(400);
+        const r1 = await rect('e');
+        await withAlt(p, () => p.mouse.click(r1.x + r1.w / 2, r1.y + r1.h / 3));
+        await p.waitForFunction(() => [...document.querySelectorAll('*')].some((n) => n.shadowRoot?.querySelector('.float textarea')), null, { timeout: 4000 }).catch(() => {});
+        await p.keyboard.type('undo me');
+        await p.keyboard.press('Enter');
+        let pin;
+        for (let i = 0; i < 30 && !pin; i++) { await sleep(150); pin = (await (await fetch(`${B}/_lab/api/comments?page=/_board/${name}`)).json()).comments?.find((x) => x.text === 'undo me'); }
+        await sleep(3500); // past the card's own undo moment
+        await p.keyboard.press('Escape');
+        await p.evaluate(() => document.activeElement?.blur());
+        await p.keyboard.press('Control+z');
+        await sleep(1200);
+        const after = (await (await fetch(`${B}/_lab/api/comments?page=/_board/${name}`)).json()).comments?.find((x) => x.text === 'undo me');
+        const still = (await frames(name)).find((g) => g.id === 'e');
+        check(eng, 'a picture moved, then a pin: ⌘Z takes the pin back and leaves the picture where it was moved', Boolean(movedTo) && Boolean(pin) && (!after || after.resolved) && still.x === movedTo.x, JSON.stringify({ moved: movedTo?.x, pin: Boolean(pin), after: after && { resolved: after.resolved }, x: still?.x }));
+        await p.keyboard.press('Control+z');
+        const backAgain = await until(async () => { const f = (await frames(name)).find((g) => g.id === 'e'); return f?.x === back.x ? f : null; });
+        check(eng, 'and the next ⌘Z moves the picture back', Boolean(backAgain));
+      }
       // with nothing picked, Backspace takes nothing off
       await p.keyboard.press('Shift+Digit1');
       await sleep(600);

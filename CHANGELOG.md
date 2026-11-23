@@ -4,6 +4,7 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 
 ## Unreleased
 
+- **⌘Z on a board takes back only the newest thing.** A pin or drawing made after moving a picture goes first; the picture stays put until the next ⌘Z.
 - **One click on ⋯ or the boards list opens it, even with a comment or the chat open.** The open thread (and a new comment with nothing typed in it) closes in the same click, as the chat button already did.
 - **Frame names on a board show only once the frame is pressed or picked.** Pictures and pages alike, so the board shows just the work.
 - **What you type in a comment stays in the comment.** A page that binds Space or other keys (a video player, a slide deck) no longer hears keys typed in labit's boxes, so Space no longer plays the page and the comment keeps its spaces. ⌘/Control keys and Esc still work as before.
