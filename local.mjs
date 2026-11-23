@@ -16,7 +16,7 @@ import { watchTree } from './lib/watch.ts';
 import { PARKED, REGISTRY, askPages, keyFor, parkedLabs, runningLabs } from './lib/labs.ts';
 import { alive, setWifi } from './lib/labcall.ts';
 import { DO_IT, PROGRESS_MS, UNMATCHED, numberOf, slim, upgrade, VERSION as SCHEMA } from './lib/schema.mjs';
-import { sameKey } from './lib/comments-api.mjs';
+import { pagePath, sameKey } from './lib/comments-api.mjs';
 import { cut } from './lib/cut.mjs';
 import { sourceLines } from './lib/source-line.mjs';
 import { isNavigation } from './lib/pageload.ts';
@@ -555,6 +555,8 @@ const pages = () => [...db.keys()].filter((k) => k.startsWith('lab:comments:') &
 // .lab/archive/<page>.json (added to what's there), and are no longer loaded or sent to the pages, so a busy lab's
 // pages don't keep carrying every thread ever closed. Open threads, and done ones with a recent message, stay.
 // Checked as the lab starts and once a day.
+// The open threads on a board pin's board (pin-<id>): they keep the pin, which is their only way in (issue 422).
+const openOnBoard = (page, id) => commentsOf(page).filter((c) => !c.parent && !c.resolved && c.anchor?.kind === 'board' && c.anchor.board === `pin-${id}`).length;
 const ARCHIVE_DAYS = SET.archiveAfterDays; // a done thread's last message must be this many days old before it is archived (setting archiveAfterDays, 30)
 function archiveOld(now = Date.now()) {
   const changed = [];
@@ -563,7 +565,7 @@ function archiveOld(now = Date.now()) {
     const h = db.get(`lab:comments:${page}`);
     const all = [...h.values()].map((v) => JSON.parse(v));
     const old = all
-      .filter((c) => !c.parent && c.resolved)
+      .filter((c) => !c.parent && c.resolved && !openOnBoard(page, c.id)) // a closed board pin stays while its board has open threads
       .map((root) => [root, ...all.filter((c) => c.parent === root.id)])
       .filter((thread) => {
         const dates = [...thread.map((c) => c.createdAt), ...(thread[0].resolvedAt ? [thread[0].resolvedAt] : [])];
@@ -1581,6 +1583,8 @@ const watchBoards = () => {
       clearTimeout(timer);
       timer = setTimeout(() => {
         version = { ...version, boards: version.boards + 1, boardNames: [...names], ...(hot.size ? { hot: (version.hot || 0) + 1, hotFiles: [...hot].map((path) => ({ path, kind: 'html' })) } : {}) };
+        // A board pin's references are in its page's text (withPageBoards): that page's comments.md is put together again.
+        refreshText([...names].filter((n) => n.startsWith('pin-')).map((n) => (boardGet(n)?.of || '').split('#')[0]).filter(Boolean));
         names.clear();
         hot.clear();
         broadcast();
@@ -3093,10 +3097,12 @@ const handler = async (req, res) => {
           if (b?.action === 'delete' && typeof b.id === 'string') {
             // A board pin (+board) whose board still has open threads stays: deleting it would leave them with no way in
             // (Leo, 23 Nov, #422: the board pin's rules). Its threads are the page's, anchored on board pin-<id>.
-            const left = commentsOf(b.page).filter((c) => !c.parent && !c.resolved && c.anchor?.kind === 'board' && c.anchor.board === `pin-${b.id}`).length;
+            // The page as the store keys it (a trailing slash taken off), so '/d/' can't slip past the check.
+            const page = pagePath(b.page) || '';
+            const left = openOnBoard(page, b.id);
             if (left) return answer(res, { error: `its board has ${left} open thread${left === 1 ? '' : 's'}: close ${left === 1 ? 'it' : 'them'} first` }, 409);
-            dropped = [b.page, b.id];
-            doomed = commentsOf(b.page).filter((c) => c.id === b.id || c.parent === b.id).flatMap((c) => imagesOf(c).map((i) => imageName(c, i)));
+            dropped = [page, b.id];
+            doomed = commentsOf(page).filter((c) => c.id === b.id || c.parent === b.id).flatMap((c) => imagesOf(c).map((i) => imageName(c, i)));
           }
         }
       }

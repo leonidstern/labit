@@ -30,6 +30,11 @@ export const boardOnPin = async (c: { id: string }, title: string) => {
   W.render();
   return showBoard(name);
 };
+/** A board pin taken back (undo, ⌘Z): its board went with it, so it is no longer one, and its view closes if open. */
+export const pinBoardGone = (id: string) => {
+  if (!S.pinBoards?.delete(id)) return;
+  void W.part('boardview').then((m) => m.hide(`pin-${id}`), () => {});
+};
 // The pins on this page that hold a board (pin-<id> boards about this page), read from the lab's list of boards.
 const loadPinBoards = () =>
   fetch('/_lab/api/board', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null), () => null).then((d) => {

@@ -282,6 +282,8 @@ function close(speed = 0) {
   }
   now();
 }
+/** Close the view if it shows this board (its pin was taken back, so the board is gone). */
+export const hide = (name: string) => void (cur?.name === name && close());
 // Closing leaves the page where it is now, wherever it was scrolled to under the view: never back at the board's section
 // (Leo, 21 Nov: "closing board by clicking on canvas after scrolled a bit should not return to board section").
 let keepY: number | null = null;

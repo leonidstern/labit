@@ -39,7 +39,7 @@ import { holdWhileOpen } from './widget/hold.ts';
 import { inkSvg } from './widget/ink.ts';
 import { bindActions } from './widget/actions.ts';
 import { bindDrag, draftHasText, endDrag, inkSaid, offerSelection, startDrag } from './widget/drag.ts';
-import { boardOnPin, boardStrip, bindBoardCam, showBoard } from './widget/boardcam.ts';
+import { boardOnPin, boardStrip, bindBoardCam, pinBoardGone, showBoard } from './widget/boardcam.ts';
 import { bindFramework, overFramework, scanForFramework } from './widget/framework.ts';
 import { bindKeys } from './widget/keys.ts';
 
@@ -579,7 +579,9 @@ import { bindKeys } from './widget/keys.ts';
     S.posted = comment.id;
     holdKeyboard(); // the keyboard waits until the card has gone (sheets.ts)
     render();
-    if (S.boardPin === anchor) void boardOnPin(comment, said); // +board: the pin's board (src/widget/boardcam.ts)
+    // +board: the pin's board (src/widget/boardcam.ts), when what was sent is what +board put in the box (asked for a name
+    // first, then sent as other words, it is a plain pin).
+    if (S.boardPin?.anchor === anchor && S.boardPin.said === said) void boardOnPin(comment, said);
     S.boardPin = null;
   }
   // A drawing goes as it is, with what it reads as, the moment it is done: no box to send it from (Leo, 21 Nov: "just
@@ -635,6 +637,7 @@ import { bindKeys } from './widget/keys.ts';
     await send({ action: 'delete', id: c.id, ...(ownKey && !S.isAdmin ? { edit: ownKey } : {}) });
     S.undo = null;
     S.comments = S.comments.filter((x) => x.id !== c.id && x.parent !== c.id);
+    pinBoardGone(c.id); // a board pin's board went with it (the lab drops it): its view closes
     if (ownKey) store.set(`lab-edit:${c.id}`, '');
     const at = placed.indexOf(c.id);
     if (at >= 0) placed.splice(at, 1);
@@ -652,10 +655,17 @@ import { bindKeys } from './widget/keys.ts';
     const c = id && S.comments.find((x) => x.id === id);
     if (!c) return;
     const ownKey = store.get(`lab-edit:${id}`);
+    // A board pin past its first seconds (the undo key's) holds what was put on its board: ⌘Z closes it, and its
+    // board stays, as a guest's ⌘Z does (issue 422: deleting it took the board and its pictures).
+    const keep = S.pinBoards?.has(id) && S.undo?.id !== id;
     try {
-      if (S.isAdmin) {
+      if (S.isAdmin && !keep) {
         await send({ action: 'delete', id });
         S.comments = S.comments.filter((x) => x.id !== id && x.parent !== id);
+        pinBoardGone(id);
+      } else if (S.isAdmin) {
+        const { comment } = await send({ action: 'resolve', id });
+        Object.assign(c, comment);
       } else if (ownKey) {
         const { comment } = await send({ action: 'resolve', id, edit: ownKey });
         Object.assign(c, comment);
@@ -1076,11 +1086,11 @@ import { bindKeys } from './widget/keys.ts';
       if (S.openId === c.id && !ink) add(drawZone(zone, `saved${anim}`)); // a drawn area shows its outline while open
       // A board pin (+board) wears its board's news too: the open threads on its board, their unread messages and where the
       // agent stands with them (asking, then working), when its own thread has nothing to say (Leo, 23 Nov, issue 422).
-      const onBoard = S.pinBoards?.has(c.id) ? S.comments.filter((x) => !x.parent && !x.resolved && x.anchor?.kind === 'board' && x.anchor.board === `pin-${c.id}`) : [];
-      const news = [...unread(c), ...onBoard.flatMap((x) => unread(x))];
+      const boardThreads = S.pinBoards?.has(c.id) ? S.comments.filter((x) => !x.parent && !x.resolved && x.anchor?.kind === 'board' && x.anchor.board === `pin-${c.id}`) : [];
+      const news = [...unread(c), ...boardThreads.flatMap((x) => unread(x))];
       const movable = !zone && (S.isAdmin || store.get(`lab-edit:${c.id}`));
       const own = lineUp().get(c.id) || { s: null, n: 0, at: '', line: '' }; // where it stands with the agent: sent, got (picked up), now (working), wait, stale, asks or done
-      const pick = (st) => onBoard.map((x) => [x, lineUp().get(x.id)]).find(([x, g]) => g?.s === st && (st !== 'asks' || unread(x).length))?.[1];
+      const pick = (st) => boardThreads.map((x) => [x, lineUp().get(x.id)]).find(([x, g]) => g?.s === st && (st !== 'asks' || unread(x).length))?.[1];
       const busy = pick('asks') || (own.s === 'now' ? null : pick('now') || pick('stale'));
       const sg = busy || own;
       // A question you've read goes back to a plain pin: amber is for one still unread (Leo, 20 Nov: "orange pin after
@@ -1247,7 +1257,7 @@ import { bindKeys } from './widget/keys.ts';
         }
         if (coarse && S.cardFull) card.classList.add('full'); // stays pulled up while you step from comment to comment
         swipeDown(card, () => ((S.openId = null), (S.cardFull = false), render()), true);
-        markSeen(news);
+        markSeen(unread(c)); // its own thread: the board's threads are read on the board, where they are seen
         if (news.length) {
           drawList(); // opened is read: the "N new" pill and the tab title count it off at once
         }
@@ -1734,8 +1744,9 @@ import { bindKeys } from './widget/keys.ts';
       const own = Object.assign(actButton('+board'), { className: 'own', title: 'a pin with a board of pictures and pages' });
       own.addEventListener('mousedown', (e) => e.preventDefault());
       own.addEventListener('click', () => {
-        S.boardPin = draft.anchor; // posted() makes the board once the pin is saved
-        go(field.value.trim() || 'board');
+        const said = field.value.trim() || 'board';
+        S.boardPin = { anchor: draft.anchor, said }; // posted() makes the board once the pin is saved
+        go(said);
       });
       row.append(own);
     }

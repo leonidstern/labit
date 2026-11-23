@@ -10,6 +10,9 @@
 // 5. Dragging it to a new spot keeps the same board.
 // 6. Losing its spot (its element gone) sends it to the ⋯ menu like any pin, and its card there still opens the board.
 // 7. Taken back within its first seconds (its own key), the pin and its board are both gone.
+// 8. ⌘Z within those seconds takes it back too, and closes its board if open; ⌘Z later only closes the pin (its board
+//    and pictures stay). Opening the pin's card leaves its board's threads unread; a thread's card on the board opens
+//    without an error. +board asking for a name first, then sent as other words, is a plain pin.
 // Not part of `npm test`. Run: node test/browser/boardpin.mjs (needs playwright; NODE_PATH can point at a node_modules that has it).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -43,7 +46,8 @@ try {
       const ctx = await browser.newContext({ viewport: { width: 1000, height: 800 } });
       await ctx.addInitScript(() => { localStorage.setItem('lab-name', 'leo'); localStorage.setItem('lab-on', '1'); });
       const p = await ctx.newPage();
-      p.on('pageerror', (e) => console.log('pageerror', e.message));
+      const errors = [];
+      p.on('pageerror', (e) => (console.log('pageerror', e.message), errors.push(e.message)));
       const shadow = (fn, arg) => p.evaluate(([f, a]) => new Function('r', 'a', f)(document.querySelector('[data-lab-comments]').shadowRoot, a), [typeof fn === 'string' ? fn : fn.toString().replace(/^[^{]*{|}$/g, ''), arg]);
       const view = () => p.evaluate(() => Boolean(document.querySelector('[data-lab-board-view]')));
       const strip = () => shadow(() => { const h = r.querySelector('.card .pinboard'); return h ? (h.shadowRoot?.querySelector('.top')?.textContent || 'empty') : null; });
@@ -95,10 +99,28 @@ try {
       const s1 = await strip();
       check(eng, '3. the card\'s strip says the board needs your reply', /board needs your reply/.test(s1 || ''), String(s1));
       await p.keyboard.press('Escape');
+      await sleep(400);
+      const still = await pinEl("(b) => ({ new: b.classList.contains('new'), ring: b.querySelector('.ring')?.className || '' })");
+      check(eng, '3. opening the pin\'s card leaves its board\'s question unread: ring and dot stay', still.new && /ask/.test(still.ring), JSON.stringify(still));
+      // A thread's card on the board, on a computer: held beside its pin, no error, every pin still drawn.
+      await openPin();
+      await shadow(() => { r.querySelector('.card .pinboard').shadowRoot.querySelector('button').click(); });
+      await until(view);
+      await sleep(900);
+      const before = errors.length;
+      await shadow(() => { [...r.querySelectorAll('button.pin:not(.draft)')].find((b) => b.style.visibility !== 'hidden' && /more like this|comment/.test(b.getAttribute('aria-label') || ''))?.click(); });
+      await sleep(600);
+      const onIt = await shadow(() => { return { card: Boolean(r.querySelector('.card')), pins: [...r.querySelectorAll('button.pin:not(.draft)')].filter((b) => b.style.visibility !== 'hidden').length }; });
+      check(eng, '3. a thread\'s card on the board opens with no error, its pin still drawn', errors.length === before && onIt.card && onIt.pins >= 1, JSON.stringify({ errors: errors.slice(before), ...onIt }));
+      await p.keyboard.press('Escape');
+      await p.keyboard.press('Escape');
+      await until(async () => !(await view()));
 
       // ----- 4. delete refused while its board has open threads; resolve closes the pin only
       const refused = await api({ action: 'delete', id: pin.id });
       check(eng, '4. deleting it is refused while its board has an open thread', refused.status === 409 && fs.existsSync(boardFile(name)), String(refused.status));
+      const slash = await api({ action: 'delete', id: pin.id, page: '/d/' });
+      check(eng, '4. the page written with a trailing slash is refused the same', slash.status === 409 && (await list()).some((c) => c.id === pin.id), String(slash.status));
       await api({ action: 'resolve', id: pin.id });
       await p.reload();
       await sleep(1500);
@@ -158,6 +180,49 @@ try {
       check(eng, '7. +board with no words names the pin "board"', second?.text === 'board', second?.text);
       check(eng, '7. taken back with its own key, the pin and its board are both gone', madeIt && back === 200 && !(await list()).length && !fs.existsSync(boardFile(name2)), JSON.stringify({ madeIt, back }));
       await p.keyboard.press('Escape');
+      await until(async () => !(await view()));
+
+      // ----- 8. ⌘Z: within the first seconds it takes the pin and board back and closes the board; later it only closes the pin
+      const plusBoard = async (sel) => {
+        await p.reload();
+        await sleep(1200);
+        await p.click(sel);
+        await p.waitForFunction(() => document.querySelector('[data-lab-comments]')?.shadowRoot?.querySelector('.float .quick .own'), null, { timeout: 8000 });
+        await shadow(() => { r.querySelector('.float .quick .own').click(); });
+        await until(view, 8000);
+        await until(async () => (await list()).some((c) => !c.parent && fs.existsSync(boardFile(`pin-${c.id}`))));
+        return (await list()).find((c) => !c.parent);
+      };
+      const third = await plusBoard('#t');
+      await p.keyboard.press('ControlOrMeta+z');
+      const shut = await until(async () => !(await view()), 3000);
+      check(eng, '8. ⌘Z right away takes back the pin and its board, and closes the board', shut && !(await list()).length && !fs.existsSync(boardFile(`pin-${third?.id}`)), JSON.stringify({ shut }));
+      const fourth = await plusBoard('#b');
+      await p.keyboard.press('Escape');
+      await until(async () => !(await view()));
+      await sleep(3500); // past the undo seconds
+      await p.keyboard.press('ControlOrMeta+z');
+      await sleep(900);
+      const kept = (await list()).find((c) => c.id === fourth?.id);
+      check(eng, '8. ⌘Z later closes the pin and keeps its board', kept?.resolved === true && fs.existsSync(boardFile(`pin-${fourth?.id}`)), JSON.stringify({ kept: kept && { resolved: kept.resolved } }));
+      await api({ action: 'delete', id: fourth.id });
+
+      // ----- 8. +board asking for a name first, then sent as other words: a plain pin
+      await p.reload();
+      await sleep(1200);
+      await p.evaluate(() => localStorage.removeItem('lab-name')); // after the load: the start script sets it on each one
+      await p.click('#t');
+      await p.waitForFunction(() => document.querySelector('[data-lab-comments]')?.shadowRoot?.querySelector('.float .quick .own'), null, { timeout: 8000 });
+      await shadow(() => { r.querySelector('.float .quick .own').click(); });
+      await sleep(500);
+      await shadow("const ta = r.querySelector('.float textarea'); ta.value = 'just a plain comment'; ta.dispatchEvent(new Event('input')); r.querySelector('.float input')?.focus();");
+      await p.keyboard.type('leo');
+      await p.keyboard.press('Enter');
+      await until(async () => (await list()).length);
+      await sleep(1000);
+      const plain = (await list()).find((c) => !c.parent);
+      check(eng, '8. +board abandoned for other words sends a plain pin, with no board', plain?.text === 'just a plain comment' && !fs.existsSync(boardFile(`pin-${plain.id}`)) && !(await view()), JSON.stringify({ text: plain?.text }));
+      check(eng, 'no page errors', !errors.length, errors.join(' | '));
       await ctx.close();
     } finally {
       await browser.close();

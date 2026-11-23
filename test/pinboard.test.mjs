@@ -19,6 +19,14 @@ write('pricing.html', '<!doctype html><title>Pricing</title><h1>Pricing</h1>');
 write('cart.html', '<!doctype html><title>Cart</title><h1>Cart</h1>');
 write('labit.json', { flags: {} });
 write('.lab/comments/pricing.json', { page: '/pricing', comments: { [ID]: { id: ID, name: 'Leo', text: 'make the hero like these', createdAt: '2026-11-21T09:00:00.000Z', num: 1, anchor: { kind: 'element', selector: 'h1', x: 0.5, y: 0.5 } } } });
+// A closed board pin two months old whose board still has an open thread, and a plain closed pin as old: the lab archives
+// old done threads as it starts, the board pin's way in kept.
+const OLD = '2026-09-01T09:00:00.000Z';
+write('.lab/comments/cart.json', { page: '/cart', comments: {
+  b0b0b0b0b0b0: { id: 'b0b0b0b0b0b0', name: 'Leo', text: 'refs', createdAt: OLD, resolved: true, resolvedAt: OLD, num: 1, anchor: { kind: 'element', selector: 'h1', x: 0.5, y: 0.5 } },
+  c0c0c0c0c0c0: { id: 'c0c0c0c0c0c0', name: 'Leo', text: 'like this one', createdAt: OLD, num: 2, anchor: { kind: 'board', board: 'pin-b0b0b0b0b0b0', fx: 1, fy: 1 } },
+  d0d0d0d0d0d0: { id: 'd0d0d0d0d0d0', name: 'Leo', text: 'old', createdAt: OLD, resolved: true, resolvedAt: OLD, num: 3, anchor: { kind: 'element', selector: 'h1', x: 0.5, y: 0.5 } },
+} });
 const lab = spawnLab(DIR, PORT);
 after(async () => {
   await stop(lab);
@@ -86,4 +94,12 @@ test('a deleted pin takes its board with it, and the page\'s file is as it was',
   assert.equal(file(), '<!doctype html><title>Pricing</title><h1>Pricing</h1>');
   assert.equal(fs.existsSync(path.join(DIR, `.lab/boards/${name}.json`)), false);
   assert.equal((await fetch(`${B}/_lab/api/board?name=${name}`)).status, 404);
+});
+
+test('a closed board pin is not archived while its board has an open thread; a plain old one is', async () => {
+  await answers(`${B}/_lab/state`);
+  const ids = ((await (await fetch(`${B}/_lab/api/comments?page=/cart`)).json()).comments || []).map((c) => c.id);
+  assert.ok(ids.includes('b0b0b0b0b0b0'), 'the board pin stays');
+  assert.ok(ids.includes('c0c0c0c0c0c0'), 'its open board thread stays');
+  assert.ok(!ids.includes('d0d0d0d0d0d0'), 'a plain old closed pin is archived');
 });
