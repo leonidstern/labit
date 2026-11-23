@@ -298,6 +298,9 @@ export function threadCard(c, fresh = new Set(), focus = false) {
   // Written on a paused video: the moment, as a chip; clicked, the page pauses there again (comments.js).
   const chip = c.anchor?.moment && W.S.momentChip?.(c.anchor.moment, true);
   if (chip) card.insertBefore(chip, body);
+  // A board pin (+board): its board, as a strip with Open, above its messages (boardcam.ts).
+  const board = W.boardStrip(c);
+  if (board) card.insertBefore(board, body);
   // Why its pin is not plainly on its spot, in one line.
   const why = { lost: 'its spot is gone', hidden: 'hidden right now: its spot is not shown', unsure: 'unsure: it may not be the spot it was made on', changed: 'its words changed: check it still fits' }[W.position(c.anchor || {}).why as string];
   if (why && !c.resolved) card.insertBefore(W.el('div', { class: 'spotnote' }, why), body);

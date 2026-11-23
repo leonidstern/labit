@@ -358,7 +358,7 @@ export const section = async (host: HTMLElement, o: { page: string }) => {
   root.replaceChildren(
     el('style', {}, STRIP),
     el('div', { className: host.parentElement === document.body ? 'box edge' : 'box' },
-      el('div', { className: 'top' }, el('b', {}, 'Board'), el('span', {}, `${frames.length || 'nothing'} on it${said ? ` · ${said.slice(0, 60)}` : ''}`), el('button', {}, 'Open')),
+      el('div', { className: 'top' }, el('b', {}, 'Board'), el('span', {}, [`${frames.length || 'nothing'} on it`, b.status === 'needs your reply' ? 'board needs your reply' : b.status, said.slice(0, 60)].filter(Boolean).join(' · ')), el('button', {}, 'Open')),
       frames.length ? el('div', { className: 'row' }, ...frames.map(thumb)) : el('div', { className: 'none' }, 'Open it to add pictures and pages for the agent.'),
     ),
   );

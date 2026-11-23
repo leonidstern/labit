@@ -39,7 +39,7 @@ import { holdWhileOpen } from './widget/hold.ts';
 import { inkSvg } from './widget/ink.ts';
 import { bindActions } from './widget/actions.ts';
 import { bindDrag, draftHasText, endDrag, inkSaid, offerSelection, startDrag } from './widget/drag.ts';
-import { addBoard, bindBoardCam, showBoard } from './widget/boardcam.ts';
+import { boardOnPin, boardStrip, bindBoardCam, showBoard } from './widget/boardcam.ts';
 import { bindFramework, overFramework, scanForFramework } from './widget/framework.ts';
 import { bindKeys } from './widget/keys.ts';
 
@@ -83,6 +83,7 @@ import { bindKeys } from './widget/keys.ts';
     get anchorAt() { return anchorAt; },
     get begin() { return begin; },
     get boards() { return BOARDS; },
+    get boardStrip() { return boardStrip; },
     get sendDrawing() { return sendDrawing; },
     get addComment() { return addComment; },
     get bar() { return bar; },
@@ -578,6 +579,8 @@ import { bindKeys } from './widget/keys.ts';
     S.posted = comment.id;
     holdKeyboard(); // the keyboard waits until the card has gone (sheets.ts)
     render();
+    if (S.boardPin === anchor) void boardOnPin(comment, said); // +board: the pin's board (src/widget/boardcam.ts)
+    S.boardPin = null;
   }
   // A drawing goes as it is, with what it reads as, the moment it is done: no box to send it from (Leo, 21 Nov: "just
   // draw maybe and send dont open comment to send it, just send"). Undo stays (⌘Z, or the pin's card). With no name
@@ -1071,9 +1074,15 @@ import { bindKeys } from './widget/keys.ts';
       }
       const ink = zone && c.anchor.ink; // a drawing is its own pin: its lines, no marker (draw.ts)
       if (S.openId === c.id && !ink) add(drawZone(zone, `saved${anim}`)); // a drawn area shows its outline while open
-      const news = unread(c);
+      // A board pin (+board) wears its board's news too: the open threads on its board, their unread messages and where the
+      // agent stands with them (asking, then working), when its own thread has nothing to say (Leo, 23 Nov, issue 422).
+      const onBoard = S.pinBoards?.has(c.id) ? S.comments.filter((x) => !x.parent && !x.resolved && x.anchor?.kind === 'board' && x.anchor.board === `pin-${c.id}`) : [];
+      const news = [...unread(c), ...onBoard.flatMap((x) => unread(x))];
       const movable = !zone && (S.isAdmin || store.get(`lab-edit:${c.id}`));
-      const sg = lineUp().get(c.id) || { s: null, n: 0, at: '', line: '' }; // where it stands with the agent: sent, got (picked up), now (working), wait, stale, asks or done
+      const own = lineUp().get(c.id) || { s: null, n: 0, at: '', line: '' }; // where it stands with the agent: sent, got (picked up), now (working), wait, stale, asks or done
+      const pick = (st) => onBoard.map((x) => [x, lineUp().get(x.id)]).find(([x, g]) => g?.s === st && (st !== 'asks' || unread(x).length))?.[1];
+      const busy = pick('asks') || (own.s === 'now' ? null : pick('now') || pick('stale'));
+      const sg = busy || own;
       // A question you've read goes back to a plain pin: amber is for one still unread (Leo, 20 Nov: "orange pin after
       // opening should become regular").
       const state = sg.s === 'asks' && !news.length ? null : sg.s;
@@ -1717,19 +1726,16 @@ import { bindKeys } from './widget/keys.ts';
     // list itself is set in labit.json or your settings.json (`actions`, docs/settings.md): nothing on the page edits it.
     const chips = LIST.map(chip);
     row.append(...chips);
-    // +board (on a page; a guest too, who is the person on another device): a board for pictures and pages goes into the
-    // page as a section at this spot, and opens; no pin is left (Leo, 21 Nov: "only board sections is enough"). The words
-    // typed are its title. It is labit's own, not one of your list, so it looks different and sits at the right end.
+    // +board (on a page; a guest too, who is the person on another device): the comment is sent as a pin whose card holds
+    // a board for pictures and pages, and the board opens (Leo, 23 Nov, issue 422, pick 6C: a board pin, nothing written into the
+    // page). The words typed are the pin's text and the board's title. It is labit's own, not one of your list, so it looks
+    // different and sits at the right end.
     if (BOARDS && !S.board && draft.anchor.kind !== 'board') {
-      const own = Object.assign(actButton('+board'), { className: 'own', title: 'a board of pictures and pages, as a section of the page here' });
+      const own = Object.assign(actButton('+board'), { className: 'own', title: 'a pin with a board of pictures and pages' });
       own.addEventListener('mousedown', (e) => e.preventDefault());
       own.addEventListener('click', () => {
-        const title = field.value.trim();
-        fill('');
-        S.draft = null;
-        keepSpot(null);
-        render();
-        void addBoard(draft.anchor, title);
+        S.boardPin = draft.anchor; // posted() makes the board once the pin is saved
+        go(field.value.trim() || 'board');
       });
       row.append(own);
     }

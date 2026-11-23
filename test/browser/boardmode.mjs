@@ -41,7 +41,7 @@ try {
       await p.keyboard.press('Control+KeyK');
       await sleep(1200);
       const rows = await p.evaluate(() => { const r = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim')).shadowRoot; return { boards: r.querySelectorAll('.sw-row[data-kind="board"]').length, pricing: r.querySelector('.sw-row[data-page="/pricing"]')?.textContent || '' }; });
-      check(eng, '⌘K has no board rows; the page row says nothing while nothing on its board needs you', rows.boards === 0 && /pricing/i.test(rows.pricing) && !/board/.test(rows.pricing), JSON.stringify(rows));
+      check(eng, '⌘K has no board rows; the page row says nothing while nothing on its board needs you', rows.boards === 0 && /pricing/i.test(rows.pricing) && !/needs your reply|agent working/.test(rows.pricing), JSON.stringify(rows));
       await p.keyboard.press('Escape');
       await ctx.close();
     } finally {

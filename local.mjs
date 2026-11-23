@@ -24,7 +24,6 @@ import { loadSettings, changedShortcuts, seedActions, savePersonal } from './lib
 import { runCommand } from './lib/commands.ts';
 import { findDevServer as find, tilde, othersNote } from './lib/devserver.ts';
 import * as B from './lib/board.ts';
-import { withBoard } from './lib/htmlspot.ts';
 import * as act from './lib/boardact.ts';
 import { imageInfo, MAX_IMAGE } from './lib/images.mjs';
 import { IMAGE_TYPES, IMAGES_SAID, imageLine, imageName, imagesOf, MAX_IMAGES, wordsOf } from './lib/schema.mjs';
@@ -790,15 +789,16 @@ const agentText = async (page) => {
   const out = sourceLines(lines.length ? local.replace(/^(page: .*)$/m, `$1\n${lines.join('\n')}`) : local, ROOT) + pageBoards(page); // a framework's `written at:` line is checked against its file now
   return boardText(page, file ? lineHints(out, file) : out);
 };
-// The boards put into this page as sections (+board, src/widget/boardcam.ts: <lab-board name="pin-<id>"> in its file):
-// what the person put on each, so an agent working on the page has their references. The page itself (its first frame)
+// The boards on this page's pins (+board, src/widget/boardcam.ts: board pin-<id> on comment <id>), and any older
+// <lab-board> section of the same name: what the person put on each, so an agent working on the page has their references. The page itself (its first frame)
 // and archived frames are left out; a board with nothing else says nothing.
 const pageBoards = (page) => B.names(ROOT).flatMap((name) => {
   const b = name.startsWith('pin-') && boardGet(name);
   const shown = b && boardHome(b) === page ? b.frames.filter((f) => f.state !== 'archived' && f.src.split(/[?#]/)[0] !== page) : [];
   if (!shown.length) return [];
   const what = (f) => (f.file ? `picture .lab/boards/${name}/${f.file}` : f.src.startsWith('/_lab/') ? `.lab/boards/${name}/${f.id}.html` : `page ${f.src}`);
-  return [`\nboard in the page${b.title ? ` "${b.title}"` : ''}: <lab-board name="${name}"> (the person's references; open the files)\n${shown.map((f) => `  frame ${f.id}: ${what(f)}${f.label ? ` "${f.label}"` : ''}`).join('\n')}`];
+  const pin = commentsOf(page).find((c) => c.id === name.slice(4));
+  return [`\nboard ${pin ? `on pin ${numberOf(pin, commentsOf(page))}` : 'in the page'}${b.title ? ` "${b.title}"` : ''}: ${name} (the person's references; open the files)\n${shown.map((f) => `  frame ${f.id}: ${what(f)}${f.label ? ` "${f.label}"` : ''}`).join('\n')}`];
 }).join('');
 // A plain HTML page: each comment's element is found in the file by its words, and its line said next to it
 // (`in file: pricing.html:30`), so an agent opens the file there instead of searching (sims, 20 Nov: a drawing's
@@ -2382,22 +2382,6 @@ const boardApi = async (req, res, url) => {
   if (req.method === 'POST') {
     if (!isAgent(req) && !isOwner(req)) return plain(res, 403, 'forbidden');
     const b = await sent(req);
-    const pinOf = /^pin-([0-9a-f]{12})$/.exec(String(b.name))?.[1];
-    const page = typeof b.of === 'string' ? b.of.split('#')[0] : '';
-    // The pin's board as a section of the page, after the element pinned: <lab-board name> written into the page's own
-    // file, which the widget fills with the board (Leo, 21 Nov: "add board section into page", "its html like artifact why
-    // it would be deployed"). The one write the lab makes outside .lab/, and only of a page's .html file served as it is.
-    if (b.action === 'place') {
-      const file = !PROXY && pinOf && b.of === `${page}#pin-${pinOf}` && fileFor(page);
-      const at = Array.isArray(b.path) && b.path.length <= 40 && b.path.every((s) => Array.isArray(s) && typeof s[0] === 'string' && /^[a-z][a-z0-9-]*$/.test(s[0]) && Number.isInteger(s[1]) && s[1] > 0) ? b.path : null;
-      if (!file || !/\.html?$/i.test(file) || file.startsWith('.lab/') || !at) return json(422, { error: 'only a page served from its own .html file takes a board section' });
-      const full = path.join(ROOT, file);
-      const src = fs.readFileSync(full, 'utf8');
-      const out = withBoard(src, String(b.name), at, typeof b.words === 'string' ? b.words.slice(0, 200) : '');
-      if (out === null) return json(422, { error: `the pinned element isn't in ${file} as the page has it` });
-      if (out !== src) fs.writeFileSync(full, out);
-      return json(200, { ok: true, file });
-    }
     const env = { root: ROOT, origin, proxied: Boolean(PROXY), open: (key) => commentsOf(key).filter((c) => !c.parent && !c.resolved).length, titleOf: (p) => { const f = fileFor(boardPage(p)); return f ? titleOf(path.join(ROOT, f)) : ''; }, fileOf: (p) => fileFor(boardPage(p)) };
     const out = act.act(String(b.action), b, env);
     boardCache.clear();
@@ -2413,7 +2397,7 @@ const boardApi = async (req, res, url) => {
   if (!name || !B.NAME.test(name) || (page && !B.labPath(page))) return json(400, { error: 'name a board (?name=) or a page (?page=/x)' });
   if (req.method === 'GET') {
     const was = boardGet(name);
-    if (was) return json(200, { ...B.place(was), exists: true, home: boardHome(was) });
+    if (was) return json(200, { ...B.place(was), exists: true, home: boardHome(was), status: boardStatus(was) });
     if (!page) return json(404, { error: `no board ${name}` });
     return json(200, { ...B.place(boardFor(name, page)), exists: false });
   }
@@ -3092,6 +3076,10 @@ const handler = async (req, res) => {
             }
           }
           if (b?.action === 'delete' && typeof b.id === 'string') {
+            // A board pin (+board) whose board still has open threads stays: deleting it would leave them with no way in
+            // (Leo, 23 Nov, #422: the board pin's rules). Its threads are the page's, anchored on board pin-<id>.
+            const left = commentsOf(b.page).filter((c) => !c.parent && !c.resolved && c.anchor?.kind === 'board' && c.anchor.board === `pin-${b.id}`).length;
+            if (left) return answer(res, { error: `its board has ${left} open thread${left === 1 ? '' : 's'}: close ${left === 1 ? 'it' : 'them'} first` }, 409);
             dropped = [b.page, b.id];
             doomed = commentsOf(b.page).filter((c) => c.id === b.id || c.parent === b.id).flatMap((c) => imagesOf(c).map((i) => imageName(c, i)));
           }
