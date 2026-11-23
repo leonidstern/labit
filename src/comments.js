@@ -1962,9 +1962,9 @@ import { bindKeys } from './widget/keys.ts';
   // A framework's hot update that writes the whole <body> again (or swaps it) takes the widget out with it, and with it an
   // unsent comment (issue 428): it is put back at once, its words and cursor as they were. Only <html>'s and <body>'s own
   // children are watched, not the page below them.
-  /** @type {Element | null} */
+  /** @type {HTMLElement | null} */
   let writingIn = null; // the box being written in, kept through its host being taken out (no blur to trust then)
-  root.addEventListener('focusin', (e) => (writingIn = /** @type {Element} */ (e.target)));
+  root.addEventListener('focusin', (e) => (writingIn = /** @type {HTMLElement} */ (e.target)));
   root.addEventListener('focusout', () => host.isConnected && (writingIn = null));
   const keepOn = new MutationObserver(() => {
     if (document.body) keepOn.observe(document.body, { childList: true });
