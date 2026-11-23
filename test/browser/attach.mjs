@@ -128,6 +128,24 @@ try {
         for (let i = 0; i < 40 && !withReply; i++) { await sleep(150); withReply = (await list()).find((c) => c.parent && c.images?.length); }
         check(eng, 'the reply is saved with it', Boolean(withReply), JSON.stringify((await list()).map((c) => c.images)));
       }
+      // Leo, 23 Nov: "sends but image stuck there like doubled". The page redraws its boxes while a send with a picture is
+      // on its way (a reply comes in on the same thread): the box drawn again took the picture back, and the send emptied only the old box.
+      await ctx.route('**/_lab/api/comments', async (r) => {
+        if (r.request().method() !== 'POST') return r.continue();
+        await fetch(`${B}/_lab/api/comments`, { method: 'POST', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ page: '/index', name: 'Other', text: 'meanwhile', parent: saved?.id }) });
+        await sleep(2500);
+        return r.continue();
+      });
+      await reply.focus();
+      await paste();
+      await until(async () => (await p.locator('.atts .p img').count()) === 1);
+      await reply.fill('sent while redrawn');
+      await reply.press('Enter');
+      let redrawn;
+      for (let i = 0; i < 60 && !redrawn; i++) { await sleep(150); redrawn = (await list()).find((c) => c.text === 'sent while redrawn'); }
+      await sleep(1200);
+      check(eng, 'a picture sent while the boxes are drawn again goes with the comment and leaves no box', redrawn?.images?.length === 1 && (await p.locator('.atts .p img').count()) === 0, `saved ${JSON.stringify(redrawn?.images)}, left in boxes ${await p.locator('.atts .p img').count()}`);
+      await ctx.unroute('**/_lab/api/comments');
       // a send that fails keeps the words and the picture
       await ctx.route('**/_lab/api/comments', (r) => (r.request().method() === 'POST' ? r.abort() : r.continue()));
       await reply.focus();
@@ -161,6 +179,34 @@ try {
       await until(async () => (inChat = await att('.chatwin .att'))?.text);
       check(eng, 'and the chat says so the same way', inChat?.text === '1 image attached' && !inChat.img && !inChat.link, JSON.stringify(inChat));
       check(eng, 'the agent reads it as an image: line under the message', Boolean(said) && (await (await fetch(`${B}/_lab/agent/index`)).text()).includes(`image: .lab/attachments/${said.id}-1.`));
+      // Enter right after a paste, on a fresh page (the picture part not loaded yet): the picture goes with the comment
+      // and the box is empty after, not a comment without it and the picture left in the box.
+      const q = await ctx.newPage();
+      await q.route('**/_lab/attach.js*', async (r) => { await sleep(1200); return r.continue(); }); // a part that takes a moment to come
+      await q.goto(B + '/');
+      await q.waitForFunction(() => [...document.querySelectorAll('*')].some((n) => n.shadowRoot?.querySelector('.scrim')), null, { timeout: 8000 });
+      await sleep(800);
+      await q.mouse.click(600, 120);
+      const quick = q.locator('textarea').first();
+      await until(async () => (await quick.count()) > 0);
+      await quick.fill('pasted and sent at once');
+      await quick.focus();
+      await q.evaluate(async () => {
+        const cv = Object.assign(document.createElement('canvas'), { width: 300, height: 200 });
+        cv.getContext('2d').fillRect(0, 0, 300, 200);
+        const blob = await new Promise((r) => cv.toBlob(r, 'image/png'));
+        const dt = new DataTransfer();
+        dt.items.add(new File([blob], 'image.png', { type: 'image/png' }));
+        const at = document.activeElement?.shadowRoot?.activeElement || document.activeElement;
+        at.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true, composed: true }));
+      });
+      await quick.press('Enter');
+      let fast;
+      for (let i = 0; i < 60 && !fast; i++) { await sleep(150); fast = (await list()).find((c) => c.text === 'pasted and sent at once'); }
+      await sleep(1500);
+      const leftOver = await q.locator('.atts .p img').count();
+      check(eng, 'Enter right after a paste: the comment goes with its picture and the box keeps none', fast?.images?.length === 1 && leftOver === 0, `saved ${JSON.stringify(fast?.images)}, left in boxes ${leftOver}, last ${JSON.stringify((await list()).slice(-2).map((c) => [c.text, c.images?.length]))}`);
+      await q.close();
       await p.keyboard.press('Escape');
     } finally {
       await browser.close();
