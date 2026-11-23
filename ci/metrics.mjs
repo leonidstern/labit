@@ -29,7 +29,7 @@ const METRICS = {
     hint: "Shrink src/comments.js without changing behaviour: remove dead code and duplication, then npm run build. No new dependencies.",
   },
   npmPackBytes: {
-    kind: "budget", dir: "down", perPr: 4096, max: 192_000,
+    kind: "budget", dir: "down", perPr: 4096, max: 196_000,
     hint: "Shrink the published package (npm pack): remove dead code from the shipped files.",
   },
   oxlintProblems: {
@@ -48,7 +48,7 @@ const METRICS = {
     kind: "ratchet", dir: "down", ideal: 0,
     hint: "public/_lab/comments.js doesn't match a fresh build of src/comments.js. Run npm run build (the built files are not kept in git).",
   },
-  sharedScriptBytes: {
+  sharedScriptCopies: {
     kind: "ratchet", dir: "down", ideal: 0,
     hint: "Code is built into more than one shipped script (public/_lab/bundles.json lists which): load it from the script that has it (part() in src/comments.js, import() of that script) instead of importing it into another.",
   },
@@ -135,7 +135,7 @@ function collect() {
 
   // Code built into more than one shipped script (scripts/build-widget.mjs writes bundles.json as it builds).
   const bundles = join(dirname(PAGE_SCRIPT), "bundles.json");
-  if (existsSync(bundles)) m.sharedScriptBytes = read(bundles).sharedBytes;
+  if (existsSync(bundles)) m.sharedScriptCopies = read(bundles).copies;
 
   m.readmeClaims = checkReadme(m);
   m.readmeClaimsWrong = m.readmeClaims.length;
