@@ -1257,7 +1257,8 @@ const setMode = (m) => {
   saveServer();
   broadcast();
 };
-let PORT = askedPort;
+// A folder with a parked lab starts again on its port (when none is asked for), so the switcher and its link still find it.
+let PORT = (!opts.port && !process.env.PORT && parkedLabs().find((p) => p.root === ROOT)?.port) || askedPort;
 const STARTED = new Date().toISOString(); // the switcher shows how long a lab has run
 // Every running lab on this computer, for the Lab panel in Claude: one file per port, removed on exit.
 const registryFile = () => path.join(REGISTRY, `${PORT}.json`);
@@ -3157,10 +3158,11 @@ server.on('error', (e) => {
 });
 // A port another lab holds is taken even when listening here would work: a lab on the wifi listens on every address
 // (IPv6 *), and the system still lets this one take 127.0.0.1 on the same port, so localhost reached one lab or the
-// other (18 Nov, :4481). Skip the ports in ~/.labit/servers.
+// other (18 Nov, :4481). Skip the ports in ~/.labit/servers, and those other folders' parked labs keep: a lab parking
+// on one would write over that lab's record, and the switcher would lose it (#427).
 function skipLabs(port) {
   if (!opts.port && process.env.PORT) return port; // the preview pane's port is the one it opens
-  const held = new Set(runningLabs().filter((l) => l.pid !== process.pid).map((l) => l.port));
+  const held = new Set([...runningLabs().filter((l) => l.pid !== process.pid), ...parkedLabs().filter((p) => p.root !== ROOT)].map((l) => l.port));
   while (held.has(port)) port++;
   return port;
 }
@@ -3200,13 +3202,11 @@ server.on('listening', async () => {
   writeAtomic(LOCK, JSON.stringify({ pid: process.pid, at: Date.now(), port: PORT }), 0o600); // a lab starting next asks this port
   // Started again after it parked (⌘K, or labit in its folder): the session that listened last is its listener again,
   // so that session's wake (the labit plugin) finds this lab and the next pin reaches it, from any folder.
-  try {
-    const was = JSON.parse(fs.readFileSync(path.join(PARKED, `${PORT}.json`), 'utf8'));
-    if (was.root === ROOT) {
-      if (!session && was.session?.id) session = was.session;
-      fs.rmSync(path.join(PARKED, `${PORT}.json`), { force: true });
-    }
-  } catch {}
+  // Its record goes on whatever port it parked on, so the switcher doesn't list it twice.
+  for (const was of parkedLabs().filter((p) => p.root === ROOT)) {
+    if (!session && was.session?.id) session = was.session;
+    fs.rmSync(path.join(PARKED, `${was.port}.json`), { force: true });
+  }
   register();
   await persist();
   console.log(`[lab] ${origin}  ·  labit ${VERSION}  ·  ${PROXY ? `pages from the dev server at ${PROXY.origin}, comments in` : 'pages from'} ${ROOT}`);

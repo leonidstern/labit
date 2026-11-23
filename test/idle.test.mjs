@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
-import { claimPort, tmp, rm, spawnLab, sleep, up as answers, serverJson } from './harness.mjs';
+import { LAB, claimPort, tmp, rm, spawnLab, sleep, up as answers, serverJson } from './harness.mjs';
 
 const kids = [];
 const dirs = [];
@@ -64,4 +64,34 @@ test('started again after parking: the session that listened last is its listene
   await sleep(300);
   assert.equal(JSON.parse(fs.readFileSync(path.join(home, 'servers', `${port}.json`), 'utf8')).listener, 'sess-park');
   assert.ok(!fs.existsSync(path.join(home, 'parked', `${port}.json`)), 'no longer parked once running');
+});
+
+// One home for two folders: a parked lab keeps its port, so another folder's lab parking can't write over its record (#427).
+test('a parked lab keeps its port: another folder skips it, and its own folder starts on it again', async () => {
+  const home = tmp('idle-home');
+  const a = fs.realpathSync(tmp('idle-a'));
+  const b = fs.realpathSync(tmp('idle-b'));
+  dirs.push(home, a, b);
+  for (const d of [a, b]) fs.writeFileSync(path.join(d, 'index.html'), '<h1>Hi</h1>');
+  const env = { ...process.env, LABIT_HOME: home, LABIT_IDLE_MS: '1500' };
+  delete env.PORT;
+  const port = String(claimPort(5500, 90));
+  const run = (dir, args) => {
+    const lab = spawn(process.execPath, [LAB, '.', '--no-open', ...args], { cwd: dir, env });
+    kids.push(lab);
+    return new Promise((r) => lab.on('exit', r));
+  };
+  await run(a, ['--port', port]);
+  await run(b, ['--port', port]); // asked for A's port: it takes the next free one
+  const parked = Object.fromEntries(fs.readdirSync(path.join(home, 'parked')).map((f) => [JSON.parse(fs.readFileSync(path.join(home, 'parked', f), 'utf8')).root, f]));
+  assert.equal(parked[a], `${port}.json`, "A's record is still there");
+  assert.ok(parked[b] && parked[b] !== `${port}.json`, 'B parked on another port');
+  // A again, no port asked: back on its own port, and its record taken (not left behind as a second entry)
+  const again = spawn(process.execPath, [LAB, '.', '--no-open'], { cwd: a, env: { ...env, LABIT_IDLE_MS: '0' } });
+  kids.push(again);
+  await up(port);
+  await sleep(300);
+  assert.ok(!fs.existsSync(path.join(home, 'parked', `${port}.json`)), 'taken once running');
+  assert.ok(fs.existsSync(path.join(home, 'parked', parked[b])), "B's record untouched");
+  again.kill();
 });

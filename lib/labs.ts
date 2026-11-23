@@ -36,7 +36,7 @@ export const askPages = (port: number, ms: number) => fetch(`http://localhost:${
 // ---------- parked labs ----------
 // A lab parked from the switcher stops and leaves ~/.labit/parked/<port>.json: how to start it again, the same way.
 export const PARKED = path.join(path.dirname(REGISTRY), 'parked');
-type Parked = { port: number; root: string; name: string; argv: string[]; execArgv: string[]; edge?: string; npx?: boolean; version?: string; archived?: boolean; at: string };
+type Parked = { port: number; root: string; name: string; argv: string[]; execArgv: string[]; edge?: string; npx?: boolean; version?: string; archived?: boolean; why?: string; session?: { id: string; [k: string]: unknown }; at: string };
 export const parkedLabs = (): Parked[] =>
   (fs.existsSync(PARKED) ? fs.readdirSync(PARKED) : [])
     .filter((n) => n.endsWith('.json'))
