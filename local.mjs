@@ -8,6 +8,13 @@ import path from 'node:path';
 import { execFile, spawn } from 'node:child_process';
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+// A lab started by a hand-over writes to .lab/lab.log: each line carries its time, so a gap while one build takes over
+// from another shows how long it was and where (23 Nov: waits gave up after 20 s and the log could not say why).
+if (process.env.LABIT_LOG_TIMES === '1')
+  for (const k of ['log', 'error']) {
+    const say = console[k].bind(console);
+    console[k] = (...a) => say(new Date().toISOString(), ...a);
+  }
 import { apiOn, BODY_MAX, callApi, decoderFor, encodingFor, onLan, packBody, sendBody, sendFile, sendPacked } from './lib/dev.ts';
 import { parseArgs, WRITE_SHORT, NEW_VERSION_NEAR } from './lib/args.ts';
 import { addRule, dropRule, rulesText } from './lib/replies.ts';
@@ -96,6 +103,7 @@ if (unknownFlags.length) die(`Unknown option ${unknownFlags[0]}. See: ${CMD} --h
 if (process.env.LABIT_TAKEOVER) {
   const was = Number(process.env.LABIT_TAKEOVER);
   delete process.env.LABIT_TAKEOVER;
+  console.log(`[lab] taking over from ${was}`);
   try {
     process.kill(was, 'SIGUSR2');
   } catch {}
@@ -3338,6 +3346,7 @@ server.on('listening', async () => {
     UPDATE = { version: v, notes: (await fetchNotes(v, VERSION)) || [] };
   });
   origin = `http://localhost:${PORT}`;
+  if (process.env.LABIT_LOG_TIMES === '1') console.log(`[lab] listening on ${PORT}`);
   saveServer();
   if (!serverSaved) die(`[lab] could not start: ${path.relative(ROOT, SERVER)} can't be written`);
   writeAtomic(LOCK, JSON.stringify({ pid: process.pid, at: Date.now(), port: PORT }), 0o600); // a lab starting next asks this port
@@ -3417,6 +3426,7 @@ let followTried = '';
 let followed = false;
 process.on('SIGUSR2', () => {
   followed = true;
+  console.log('[lab] the newer build loaded: this lab goes');
 });
 // A release from npm, as the file node runs (null when npm can't give it). npx only fetches it and says where it is: a
 // lab started through npx kept npm's own process (82 MB, more than the lab) running beside it for as long as it ran.
@@ -3446,7 +3456,7 @@ const handOver = (command, first, more = []) => {
   followed = false;
   spawn(command, [...first, ...args, ...more, '--no-open', '--port', String(PORT)], {
     cwd: process.cwd(),
-    env: { ...process.env, LABIT_TAKEOVER: String(process.pid), LABIT_EXIT_WITH_PARENT: '', LABIT_EDGE: '' },
+    env: { ...process.env, LABIT_TAKEOVER: String(process.pid), LABIT_EXIT_WITH_PARENT: '', LABIT_EDGE: '', LABIT_LOG_TIMES: '1' },
     detached: true,
     stdio: ['ignore', out, out],
   })
