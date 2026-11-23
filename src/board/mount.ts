@@ -895,6 +895,8 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   if (!coarse) {
     on('keydown', (e: KeyboardEvent) => {
       if (typing(e) || entered) return;
+      // Backspace on the board is never the browser's "back" (WebKit's can be): with nothing picked it does nothing at all.
+      if (e.key === 'Backspace' && !e.metaKey && !e.ctrlKey && !e.altKey) e.preventDefault();
       const gone = (e.key === 'Backspace' || e.key === 'Delete') && !e.metaKey && !e.ctrlKey && !e.altKey && picks.size > 0;
       const back = (e.metaKey || e.ctrlKey) && !e.shiftKey && e.code === 'KeyZ' && taken.length > 0 && !e.defaultPrevented; // prevented: the widget took this ⌘Z for a newer pin or drawing
       if (!gone && !back) return;
