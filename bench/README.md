@@ -118,3 +118,14 @@ node bench/cost.mjs --summary bench/results/cost/<file>.json
 Arms are what the agent is handed: `full`, the saved agent text, or `lean`, what a wait hands over (the lines in `LEAN_SKIP`, lib/comments-api.mjs, left out). Each arm gets the median and p90 of each number, a 95% interval for the mean cost, and the cost per run that got everything right (all runs' cost, the wrong ones too, over the right ones). The raw runs are in the same file, with the commit, the host's version and the model.
 
 Read cost per right run first: text a run doesn't get can come back as files and pictures it opens instead.
+
+### Results, 2026-11-23
+
+Situations (batch 1), Sonnet 5.5, Claude Code 2.1.330, 20 runs per arm in two sets of 10, at ebc0f88 (`results/cost/`):
+
+| arm | situations wrong | runs all right | mean cost (95%) | cost per all-right run | median turns | median cache read |
+|---|---|---|---|---|---|---|
+| full | 8 of 600 | 14 / 20 | $0.234 (0.224–0.244) | $0.334 | 8.5 | 392k |
+| lean | 21 of 600 | 9 / 20 | $0.236 (0.220–0.252) | $0.525 | 7.5 | 340k |
+
+The lean text is about 25% shorter and costs the same per run: more than 90% of the input is the conversation read again from cache on each call, and the pin text is about 2k tokens of it. It gets more wrong (Fisher's exact test, p ≈ 0.02). Of the misses the second set names, dark mode is 5 of 10 lean runs against 1 of 10 full ones: lean leaves out the `colours:` line, the only one that says the page was dark.

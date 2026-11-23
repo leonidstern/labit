@@ -33,7 +33,9 @@ const situations = (n) => {
       if (!answer) return { pass: 0, of: null, note: 'no answer file' };
       const out = execFileSync('node', [join(HERE, 'score-situations.mjs'), join(dir, 'bench/results', answer), '--batch', String(n)], { encoding: 'utf8' });
       const [, pass, of] = /total: (\d+)\/(\d+) situations/.exec(out) || [];
-      return { pass: Number(pass ?? 0), of: of ? Number(of) : null };
+      // Which situations it got wrong, to tell a miss that comes back in every run of an arm from a one-off.
+      const missed = [...out.matchAll(/^(\S+)\s+\S+\s+MISS\s/gm)].map((m) => m[1]);
+      return { pass: Number(pass ?? 0), of: of ? Number(of) : null, missed };
     },
   };
 };
