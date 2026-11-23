@@ -83,3 +83,12 @@ test('pin retried', async () => {
   assert.equal(a.code, 0, a.out); assert.equal(b.code, 0, b.out);
   assert.equal((await agentTexts('Look here')).length, 1);
 });
+
+test('a browser retry of a pin closed in between gives back that pin, not a second one (#425)', async () => {
+  const body = { name: 'leo', text: 'retried after a lost answer', nonce: 'browser-retry-425', anchor: { kind: 'element', selector: '#x', x: 0.5, y: 0.5 } };
+  const first = await post(body);
+  assert.equal((await cli('gggggggg-1', 'resolve', first.id)).code, 0);
+  const again = await post(body);
+  assert.equal(again.id, first.id);
+  assert.equal((await all()).filter((c) => !c.parent && c.text === body.text).length, 1);
+});

@@ -191,7 +191,7 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
   }
 
   // ---------- Claude's side: wait, reply, resolve, pin ----------
-  if (['wait', 'reply', 'resolve', 'pin', 'invite'].includes(pos[0])) {
+  if (['wait', 'reply', 'resolve', 'thread', 'pin', 'invite'].includes(pos[0])) {
     // `pin move <id> <selector>` and `pin gone <id>` settle a pin that is already there; any other `pin` makes one.
     const settle = pos[0] === 'pin' && (pos[1] === 'move' || pos[1] === 'gone') ? pos[1] : '';
     const [cmd, ref, ...words] = settle ? [pos[0], ...pos.slice(2)] : pos;
@@ -241,7 +241,11 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
       const { seconds, capped } = waitSeconds(opts, process.stdout.isTTY === true);
       const out = await call('/_lab/wait', { timeout: seconds, pages: listenPages(opts, true), ack: true }, 20);
       console.log(WAIT_SAID[out.status] ?? out.text);
-      await labAck(server, out.delivery, session);
+      // Codex can't be woken once its turn ended, and what a background command prints then is read by nobody: a
+      // `wait --bg` there that confirmed its hand-off left the pins "picked up" and unread (#420, tested on Codex
+      // 0.166). Unconfirmed, the lab takes them back after a few seconds unless the session answers them, and the labit
+      // hook brings them in when the person next writes or the turn ends.
+      if (!(opts.bg && session.kind === 'codex')) await labAck(server, out.delivery, session);
       if (capped && out.status === 204)
         console.log(
           `\nThat wait was held to ${FOREGROUND_CAP} seconds. Run it in the background (your app's own way of doing that) and ` +
@@ -478,6 +482,13 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
       hit = hits[0];
     }
     if (!hit) die(`No open comment ${ref || ''}${want ? ` on ${want}` : ''}. See .lab/comments.md.`);
+    // thread <id>: the whole thread, every message, resolved or not (a long one is cut short in a hand-off, #425).
+    if (cmd === 'thread') {
+      const out = await call(`/_lab/agent${hit.page}?thread=${encodeURIComponent(hit.id)}`, {});
+      if (out.status >= 300) die(`Could not read it: ${out.text}`);
+      process.stdout.write(out.text);
+      process.exit(0);
+    }
     // pin move / pin gone: the agent that changed the page settles a pin the page was unsure of (its words changed, a copy,
     // a spot that cannot be told). move puts it on the element <selector> finds (and --quote on words in it); gone says
     // its spot has been removed: the page draws a ghost where it stood. Nothing is told to the agent about it again.
@@ -520,11 +531,15 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
       if (asked && intent && intent !== 'question') die(`A reply with --choice is a question; leave out --${intent === 'working' ? 'on-it' : intent}.`);
       if (asked && opts.resolve) die('A reply with --choice waits for the person to pick; leave out --resolve.');
       if (asked) intent = 'question';
+      // --checked "<how>": the agent looked at what it did (the page at a width, a test run); a done answer without it shows
+      // as not checked (#425). Only with --done: on it, a question or a pick isn't a result.
+      if (opts.checked !== undefined && (typeof opts.checked !== 'string' || !opts.checked.trim())) die('--checked takes how you looked: --checked "opened /pricing at 390 px"');
+      if (opts.checked !== undefined && intent !== 'done') die('--checked goes with --done: it says how you checked the result.');
       const said = Object.values(((data as Record<string, object>)[hit.page] || {}) as Record<string, { id: string; parent?: string; session?: unknown; createdAt: string }>)
         .filter((c) => (c.id === hit.id || c.parent === hit.id) && !c.session)
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
         .pop()?.id;
-      const out = await call('/_lab/api/comments', { page: hit.page, parent: hit.id, nonce: nonceOf(hit.page, hit.id, hit.to, said, words.join(' ')), ...(hit.to ? { to: hit.to } : {}), name: signed(), text: words.join(' '), ...(typeof opts['suggest-rule'] === 'string' ? { suggest: opts['suggest-rule'] } : {}), ...(intent ? { intent } : {}), ...asked });
+      const out = await call('/_lab/api/comments', { page: hit.page, parent: hit.id, nonce: nonceOf(hit.page, hit.id, hit.to, said, words.join(' ')), ...(hit.to ? { to: hit.to } : {}), name: signed(), text: words.join(' '), ...(typeof opts['suggest-rule'] === 'string' ? { suggest: opts['suggest-rule'] } : {}), ...(intent ? { intent } : {}), ...(typeof opts.checked === 'string' ? { checked: opts.checked } : {}), ...asked });
       if (out.status >= 300) die(`Could not reply: ${out.text}`);
       // The page tries each choice in place of the quoted words: a choice that reaches past them is said here.
       if (asked) for (const note of choiceSpills(data[hit.page]?.[hit.id]?.anchor?.quote, asked.choices)) console.log(`Note: ${note}`);

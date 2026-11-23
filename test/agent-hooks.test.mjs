@@ -13,7 +13,7 @@ const { DIR, PORT, B } = site('agent-hooks', 9010, 9);
 for (const n of ['index', 'other']) fs.writeFileSync(path.join(DIR, n + '.html'), `<!doctype html><title>${n}</title><h1>${n}</h1>`);
 const home = tmp('home');
 const scratch = tmp('scratch'); // the hook's state files (TMPDIR)
-const env = { ...process.env, LAB_CLOSE_GRACE: '1', LAB_SETTLE_MS: '100', LAB_ACK_MS: '1500', LABIT_HOME: home, LABIT_NO_UPDATE_CHECK: '1' };
+const env = { ...process.env, LAB_CLOSE_GRACE: '1', LAB_SETTLE_MS: '100', LAB_ACK_MS: '1500', LAB_CLAIM_LIFE_MS: '3000', LABIT_HOME: home, LABIT_NO_UPDATE_CHECK: '1' };
 const server = spawnLab(DIR, PORT, { env });
 after(() => { server.kill(); rm([DIR, home, scratch]); });
 const key = () => serverJson(DIR).agent;
@@ -54,10 +54,26 @@ test('progress: only the session that listened last, only a pin it claimed, once
   const second = await progressAt(id);
   assert.ok(second > first, 'its own tool call renews the line');
   const line = (await comments()).find((c) => c.id === id).progress.text;
-  assert.equal(line, 'session activity', 'never the command');
+  assert.equal(line, 'drawing', "the agent's own words stay: a renewal moves only the time, and never says the command");
   await hook('progress', cursor('S1'));
   assert.equal(await progressAt(id), second, 'within the minute: no second line');
   assert.equal(await progressAt(free), '');
+});
+
+test('progress: the hook stops renewing a pin the agent said nothing on for a while, so the page can say no update (#425)', async () => {
+  const id = (await post('left behind')).comment.id;
+  const w = await call('/_lab/wait', { timeout: 3, pages: null, ack: true }, 'S1');
+  await call('/_lab/ack', { id: w.delivery }, 'S1');
+  await call('/_lab/api/comments', { page: '/index', action: 'progress', id, text: 'building' }, 'S1');
+  assert.ok((await pending()).working.some((p) => p.id === id), 'claimed: listed for renewal');
+  await sleep(3200); // LAB_CLAIM_LIFE_MS: nothing from the agent itself since
+  assert.ok(!(await pending()).working.some((p) => p.id === id), 'no longer listed: renewals alone do not keep it claimed');
+  const before = await progressAt(id);
+  fs.rmSync(path.join(scratch, 'labit-hook-S1.json'), { force: true });
+  await hook('progress', codex('S1'));
+  assert.equal(await progressAt(id), before, 'its tool calls renew nothing now');
+  await call('/_lab/api/comments', { page: '/index', action: 'progress', id, text: 'building, step 2' }, 'S1');
+  assert.ok((await pending()).working.some((p) => p.id === id), 'a new line of its own claims it again');
 });
 
 test('wake: the session that listened last, at most twice per set of pins, no page named; Codex blocks the stop, Cursor follows up', async () => {
@@ -93,4 +109,34 @@ test('Cursor: the start hook says the session to the shells, and wait signs with
   const out = await cli(['wait', '--timeout', '1', '--no-open'], { cwd: DIR, env: { ...env, CURSOR_AGENT: '1', LAB_SESSION_ID: 'conv-1' } });
   assert.doesNotMatch(out.out, /Error/i);
   assert.equal((await pending()).last, 'conv-1');
+});
+
+// #420, on a real Codex (0.166): Codex has no idle event, and a `wait --bg` it left running took a pin while it sat idle,
+// printed it to nobody and confirmed it, so the pin read "picked up" and nothing brought it in again.
+test("Codex: a background wait doesn't confirm its hand-off, so the pin comes back; the person's next message brings it in", async () => {
+  const sid = 'codex-thread-1';
+  const codexEnv = { ...env, LAB_AGENT: '', CODEX_THREAD_ID: sid };
+  const listening = cli(['wait', '--bg', '--timeout', '4', '--no-open'], { cwd: DIR, env: codexEnv });
+  for (let i = 0; i < 40 && !(await pending()).listening; i++) await sleep(50);
+  await post('left while codex sat idle', '/other');
+  const got = await listening;
+  assert.match(got.out, /left while codex sat idle/, 'the background wait took it');
+  // Right away too, before it goes back: a Stop just after the background wait took a pin mid-turn must still see it
+  // (on the Mac, Stop came 1 s before the take-back and the pin sat until the next message).
+  const early = await (await fetch(`${B}/_lab/pending?for=${sid}`, { headers: { 'x-lab-admin': key(), 'x-lab-agent': '1' } })).json();
+  assert.equal(early.fresh, 1, 'an unconfirmed hand-off still counts for its session');
+  assert.equal((await (await fetch(`${B}/_lab/pending?for=someone-else`, { headers: { 'x-lab-admin': key(), 'x-lab-agent': '1' } })).json()).fresh, 0);
+  await sleep(2000); // LAB_ACK_MS is 1.5 s here: unconfirmed, it goes back
+  const p = await (await fetch(`${B}/_lab/pending?for=${sid}`, { headers: { 'x-lab-admin': key(), 'x-lab-agent': '1' } })).json();
+  assert.equal(p.fresh, 1, 'not left "picked up" and unread');
+  const out = JSON.parse(await hook('prompt', codex(sid, { hook_event_name: 'UserPromptSubmit', prompt: 'hi', turn_id: 't1' })));
+  assert.equal(out.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
+  assert.match(out.hookSpecificOutput.additionalContext, /^labit: A new pin .*wait --timeout 5/);
+  assert.equal(await hook('prompt', cursor(sid, { hook_event_name: 'beforeSubmitPrompt' })), '', 'Cursor: no such context');
+  // Other agents' background waits still confirm what they printed.
+  const claude = cli(['wait', '--bg', '--timeout', '4', '--no-open'], { cwd: DIR, env: { ...env, LAB_AGENT: '', CLAUDE_CODE_SESSION_ID: 'cc-1' } });
+  const back = await claude;
+  assert.match(back.out, /left while codex sat idle/);
+  await sleep(2000);
+  assert.equal((await pending()).fresh, 0);
 });
