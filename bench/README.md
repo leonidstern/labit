@@ -142,3 +142,14 @@ The lean text is about 25% shorter and costs the same per run: more than 90% of 
 | skill-core: plus the skill without its Boards and Artifact parts | $0.066 | 132k |
 
 Leaving the coordinates out saves nothing on these marks (their `lines` are 47–188 characters). The skill adds about $0.01 a pin when the agent reads it with every pin; its core alone saves about $0.002 of that, within the spread.
+
+### Typed pins and Artifact comments, 2026-11-23
+
+The 12 asks of the drawings, typed with the same words (`drawings/typed.mjs`: "remove", "typo", "move this into the Team plan"…): as labit pins on the same elements as the drawings, and as comments a person left on a private Artifact of the same page, read with Claude's artifact comment tool (`drawings/artifact-comments.json`). The prompt is the same for both. Sonnet 5.5, 5 runs per ask and arm (`results/cost/drawings-sonnet-2026-11-23-09-22.json`):
+
+| arm | right | mean cost a run | cost per right run |
+|---|---|---|---|
+| typed labit pins | 60 / 60 | $0.055 | $0.055 |
+| Artifact comments | 51 / 60 | $0.059 | $0.069 |
+
+The 9 misses are two comments whose Artifact anchor wasn't the element meant: "typo" on Team's "Unlimted history" was saved on Studio's "Unlimited history" (4 of 5 runs wrong), and "drop this line" on Studio's "Priority support" was saved on the Plans heading (5 of 5). The labit pins were made by a script at the exact elements and the Artifact comments by hand, so part of the gap may be where the clicks landed. The Artifact text also carries a fixed preamble of about 2.8 KB per read.
