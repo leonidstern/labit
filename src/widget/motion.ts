@@ -2,7 +2,7 @@
 // loads once the page has something that moves (a video, an animation), P or S is pressed, or a comment has a moment. Its styles come with it. Uses the widget's own parts through W, set once at startup.
 import { clock, momentText } from '../../lib/moment.mjs';
 import { selectorFor } from './anchoring.ts';
-import { frameAt, fps, stepAnims, stepOfKey, stepVideo, watchFrames } from './step.ts';
+import { frameAt, fps, knownFps, stepAnims, stepOfKey, stepVideo, watchFrames } from './step.ts';
 import css from './motion.css';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -102,7 +102,8 @@ const momentOf = (el) => {
   const playing = isStill(el) ? undefined : true; // nothing paused: the moment it was showing as the pin went down
   if (el instanceof HTMLVideoElement) {
     if (!Number.isFinite(el.currentTime)) return undefined;
-    return { kind: 'video', at: el.currentTime, of: Number.isFinite(el.duration) ? el.duration : undefined, what, sel, playing };
+    const f = knownFps(el); // the exact frame, once the rate is known (9b)
+    return { kind: 'video', at: el.currentTime, of: Number.isFinite(el.duration) ? el.duration : undefined, what, sel, playing, ...(f ? { frame: frameAt(el) + 1, fps: f } : {}) };
   }
   const a = animsOf(el)[0];
   const t = a?.effect?.getComputedTiming();
@@ -123,7 +124,7 @@ const seekMoment = (m) => {
   setPause(true);
   if (!held.has(el)) setItem(el, true);
   armed = el; // the arrows step from here
-  if (el instanceof HTMLVideoElement) el.currentTime = m.at;
+  if (el instanceof HTMLVideoElement) el.currentTime = m.frame && m.fps ? (m.frame - 0.5) / m.fps : m.at; // the middle of its frame
   else {
     const a = animsOf(el)[0];
     const t = a?.effect?.getComputedTiming();
@@ -327,6 +328,62 @@ const startPick = () => {
 };
 const swallow = (e) => (e.preventDefault(), e.stopImmediatePropagation());
 
+// Space plays or pauses it; an arrow pauses a playing one (3a), else steps it d frames (a video) or screen frames (a loop).
+const act = (el, space, d, repeat) => {
+  const v = videosIn(el)[0];
+  if (space) {
+    if (!repeat) setItem(el, !isStill(el));
+  } else if (!isStill(el) && !repeat) setItem(el, true); // 3a: the first press stops it on the frame showing
+  else {
+    setItem(el, true);
+    if (v) for (const x of videosIn(el)) stepVideo(x, d);
+    else stepAnims(animsOf(el), d);
+  }
+  for (const [l, u] of lines) if (l.isConnected && lineOf.get(l) === el) u(); // an animation says nothing when stepped
+};
+
+// Writing about a moving thing (Leo, 23 Nov, 9b): the moment line above a comment's box, a new one's or a reply's, says
+// the moment showing now and, while the box has the cursor, the keys: ⌃ ← → a frame (⌃ , . too: macOS may keep ⌃ ← → for
+// its desktops), ⌃⇧ a second, ⌃K plays or pauses. The comment keeps the moment the line ends on: it follows a step or a
+// seek, not a playing video (that one keeps the moment the pin went down until it stops).
+const lines = new Map<HTMLElement, () => void>(); // each live line and its update
+const lineOf = new WeakMap<HTMLElement, Element>(); // what it is about
+const liveMoment = (anchor, keep) => {
+  let el = ownMotion(anchor);
+  if (!el && anchor.moment?.sel) {
+    try {
+      el = document.querySelector(anchor.moment.sel);
+    } catch {}
+  }
+  if (!el || anchor.moment?.kind === 'gif') return null;
+  let m = anchor.moment || momentOf(el);
+  const line = W.el('span', { class: 'moment live' }, momentText(m)); // the keys are its ::after (motion.css): not in its words
+  const u = () => {
+    if (!line.isConnected) return void lines.delete(line);
+    m = momentOf(el) || m;
+    line.textContent = momentText(m);
+    keep(m);
+  };
+  lines.set(line, u);
+  lineOf.set(line, el);
+  for (const v of videosIn(el)) for (const t of ['seeked', 'pause']) v.addEventListener(t, u);
+  return line;
+};
+// ⌃ keys in a comment's box on a moving thing: the thing its line is about moves; the words stay as they are.
+const typingKey = (e) => {
+  const box = e.composedPath()[0];
+  if (!e.ctrlKey || e.metaKey || e.altKey || W.coarse || !(box instanceof HTMLTextAreaElement) || !W.root.contains(box)) return false;
+  const line = box.closest('.float, .card')?.querySelector<HTMLElement>('.moment.live');
+  const el = line && lineOf.get(line);
+  const k = e.key === ',' ? 'ArrowLeft' : e.key === '.' ? 'ArrowRight' : e.key;
+  const play = k.toLowerCase() === 'k';
+  if (!el?.isConnected || (!play && k !== 'ArrowLeft' && k !== 'ArrowRight')) return false;
+  swallow(e);
+  const v = videosIn(el)[0];
+  act(el, play, (k === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? (v ? fps(v) : 60) : 1), e.repeat);
+  return true;
+};
+
 // What the arrows and Space move: the one right-clicked, picked or gone back to; else a focused video (its own
 // controls were used); else the paused one most in view; else the video most in view. None on screen: the page's keys.
 const keyTarget = () => {
@@ -353,6 +410,9 @@ export function bindMotion(w: unknown) {
   S = W.S;
   W.root.append(W.el('style', {}, css)); // its styles come with it, after the widget's own
   S.momentLine = momentLine;
+  S.liveMoment = liveMoment;
+  addEventListener('keyup', (e) => e.key === 'Control' && [...lines.keys()].forEach((l) => l.classList.remove('ctrl')));
+  addEventListener('blur', () => [...lines.keys()].forEach((l) => l.classList.remove('ctrl')));
   box = W.el('div', { class: `more-menu motion-menu${W.coarse ? ' motion-sheet' : ''}`, role: 'menu', 'aria-label': 'motion', hidden: '' });
   (W.root.querySelector('.ui') || W.root).append(box);
   if (W.coarse) W.swipeDown(box, closeMotion);
@@ -397,6 +457,8 @@ export function bindMotion(w: unknown) {
   for (const v of document.querySelectorAll('video')) watchFrames(v);
   addEventListener('play', (e) => e.target instanceof HTMLVideoElement && watchFrames(e.target), true);
   addEventListener('keydown', (e) => {
+    if (e.key === 'Control') for (const l of lines.keys()) l.classList.add('ctrl'); // held: the line names the rest
+    if (typingKey(e)) return;
     if (W.coarse || !S.on || e.defaultPrevented || e.composedPath().some((n) => n instanceof HTMLElement && (n.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName)))) return;
     // Space presses a focused button or link, as ever; the arrows still step.
     const space = e.key === ' ' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.composedPath().some((n) => n instanceof HTMLElement && /^(BUTTON|A|SUMMARY)$/.test(n.tagName));
@@ -408,14 +470,7 @@ export function bindMotion(w: unknown) {
     if (!space && !d) return;
     swallow(e);
     armed = el;
-    if (space) {
-      if (!e.repeat) setItem(el, !isStill(el));
-    } else if (!isStill(el) && !e.repeat) setItem(el, true); // 3a: the first press stops it on the frame showing
-    else {
-      setItem(el, true);
-      if (v) for (const x of videosIn(el)) stepVideo(x, d);
-      else stepAnims(animsOf(el), d);
-    }
+    act(el, space, d, e.repeat);
     if (open && target === el) {
       if (v) v.addEventListener('seeked', () => ((moment = momentOf(el) || moment), refresh()), { once: true });
       moment = momentOf(el) || moment;

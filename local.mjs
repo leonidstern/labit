@@ -18,6 +18,7 @@ import { alive, setWifi } from './lib/labcall.ts';
 import { CLAIM_LIFE_MS, DO_IT, PROGRESS_MS, RENEWAL, REQUESTS, UNMATCHED, numberOf, slim, upgrade, VERSION as SCHEMA } from './lib/schema.mjs';
 import { LEAN_SKIP, pagePath, sameKey } from './lib/comments-api.mjs';
 import { cut } from './lib/cut.mjs';
+import { momentText } from './lib/moment.mjs';
 import { sourceLines } from './lib/source-line.mjs';
 import { isNavigation } from './lib/pageload.ts';
 import { loadSettings, changedShortcuts, seedActions, savePersonal } from './lib/settings.ts';
@@ -1839,7 +1840,7 @@ function threadText(page, root, replies, fresh, spot, when) {
     const state = r.session ? STATE[r.intent] : '';
     // A pick on a question with choices says which question it answers (the words already say which choice).
     const pick = r.picked ? ` (their pick on your question id ${r.picked.of})` : '';
-    out.push(`- ${who(r)} · ${when(r)}${state ? ` · ${state}` : ''} · id ${r.id}: ${body(wordsOf(r))}${pick}${r.doit ? DO_IT(r.name) : ''}${fresh.has(r.id) ? '  ← new' : ''}`);
+    out.push(`- ${who(r)} · ${when(r)}${state ? ` · ${state}` : ''} · id ${r.id}${r.moment ? ` (at ${momentText(r.moment)})` : ''}: ${body(wordsOf(r))}${pick}${r.doit ? DO_IT(r.name) : ''}${fresh.has(r.id) ? '  ← new' : ''}`);
     for (const i of imagesOf(r)) out.push(`    ${imageLine(r, i)}`);
   }
   return out.join('\n');

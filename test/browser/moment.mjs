@@ -113,7 +113,7 @@ try {
         const vid = await pin('vid', 'on the video');
         const vm = vid.c?.anchor?.moment;
         vidPin = { vm };
-        check(eng, 'a pin on the paused video carries its time and length', vt.paused && vm?.kind === 'video' && Math.abs(vm.at - vt.t) < 0.11 && Math.abs(vm.of - vt.d) < 0.11 && /^video \d:\d\d\.\d of \d:\d\d$/.test(vid.chip), JSON.stringify({ vm, vt, chip: vid.chip }));
+        check(eng, 'a pin on the paused video carries its time and length', vt.paused && vm?.kind === 'video' && Math.abs(vm.at - vt.t) < 0.11 && Math.abs(vm.of - vt.d) < 0.11 && /^video \d:\d\d\.\d of \d:\d\d( · frame \d+)?$/.test(vid.chip), JSON.stringify({ vm, vt, chip: vid.chip }));
       } else console.log(`skip ${eng.padEnd(8)} video (this engine can't play the WebM)`);
       const page = await pin('loop', 'second on the loop');
       check(eng, 'pause, comment, again: the second pin has the same moment', page.c?.anchor?.moment?.at === m?.at, JSON.stringify(page.c?.anchor?.moment));
@@ -155,7 +155,7 @@ try {
       if (videoOk) {
         const got = await openNear('vid', '.card .msg .when button.moment');
         const shown = await inRoot(p, "r.querySelector('.card .msg .when button.moment')?.textContent || ''");
-        check(eng, 'the sent pin on the paused video shows its moment', got && /^video \d:\d\d\.\d of \d:\d\d$/.test(shown), shown);
+        check(eng, 'the sent pin on the paused video shows its moment', got && /^video \d:\d\d\.\d of \d:\d\d( · frame \d+)?$/.test(shown), shown);
         await p.evaluate(() => { const v = document.getElementById('vid'); v.play?.(); });
         await sleep(500);
         await inRoot(p, "r.querySelector('.card button.moment').click()");
