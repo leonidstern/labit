@@ -287,7 +287,7 @@ test('a wake Claude Code refuses (the session was stopped) is no try: the next t
   let refuse = true;
   let refusedN = 0;
   const w = world(on, { fresh: 1, pages: ['/a'], key: 'k1' }, 'S1', {
-    submit: () => { if (refuse) { refusedN++; throw new Error('refused: the session was stopped and nobody has sent input since'); } return null; },
+    submit: () => (refuse ? (refusedN++, { drop: 'the session was stopped and nobody has sent input since' }) : null), // as Claude Code answers it
   });
   await $.session.start({ cwd: '/p/sub', surface: 'terminal', isInteractive: true } as any);
   await clock.advance(4000);
@@ -299,4 +299,21 @@ test('a wake Claude Code refuses (the session was stopped) is no try: the next t
   await clock.advance(8000); // two looks while busy: queued behind their turn
   expect(w.sent.length).toBe(1);
   expect(w.sent[0]).toContain('queued while you were busy');
+});
+
+test('after a refused wake, a short turn of the person (over before two looks) is followed by the wake', async ($, on) => {
+  const clock = mock.clock(on);
+  let refuse = true;
+  const w = world(on, { fresh: 1, pages: ['/a'], key: 'k1' }, 'S1', {
+    submit: () => (refuse ? { drop: 'the session was stopped and nobody has sent input since' } : null),
+  });
+  await $.session.start({ cwd: '/p/sub', surface: 'terminal', isInteractive: true } as any);
+  await clock.advance(60000);
+  refuse = false;
+  await turnStart($);
+  await clock.advance(1000);
+  await turnEnd($);
+  await clock.advance(4000);
+  expect(w.sent.length).toBe(1);
+  expect(w.sent[0]).not.toContain('queued while you were busy');
 });

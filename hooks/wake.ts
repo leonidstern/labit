@@ -51,8 +51,8 @@ const SUBMIT_MS = 15000;
 const TRIES = 3; // wakes for one set of pins, at most
 const tries = new Map<string, number>(); // port:key -> wakes sent for it
 let woke = false; // the running turn is one a wake started
-// Claude Code refuses a submit after the person stopped the session (Escape) until they send something. A refused wake
-// was never a try: it doesn't count, and no wake is sent until a turn starts again (the person's), which ends by
+// Claude Code refuses a submit after the person stopped the session (Escape) until they send something: the submit
+// resolves with { drop: why } (it doesn't reject). A refused wake was never a try: it doesn't count, and no wake is sent until a turn starts again (the person's), which ends by
 // waking the session for the pins still unheard.
 let refused = false;
 // The lab answers for this session (`for`); a lab from before #420 doesn't, and then only the one that listened last counts.
@@ -143,6 +143,15 @@ async function progress($: any, e: any): Promise<void> {
   if (e?.tool && e.agentId === undefined) await note($, LINE);
 }
 
+// A wake that never got in: the try is taken back, and nothing more is sent until a turn starts (the person's).
+function undelivered(key: string, port: number): void {
+  tries.set(key, Math.max(0, (tries.get(key) || 1) - 1));
+  told.delete(port);
+  submittedAt = 0;
+  queued = false;
+  refused = true;
+}
+
 async function look($: any): Promise<void> {
   if (submittedAt) {
     if ((await $.clock.now()) - submittedAt < SUBMIT_MS) return;
@@ -186,14 +195,10 @@ async function look($: any): Promise<void> {
         `labit: ${n} (${p.url}) while you weren't listening${busy ? ' (queued while you were busy)' : ''}. ` +
         `Run \`${p.cmd} wait --timeout 5\` in ${p.dir} to read them (nothing new means you already have them), ` +
         `read each thread whole (the page or section is not the question), answer each on its pin with reply, then listen again in the background as before (\`wait --bg\`).`,
-    })).catch(() => {
-      // Not delivered: take the try back, and wait for the person before trying again.
-      tries.set(key, Math.max(0, (tries.get(key) || 1) - 1));
-      told.delete(lab.port);
-      submittedAt = 0;
-      queued = false;
-      refused = true;
-    });
+    })).then(
+      (r: any) => { if (r?.drop !== undefined) undelivered(key, lab.port); }, // { drop: why }: refused, or taken out of the queue
+      () => undelivered(key, lab.port),
+    );
     return;
   }
   heard = ''; // nothing waiting: the next pin starts its count again
