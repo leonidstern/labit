@@ -16,7 +16,7 @@ import { watchTree } from './lib/watch.ts';
 import { PARKED, REGISTRY, askPages, keyFor, parkedLabs, runningLabs } from './lib/labs.ts';
 import { alive, setWifi } from './lib/labcall.ts';
 import { DO_IT, PROGRESS_MS, UNMATCHED, numberOf, slim, upgrade, VERSION as SCHEMA } from './lib/schema.mjs';
-import { sameKey } from './lib/comments-api.mjs';
+import { LEAN_SKIP, sameKey } from './lib/comments-api.mjs';
 import { cut } from './lib/cut.mjs';
 import { sourceLines } from './lib/source-line.mjs';
 import { isNavigation } from './lib/pageload.ts';
@@ -1753,8 +1753,7 @@ async function threadsText(page, threads, who = '') {
   }
   // Lean: details an agent rarely needs (computed looks, colours, window size, the CSS path) stay in the full text at
   // /_lab/agent/<page>; the pin's words, element, text, section and file stay here.
-  const RARE = /^(looks|css rules reaching it \(last wins\)|box|colours|viewport|selector \(at comment time\)):/;
-  const parts = text.split('\n## ').slice(1).filter((b) => threads.some((id) => b.split('\n')[0].endsWith(`· id ${id}`))).map((b) => b.split('\n').filter((l) => !RARE.test(l)).join('\n'));
+  const parts = text.split('\n## ').slice(1).filter((b) => threads.some((id) => b.split('\n')[0].endsWith(`· id ${id}`))).map((b) => b.split('\n').filter((l) => !LEAN_SKIP.test(l)).join('\n'));
   const ids = threads.filter((id) => parts.some((b) => b.split('\n')[0].endsWith(`· id ${id}`)));
   // Each pin's number (as the page's cards count them) and the file it points at, for the hand-off's "Same file:" line.
   const pins = parts.map((b) => ({ id: b.split('\n')[0].split('· id ').pop().trim(), n: Number(/^(\d+)\./.exec(b)?.[1]) || 0 }));

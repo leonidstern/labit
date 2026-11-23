@@ -105,3 +105,16 @@ Two things could not be made into a situation, because no comment can be left th
 Two more things seen on the way: Option-click on any control also runs it (the fold button opens its fold, a menu item acts); and a click on the “…” of a cut-off title quotes a word from the hidden part.
 
 The code blocks in `situations/b2-guide.html` are written by `situations-2-guide.mjs` from the files in `situations/src/calendar`.
+
+## Cost per task
+
+`cost.mjs` runs a task above through Claude Code several times per arm, each in a fresh copy, and records what each run spent and whether it was right. The numbers are the host's own: model calls, uncached input, cache-write and cache-read input, output tokens, turns, tool calls by kind, bytes of tool results, pictures opened, wall time and cost in USD at list price. A number the host doesn't report stays unknown, never zero. Runs of different arms are shuffled together.
+
+```
+node bench/cost.mjs situations --arms full,lean --runs 10 --model haiku    # also situations-2
+node bench/cost.mjs --summary bench/results/cost/<file>.json
+```
+
+Arms are what the agent is handed: `full`, the saved agent text, or `lean`, what a wait hands over (the lines in `LEAN_SKIP`, lib/comments-api.mjs, left out). Each arm gets the median and p90 of each number, a 95% interval for the mean cost, and the cost per run that got everything right (all runs' cost, the wrong ones too, over the right ones). The raw runs are in the same file, with the commit, the host's version and the model.
+
+Read cost per right run first: text a run doesn't get can come back as files and pictures it opens instead.
