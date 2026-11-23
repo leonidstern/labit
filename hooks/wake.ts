@@ -17,9 +17,10 @@
 // look wakes it). A wake that never started a turn is sent again, TRIES in all for one set of pins, then left to `wait`.
 //
 // Progress: a pin somebody claimed (the agent said `reply --progress` or `--on-it` on it) keeps its status line alive while
-// this session itself runs tools: "session activity", at most one renewal per pin a minute. The lab counts a status line
-// as a sign only for 3 minutes (PROGRESS_MS), so a session that moved on to something else lets it lapse and the pin goes
-// grey. A helper's tool calls never renew it, and a pin nobody claimed gets no line.
+// this session itself runs tools, at most one renewal per pin a minute. A renewal moves only the line's time: the agent's
+// own words stay on the pin ("session activity" only where it wrote none). The lab counts a status line as a sign only for
+// 3 minutes (PROGRESS_MS), so a session that moved on to something else lets it lapse and the pin goes grey, and it lists
+// a pin for renewal only for 10 minutes after the agent itself last said something on it (CLAIM_LIFE_MS, #425). A helper's tool calls never renew it, and a pin nobody claimed gets no line.
 //
 // Labs: the one in the session's folder (.lab/server.json, or above), and every lab whose registry file
 // (~/.labit/servers/<port>.json, what `labit list` reads) names this session as its listener, so it also works when the
@@ -127,7 +128,7 @@ async function note($: any, line: string): Promise<void> {
       .fetch(`http://127.0.0.1:${w.lab.port}/_lab/api/comments`, {
         method: 'POST',
         headers: { host: `localhost:${w.lab.port}`, 'x-lab-admin': w.lab.key, 'x-lab-agent': '1', 'content-type': 'application/json' },
-        body: JSON.stringify({ page: w.page, action: 'progress', id: w.id, text: line }),
+        body: JSON.stringify({ page: w.page, action: 'progress', id: w.id, text: line, renew: true }), // renew: only its time moves, the agent's words stay
       })
       .catch(() => {});
   }

@@ -109,7 +109,7 @@ async function progress(sid, cwd, now = Date.now()) {
     const key = `${w.lab.port}:${w.id}`;
     if (now - (st.noted[key] || 0) < PROGRESS_MS) continue;
     st.noted[key] = now;
-    await call(w.lab, 'POST', '/_lab/api/comments', { page: w.page, action: 'progress', id: w.id, text: LINE });
+    await call(w.lab, 'POST', '/_lab/api/comments', { page: w.page, action: 'progress', id: w.id, text: LINE, renew: true }); // renew: only its time moves, the agent's words stay
   }
   save(sid, st);
 }
