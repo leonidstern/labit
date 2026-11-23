@@ -33,6 +33,10 @@ const barLate = (word) => `${labHead}<h1>Late ${word}</h1><main id="m"></main><s
 const barPlain = (n) => `${labHead}<h1>Plain</h1>${Array.from({ length: n }, (_, i) => bsec(i + 1)).join('')}${lines(30)}`;
 save('barlate.html', barLate('one'));
 save('barplain.html', barPlain(2));
+// #428: a page with a script of its own, saved while a drawing is being drawn; and a plain page that misses saves.
+const drawPage = (word) => `<!doctype html><meta charset="utf-8"><title>${word}</title><h1>Draw ${word}</h1>${lines(20)}<script>window.own = 1</script>`;
+save('drawhold.html', drawPage('one'));
+save('plain.html', `<!doctype html><meta charset="utf-8"><title>p</title><h1>Plain</h1>${lines(20)}`);
 save('labit.json', JSON.stringify({ port: PORT }));
 const server = startLab(DIR, labEnv());
 await labUp(B);
@@ -162,6 +166,30 @@ try {
       const still = await off(bp, 'b22');
       check(eng, 'the bar comes with a third heading: what is in view stays where it is', still.room > 0 && Math.abs(still.top - held.top) < 2 && (await bp.evaluate(() => window.__kept === 1)), JSON.stringify({ held, still }));
       await bp.close();
+
+      // #428: its file saved mid-drawing, the page waits for the drawing to be sent before it reloads (it lost the strokes).
+      const dh = await open('/drawhold');
+      await dh.keyboard.down('d');
+      await dh.mouse.move(200, 200);
+      await dh.mouse.down();
+      for (let i = 1; i <= 10; i++) await dh.mouse.move(200 + i * 20, 200 + i * 4);
+      save('drawhold.html', drawPage('two'));
+      await sleep(3200); // past the 1.5 s a touch holds a reload anyway
+      const mid = await dh.evaluate(() => window.__kept === 1);
+      await dh.mouse.up();
+      await dh.keyboard.up('d');
+      await dh.waitForFunction(() => !window.__kept, null, { timeout: 8000 }).catch(() => {});
+      const inks = (await (await fetch(B + '/_lab/api/comments?page=/drawhold')).json()).comments.filter((c) => c.anchor?.ink);
+      check(eng, 'a save mid-drawing waits: the page reloads after the drawing is sent, and the drawing is saved', mid && (await dh.title()) === 'two' && inks.length === 1, JSON.stringify({ mid, title: await dh.title(), inks: inks.length }));
+      await dh.close();
+
+      // #428: a burst too big to list (a branch switch: 60 files at once), none of them this page's: a page with no scripts
+      // of its own catches up in place instead of reloading. (Saves missed while away take the same path.)
+      const pl = await open('/plain');
+      for (let i = 0; i < 60; i++) save(`burst-${i}.md`, `# ${i}`);
+      await sleep(4000);
+      check(eng, 'a burst too big to list: a page with no scripts of its own is not reloaded', await pl.evaluate(() => window.__kept === 1));
+      await pl.close();
       await ctx.close();
     } finally {
       await browser.close();

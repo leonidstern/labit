@@ -3,6 +3,7 @@
 // Drag to mark: a mouse or a pen drags an area (or, holding D, a drawing) instead of a point; the ink at the end of a
 // drag; and the words selected with Shift + drag, offered as a comment on them.
 import { inkAnchor, liveInk } from './ink.ts';
+import { holdWhileDrawing } from './hold.ts';
 import { cut, openingTag, short, wholeWords, zoneAnchor, zoneEl, anchorAt } from './anchoring.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -58,6 +59,7 @@ export const endDrag = (e) => {
     else {
       S.inking.svg.remove();
       S.inking = null;
+      holdWhileDrawing(false);
     }
     return;
   }
@@ -115,7 +117,16 @@ async function endInk() {
   clearTimeout(S.inkTimer);
   const ink = S.inking;
   S.inking = null;
-  if (!ink) return;
+  if (!ink) return holdWhileDrawing(false);
+  S.sendingInk = true; // a reload waits until the drawing is saved too (live.ts busy, hold.ts)
+  try {
+    await sendInk(ink);
+  } finally {
+    S.sendingInk = false;
+    holdWhileDrawing(false);
+  }
+}
+async function sendInk(ink) {
   const { readInk } = await W.part('draw').catch(() => ({ readInk: null }));
   ink.svg.remove();
   S.lastInk = ink.strokes; // a stroke drawn while its box is open, empty, joins it (above)
@@ -128,7 +139,7 @@ async function endInk() {
   const read = readInk(here, (e) => e && short(`${openingTag(e)} "${short(e.textContent, 40)}"${block(e) ? ` in ${openingTag(block(e))} "${short(block(e).textContent, 30)}"` : ''}`, 200));
   // Sent as it is, what it reads as its words, with no box to send it from (Leo, 21 Nov: "just draw maybe and send dont
   // open comment to send it, just send"); words are added in its thread after.
-  void W.sendDrawing(inkAnchor(read, ZONE_MIN));
+  await W.sendDrawing(inkAnchor(read, ZONE_MIN));
 }
 // Selecting words. Computers: Shift + drag (or Shift + double or triple click) selects words; a plain drag marks an area
 // wherever it starts, a click pins, and the page's text can't be selected without Shift (it shows the I-beam cursor,
@@ -219,6 +230,7 @@ export function bindDrag(w: unknown) {
             W.render();
           }
           if (!S.inking) W.layer.append((S.inking = liveInk()).svg);
+          holdWhileDrawing(true); // a dev server's reload waits until the drawing is sent (hold.ts)
           S.inking.strokes.push([{ x: S.drag.x0 + scrollX, y: S.drag.y0 + scrollY }]);
           // Held by the page till the pen lifts: a stroke run into a frame, or off the window, still ends here.
           try {
