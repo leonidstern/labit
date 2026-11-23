@@ -4,6 +4,7 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 
 ## Unreleased
 
+- **A drawing lands as you drew it.** It keeps its colour once sent (it was faded twice, so it landed paler), the line is lightly smoothed (more when you draw slowly, less when fast) and ends exactly where you lift, and holding D shows a pen dot instead of the pointer, on short pages too.
 - **The skill gives its reasons.** Rules say why (one question per pin: a small box on a phone; no dev server for plain pages: file lines and reloads), so an agent can tell when one doesn't apply. Helpers may keep a status line on their pins but never answer or run `wait`; looks are shown drawn rather than ordered onto a board; a narrow-window pin is checked for being phone-only before an `@media` change. A test keeps the skill's timings and flags in step with the code.
 - **Batches aren't taken back mid-way.** An answer or status line on any pin of a hand-off restarts the 2-minute "not answered" clock for the others, so an agent working through five pins one by one keeps pins 4 and 5. A session that goes quiet still loses what it never answered.
 - **Truer hand-off for agents.** The answer line shows `reply <id> --done` and `--wait --bg`; the status-line lapse is said right for agents without the plugin (3 minutes); the hand-off points to the full text at `/_lab/agent/<page>`. A drawing's quick action keeps the change small but no longer forbids checking around; a wifi guest's wordless drawing or action button is said as a request to weigh, not an order.

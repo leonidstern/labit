@@ -1999,6 +1999,10 @@ import { bindKeys } from './widget/keys.ts';
   // or comments are switched.
   S.mouse = null; // the last mouse position
   const place = (x, y, target) => {
+    // D held (draw.ts): the pointer is the pen's tip, a dot of the ink's colour where the line goes.
+    const pen = Boolean(S.on && S.dKey);
+    document.documentElement.classList.toggle('lab-pen', pen);
+    ptr.classList.toggle('draw', pen);
     const show = Boolean(target) && target !== host && !host.contains(target) && getComputedStyle(target).cursor === 'none';
     ptr.classList.toggle('show', show);
     ptr.style.transform = `translate(${x - 1}px, ${y - 27}px)`;
@@ -2025,8 +2029,8 @@ import { bindKeys } from './widget/keys.ts';
     place(e.clientX, e.clientY, t instanceof Element ? t : null);
   }, { capture: true, passive: true });
   addEventListener('scroll', recheck, { capture: true, passive: true });
-  addEventListener('keydown', (e) => (e.key === 'Shift' || e.key === 'Alt') && recheck(), true);
-  addEventListener('keyup', (e) => (e.key === 'Shift' || e.key === 'Alt') && recheck(), true);
+  addEventListener('keydown', (e) => !e.repeat && recheck(), true); // Shift, Option, D: what the pointer is (a frame later, once the key's state is set)
+  addEventListener('keyup', recheck, true);
   document.documentElement.addEventListener('mouseleave', () => ((S.mouse = null), ptr.classList.remove('show')));
   addEventListener('blur', () => ((S.mouse = null), ptr.classList.remove('show')));
   // No pictures: where the drawn pin can't show (an open dialog or full screen draws above it, or before the mouse first
@@ -2041,9 +2045,10 @@ import { bindKeys } from './widget/keys.ts';
     const plain = `:not(${INTERACTIVE}, a *, button *, label *, [role="button"] *, [contenteditable], [contenteditable] *, ${OFF}, ${OFF} *, [data-lab-comments])`;
     const top = `dialog, dialog *, [popover], [popover] *, :fullscreen, :fullscreen *`;
     pinCursorStyle.textContent =
-      `@layer lab-pointer { html:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl) body, html:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl) body *${plain} { cursor: crosshair; } ` +
+      `@layer lab-pointer { html:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl), html:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl) body, html:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl) body *${plain} { cursor: crosshair; } ` +
       // With the drawn pointer the system one hides over plain parts of the page (not in the top layer, which is above it).
-      `html.lab-drawn:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl):not(.lab-dragging) body, html.lab-drawn:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl):not(.lab-dragging) body *${plain}:not(${top}) { cursor: none; } ` +
+      // html too: under a page shorter than the window there is no body, and the plain arrow showed (Leo, 23 Nov).
+      `html.lab-drawn:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl):not(.lab-dragging), html.lab-drawn:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl):not(.lab-dragging) body, html.lab-drawn:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl):not(.lab-dragging) body *${plain}:not(${top}) { cursor: none; } ` +
       // Holding Shift (drag to quote words): the drawn I-beam with a low ink band at its foot (C3, Leo 18 Nov; text where a cursor image isn't drawn) over the page's content, back to the pin when it's let go.
       `html:has([data-lab-pinning]).lab-shift-cur:not(.lab-dragging) body *${plain}:not(img, svg, video, canvas) { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Crect x='5' y='15.5' width='14' height='5' rx='1.5' fill='%23f0b70a' fill-opacity='.6'/%3E%3Cpath d='M9 4h6M12 4v16M9 20h6' stroke='white' stroke-width='4' stroke-linecap='round' fill='none'/%3E%3Cpath d='M9 4h6M12 4v16M9 20h6' stroke='%23141414' stroke-width='1.5' stroke-linecap='round' fill='none'/%3E%3C/svg%3E") 12 12, text; } ` +
       // The pointer is inherited, so places that aren't commented on name theirs: editable text a text cursor, a part
@@ -2051,7 +2056,10 @@ import { bindKeys } from './widget/keys.ts';
       `html:has([data-lab-pinning]) body :is([contenteditable], [contenteditable] *) { cursor: text; } html:has([data-lab-pinning]) body :is(${OFF}, ${OFF} *) { cursor: auto; } }` +
       // Holding Option (Alt) pins links and controls too: the drawn pin shows over them (the system pointer hides).
       `html.lab-alt body, html.lab-alt body *:not([data-lab-comments], [data-lab-comments] *, ${OFF}, ${OFF} *) { cursor: crosshair !important; }` +
-      `html.lab-drawn.lab-alt body, html.lab-drawn.lab-alt body *:not([data-lab-comments], [data-lab-comments] *, ${OFF}, ${OFF} *, ${top}) { cursor: none !important; }`;
+      `html.lab-drawn.lab-alt body, html.lab-drawn.lab-alt body *:not([data-lab-comments], [data-lab-comments] *, ${OFF}, ${OFF} *, ${top}) { cursor: none !important; }` +
+      // Holding D (drawing), anywhere on the page, links and controls too, even mid-stroke: the system pointer hides and the drawn
+      // one is the pen's tip (Leo, 23 Nov: "need cursor for drawing"). The widget's own parts keep theirs.
+      `html.lab-pen.lab-drawn, html.lab-pen.lab-drawn body, html.lab-pen.lab-drawn body *:not([data-lab-comments], ${top}) { cursor: none !important; } html.lab-pen [data-lab-comments] { cursor: auto !important; }`;
   }
   // Computers, comments on: a click or drag doesn't select the page's text; hold Shift to select (and quote) words.
   // Fields and editable text stay selectable.

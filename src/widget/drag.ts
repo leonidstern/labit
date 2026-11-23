@@ -82,6 +82,14 @@ export const endDrag = (e) => {
   // A stroke of a drawing: more may follow while D is held. It is done when D is let go, or a second after the last.
   if (d.ink) {
     S.drew = true;
+    // The smoothed line catches up: its last point is where the pen lifted (an arrow's tip lands where it was drawn).
+    const end = S.inking?.strokes.at(-1);
+    const last = end?.at(-1);
+    if (last && S.inkAt && Math.hypot(S.inkAt.x - last.x, S.inkAt.y - last.y) > 0.5) {
+      end.push({ ...S.inkAt, w: last.w });
+      S.inking.add();
+    }
+    S.inkAt = null;
     // Shift held as the pen lifts: a stroke that runs about straight becomes a straight line, flat, upright or at 45°
     // (Leo's pick S1, 20 Nov); a rough box or loop a clean rectangle or ellipse (S2). Anything else stays as drawn.
     const st = S.inking?.strokes.at(-1);
@@ -262,7 +270,11 @@ export function bindDrag(w: unknown) {
         S.inkT = now;
         // A pen's pressure sets the width; a mouse or finger draws thinner the faster it moves (Leo's pick 4, 20 Nov).
         const want = e.pointerType === 'pen' && e.pressure > 0 ? 1.5 + e.pressure * 4 : Math.max(1.6, Math.min(5, 5 - speed * 1.8));
-        st.push({ x, y, w: q?.w ? (q.w + want) / 2 : want });
+        // A light smoothing (Leo, 23 Nov): a point goes part of the way to the pointer, more of it the faster the hand moves,
+        // so a slow hand's shake is taken out and a quick line keeps up. The stroke ends on the pointer (endDrag).
+        const k = q ? Math.min(1, 0.35 + speed * 0.4) : 1;
+        S.inkAt = { x, y };
+        st.push({ x: q ? q.x + (x - q.x) * k : x, y: q ? q.y + (y - q.y) * k : y, w: q?.w ? (q.w + want) / 2 : want });
         return void S.inking.add();
       }
       S.zoneFrame ||= requestAnimationFrame(paintZone);
