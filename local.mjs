@@ -1705,6 +1705,25 @@ const waitingOn = (key) => {
     return !reps.length || !reps[reps.length - 1].session;
   }).length;
 };
+// Where a board's open threads stand, in plain words (Leo, 23 Nov, #422: "only what needs you", no counts): 'needs your
+// reply' when the agent answered or asked last and the thread is still open, else 'agent working' while it says it is
+// (--on-it, or a progress line still fresh), else ''. Its threads are kept with the page it is about (gather) or under
+// its own key.
+const boardStatus = (b) => {
+  const home = boardHome(b);
+  const all = [...new Set([home, `/_board/${b.name}`].filter(Boolean))].flatMap((k) => commentsOf(k));
+  const ofBoard = all.filter((c) => !c.parent && !c.resolved && c.anchor?.kind === 'board' && c.anchor.board === b.name);
+  let on = false;
+  for (const c of ofBoard) {
+    const thread = all.filter((m) => m.parent === c.id);
+    const lastPerson = [c, ...thread].filter((m) => !m.session).map((m) => m.createdAt).sort().pop() || '';
+    const answer = thread.filter((m) => m.session).sort((x, y) => x.createdAt.localeCompare(y.createdAt)).pop();
+    const answered = answer && answer.createdAt > lastPerson;
+    if (answered && answer.intent !== 'working' && answer.intent !== 'done') return 'needs your reply';
+    if ((answered && answer.intent === 'working') || (c.progress && Date.now() - Date.parse(c.progress.at) < PROGRESS_LIFE)) on = true;
+  }
+  return on ? 'agent working' : '';
+};
 // With every page closed, Claude keeps waiting quietly (a comment after a break still wakes it), and the wait
 // ends after an hour of no page. A browser's tabs of this lab share one stream (the widget passes it on), held under
 // the id of the tab that opened it; when that tab goes, another opens the stream under its own. A tab counts while
@@ -2329,6 +2348,15 @@ const labInfo = () => {
       return null;
     }
   };
+  // A board is part of its page (Leo, 23 Nov: "board is always on page", "no own lab for boards"): what needs you on the
+  // page's boards is said on the page's own row, "needs your reply" before "agent working".
+  const boardOn = new Map();
+  for (const name of B.names(ROOT)) {
+    const b = boardGet(name);
+    const home = b && boardHome(b);
+    const st = home && boardStatus(b);
+    if (st && boardOn.get(home) !== 'needs your reply') boardOn.set(home, st);
+  }
   const list = (PROXY ? [] : pagesUnder(ROOT)).map((rel) => ({ url: origin + urlOf(rel), title: titleOf(path.join(ROOT, rel)), file: rel, key: keyFor(rel) }));
   if (PROXY) list.push({ url: origin + '/', title: '', file: '', key: '/' });
   // A dev server's pages: the ones with comments. Pages without a file (moved or deleted) keep their pins but aren't offered: going there would find nothing.
@@ -2336,12 +2364,10 @@ const labInfo = () => {
   return {
     name: LAB_NAME, root: ROOT, port: PORT, wifi: WIFI, proxy: PROXY?.origin || null, browser: openTabs() > 0, mode: session ? mode : 'away', listening: session?.name || null, heard: heard(),
     started: STARTED,
-    // A pin's own board (pin-<id>) is opened from its pin, not listed with the lab's boards.
-    boards: B.names(ROOT).flatMap((name) => { const b = boardGet(name); return b && !(name.startsWith('pin-') && b.of?.includes('#pin-')) ? [{ name, url: `${origin}/_lab/board/${name}`, frames: b.frames.filter((f) => f.state !== 'archived').length, of: b.of || null, at: b.at }] : []; }),
     created: created(),
     pages: list.map(({ key, ...p }) => {
       const at = lastAt(key, p.file ? path.join(ROOT, p.file) : '');
-      return { ...p, path: key, ...tally(key), waiting: waitingOn(key), listener: listenerOf(key), at, when: ago(at), edited: edited(p.file), opened: opened.get(key) || null, archived: archivedPages.get(key) || null };
+      return { ...p, path: key, ...tally(key), waiting: waitingOn(key), listener: listenerOf(key), at, when: ago(at), edited: edited(p.file), opened: opened.get(key) || null, archived: archivedPages.get(key) || null, board: boardOn.get(key) || '' };
     }),
   };
 };

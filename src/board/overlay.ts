@@ -28,35 +28,13 @@ const CSS = `
 .bv-bar button:hover{background:var(--lab-hover,rgba(0,0,0,.10))}
 .bv-bar button:focus-visible{outline:2px solid currentColor;outline-offset:2px}
 .bv-name{position:absolute;left:50%;translate:-50% 0;width:calc(100% - 220px);pointer-events:none;text-align:center;font:400 14px/1.4 var(--lab-font,system-ui,-apple-system,sans-serif);letter-spacing:-.011em;opacity:.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:normal}
-.bv-grip{position:absolute;left:0;right:0;top:-5px;height:10px;cursor:ns-resize;touch-action:none;z-index:1}
-.bv-grip::after{content:"";position:absolute;left:50%;top:7px;width:36px;height:4px;margin-left:-18px;border-radius:2px;background:currentColor;opacity:.25}
-/* The same spot half and full (it moved 4 px as the view went full: Leo, 21 Nov), under a phone's notch when full. */
-:host(.full) .bv-grip{top:calc(env(safe-area-inset-top,0px) - 5px)}
-.bv-size{margin-left:auto}
-@media (pointer:fine){.bv-bar{cursor:ns-resize}.bv-grip{top:-10px;height:20px}.bv-grip::after{top:12px}:host(.full) .bv-grip{top:calc(env(safe-area-inset-top,0px) - 10px)}}
 .bv-box{position:relative;flex:1;min-height:0}
 .bv-box #lab-board{position:absolute}
 @media (pointer:coarse){.bv-bar{z-index:1}.bv-bar button{position:relative;z-index:2;min-width:44px}.bv-bar button::before{content:"";position:absolute;left:0;right:0;top:-9px;bottom:-12px}}
 @media (prefers-color-scheme:dark){:host{background:#1b1b1a!important;color:#e9e8e4!important}.bv-bar button:hover{background:var(--lab-hover,rgba(255,255,255,.10))}.bv-bar{border-color:rgba(255,255,255,.08)}}
 @supports (corner-shape:squircle){:host{--_radius:calc(var(--lab-radius,12px)*1.8);--_r-s:11px}*{corner-shape:squircle}}
 `;
-const MIN = 0.25; // the least of the window it is dragged down to
-const HALF = 0.5; // a board opens at half height, the page above it, until it is set otherwise (Leo, 21 Nov: "open boards half not full by default")
-const EDGE = 280; // ms: a half view's top edge going up as the keyboard comes, and back down after
-const sizeKey = (page: string) => `lab-board-size:${page}`;
-const readSize = (page: string) => {
-  try {
-    const v = parseFloat(localStorage.getItem(sizeKey(page)) || '');
-    return v >= MIN && v <= 1 ? v : HALF;
-  } catch {
-    return HALF;
-  }
-};
-const saveSize = (page: string, v: number) => {
-  try {
-    localStorage.setItem(sizeKey(page), String(Math.round(v * 1000) / 1000));
-  } catch {}
-};
+const EDGE = 280; // ms: the view's top edge going up as the keyboard comes, and back down after
 const nameInHash = () => /^#board=([a-z0-9][a-z0-9_-]*)/i.exec(location.hash)?.[1] || '';
 const moved = () => dispatchEvent(new Event('lab-board-moved')); // the widget draws the pins again (the board's and the page's under it)
 // The view came to rest after a slide (the board read its box again, board.resized): every pin on the board is placed
@@ -90,122 +68,19 @@ export function show(name: string, o: Opts) {
     b.addEventListener('click', (e) => (e.stopPropagation(), fn()));
     return b;
   };
-  const grip = document.createElement('div');
-  grip.className = 'bv-grip';
-  grip.setAttribute('aria-hidden', 'true');
   const title = Object.assign(document.createElement('span'), { className: 'bv-name', textContent: `board ${name}` });
-  let size = o.own ? 1 : readSize(o.page);
-  const toggle = btn('', 'full or half', () => {
-    size = size >= 1 ? HALF : 1;
-    saveSize(o.page, size);
-    board.keep(); // its zoom stays
-    paintSize();
-    // One step, so fitted in this same frame: where the view is is read now (it is asked for by the board's pins), and the
-    // board fits to the new size before anything is drawn (not 200 ms on, once the box rests, as a dragged edge does).
-    at = view.getBoundingClientRect();
-    board.resized();
-  });
-  toggle.className = 'bv-size';
-  const closeBtn = o.own ? btn('‹ back', 'back to the page', () => backTo(o.of || '')) : btn('‹ close', 'close the board', () => close());
+  // Every board fills the window, over its page or at its own address, so only one thing takes the presses (Leo, 23 Nov,
+  // #422 pick 3B: no half view, no edge to drag). Back goes to the page where it was left.
+  const closeBtn = o.own ? btn('‹ back', 'back to the page', () => backTo(o.of || '')) : btn('‹ back', 'back to the page', () => close());
   closeBtn.className = 'bv-close';
-  // The board's own address: no half (nothing is under it), and the way back only when it says which page it is about.
-  if (o.own) bar.append(...(o.of ? [closeBtn] : []), title);
-  else bar.append(grip, closeBtn, title, toggle);
+  // The board's own address: the way back only when it says which page it is about.
+  bar.append(...(!o.own || o.of ? [closeBtn] : []), title);
   const box = document.createElement('div');
   box.className = 'bv-box';
   const root = document.createElement('div');
   box.append(root);
   view.attachShadow({ mode: 'open' }).append(Object.assign(document.createElement('style'), { textContent: CSS }), bar, box);
-  const paintSize = () => {
-    view.style.setProperty('--bv-h', size >= 1 ? '100%' : `${size * 100}%`);
-    view.classList.toggle('full', size >= 1);
-    toggle.textContent = size >= 1 ? 'half' : 'full';
-  };
-  paintSize();
-  // The grip on the top edge, or the bar itself off its keys: drag it down and the page shows above. The edge follows the
-  // pointer, one step a frame; near the top it becomes full only when let go (snapping mid-drag made it jump back and
-  // forth at that height). Pulled on below the least height, it goes down with the finger, and let go there (or flicked
-  // down) it slides away and closes, as the comment drawer does (Leo, 21 Nov: "board drawer also behave weird not like
-  // comment drawer").
-  // A finger is followed by its touch events, as the comment drawer's is (sheets.ts swipeDown): Safari on a phone let a
-  // pointer drag go now and then (the first drag after opening did nothing, iOS 27 simulator, 21 Nov). A mouse or a pen
-  // by its pointer events.
-  const pulling = (y0: number, t0: number) => {
-    board.keep(); // its zoom stays as the edge moves
-    let frame = 0;
-    let below = 0; // px pulled past the least height
-    const moves = [{ t: t0, y: y0 }];
-    const to = (y: number, t: number) => {
-      const want = (innerHeight - y) / innerHeight;
-      size = Math.max(MIN, Math.min(1, want));
-      below = Math.max(0, (MIN - want) * innerHeight);
-      moves.push({ t, y });
-      while (moves.length > 2 && t - moves[0].t > 200) moves.shift();
-      frame ||= requestAnimationFrame(() => {
-        frame = 0;
-        paintSize();
-        for (const [k, v] of [['--bv-t', '0ms'], ['--bv-y', `${below}px`]]) {
-          if (below) view.style.setProperty(k, v);
-          else view.style.removeProperty(k);
-        }
-      });
-    };
-    const end = (t: number, done: boolean) => {
-      cancelAnimationFrame(frame);
-      paintSize();
-      const v = move.speedOf(moves, t);
-      // At its least height, let go as the comment drawer is (move.goes): it goes on down at the finger's speed and closes.
-      if (done && size <= MIN + 0.01 && move.goes(below, v, view.offsetHeight)) return void close(Math.max(0, v));
-      if (below) setTimeout(() => ((at = view.getBoundingClientRect()), board.resized(), rested()), slide(view, true, Math.max(0, -v)) + 20);
-      if (size > 0.97) size = 1;
-      paintSize();
-      saveSize(o.page, size);
-    };
-    return { to, end };
-  };
-  const drag = (e: PointerEvent) => {
-    if (e.pointerType === 'touch' || (e.target as Element).closest?.('button') || e.button !== 0) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const on = e.currentTarget as HTMLElement;
-    on.setPointerCapture?.(e.pointerId);
-    const p = pulling(e.clientY, e.timeStamp);
-    const pull = (m: PointerEvent) => p.to(m.clientY, m.timeStamp);
-    const up = (u: PointerEvent) => {
-      on.removeEventListener('pointermove', pull);
-      on.removeEventListener('pointerup', up);
-      on.removeEventListener('pointercancel', up);
-      p.end(u.timeStamp, u.type === 'pointerup');
-    };
-    on.addEventListener('pointermove', pull);
-    on.addEventListener('pointerup', up);
-    on.addEventListener('pointercancel', up);
-  };
-  let held: ReturnType<typeof pulling> | null = null;
-  const touchStart = (e: TouchEvent) => {
-    if (e.touches.length !== 1 || (e.target as Element).closest?.('button')) return void (held = null);
-    e.stopPropagation();
-    held = pulling(e.touches[0].clientY, e.timeStamp);
-  };
-  const touchMove = (e: TouchEvent) => {
-    if (!held) return;
-    e.stopPropagation(); // the grip is in the bar: one move, once
-    if (e.cancelable) e.preventDefault();
-    held.to(e.touches[0].clientY, e.timeStamp);
-  };
-  const touchEnd = (e: TouchEvent) => {
-    e.stopPropagation();
-    const h = held;
-    held = null;
-    h?.end(e.timeStamp, e.type === 'touchend');
-  };
-  for (const n of o.own ? [grip] : [grip, bar]) {
-    n.addEventListener('pointerdown', drag);
-    n.addEventListener('touchstart', touchStart, { passive: true });
-    n.addEventListener('touchmove', touchMove, { passive: false });
-    n.addEventListener('touchend', touchEnd);
-    n.addEventListener('touchcancel', touchEnd);
-  }
+  view.classList.add('full');
   // The view's bar never scrolls the page behind (the board itself pans on the wheel).
   bar.addEventListener('wheel', (e) => e.preventDefault(), { passive: false });
   // A page's zoom on <html> or <body> scales what is drawn in the view: it zooms the other way, by what 100 px comes out as
@@ -229,7 +104,6 @@ export function show(name: string, o: Opts) {
   let nudged = false; // the camera has glided to show a draft pin
   let settling = false; // …and is gliding back
   let scrollFrom = -1; // where the page was when the keyboard came up
-  let grown = false; // a half view that is full while the keyboard is up
   let typed = false; // the keyboard has been up since scrollFrom was taken
   let loop = 0;
   let quiet = 0;
@@ -262,24 +136,11 @@ export function show(name: string, o: Opts) {
       if (scrollFrom < 0) scrollFrom = scrollY;
       if (settling) {
         settling = nudged = false; // typing again before the camera was back: it goes to the new pin from where it is
-        if (grown) edge();
       }
     } else if (typed && !sheet && scrollFrom >= 0 && !vv.offsetTop) {
       if (Math.abs(scrollY - scrollFrom) > 1) scrollTo({ top: scrollFrom, behavior: 'instant' as ScrollBehavior }); // the page iOS scrolled for the keyboard goes back
       scrollFrom = -1;
       typed = false;
-    }
-    // A new comment on a half view: its pin is under the keyboard and its sheet. The view grows to the whole screen while
-    // the keyboard is up, the board staying where it is on the screen (api.hold), and the camera then glides the pin above
-    // the sheet (Leo, 21 Nov: "canvas still jumping", the half board). Writing in the chat or a thread grows nothing: their
-    // sheet fills the screen above the keyboard anyway.
-    if (typing && pin && size < 1 && !grown) {
-      grown = true;
-      board.api.hold(true);
-      const top = view.getBoundingClientRect().top;
-      view.style.setProperty('--bv-h', '100%');
-      at = view.getBoundingClientRect(); // (the board says its box changed, and the widget moves its pins: nothing is drawn again, the new comment's box stays as it is)
-      edge(top, 0);
     }
     const viewTop = innerHeight - view.offsetHeight; // where the view starts when nothing is panned
     const next = typing && viewTop < vv.height - 160 ? Math.round(vv.offsetTop) : !typing ? Math.round(vv.offsetTop) : 0;
@@ -299,24 +160,13 @@ export function show(name: string, o: Opts) {
       const dy = over > 0 ? -over - 24 : pin.top < 56 ? 56 - pin.top : 0;
       nudged = true; // looked at once per comment: the pin is not chased as the sheet moves
       if (dy) board.api.nudge(dy);
-    } else if ((!typing || !/^(textarea|input)$/.test(sr?.activeElement?.localName || '')) && !sheet && !vv.offsetTop && (nudged || grown) && !settling) {
+    } else if ((!typing || !/^(textarea|input)$/.test(sr?.activeElement?.localName || '')) && !sheet && !vv.offsetTop && nudged && !settling) {
       // The comment's sheet is leaving and nothing holds the keyboard any more (it is on its way down, or gone): the camera
-      // glides back with them, not after them, to where it was, and only then is a grown
-      // view half again, the board put back as it was before it grew. Nothing is seen of that last step: the board is
-      // already where it will be (shrunk first, it jumped 288 px in one frame: 21 Nov simulator).
+      // glides back with them, not after them, to where it was.
       settling = true;
-      const shut = grown ? edge(0, innerHeight * (1 - size)) : 0; // the page comes back above the board as the camera goes
-      board.api.nudgeBack(() => setTimeout(() => {
-        if (!settling) return; // typing again meanwhile
-        settling = nudged = false;
-        if (!grown) return;
-        grown = false;
-        paintSize();
-        board.api.hold(false);
-        edge();
-        at = view.getBoundingClientRect();
-        moved();
-      }, Math.max(0, shut - performance.now())));
+      board.api.nudgeBack(() => {
+        if (settling) settling = nudged = false; // (not when typing again meanwhile)
+      });
     }
     // Only when the view moved or changed its size: drawn again on every frame, the comment's box was made anew and took
     // the cursor again each time, which came back here as a focus and kept this going for as long as the box was open.
@@ -335,7 +185,7 @@ export function show(name: string, o: Opts) {
     follow();
     quiet = before === pan ? quiet + 1 : 0;
     // …and for as long as the camera or the view is away for a keyboard: the sheet's going is no event.
-    loop = quiet < 20 || ((nudged || grown) && !settling) ? requestAnimationFrame(tick) : 0;
+    loop = quiet < 20 || (nudged && !settling) ? requestAnimationFrame(tick) : 0;
   };
   const watch = () => {
     quiet = 0;
@@ -374,36 +224,7 @@ export function show(name: string, o: Opts) {
     view.style.setProperty('--bv-o', '0');
     requestAnimationFrame(fade);
   }
-  // A click on the page behind a half view closes the board, and only that: no pin, no link (Leo, 21 Nov: "clicking on
-  // the page behind board should close the board"). An open comment or the chat goes first, as a click outside one does.
-  // The widget's own buttons still work. A finger's tap on the page only reads, as on a page (phones close by the bar).
-  let swallow = false;
-  const behind = (e: PointerEvent) => {
-    swallow = false;
-    if (e.pointerType === 'touch' || e.button !== 0 || size >= 1 || o.own || e.altKey) return;
-    const path = e.composedPath();
-    if (path.includes(view) || path.some((n) => n instanceof Element && n.hasAttribute('data-lab-comments'))) return;
-    // A board's own link or section is not "the page": it opens that board in this one's place (Leo, 21 Nov: "opening new
-    // not closing board?"), instead of a first press that only closed this one and ate the click.
-    if (path.some((n) => n instanceof Element && ((n instanceof HTMLButtonElement && n.getRootNode() instanceof ShadowRoot && (n.getRootNode() as ShadowRoot).host.localName === 'lab-board') || (n instanceof HTMLAnchorElement && /^\/_lab\/board\/[a-z0-9]/i.test(n.pathname))))) return;
-    swallow = true;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    if (!(window as unknown as { __labBoardWidget?: { dismiss?: () => boolean } }).__labBoardWidget?.dismiss?.()) close();
-  };
-  const eat = (e: Event) => {
-    if (!swallow) return;
-    if (e.type === 'click') swallow = false;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-  };
-  // A new comment on the page behind (the widget starts it on ⌥-press and takes the press: it says so) closes a half board
-  // (Leo, 21 Nov: "opening new [comment] not closing board?").
-  const yielded = () => size < 1 && !o.own && close();
-  addEventListener('lab-board-yield', yielded);
-  addEventListener('pointerdown', behind, true);
-  for (const t of ['mousedown', 'pointerup', 'mouseup', 'click']) addEventListener(t, eat, true);
-  cur = { name, view, destroy: () => (removeEventListener('lab-board-yield', yielded), removeEventListener('pointerdown', behind, true), ['mousedown', 'pointerup', 'mouseup', 'click'].forEach((t) => removeEventListener(t, eat, true)), ro.disconnect(), removeEventListener('focusin', focused), vv?.removeEventListener('resize', watch), vv?.removeEventListener('scroll', watch), cancelAnimationFrame(loop), board.destroy()), onClose: o.onClose, restoration, pushed };
+  cur = { name, view, destroy: () => (ro.disconnect(), removeEventListener('focusin', focused), vv?.removeEventListener('resize', watch), vv?.removeEventListener('scroll', watch), cancelAnimationFrame(loop), board.destroy()), onClose: o.onClose, restoration, pushed };
   moved();
 }
 
