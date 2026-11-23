@@ -399,6 +399,14 @@ button.btn.undo { color: var(--_fg); }
         font: inherit; font-size: 13px; letter-spacing: -.006em; white-space: nowrap;
         display: inline-flex; gap: 6px; align-items: center; color: var(--_fg); text-decoration: none; cursor: default; }
 .listener span { color: var(--_muted); }
+/* In the bar, after ⋯ (Leo, 23 Nov: on a black page the mark alone showed only its eye): a segment like the others, the
+   mark on the bar's colour with no shadow of its own, and its words above the bar's right end (the bar clips what
+   sticks out of it, a fixed box is not clipped). */
+.bar > .listener { width: auto; height: auto; align-self: stretch; padding: 0 12px; border-radius: 0; box-shadow: inset .5px 0 0 var(--_line); }
+.bar > .listener.first { box-shadow: none; }
+.bar > .listener .mark { transform: none; filter: none; }
+.bar > .listener .cb { right: 6px; top: 6px; }
+.bar > .listener .w { position: fixed; left: auto; right: 16px; bottom: calc(16px + var(--_pill-h) + 10px); }
 /* The mark says the state, three ways (Leo, 18 Nov: black only when nobody listens): plain green while an agent is
    connected and listening, green with twitching ears while one works on pins (Leo: no third colour), black and still when nobody
    listens. A dropped connection keeps the last state, faded, instead of looking like nobody. Only transforms move, on three small shapes, so nothing else

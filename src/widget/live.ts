@@ -199,7 +199,7 @@ export function startLive() {
     // The pill's label, kept aside while it says "update waiting" (the "!" badge) and put back after.
     const whoLabel = (t: string) => (updOn === who ? (who.dataset.updLabel = t) : who.setAttribute('aria-label', t));
     who.hidden = true;
-    W.root.querySelector('.left').prepend(who);
+    W.root.querySelector('.bar').append(who); // the bar's last part, after ⋯: on the bar's own colour it reads on any page, a black one too (Leo, 23 Nov)
     // Capture, so a tap that takes the update never also opens the chat, the ⋯ menu or the session's link.
     for (const n of [who, W.chatBtn, W.root.querySelector('.more')]) n?.addEventListener('click', take, { capture: true });
     // Files a save can mean for this page: the page itself, anything it loads, and data it may fetch as it runs.
