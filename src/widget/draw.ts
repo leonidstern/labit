@@ -97,11 +97,11 @@ const letterAt = (x: number, y: number) => {
 const calm = (s: P[]) => s.map((p, i) => (i && i < s.length - 1 ? { ...p, x: (s[i - 1].x + p.x + s[i + 1].x) / 3, y: (s[i - 1].y + p.y + s[i + 1].y) / 3 } : p));
 
 // How often a line turns back across (left to right, then right to left): a wave goes one way, a scribble back and forth.
-const backs = (c: P[]) => {
+const backs = (c: P[], k: 'x' | 'y' = 'x') => {
   let n = 0;
   let dir = 0;
   for (let i = 1; i < c.length; i++) {
-    const dx = c[i].x - c[i - 1].x;
+    const dx = c[i][k] - c[i - 1][k];
     if (Math.abs(dx) < 2) continue;
     const d = Math.sign(dx);
     if (dir && d !== dir) n++;
@@ -189,7 +189,9 @@ export function readInk(strokes: P[][], say: (e: Element | null) => string | und
           break;
         }
       }
-    } else if (turns(cut(s, Math.max(6, diag * 0.04)), 1) >= 4) out.mark = 'scribbled over (likely: remove this)'; // turns cut to its size: a long gentle wave's shake is not a scribble (issue 423)
+    // Or back and forth along its long side four times or more: a flat zigzag over a wide note, which a cut to its size
+    // straightens into a line (bench scribble-note read as an arrow, 23 Nov).
+    } else if (turns(cut(s, Math.max(6, diag * 0.04)), 1) >= 4 || backs(cut(s, 6), w >= h ? 'x' : 'y') >= 4) out.mark = 'scribbled over (likely: remove this)'; // turns cut to its size: a long gentle wave's shake is not a scribble (issue 423)
     else if (c.length === 3 && c[1].y < Math.min(c[0].y, c[2].y) - h * 0.6 && Math.abs(c[0].y - c[2].y) < h * 0.4 && w < 90) {
       out.mark = 'caret (insert here)';
       out.to = c[1];

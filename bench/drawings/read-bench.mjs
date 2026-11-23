@@ -52,6 +52,8 @@ for (const [w, hh] of [[60, 30], [200, 60], [500, 200]]) for (const k of [1.5, 4
   add('circle', /^circled/, [shake(Array.from({ length: 60 }, (_, i) => { const t = (i / 59) * over * 2 * Math.PI; return [C[0] + (w / 2) * Math.cos(t), C[1] + (hh / 2) * Math.sin(t)]; }), k)]);
   add('box', /^box drawn/, [shake(walk([[C[0] - w / 2, C[1] - hh / 2], [C[0] + w / 2, C[1] - hh / 2], [C[0] + w / 2, C[1] + hh / 2], [C[0] - w / 2, C[1] + hh / 2], [C[0] - w / 2, C[1] - hh / 2 + 4]]), k)]);
   add('scribble', /^scribbled/, [shake(walk(Array.from({ length: 12 }, (_, i) => [i % 2 ? C[0] + w / 2 : C[0] - w / 2, C[1] - hh / 2 + (hh * i) / 11])), k)]);
+  // Flat: back and forth over a wide, low note (the drawing bench's scribble-note read as an arrow, 23 Nov).
+  if (w >= 200) add('flat zigzag over a wide line', /^scribbled/, [shake(walk(Array.from({ length: 14 }, (_, i) => [i % 2 ? C[0] + w * 0.8 : C[0] - w * 0.8, C[1] + (40 * i) / 13])), k)]);
   add('X', /^X drawn/, [shake(walk([[C[0] - w / 2, C[1] - hh / 2], [C[0] + w / 2, C[1] + hh / 2]]), k), shake(walk([[C[0] + w / 2, C[1] - hh / 2], [C[0] - w / 2, C[1] + hh / 2]]), k)]);
   add('wavy underline', /^wavy underline/, [shake(Array.from({ length: Math.ceil(w / 3) + 1 }, (_, i) => [C[0] - w / 2 + i * 3, C[1] + 4 * Math.sin(i)]), Math.min(k, 2))]);
   // A long gentle wave (25 px up and down over 400 px or more) is not a scribble: whatever it reads as, never as "remove this".
