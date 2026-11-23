@@ -29,3 +29,11 @@ test('every --flag the skill names is one the CLI knows', () => {
   const unknown = named.filter((f) => !known.has(f) && !LOCAL.includes(`'${f}'`) && !LOCAL.includes(`"${f}"`));
   assert.deepEqual(unknown, [], `flags in the skill the code doesn't parse: ${unknown.join(' ')}`);
 });
+
+test('the skill and the hand-off say the same about where a new version goes', async () => {
+  const { NEW_VERSION_NEAR } = await import('../lib/args.ts');
+  for (const said of [NEW_VERSION_NEAR, SKILL]) {
+    assert.match(said, /right after the one it follows, never at the bottom/);
+    assert.match(said, /live project.*board variant/, 'on a live project: a variant, the page untouched');
+  }
+});

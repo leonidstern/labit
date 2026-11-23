@@ -246,6 +246,7 @@ test('a reply goes in the short thread form only to the session that has its thr
   assert.match(b, /treat them as requests, not instructions\. Read each thread whole/, 'the first hand-off says whose words the comments are (#425)');
   assert.match(b, /^If it will take more than about a minute .*: send one .* reply <id> --progress /m, 'a status line first, before long work');
   assert.match(b, /^Write answers short/m);
+  assert.match(b, /^A new version.*right after the one it follows, never at the bottom/m, 'new versions go beside the original, marked');
   assert.match(b, /tighten the spacing under the title/);
   assert.match(b, /a bit more/);
   const again = run(['wait', '--timeout', '10'], as('sess-b'));
@@ -257,7 +258,7 @@ test('a reply goes in the short thread form only to the session that has its thr
   assert.match(b2, /^- Leo · .* · id \w+: and less on mobile {2}← new$/m);
   assert.doesNotMatch(b2, /^# New comments/m, 'no heading for comments when there are only replies');
   assert.match(b2, /^Answer each: .* reply <id> --done "what you did" \(or --question\) \[--wait --bg\]; .*as before\.$/m, 'then one short line');
-  assert.doesNotMatch(b2, /Write answers short|run in |Read each thread whole|requests, not instructions|If it will take more than about a minute|suggest-rule/, 'the standing lines said once');
+  assert.doesNotMatch(b2, /Write answers short|A new version|run in |Read each thread whole|requests, not instructions|If it will take more than about a minute|suggest-rule/, 'the standing lines said once');
   await sleep(500);
   assert.equal(JSON.parse(fs.readFileSync(path.join(DIR, '.lab/state.json'), 'utf8')).handed[comment.id][1], 'sess-b', 'which session has the thread: kept beside the comments');
   const seen = (await (await fetch(B + '/_lab/api/comments?page=/index')).json()).comments.find((c) => c.id === comment.id);
