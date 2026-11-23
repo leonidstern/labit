@@ -28,8 +28,6 @@ const targetOf = (a) => (a.effect as KeyframeEffect).target;
 const animsOf = (el) => pageAnims().filter((a) => el.contains(targetOf(a))).sort((a, b) => Number(targetOf(b) === el) - Number(targetOf(a) === el));
 const videosIn = (el) => (el instanceof HTMLVideoElement ? [el] : [...el.querySelectorAll('video')]);
 const moving = () => [...new Set([...document.querySelectorAll('video'), ...held, ...pageAnims().filter((a) => a.playState === 'running').map(targetOf)])].filter((el) => el?.isConnected);
-// One control for a moving thing and what moves inside it: only the outermost get one.
-const outermost = (els) => els.filter((t) => !els.some((o) => o !== t && o.contains(t)));
 const isStill = (el) => videosIn(el).every((v) => v.paused) && animsOf(el).every((a) => a.playState !== 'running');
 const setItem = (el, stop) => {
   for (const v of videosIn(el)) {
