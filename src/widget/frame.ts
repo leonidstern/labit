@@ -3,7 +3,6 @@
 // What it keeps: the page's live updates (a save patches or reloads this frame, never the board), reading the lab's
 // state from the board's stream and not opening its own, and a way to pass keys on to the board.
 import { bindLive, startLive } from './live.ts';
-import { fps, stepOfKey, stepVideo, watchFrames } from './step.ts';
 
 /** True in a board's frame: the name the board gave it, and a board on top (the name alone could be anyone's frame). */
 export const inFrame = (): boolean => {
@@ -18,6 +17,7 @@ export const inFrame = (): boolean => {
 type Board = { busy?: () => boolean; key?: (k: Record<string, unknown>) => unknown } & Record<string, any>;
 
 export function startFrame(script: HTMLScriptElement | null) {
+  motionUrl = new URL('motion.js', script?.src || location.href).href;
   const board = () => (top as unknown as { __labBoard: Board }).__labBoard;
   // live.ts runs on this: what it touches of the widget is a detached stand-in that is never put on the page.
   const host = document.createElement('div');
@@ -55,27 +55,22 @@ export function startFrame(script: HTMLScriptElement | null) {
 
 // A video in an open frame steps as on a page (Leo, 23 Nov, 8a): ← → a frame, ⇧ a second, Space plays or pauses; an
 // arrow on a playing one pauses it first. The focused video, else the one most in view; none on screen: the board's keys.
+// The stepping itself is the motion script's (motion.ts frameKey), loaded on the first such key: not in every page.
+let motionUrl = '';
 const shown = (v: HTMLVideoElement) => {
   const r = v.getBoundingClientRect();
   return Math.max(0, Math.min(r.right, innerWidth) - Math.max(r.left, 0)) * Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0));
 };
 function frameKey(e: KeyboardEvent) {
-  const space = e.key === ' ' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && !(e.target as HTMLElement | null)?.closest?.('button, a, summary');
+  if (e.metaKey || e.ctrlKey || e.altKey) return false;
+  const space = e.key === ' ' && !e.shiftKey && !(e.target as HTMLElement | null)?.closest?.('button, a, summary');
   if (!space && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return false;
   const f = document.activeElement;
   const v = f instanceof HTMLVideoElement ? f : [...document.querySelectorAll('video')].filter((x) => shown(x) > 0).sort((a, b) => shown(b) - shown(a))[0];
   if (!v) return false;
-  watchFrames(v);
-  const d = stepOfKey(e, fps(v));
-  if (!space && !d) return false;
   e.preventDefault();
   e.stopImmediatePropagation();
-  if (space) {
-    if (!e.repeat) void (v.paused ? v.play().catch(() => {}) : v.pause());
-  } else if (!v.paused && !e.repeat) v.pause();
-  else {
-    v.pause();
-    stepVideo(v, d);
-  }
+  const k = { key: e.key, shiftKey: e.shiftKey, metaKey: false, ctrlKey: false, altKey: false, repeat: e.repeat };
+  void import(motionUrl).then((m) => m.frameKey(v, k)).catch(() => {});
   return true;
 }

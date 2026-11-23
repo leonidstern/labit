@@ -338,6 +338,16 @@ const keyTarget = () => {
   return paused.length ? mostInView(paused) : mostInView([...document.querySelectorAll('video')].filter(on)) || null;
 };
 
+/** A key on a video in a board's open frame (frame.ts, which loads this file for it): Space plays or pauses; ← → pause a
+ * playing one, else step it a frame (⇧ a second). Nothing of the widget is bound there. */
+export function frameKey(v: HTMLVideoElement, k: { key: string; shiftKey: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean; repeat: boolean }) {
+  watchFrames(v);
+  if (k.key === ' ') return void (k.repeat || (v.paused ? v.play().catch(() => {}) : v.pause()));
+  if (!v.paused && !k.repeat) return v.pause();
+  v.pause();
+  stepVideo(v, stepOfKey(k, fps(v)));
+}
+
 export function bindMotion(w: unknown) {
   W = w;
   S = W.S;
