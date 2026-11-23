@@ -32,6 +32,8 @@ const ANG = [0, 0.5, 1.2, Math.PI / 2, 2.5, Math.PI, -0.7];
 const LEN = [90, 260, 700];
 const C = [600, 500]; // the middle of the space the marks are drawn in, away from the words
 const head = (tip, ang, leg = 16) => [[tip[0] - leg * Math.cos(ang - 0.5), tip[1] - leg * Math.sin(ang - 0.5)], tip, [tip[0] - leg * Math.cos(ang + 0.5), tip[1] - leg * Math.sin(ang + 0.5)]];
+// Leo's one-stroke arrow (23 Nov, as it landed): out to the tip, a long stroke back for the head, a small curl at its end.
+const LEO_ARROW = [[0, 75], [16, 81], [44, 79], [87, 73], [178, 54], [273, 40], [356, 34], [419, 38], [416, 34], [382, 32], [337, 22], [282, 6], [245, 0], [214, 1], [196, 8], [197, 11], [207, 14]];
 const cases = [];
 const add = (mark, want, strokes) => cases.push({ mark, want, strokes: strokes.map((s) => s.map(([x, y]) => ({ x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 }))) });
 for (const a of ANG) for (const L of LEN) for (const k of [1.5, 4]) {
@@ -52,6 +54,8 @@ for (const [w, hh] of [[60, 30], [200, 60], [500, 200]]) for (const k of [1.5, 4
   add('circle', /^circled/, [shake(Array.from({ length: 60 }, (_, i) => { const t = (i / 59) * over * 2 * Math.PI; return [C[0] + (w / 2) * Math.cos(t), C[1] + (hh / 2) * Math.sin(t)]; }), k)]);
   add('box', /^box drawn/, [shake(walk([[C[0] - w / 2, C[1] - hh / 2], [C[0] + w / 2, C[1] - hh / 2], [C[0] + w / 2, C[1] + hh / 2], [C[0] - w / 2, C[1] + hh / 2], [C[0] - w / 2, C[1] - hh / 2 + 4]]), k)]);
   add('scribble', /^scribbled/, [shake(walk(Array.from({ length: 12 }, (_, i) => [i % 2 ? C[0] + w / 2 : C[0] - w / 2, C[1] - hh / 2 + (hh * i) / 11])), k)]);
+  // An arrow in one stroke whose head is one long stroke back with a small curl at its end (Leo's, 23 Nov: read as scribbled over).
+  if (w >= 200) add('arrow, long head stroke with a curl', /^arrow/, [shake(walk(LEO_ARROW.map(([x, y]) => [C[0] - w + (x * w) / 210, C[1] - 40 + (y * w) / 210])), k)]);
   // Flat: back and forth over a wide, low note (the drawing bench's scribble-note read as an arrow, 23 Nov).
   if (w >= 200) add('flat zigzag over a wide line', /^scribbled/, [shake(walk(Array.from({ length: 14 }, (_, i) => [i % 2 ? C[0] + w * 0.8 : C[0] - w * 0.8, C[1] + (40 * i) / 13])), k)]);
   add('X', /^X drawn/, [shake(walk([[C[0] - w / 2, C[1] - hh / 2], [C[0] + w / 2, C[1] + hh / 2]]), k), shake(walk([[C[0] + w / 2, C[1] - hh / 2], [C[0] - w / 2, C[1] + hh / 2]]), k)]);

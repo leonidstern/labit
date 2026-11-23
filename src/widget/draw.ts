@@ -97,15 +97,20 @@ const letterAt = (x: number, y: number) => {
 const calm = (s: P[]) => s.map((p, i) => (i && i < s.length - 1 ? { ...p, x: (s[i - 1].x + p.x + s[i + 1].x) / 3, y: (s[i - 1].y + p.y + s[i + 1].y) / 3 } : p));
 
 // How often a line turns back across (left to right, then right to left): a wave goes one way, a scribble back and forth.
-const backs = (c: P[], k: 'x' | 'y' = 'x') => {
+// A run counts only once it has gone span px one way: a curl at an arrow's end, or a hook at its tip, turns back a few
+// px and is not a pass of a scribble (Leo, 23 Nov: an arrow with a curl at its end read as scribbled over).
+const backs = (c: P[], k: 'x' | 'y' = 'x', span = 2) => {
   let n = 0;
   let dir = 0;
-  for (let i = 1; i < c.length; i++) {
-    const dx = c[i][k] - c[i - 1][k];
-    if (Math.abs(dx) < 2) continue;
-    const d = Math.sign(dx);
-    if (dir && d !== dir) n++;
-    dir = d;
+  let at = c[0]?.[k] ?? 0; // the furthest the current run has gone
+  for (const p of c) {
+    const d = p[k] - at;
+    if (dir && Math.sign(d) === dir) at = p[k];
+    else if (Math.abs(d) >= span) {
+      if (dir) n++;
+      dir = Math.sign(d);
+      at = p[k];
+    }
   }
   return n;
 };
@@ -165,9 +170,7 @@ export function readInk(strokes: P[][], say: (e: Element | null) => string | und
   const diag = Math.hypot(w, h) || 1;
   const out: { mark: string; from?: P; to?: P } = { mark: `${lines.length > 1 ? `${lines.length} strokes, ` : ''}unclear mark (go by the comment's words)` };
   let [s, t] = lines;
-  let shaft: P[] = [];
   let tip: P | undefined;
-  let headLen = 0; // how long the drawn head's legs were: the clean head is drawn as big (Leo, 23 Nov: "i draw big one but it draws it weirdly small")
   if (lines.length === 1) {
     // A line drawn there and back over itself (two passes, to make it count) is the line out, not a loop round nothing:
     // it encloses next to no area (Leo, 22 Nov, #430: it read as circled).
@@ -192,7 +195,7 @@ export function readInk(strokes: P[][], say: (e: Element | null) => string | und
       }
     // Or back and forth along its long side four times or more: a flat zigzag over a wide note, which a cut to its size
     // straightens into a line (bench scribble-note read as an arrow, 23 Nov).
-    } else if (turns(cut(s, Math.max(6, diag * 0.04)), 1) >= 4 || backs(cut(s, 6), w >= h ? 'x' : 'y') >= 4) out.mark = 'scribbled over (likely: remove this)'; // turns cut to its size: a long gentle wave's shake is not a scribble (issue 423)
+    } else if (turns(cut(s, Math.max(6, diag * 0.04)), 1) >= 4 || backs(cut(s, 6), w >= h ? 'x' : 'y', Math.max(w, h) * 0.3) >= 4) out.mark = 'scribbled over (likely: remove this)'; // turns cut to its size: a long gentle wave's shake is not a scribble (issue 423)
     else if (c.length === 3 && c[1].y < Math.min(c[0].y, c[2].y) - h * 0.6 && Math.abs(c[0].y - c[2].y) < h * 0.4 && w < 90) {
       out.mark = 'caret (insert here)';
       out.to = c[1];
@@ -200,8 +203,6 @@ export function readInk(strokes: P[][], say: (e: Element | null) => string | und
       // Its head is drawn: an arrow, before it is read as a line under or beside something (a long flat arrow read as
       // underlined, issue 423).
       Object.assign(out, { mark: 'arrow', from: s[0], to: tip });
-      headLen = Math.max(...s.slice(s.indexOf(tip)).map((q) => dist(q, tip!)));
-      shaft = s.slice(0, s.indexOf(tip) + 1);
     } else if (straight(s) && h < Math.max(18, w * 0.06) && w > 24) {
       const y = (box.t + box.b) / 2;
       const mid = (box.l + box.r) / 2;
@@ -242,8 +243,6 @@ export function readInk(strokes: P[][], say: (e: Element | null) => string | und
     if (straight(s) && straight(t) && cross(s[0], s[s.length - 1], t[0], t[t.length - 1]) && Math.min(ls, lt) > Math.max(ls, lt) * 0.5) out.mark = 'X drawn over it (likely: remove this)';
     else if (lt < ls * 0.5 && dist(t[0], s[s.length - 1]) < Math.max(30, lt)) {
       Object.assign(out, { mark: 'arrow', from: s[0], to: s[s.length - 1] });
-      shaft = s;
-      headLen = Math.max(...t.map((q) => dist(q, s[s.length - 1])));
     }
   }
   // What is under a point on the page itself: labit's own bars and layers (data-lab-comments) are skipped (sims, 20 Nov:
@@ -268,10 +267,10 @@ export function readInk(strokes: P[][], say: (e: Element | null) => string | und
     const inView = (hit as HTMLElement | null)?.shadowRoot?.elementsFromPoint(p.x, p.y).find((e) => e.closest('.f[data-id]'));
     return say(inView?.closest('.f[data-id]') || hit);
   };
-  // An arrow keeps its shaft only, up to the tip: the page draws it a clean head (Leo's pick H, 20 Nov), whatever the
-  // hand did at the end.
+  // A drawing is kept as it was drawn, an arrow's own head too (Leo, 23 Nov: "still drawing arrows not right", "some draws
+  // backwards"): a clean head drawn at the end of the line read as its shaft landed on a barb, or past a jitter, backwards.
   // Up to 64 strokes are kept (16 were, and the rest went without a word, issue 423); past that, the drawing says how many it had.
-  const kept = out.mark === 'arrow' && shaft.length > 1 ? [shaft] : strokes.slice(0, MAX_STROKES);
+  const kept = strokes.slice(0, MAX_STROKES);
   // Several marks in one drawing (circle this, arrow that there, cross out those): each is read on its own and said
   // with what it is on, in the order drawn, so the words can refer to them ("move this one first, rename that"). An
   // arrowhead drawn as its own short stroke stays with its arrow. Sims, 20 Nov: with only "3 strokes, unclear" the
@@ -293,6 +292,6 @@ export function readInk(strokes: P[][], say: (e: Element | null) => string | und
         return r.from || r.to ? `${what} from ${r.from || '?'} to ${r.to || '?'}` : `${what}${on ? ` on ${on}` : ''}`;
       });
   }
-  return { mark: out.mark, from: at(out.from), to: at(out.to), box, lines: kept.map(thin), ...(marks ? { marks } : {}), ...(headLen ? { head: Math.round(Math.min(60, Math.max(12, headLen))) } : {}), ...(strokes.length > kept.length && out.mark !== 'arrow' ? { cut: strokes.length } : {}) };
+  return { mark: out.mark, from: at(out.from), to: at(out.to), box, lines: kept.map(thin), ...(marks ? { marks } : {}), whole: true, ...(strokes.length > kept.length ? { cut: strokes.length } : {}) };
 }
 
