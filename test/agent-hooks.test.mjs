@@ -121,6 +121,11 @@ test("Codex: a background wait doesn't confirm its hand-off, so the pin comes ba
   await post('left while codex sat idle', '/other');
   const got = await listening;
   assert.match(got.out, /left while codex sat idle/, 'the background wait took it');
+  // Right away too, before it goes back: a Stop just after the background wait took a pin mid-turn must still see it
+  // (on the Mac, Stop came 1 s before the take-back and the pin sat until the next message).
+  const early = await (await fetch(`${B}/_lab/pending?for=${sid}`, { headers: { 'x-lab-admin': key(), 'x-lab-agent': '1' } })).json();
+  assert.equal(early.fresh, 1, 'an unconfirmed hand-off still counts for its session');
+  assert.equal((await (await fetch(`${B}/_lab/pending?for=someone-else`, { headers: { 'x-lab-admin': key(), 'x-lab-agent': '1' } })).json()).fresh, 0);
   await sleep(2000); // LAB_ACK_MS is 1.5 s here: unconfirmed, it goes back
   const p = await (await fetch(`${B}/_lab/pending?for=${sid}`, { headers: { 'x-lab-admin': key(), 'x-lab-agent': '1' } })).json();
   assert.equal(p.fresh, 1, 'not left "picked up" and unread');
