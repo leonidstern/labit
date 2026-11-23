@@ -54,9 +54,6 @@ export const stampOf = (m: any, root: any, prefix = ''): HTMLElement => {
       stamp.append(el('span', { class: 'state' }, words));
     }
   }
-  // An agent's done answer says it looked at the result (labit reply --done --checked "…", #425), on the line its stamp
-  // keeps for where a message stands. Just "checked", how it checked on hover; nothing when it didn't (Leo, 23 Nov: the long line ran out of the column).
-  if (m.session && m.intent === 'done' && m.checked) stamp.append(el('span', { class: 'state', title: m.checked }, 'checked'));
   return stamp;
 };
 
