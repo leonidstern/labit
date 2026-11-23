@@ -2434,7 +2434,14 @@ const boardApi = async (req, res, url) => {
     if (!isAgent(req) && !isOwner(req)) return plain(res, 403, 'forbidden');
     const b = await sent(req);
     const env = { root: ROOT, origin, proxied: Boolean(PROXY), open: (key) => commentsOf(key).filter((c) => !c.parent && !c.resolved).length, titleOf: (p) => { const f = fileFor(boardPage(p)); return f ? titleOf(path.join(ROOT, f)) : ''; }, fileOf: (p) => fileFor(boardPage(p)) };
-    const out = act.act(String(b.action), b, env);
+    // A board an agent makes about a page is a board pin on that page, as +board makes one: every board of a page shows on
+    // it, none is only reachable by its address (Leo, 23 Nov: "we need to be sure no hidden boards like this"). The pin
+    // is the agent's, at the page's top left, worded with the topic; its board is pin-<id>.
+    const pinPage = String(b.action) === 'new' && !b.name && typeof b.of === 'string' && B.labPath(b.of.split('#')[0]) ? pagePath(boardPage(b.of.split('#')[0])) : null;
+    const pin = pinPage ? await boardPinFor(pinPage, String(b.topic || ''), sessionFrom(req).agent) : null;
+    if (pinPage && !pin) return json(500, { error: "the board's pin couldn't be made", text: "the board's pin couldn't be made" });
+    const out = act.act(String(b.action), pin ? { ...b, name: `pin-${pin}`, of: `${pinPage}#pin-${pin}` } : b, env);
+    if (pin && out.error) await dropBoardPin(pinPage, pin);
     boardCache.clear();
     boardList = null;
     watchBoards();
@@ -2529,6 +2536,25 @@ const imageApi = async (req, res, url) => {
   return json(200, { board: B.place(boardGet(name)), frame: out.frame, text: `Added ${out.frame.id} (${act.shown(board, out.frame)})` });
 };
 // A pick reaches the agent as a pin from the person on the board, once (a pick that changes nothing posts nothing).
+// The agent's pin that holds a board it made about a page (board new --of): its id, or null.
+const boardPinFor = async (page, topic, who) => {
+  const res = await api.POST(new Request('http://localhost/api', {
+    method: 'POST',
+    headers: { host: 'localhost', 'content-type': 'application/json', 'x-lab-agent': '1', 'x-lab-admin': TOKEN, 'x-forwarded-for': '127.0.0.1' },
+    body: JSON.stringify({ page, name: who, text: topic.slice(0, 200) || 'Board', anchor: { selector: 'body', x: 0, y: 0, docX: 24, docY: 24, width: 1280 } }),
+  }));
+  if (!res.ok) return null;
+  const { comment } = await res.json();
+  persist(page).catch((e) => console.error('[lab] could not save comments:', e.message));
+  broadcast();
+  return comment?.id || null;
+};
+// …taken back when its board could not be made.
+const dropBoardPin = async (page, id) => {
+  await api.POST(new Request('http://localhost/api', { method: 'POST', headers: { host: 'localhost', 'content-type': 'application/json', 'x-lab-admin': TOKEN, 'x-forwarded-for': '127.0.0.1' }, body: JSON.stringify({ page, action: 'delete', id }) }));
+  persist(page).catch((e) => console.error('[lab] could not save comments:', e.message));
+  broadcast();
+};
 const pickedPin = async (board, frame) => {
   const res = await api.POST(new Request('http://localhost/api', {
     method: 'POST',

@@ -4,6 +4,7 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 
 ## Unreleased
 
+- **Every board of a page shows on it.** A board an agent makes about a page (`labit board new --of /page`) is a board pin on that page, as `+board` makes, named `pin-<id>`: none is reachable only by its address.
 - **Pictures on a board no longer blink as you zoom in Safari.**
 - **A picked frame on a board has the same thin outline as hover.** No thicker ring.
 - **A drawing lands as you drew it.** Every point you drew is kept (up to 500 a line, was thinned to half a px and 200) and placed to a tenth, so the line that lands is the line you saw.
