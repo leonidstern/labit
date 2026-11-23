@@ -47,7 +47,7 @@ const css = `
 #lab-board iframe,#lab-board img{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff;pointer-events:none}
 #lab-board .f.in iframe{pointer-events:auto}
 #lab-board .t{position:absolute;left:0;bottom:100%;white-space:nowrap;max-width:calc(100% / var(--iz));overflow:hidden;text-overflow:ellipsis;transform-origin:0 100%;transform:scale(var(--iz));padding-bottom:4px;opacity:.75}
-#lab-board .f.pic:not(.sel,.pick) .t{visibility:hidden} /* a picture's file name only once it is picked (Leo, 23 Nov: "dont show picture names files always") */
+#lab-board .f.pic:not(.sel,.pick,.down) .t{visibility:hidden} /* a picture's file name only once it is picked (Leo, 23 Nov: "dont show picture names files always") */
 #lab-board .c{position:absolute;inset:0;box-sizing:border-box;padding:calc(20px*var(--iz));font-size:calc(14px*var(--iz));line-height:1.5;color:#1d1d1b;background:#f6f5f1}
 #lab-board .c b{display:block;font-size:calc(22px*var(--iz));font-weight:600;margin-bottom:calc(6px*var(--iz))}
 #lab-board .none{position:absolute;inset:0;display:grid;place-items:center;opacity:.7}
@@ -624,6 +624,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       down = { x: e.clientX, y: e.clientY, id: at(e), far: false, at: performance.now(), t: e.timeStamp, hand: !plain, mid: e.pointerType !== 'touch' && e.button === 1, shift: e.shiftKey };
       hand();
       clearTimeout(holdTimer);
+      if (plain && down.id) find(down.id)?.box.classList.add('down'); // a picture's name shows as the press starts, not on the lift (Leo, 23 Nov: "it appears with delay?")
       if (e.pointerType === 'touch') {
         const d = down;
         holdTimer = window.setTimeout(() => {
@@ -717,6 +718,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     clearTimeout(holdTimer);
     if (pts.size || !d) return;
     down = null;
+    for (const c of cards) c.box.classList.remove('down');
     hand();
     // Right after the page loads, the live frames keep the page busy: the finger's lift can be handled before the 400 ms
     // timer runs, and the first hold was taken for a tap (Leo, 19 Nov). The touch's own times decide it then.

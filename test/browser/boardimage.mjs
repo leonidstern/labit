@@ -177,7 +177,10 @@ try {
       check(eng, 'no × on a picture', await p.locator('.f .rm').count() === 0);
       const nameShown = () => p.evaluate(() => getComputedStyle(document.querySelector('[data-lab-board-view]').shadowRoot.querySelector('#lab-board .f[data-id="e"] .t')).visibility === 'visible');
       check(eng, 'a picture\'s file name is not shown till it is picked', !(await nameShown()));
-      await p.mouse.click(rb3.x + rb3.w / 2, rb3.y + rb3.h / 2);
+      await p.mouse.move(rb3.x + rb3.w / 2, rb3.y + rb3.h / 2);
+      await p.mouse.down();
+      check(eng, 'its file name shows as the press starts, not on the lift', await nameShown());
+      await p.mouse.up();
       await sleep(250);
       check(eng, 'a click picks the picture: its ring', await p.locator('.f[data-id="e"].pick').count() === 1);
       check(eng, 'and its file name shows', await nameShown());
