@@ -3321,6 +3321,9 @@ server.on('listening', async () => {
 // Parked: a record of how it was started (in ~/.labit/parked), so the switcher (⌘K) in another lab, or labit run in
 // its folder again, starts it the same way.
 const park = (archived = false, why = '') => {
+  // Under --dev the lab's parent is node --watch, which would start it again at the next save and runs on meanwhile
+  // (130 MB with the --dev process waiting on it): a parked lab ends it, and with it --dev.
+  if (process.env.LAB_DEV) process.on('exit', () => process.kill(process.ppid));
   try {
     fs.mkdirSync(PARKED, { recursive: true });
     // Run from npm: started again through npx at this version, not from this version's folder in npx's cache.
