@@ -243,7 +243,8 @@ try {
         // The browser says when the page navigated, and when a scroll ended: what the widget listens to follows what there is.
         const heard = await p.evaluate(() => [...window.__listened]);
         check(tag, 'the widget listens to the Navigation API, and leaves the page\'s history alone', heard.includes('currententrychange') && !heard.includes('popstate') && (await p.evaluate(() => /native code/.test(history.pushState.toString()))), JSON.stringify({ listened: heard.filter((t) => /currententrychange|popstate|scrollend/.test(t)) }));
-        // scrollend is the motion controls' (a phone's end a scroll's quiet wait): their file loads with the first thing that moves.
+        // The motion controls' file (src/widget/motion.ts) loads on a phone with the first thing that moves. It no longer
+        // listens for scrollend: its per-element controls that followed a scroll were taken out with the motion menus (#450).
         if (phone) {
           await p.evaluate(() => {
             const d = document.body.appendChild(document.createElement('div'));
@@ -252,9 +253,9 @@ try {
           });
           await sleep(1600);
         }
-        const heardAfter = phone ? await p.evaluate(() => [...window.__listened]) : heard;
+        const motionLoaded = phone ? await p.evaluate(() => performance.getEntriesByType('resource').some((e) => /\/motion\.js(\?|$)/.test(e.name))) : true;
         if (phone) await p.evaluate(() => document.getElementById('lab-test-loop')?.remove());
-        check(tag, 'the widget listens for scrollend', heardAfter.includes('scrollend') || !phone);
+        check(tag, 'on a phone the motion controls load once something moves', motionLoaded);
         // A navigation inside the page: the comments of the new page are asked for, and of the old one after Back.
         const asked = [];
         p.on('request', (r) => { const m = /\/_lab\/api\/comments\?page=([^&]*)/.exec(r.url()); if (m) asked.push(decodeURIComponent(m[1])); });
