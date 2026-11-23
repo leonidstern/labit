@@ -207,6 +207,27 @@ test('the session\'s own tool calls renew the status line of the claimed pins, o
   expect(w.posts[1].text).toBe('session activity');
 });
 
+test('pins waiting on a busy session come with its own tool results, once each', async ($, on) => {
+  const clock = mock.clock(on);
+  const handed = new Date(Date.now() - 60000).toISOString();
+  world(on, { quiet: [{ id: 'c1', at: handed }], fresh: 2, key: 'k1', listening: false, last: 'S1' });
+  on('tool.call', () => ({ result: {} }));
+  await $.session.start({ cwd: '/p/sub', surface: 'terminal', isInteractive: true } as any);
+  await turnStart($);
+  await $.tool.call({ tool: 'Bash', command: 'npm run build' } as any); // the look runs beside the call, never holding it up
+  await clock.advance(1000);
+  const first: any = await $.tool.call({ tool: 'Bash', command: 'npm run build' } as any);
+  expect(first.context?.length).toBe(1);
+  expect(first.context[0]).toContain('a pin handed to you with no word back yet (c1)');
+  expect(first.context[0]).toContain('2 pins nobody has taken');
+  expect(first.context[0]).toContain('--progress');
+  await clock.advance(20000);
+  const again: any = await $.tool.call({ tool: 'Bash', command: 'npm test' } as any);
+  expect(again.context?.length || 0).toBe(0); // said once
+  const helper: any = await $.tool.call({ tool: 'Bash', command: 'ls', agentId: 'h1' } as any);
+  expect(helper.context?.length || 0).toBe(0); // a helper's results carry nothing
+});
+
 test('a helper\'s tool calls renew nothing, and a helper running while the session itself is idle does not keep the line alive', async ($, on) => {
   const clock = mock.clock(on);
   const w = world(on, { working: [{ page: '/a', id: 'c1' }], last: 'S1' });
