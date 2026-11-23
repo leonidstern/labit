@@ -62,7 +62,7 @@ button:focus-visible { outline: 2px solid var(--_accent); outline-offset: 2px; }
   transform: translate(var(--lab-zx), var(--lab-zy)) scale(var(--lab-zk)); transform-origin: 0 0; pointer-events: none; }
 @layer zoom { :host([data-zoom]) .ui > * { pointer-events: auto; } } /* a layer: loses to their own pointer-events rules */
 .pin, .pin * { -webkit-user-select: none; user-select: none; } /* a hold on a placed pin selected its letter on iOS and later taps did nothing; the page-level rule skips the widget host */
-.pin, .motion-ctl { box-shadow: 0 0 0 1px var(--_edge), 0 2px 8px rgba(0,0,0,.16); }
+.pin { box-shadow: 0 0 0 1px var(--_edge), 0 2px 8px rgba(0,0,0,.16); }
 .pin { position: absolute; width: 28px; height: 28px; margin: -28px 0 0 0; border-radius: 14px 14px 14px 2px;
        background: var(--_bg); border: 0;
        display: grid; place-items: center; cursor: pointer; padding: 0; color: var(--_fg); font-size: 12px; font-weight: 500;
@@ -441,7 +441,7 @@ button.btn.undo { color: var(--_fg); }
 /* Keys whisper: a small grey letter, no chip; a bit clearer while the pointer is on the bar. */
 kbd { font-size: 10px; letter-spacing: .012em; line-height: 17px; min-width: 0; padding: 0 1px; text-align: center; background: none;
       color: var(--_muted) !important; opacity: .45; }
-kbd, .motion-ctl, .onb { transition: opacity var(--_t-quick) var(--_ease-out); } /* .onb: what the page holds to a board, back as its view rests */
+kbd, .onb { transition: opacity var(--_t-quick) var(--_ease-out); } /* .onb: what the page holds to a board, back as its view rests */
 .bar:hover kbd { opacity: .75; }
 .bar button kbd { margin-left: -4px; } /* the hint sits close to its word: chat (c) */
 /* One bar of segments, a hairline between them; the less used ones in the ⋯ menu above it (phones too: same bar, bigger to tap). */
@@ -688,7 +688,7 @@ kbd::before { content: '('; } kbd::after { content: ')'; } /* read as a hint: ch
    closes it). A tapped sheet rises in from the bottom (--lab-from still sets where its small scale pivots). */
 @media (pointer: coarse) and (max-width: 560px), (pointer: coarse) and (max-height: 500px) {
   :host { --_gap: 8px; --_card-r: 30px; }
-  .card, .float, .list, .sw-box { left: var(--_gap) !important; right: var(--_gap); bottom: var(--_gap) !important; border-radius: var(--_card-r) !important;
+  .card, .float, .list, .sw-box, .motion-sheet { left: var(--_gap) !important; right: var(--_gap); bottom: var(--_gap) !important; border-radius: var(--_card-r) !important;
     background: var(--_bg);
     box-shadow: 0 0 0 .5px color-mix(in srgb, var(--_fg) 10%, transparent), 0 0 8px rgba(0, 0, 0, .14); transform-origin: var(--lab-from, 50% 100%); }
   :host([data-kb]) :is(.card, .list:not([hidden]), .sw-box) { top: calc(var(--lab-top, 0px) + var(--_gap)) !important; height: calc(var(--lab-vh, 100dvh) - 2 * var(--_gap)) !important; }
