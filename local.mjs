@@ -2011,6 +2011,16 @@ function deliver(res, got, who = '', ack = false, key = '', label = 'Claude') {
       return !commentsOf(page).some((r) => r.parent === id && r.session && r.createdAt >= at);
     });
     if (!quiet.length) return;
+    // A batch is worked through one pin at a time: a sign on any thread of this hand-off (an answer or a status line)
+    // restarts the clock for the others, so pins 4 and 5 of five aren't taken back while the agent is on pin 3. It only
+    // restarts it: a session that goes quiet after its first answer still loses the rest ANSWER_MS later.
+    const signs = got.handed.flatMap(([page, id]) => {
+      const c = commentsOf(page).find((x) => x.id === id);
+      const own = commentsOf(page).filter((r) => r.parent === id && r.session && r.createdAt >= at).map((r) => r.createdAt);
+      return [...own, ...(c?.progress?.at >= at ? [c.progress.at] : []), ...(c?.resolved && c.resolvedAt >= at ? [c.resolvedAt] : [])];
+    });
+    const last = signs.length ? Date.parse(signs.sort().pop()) : 0;
+    if (last && Date.now() - last < ANSWER_MS) return void setTimeout(notAnswered, last + ANSWER_MS - Date.now()).unref();
     const threads = new Set(quiet.map(([, id]) => id));
     const threadOf = (id) => {
       for (const [page] of quiet) {
