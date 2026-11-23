@@ -9,7 +9,7 @@ import { execFile, spawn } from 'node:child_process';
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { apiOn, BODY_MAX, callApi, decoderFor, encodingFor, onLan, packBody, sendBody, sendFile, sendPacked } from './lib/dev.ts';
-import { parseArgs, WRITE_SHORT } from './lib/args.ts';
+import { parseArgs, WRITE_SHORT, NEW_VERSION_NEAR } from './lib/args.ts';
 import { addRule, dropRule, rulesText } from './lib/replies.ts';
 import { AGENTS } from './lib/agents.ts';
 import { watchTree } from './lib/watch.ts';
@@ -1964,6 +1964,7 @@ async function unseen(scope = pages(), who = '') {
       // The person sees nothing between "picked up" and the answer: a batch an agent worked through for 13 minutes looked
       // lost (Leo, 18 Nov). A --progress line first turns the ring and the pill at once, without a message (Leo, 20 Nov: less noise).
       `\nIf it will take more than about a minute (a build, a restart, a PR): send one ${CMD} reply <id> --progress "<what you're doing>" on each first (a status line, not a message), then start, and a new one when the step changes (about 3 minutes after your last, the page says no update; with the labit plugin, about 10 while this session keeps working); a quick ask needs none (an answer within 2 minutes counts). A plain "go" gets no words: resolve it when done.` +
+      `\n${NEW_VERSION_NEAR}` +
       `\n${WRITE_SHORT}`
     : `\n\nAnswer each: ${CMD} reply <id> --done "what you did" (or --question) [--wait --bg]; the standing lines (read threads whole, --progress before long work, short answers) and rules as before.`;
   // Listen again first (Leo, 23 Nov: "why stopped"): a wait that ended with a pin while the agent went on to work left

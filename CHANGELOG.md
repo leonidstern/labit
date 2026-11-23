@@ -4,6 +4,7 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 
 ## Unreleased
 
+- **A new version goes next to the one it follows.** Agents are told (in the skill and the first hand-off) to put a redo or another round on a research page right after the original, with its own id and a plain heading like "Pricing, new version", never at the bottom. On a live project it is made where it was asked, as a board variant, so the real page stays as it was until picked.
 - **No light line along a picture's edge while it moves on a board.** Pictures no longer sit on a white card that could show through at a half pixel.
 - **A click on the labit mark closes an open comment too**, as ⋯, the boards list and the chat do. A new comment with words in it stays.
 - **Long animations get the motion menu.** An animation that ends but runs 5 s or more (a film or slideshow on one clock) now gets the right-click menu, P and S, like a loop does. Short ones that end (a highlight) are still moments.
