@@ -192,7 +192,7 @@ test('the session\'s own tool calls renew the status line of the claimed pins, o
   await $.tool.call({ tool: 'Edit', file_path: '/p/src/comments.js', old_string: 'a', new_string: 'b' } as any);
   await clock.advance(1000);
   expect(w.posts.length).toBe(1);
-  expect(w.posts[0]).toEqual({ page: '/a', action: 'progress', id: 'c1', text: 'session activity' }); // not the tool call, not an answer
+  expect(w.posts[0]).toEqual({ page: '/a', action: 'progress', id: 'c1', text: 'session activity', renew: true }); // not the tool call, not an answer; a renewal keeps the agent's words
   await $.tool.call({ tool: 'Bash', command: 'npm test' } as any).catch(() => {});
   await clock.advance(1000);
   expect(w.posts.length).toBe(1); // within the minute: no second line

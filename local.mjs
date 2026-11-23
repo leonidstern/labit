@@ -15,7 +15,7 @@ import { AGENTS } from './lib/agents.ts';
 import { watchTree } from './lib/watch.ts';
 import { PARKED, REGISTRY, askPages, keyFor, parkedLabs, runningLabs } from './lib/labs.ts';
 import { alive, setWifi } from './lib/labcall.ts';
-import { DO_IT, PROGRESS_MS, UNMATCHED, numberOf, slim, upgrade, VERSION as SCHEMA } from './lib/schema.mjs';
+import { CLAIM_LIFE_MS, DO_IT, PROGRESS_MS, RENEWAL, UNMATCHED, numberOf, slim, upgrade, VERSION as SCHEMA } from './lib/schema.mjs';
 import { sameKey } from './lib/comments-api.mjs';
 import { cut } from './lib/cut.mjs';
 import { sourceLines } from './lib/source-line.mjs';
@@ -1898,7 +1898,7 @@ async function unseen(scope = pages(), who = '') {
       `\n\nAnswer each: ${CMD} reply <id> "what you did" [--done | --question] [--resolve] (run in ${ROOT}); add --wait to the last one to listen again in the same command.` +
       // The person sees nothing between "picked up" and the answer: a batch an agent worked through for 13 minutes looked
       // lost (Leo, 18 Nov). A --progress line first turns the ring and the pill at once, without a message (Leo, 20 Nov: less noise).
-      `\nIf it will take more than about a minute (a build, a restart, a PR): send one ${CMD} reply <id> --progress "<what you're doing>" on each first (a status line, not a message), then start; a quick ask needs none (an answer within 2 minutes counts). A plain "go" gets no words: resolve it when done.` +
+      `\nIf it will take more than about a minute (a build, a restart, a PR): send one ${CMD} reply <id> --progress "<what you're doing>" on each first (a status line, not a message), then start, and a new one when the step changes (10 minutes after your last, the page says no update); a quick ask needs none (an answer within 2 minutes counts). A plain "go" gets no words: resolve it when done.` +
       `\n${WRITE_SHORT}`
     : `\n\nAnswer each: ${CMD} reply <id> "what you did" [--done | --question] [--wait]; the standing lines (read threads whole, --progress before long work, short answers) and rules as before.`;
   const text = `In this message: ${count}. Read all of it; each one is marked handed to you.\n\n${whole.length ? '# New comments\n\n' : ''}${groups.length ? `${groups.join('\n')}\n\n` : ''}${blocks.join('\n\n')}` +
@@ -2030,6 +2030,7 @@ function deliver(res, got, who = '', ack = false, key = '', label = 'Claude') {
 // over together, in one round trip, instead of one wake-up each.
 const SETTLE_MS = Number(process.env.LAB_SETTLE_MS ?? 2000);
 const PROGRESS_LIFE = Number(process.env.LAB_PROGRESS_MS ?? PROGRESS_MS); // a status line is a sign this long
+const CLAIM_LIFE = Number(process.env.LAB_CLAIM_LIFE_MS ?? CLAIM_LIFE_MS); // the hook renews a pin this long after the agent's own last word on it
 const REMIND_MS = Number(process.env.LAB_REMIND_MS ?? 180000); // a handed pin with no answer comes back after this
 let settleTimer = null;
 function wake() {
@@ -2654,13 +2655,20 @@ const handler = async (req, res) => {
       const fresh = freshIn(pages().filter((p) => !heard.has(p)));
       const ids = fresh.map(({ c }) => c.id).sort();
       // The threads someone claimed (a status line from --progress, or an "on it" reply, since the person's last words):
-      // the plugin's hook renews that line while its own session runs tools. A pin nobody claimed gets none.
+      // the plugin's hook renews that line while its own session runs tools. A pin nobody claimed gets none, and neither
+      // does one the agent itself said nothing on for CLAIM_LIFE_MS: its line then lapses and the page says "no update"
+      // (#425: the hook's renewals alone kept a pin the agent had left looking worked on).
+      const now = Date.now();
+      const recent = (at) => Boolean(at) && now - Date.parse(at) < CLAIM_LIFE;
+      // When the agent itself last wrote the line: said, or for a line from before said, its time unless it was a renewal.
+      const ownLine = (p) => p?.said || (p && p.text !== RENEWAL ? p.at : '');
       const working = pages().flatMap((page) => commentsOf(page).filter((c) => !c.parent && !c.resolved && c.handedAt).flatMap((c) => {
         const msgs = commentsOf(page).filter((r) => r.parent === c.id);
         const lastAt = (mine) => [c, ...msgs].filter((m) => Boolean(m.session) === mine).map((m) => m.createdAt).sort().pop() || '';
         const reply = msgs.filter((m) => m.session).sort((a, b) => a.createdAt.localeCompare(b.createdAt)).pop();
         const answered = reply && reply.createdAt > lastAt(false);
-        return answered ? (reply.intent === 'working' ? [{ page, id: c.id }] : []) : c.progress ? [{ page, id: c.id }] : [];
+        const claimed = answered ? reply.intent === 'working' && (recent(reply.createdAt) || recent(ownLine(c.progress))) : Boolean(c.progress) && recent(ownLine(c.progress));
+        return claimed ? [{ page, id: c.id }] : [];
       }));
       return answer(res, {
         working,
