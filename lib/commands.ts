@@ -152,6 +152,10 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
     }
     const out = path.join(HERE, '.lab', 'lab-pages.md');
     fs.mkdirSync(path.dirname(out), { recursive: true });
+    // Run in a folder no lab has served, this makes its .lab: git skips it as it skips a lab's (local.mjs ignoreLab).
+    try {
+      fs.writeFileSync(path.join(path.dirname(out), '.gitignore'), '*\n', { flag: 'wx' });
+    } catch {}
     fs.writeFileSync(out, (lines.join('\n').trim() || (opts.all ? 'No labs running.' : 'No labs for this folder. `pages --all` lists every lab on this computer.')) + '\n');
     console.log(out);
     process.exit(0);

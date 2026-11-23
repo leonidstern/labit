@@ -111,6 +111,11 @@ test('a running lab is listed for the Lab panel: a registry file while it runs, 
   const out = await new Promise((resolve) => execFile(process.execPath, [LAB, 'pages'], { cwd: dir, env: { ...process.env, LABIT_HOME: home } }, (err, stdout) => resolve(stdout.trim())));
   assert.equal(out, path.join(dir, '.lab', 'lab-pages.md'));
   assert.equal(fs.readFileSync(out, 'utf8'), `- [Start](http://localhost:${port}/) · just now\n`);
+  // Run from a folder no lab has served: the .lab it makes for the file is one git skips.
+  const elsewhere = fs.realpathSync(tmp('pages-here'));
+  await new Promise((resolve) => execFile(process.execPath, [LAB, 'pages'], { cwd: elsewhere, env: { ...process.env, LABIT_HOME: home } }, resolve));
+  assert.equal(fs.readFileSync(path.join(elsewhere, '.lab', '.gitignore'), 'utf8'), '*\n');
+  rm([elsewhere]);
   lab.kill();
   await new Promise((r) => lab.on('exit', r));
   assert.ok(!fs.existsSync(reg), 'registry file removed on exit');

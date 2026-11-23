@@ -3390,8 +3390,10 @@ let switchedAt = 0;
 const handOver = (command, first, more = []) => {
   /** @type {number | 'ignore'} */
   let out = 'ignore';
+  // The newer build's output goes on at the end; past 1 MB the file starts over, so years of hand-overs stay small.
   try {
-    out = fs.openSync(path.join(LAB, 'lab.log'), 'a');
+    const log = path.join(LAB, 'lab.log');
+    out = fs.openSync(log, (fs.statSync(log, { throwIfNoEntry: false })?.size ?? 0) > 1e6 ? 'w' : 'a');
   } catch {}
   const args = process.argv.slice(2).filter((a) => a !== '--no-open' && !(more.length && /^--(no-)?wifi$/.test(a)));
   followed = false;
