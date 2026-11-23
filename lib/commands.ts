@@ -237,7 +237,11 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
       const { seconds, capped } = waitSeconds(opts, process.stdout.isTTY === true);
       const out = await call('/_lab/wait', { timeout: seconds, pages: listenPages(opts, true), ack: true }, 20);
       console.log(WAIT_SAID[out.status] ?? out.text);
-      await labAck(server, out.delivery, session);
+      // Codex can't be woken once its turn ended, and what a background command prints then is read by nobody: a
+      // `wait --bg` there that confirmed its hand-off left the pins "picked up" and unread (#420, tested on Codex
+      // 0.166). Unconfirmed, the lab takes them back after a few seconds unless the session answers them, and the labit
+      // hook brings them in when the person next writes or the turn ends.
+      if (!(opts.bg && session.kind === 'codex')) await labAck(server, out.delivery, session);
       if (capped && out.status === 204)
         console.log(
           `\nThat wait was held to ${FOREGROUND_CAP} seconds. Run it in the background (your app's own way of doing that) and ` +

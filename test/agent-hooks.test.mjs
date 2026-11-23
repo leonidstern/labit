@@ -110,3 +110,28 @@ test('Cursor: the start hook says the session to the shells, and wait signs with
   assert.doesNotMatch(out.out, /Error/i);
   assert.equal((await pending()).last, 'conv-1');
 });
+
+// #420, on a real Codex (0.166): Codex has no idle event, and a `wait --bg` it left running took a pin while it sat idle,
+// printed it to nobody and confirmed it, so the pin read "picked up" and nothing brought it in again.
+test("Codex: a background wait doesn't confirm its hand-off, so the pin comes back; the person's next message brings it in", async () => {
+  const sid = 'codex-thread-1';
+  const codexEnv = { ...env, LAB_AGENT: '', CODEX_THREAD_ID: sid };
+  const listening = cli(['wait', '--bg', '--timeout', '4', '--no-open'], { cwd: DIR, env: codexEnv });
+  for (let i = 0; i < 40 && !(await pending()).listening; i++) await sleep(50);
+  await post('left while codex sat idle', '/other');
+  const got = await listening;
+  assert.match(got.out, /left while codex sat idle/, 'the background wait took it');
+  await sleep(2000); // LAB_ACK_MS is 1.5 s here: unconfirmed, it goes back
+  const p = await (await fetch(`${B}/_lab/pending?for=${sid}`, { headers: { 'x-lab-admin': key(), 'x-lab-agent': '1' } })).json();
+  assert.equal(p.fresh, 1, 'not left "picked up" and unread');
+  const out = JSON.parse(await hook('prompt', codex(sid, { hook_event_name: 'UserPromptSubmit', prompt: 'hi', turn_id: 't1' })));
+  assert.equal(out.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
+  assert.match(out.hookSpecificOutput.additionalContext, /^labit: A new pin .*wait --timeout 5/);
+  assert.equal(await hook('prompt', cursor(sid, { hook_event_name: 'beforeSubmitPrompt' })), '', 'Cursor: no such context');
+  // Other agents' background waits still confirm what they printed.
+  const claude = cli(['wait', '--bg', '--timeout', '4', '--no-open'], { cwd: DIR, env: { ...env, LAB_AGENT: '', CLAUDE_CODE_SESSION_ID: 'cc-1' } });
+  const back = await claude;
+  assert.match(back.out, /left while codex sat idle/);
+  await sleep(2000);
+  assert.equal((await pending()).fresh, 0);
+});

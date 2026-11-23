@@ -3,6 +3,8 @@
 //
 //   node agent.mjs progress   a tool call by the session: keeps the status line of the pins it claimed alive
 //   node agent.mjs wake       the session stopped: pins nobody was handed come in as its next turn
+//   node agent.mjs prompt     Codex: the person wrote: pins nobody was handed come with their message (Codex has no
+//                             idle event, so a pin left while it sat idle reached it only at the end of that turn)
 //   node agent.mjs start      Cursor's session start: tells the shells which session this is (LAB_SESSION_ID)
 //   opencode: copy this file to .opencode/plugins/labit.js (its default export is the plugin)
 //
@@ -151,6 +153,9 @@ async function cli(mode) {
   else if (mode === 'wake') {
     const text = await wake(sid, cwd);
     if (text) console.log(JSON.stringify(cursor ? { followup_message: text } : { decision: 'block', reason: text }));
+  } else if (mode === 'prompt' && !cursor) {
+    const text = await wake(sid, cwd);
+    if (text) console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: text } }));
   }
 }
 // (Not import.meta.url: opencode's loader runs the file without a plugin call when it is used.)
