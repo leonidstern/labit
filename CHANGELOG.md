@@ -4,6 +4,7 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 
 ## Unreleased
 
+- **Arrows land as you drew them.** A drawing keeps every stroke, an arrow's own head too; the clean head that was drawn at the end of its line landed on a barb or past a jitter, small or backwards. An arrow with a curl at its end no longer reads as scribbled over.
 - **Shift draws straight as you go.** With Shift held the line is straight from where it began while you draw, so it no longer jumps when you lift; a box or loop still comes out neat. A line through a heading is read as crossed out wherever it slopes (it was asked once, at its middle). The chat's send arrow no longer flies off, as in a comment.
 - **Arrows land as big as drawn.** The clean head is as long as the head you drew (12 to 60 px; it was always 12), the light smoothing no longer trails your hand or cuts an arrowhead short, and an arrow's end in empty space below a page says "empty space on the page" instead of quoting the page's script.
 - **Shorter status lines.** Under your message only what the ticks don't say: on it, quiet, 2nd in line, no answer (✓ and ✓✓ already say sent and picked up). An agent's done answer has no "checked" line under it any more (what it checked still reaches the agent text).

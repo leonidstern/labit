@@ -3,11 +3,11 @@
 import { zoneAnchor } from './anchoring.ts';
 
 type P = { x: number; y: number; w?: number };
-type Ink = { mark: string; from?: string; to?: string; pts: number[][]; w?: number[][]; marks?: string[]; cut?: number; head?: number };
-type Read = { mark: string; from?: string; to?: string; box: { l: number; t: number; r: number; b: number }; lines: P[][]; marks?: string[]; cut?: number; head?: number };
+type Ink = { mark: string; from?: string; to?: string; pts: number[][]; w?: number[][]; marks?: string[]; cut?: number; head?: number; whole?: boolean };
+type Read = { mark: string; from?: string; to?: string; box: { l: number; t: number; r: number; b: number }; lines: P[][]; marks?: string[]; cut?: number; head?: number; whole?: boolean };
 
 // The drawing as an area comment: the area (at least min each way), plus the lines as 0–1000 across and down it.
-export function inkAnchor({ mark, from, to, box, lines, marks, cut, head }: Read, min: number) {
+export function inkAnchor({ mark, from, to, box, lines, marks, cut, whole }: Read, min: number) {
   for (const [a, b] of [['l', 'r'], ['t', 'b']] as const) {
     if (box[b] - box[a] >= min) continue;
     const mid = (box[a] + box[b]) / 2;
@@ -19,7 +19,7 @@ export function inkAnchor({ mark, from, to, box, lines, marks, cut, head }: Read
   // The pen's width at each point, in tenths of a px (pressure with a pen, speed otherwise): Leo's pick 4, 20 Nov.
   if (marks?.length) anchor.ink.marks = marks;
   if (cut) anchor.ink.cut = cut;
-  if (head) anchor.ink.head = head;
+  if (whole) anchor.ink.whole = true;
   if (lines.some((s) => s.some((p) => p.w))) anchor.ink.w = lines.map((s) => s.map((p) => Math.round((p.w || 3) * 10)));
   return anchor;
 }
@@ -44,11 +44,11 @@ export function inkSvg(ink: Ink, zone: { left: number; top: number; width: numbe
     hit.setAttribute('class', 'hit');
     svg.append(...widths(pts, ink.w?.[n]), hit);
   });
-  if (ink.mark.startsWith('arrow')) svg.append(...head(ink.pts.at(-1) || [], zone.width, zone.height, ink.head));
+  if (ink.mark.startsWith('arrow') && !ink.whole) svg.append(...head(ink.pts.at(-1) || [], zone.width, zone.height, ink.head));
   return svg;
 }
-// A clean arrowhead at the end of the arrow's line: two strokes as long as the drawn head's legs (12 px for a drawing
-// made before 23 Nov) at 28° either side of where it was heading,
+// A clean arrowhead at the end of the arrow's line, for a drawing kept as its shaft only (before 23 Nov; since, a
+// drawing keeps its own head, ink.whole): two strokes as long as the drawn head's legs (12 px before ink.head) at 28° either side of where it was heading,
 // worked out on screen and put back into the area's 0–1000 so the stretch of the area doesn't bend it.
 function head(pts: number[], w: number, h: number, size = 12) {
   const n = pts.length / 2;
