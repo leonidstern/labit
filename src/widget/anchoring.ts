@@ -1426,9 +1426,10 @@ const route = (p) => p.replace(/(\/index)?(\.html)?\/?$/, '');
 const linked = (text) => {
   const out = [];
   let at = 0;
-  for (const m of text.matchAll(/\bhttps?:\/\/[^\s<>"']*[^\s<>"'.,;:!?)\]]|(?<![\w&/#])#([A-Za-z][\w:.-]*[\w])/g)) {
+  // A lab address written without http:// ("localhost:4403/page/", as agents often write it) is a link too (Leo, 23 Nov).
+  for (const m of text.matchAll(/\bhttps?:\/\/[^\s<>"']*[^\s<>"'.,;:!?)\]]|(?<![\w/:.@-])(?:localhost|127\.0\.0\.1):\d{2,5}(?:\/(?:[^\s<>"']*[^\s<>"'.,;:!?)\]])?)?(?!\w)|(?<![\w&/#])#([A-Za-z][\w:.-]*[\w])/g)) {
     let to = m[1];
-    let href = m[0];
+    let href = /^https?:/.test(m[0]) || m[1] ? m[0] : `http://${m[0]}`;
     let words = m[0];
     let u: URL | null = null;
     try {
