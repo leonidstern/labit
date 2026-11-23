@@ -6,7 +6,7 @@
 //   node agent.mjs prompt     Codex: the person wrote: pins nobody was handed come with their message (Codex has no
 //                             idle event, so a pin left while it sat idle reached it only at the end of that turn)
 //   node agent.mjs start      Cursor's session start: tells the shells which session this is (LAB_SESSION_ID)
-//   opencode: copy this file to .opencode/plugins/labit.js (its default export is the plugin)
+//   opencode 2: copy this file to .opencode/plugins/labit.js (its default export is the plugin)
 //
 // Same rules as the Claude Code hook (PR #321): a status line only for a pin the session claimed (the lab lists those) and
 // only while this session itself runs tools, at most one renewal per pin a minute (the lab counts a line for 3 minutes);
@@ -17,8 +17,8 @@
 // pages each get woken for their own. A wake whose pins are still unhanded at the next stop was not acted on: it is sent
 // once more (TRIES in all for one set of pins), never in a loop; `wait` stays what hands pins over.
 //
-// The session is the id the agent's `wait` and `reply` sign with: Codex CODEX_THREAD_ID, and LAB_SESSION_ID for the
-// others (Cursor's start hook and opencode's shell.env set it), so the lab's "listened last" is the same id here.
+// The session is the id the agent's `wait` and `reply` sign with: Codex CODEX_THREAD_ID, Cursor CURSOR_CONVERSATION_ID,
+// opencode OPENCODE_SESSION_ID (each the id its hooks get), so the lab's "listened last" is the same id here.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -161,19 +161,25 @@ async function cli(mode) {
 // (Not import.meta.url: opencode's loader runs the file without a plugin call when it is used.)
 if (/[\\/]agent\.mjs$/.test(process.argv[1] || '')) await cli(process.argv[2]).catch(() => {});
 
-// ---------- opencode: this file as .opencode/plugins/labit.js ----------
-export default async function labit({ directory, client }) {
-  return {
-    // The shells opencode starts get this session's id, so `wait` and `reply` sign with it.
-    'shell.env': async (input, output) => { if (safe(input?.sessionID)) output.env.LAB_SESSION_ID = input.sessionID; },
-    'tool.execute.after': async (input) => { await progress(input?.sessionID, directory).catch(() => {}); },
-    event: async ({ event }) => {
-      const sid = event?.properties?.sessionID || event?.properties?.info?.id;
-      if (event?.type !== 'session.idle' || !sid) return;
-      const text = await wake(sid, directory).catch(() => '');
-      // promptAsync queues the turn and returns; prompt (older SDKs) holds until the answer is done.
-      const send = client.session.promptAsync || client.session.prompt;
-      if (text) await send.call(client.session, { path: { id: sid }, body: { parts: [{ type: 'text', text }] } }).catch(() => {});
-    },
-  };
+// ---------- opencode 2: this file as .opencode/plugins/labit.js ----------
+// opencode 2 takes a plugin as { id, setup(ctx) } and refuses a function (opencode 1's shape). Its shells already carry
+// OPENCODE_SESSION_ID, which `wait` and `reply` sign with, so no env hook is needed. The tool hook "execute.after" gets
+// { tool, sessionID, ... }; the session hook "experimental.idle" gets { sessionID, background } once the session's loop
+// has nothing left to do (background: the jobs still running); ctx.session.prompt({ sessionID, text }) starts a turn.
+function setup(ctx) {
+  const dir = ctx?.location?.directory || process.cwd();
+  const offs = [];
+  const keep = (x) => { if (typeof x?.then === 'function') x.then((h) => h && offs.push(h)).catch(() => {}); else if (x) offs.push(x); };
+  keep(ctx.tool.hook('execute.after', (e) => { if (safe(e?.sessionID)) void progress(e.sessionID, dir).catch(() => {}); }));
+  keep(ctx.session.hook('experimental.idle', (e) => {
+    const sid = e?.sessionID;
+    if (!safe(sid) || (Array.isArray(e?.background) ? e.background.length : e?.background)) return; // a `wait --bg` still running hears the pins itself
+    // Not awaited: the idle hook runs inside the session's loop, and a prompt sent from inside it would wait on itself.
+    setTimeout(async () => {
+      const text = await wake(sid, dir).catch(() => '');
+      if (text) await Promise.resolve(ctx.session.prompt({ sessionID: sid, text })).catch(() => {});
+    }, 0);
+  }));
+  return () => { for (const h of offs) try { (h.dispose || h)(); } catch {} };
 }
+export default { id: 'labit', setup };

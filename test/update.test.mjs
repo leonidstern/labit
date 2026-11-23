@@ -15,11 +15,13 @@ fs.mkdirSync(DIR);
 fs.mkdirSync(HOME);
 fs.writeFileSync(path.join(DIR, 'index.html'), '<!doctype html><title>index</title><h1>index</h1>');
 fs.writeFileSync(path.join(HOME, 'latest.json'), JSON.stringify({ version: '9.9.9', at: Date.now() }));
-// npx stand-in: npx --yes @leonidstern/labit@9.9.9 <args> starts this labit with the args, and says what it was asked.
-// With a file named hang beside it, it says so and starts nothing: a release that never loads.
+// npx stand-in: `npx --yes -p @leonidstern/labit@9.9.9 which labit` says where that release is (this labit), and notes
+// what it was asked. With a file named hang beside it, the release it gives never loads.
 const NPX = path.join(TMP, 'npx');
 const HANG = path.join(TMP, 'hang');
-fs.writeFileSync(NPX, `#!/bin/sh\nif [ -f "${HANG}" ]; then echo "$2" > "${path.join(TMP, 'asked-hang')}"; exit 0; fi\necho "$2" > "${path.join(TMP, 'asked')}"\nshift 2\nexec "${process.execPath}" "${LAB}" "$@"\n`, { mode: 0o755 });
+const NEVER = path.join(TMP, 'never.mjs');
+fs.writeFileSync(NEVER, '');
+fs.writeFileSync(NPX, `#!/bin/sh\nif [ -f "${HANG}" ]; then echo "$3" > "${path.join(TMP, 'asked-hang')}"; echo "${NEVER}"; exit 0; fi\necho "$3" > "${path.join(TMP, 'asked')}"\necho "${LAB}"\n`, { mode: 0o755 });
 const PORT = String(claimPort(8500, 90));
 const B = `http://localhost:${PORT}`;
 const env = { ...process.env, LABIT_HOME: HOME, LABIT_NO_UPDATE_CHECK: '', LABIT_OFFER_UPDATE: '1', LABIT_NPX: NPX, LABIT_IDLE_MS: '0', LABIT_FOLLOW_WAIT_MS: '5000', LABIT_FOLLOW_MS: '300', LABIT_EXIT_WITH_PARENT: '' };
