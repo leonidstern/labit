@@ -2,7 +2,7 @@
 // loads when D is first pressed: what a drawing reads as. Its lines are drawn by ink.ts.
 // Drawing pins: hold D and drag to draw on the page instead of marking a box. The drawing is an area comment (the area
 // is the box around the lines, with the words and elements in it, zoneAnchor) plus the lines themselves and what they
-// read as: circled, a box, underlined, crossed out, an X, scribbled over, an arrow (where from, where it points), a
+// read as: circled, a box, underlined, crossed out, an X, scribbled over, an arrow (where from, where it points), a line, a
 // caret (insert here) or a side line (this block). Anything else is sent as an unclear mark: the comment's words win.
 // Strokes drawn while D is held make one drawing; one that starts where the last ended joins it into one line.
 // The drawing is the pin: no marker, its line is what you click (comments.js).
@@ -48,6 +48,8 @@ const thin = (s: P[]) => {
   while (c.length > 80) c = cut(s, (eps *= 1.5));
   return c;
 };
+// The area a line closes (shoelace): next to none for a line drawn there and back.
+const area = (s: P[]) => Math.abs(s.reduce((n, p, i) => n + p.x * s[(i + 1) % s.length].y - s[(i + 1) % s.length].x * p.y, 0)) / 2;
 const straight = (s: P[]) => length(s) < dist(s[0], s[s.length - 1]) * 1.15;
 const boxOf = (s: P[]) => {
   const xs = s.map((p) => p.x);
@@ -135,9 +137,13 @@ export function readInk(strokes: P[][], say: (e: Element | null) => string | und
   const h = box.b - box.t;
   const diag = Math.hypot(w, h) || 1;
   const out: { mark: string; from?: P; to?: P } = { mark: `${lines.length > 1 ? `${lines.length} strokes, ` : ''}unclear mark (go by the comment's words)` };
-  const [s, t] = lines;
+  let [s, t] = lines;
   let shaft: P[] = [];
   if (lines.length === 1) {
+    // A line drawn there and back over itself (two passes, to make it count) is the line out, not a loop round nothing:
+    // it encloses next to no area (Leo, 22 Nov, #430: it read as circled).
+    const far = s.reduce((k, p, i) => (dist(p, s[0]) > dist(s[k], s[0]) ? i : k), 0);
+    if (dist(s[far], s[0]) > 24 && length(s.slice(far)) > length(s.slice(0, far + 1)) * 0.5 && area(s) < length(s) * 4 && turns(cut(s, 6), 1) < 4) s = s.slice(0, far + 1);
     const ends = dist(s[0], s[s.length - 1]);
     const c = cut(s, Math.max(3, diag * 0.06));
     // Closed, or nearly: ends close, or a loop that goes at least three quarters round one way (a quick hand stops short
@@ -187,19 +193,29 @@ export function readInk(strokes: P[][], say: (e: Element | null) => string | und
       out.mark = 'caret (insert here)';
       out.to = c[1];
     } else {
-      // An arrow, its head drawn in the same stroke or not: the tip is the first sharp turn near the end.
-      let tip = s[s.length - 1];
+      // An arrow only when its head is drawn (Leo, 22 Nov, #429: a hand's lines end in small hooks, and those read as
+      // heads): past the middle, a sharp turn back with a leg of its own after it, at least 12 px straight across (a hook
+      // is smaller). Read on the points as drawn, the turn between 16 px before and after: cut, a narrow head is lost.
+      const total = length(s);
+      const leg = Math.max(12, Math.min(18, total * 0.04));
+      const near = (i: number, step: number, d: number) => {
+        let j = i;
+        while (s[j + step] && dist(s[j], s[i]) < d) j += step;
+        return s[j];
+      };
       let run = 0;
-      const total = length(c);
-      for (let i = 1; i < c.length - 1; i++) {
-        run += dist(c[i], c[i - 1]);
-        if (run > total * 0.55 && turn(c[i - 1], c[i], c[i + 1]) > 2) {
-          tip = c[i];
+      let tip: P | undefined;
+      for (let i = 1; i < s.length - 1; i++) {
+        run += dist(s[i], s[i - 1]);
+        if (run > total * 0.55 && turn(near(i, -1, 16), s[i], near(i, 1, 16)) > 2 && s.slice(i).some((q) => dist(q, s[i]) >= leg)) {
+          tip = s[i];
           break;
         }
       }
-      Object.assign(out, { mark: 'arrow', from: s[0], to: tip });
-      shaft = s.slice(0, s.indexOf(tip) + 1);
+      if (tip) {
+        Object.assign(out, { mark: 'arrow', from: s[0], to: tip });
+        shaft = s.slice(0, s.indexOf(tip) + 1);
+      } else Object.assign(out, { mark: 'line', from: s[0], to: s[s.length - 1] });
     }
   } else if (lines.length === 2) {
     const [ls, lt] = [length(s), length(t)];
