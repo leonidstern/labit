@@ -28,6 +28,9 @@ board('gone', '/not-here');
 keep('/_board/withpage', pin('b1', 'withpage', 1), pin('b2', 'withpage', 2), { id: 'r1', name: 'Claude', text: 'on it', createdAt: '2026-11-13T10:00:00.000Z', parent: 'b1' });
 keep('/pricing', { id: 'p1', name: 'Leo', text: 'a page pin', createdAt: '2026-11-09T10:00:00.000Z', num: 1, anchor: { kind: 'element', selector: 'h1', x: 0.5, y: 0.5 } });
 keep('/_board/nopage', pin('n1', 'nopage', 1));
+// A board about /cart whose agent asked something last: the cart page's row says its board needs a reply.
+board('asks', '/cart');
+keep('/cart', pin('c1', 'asks', 1), { id: 'c2', name: 'Claude', session: 's1', intent: 'question', text: 'which one?', createdAt: '2026-11-12T10:00:00.000Z', parent: 'c1' });
 keep('/_board/gone', pin('g1', 'gone', 1));
 // …and a person had read both pins there: on the page they are read too (the page is not unread on every device).
 write('.lab/state.json', { reads: { leo: { '/_board/withpage': ['b1', 'b2', 'r1'] } }, opened: { '/_board/withpage': '2026-11-14T10:00:00.000Z' } });
@@ -113,4 +116,12 @@ test('a restart changes nothing (no duplicates), and a pin that lands late on th
   lab = spawnLab(DIR, PORT);
   await answers(`${B}/_lab/state`);
   assert.equal((await list('/pricing')).length, 5, 'what was saved reads back whole');
+});
+
+test('a board is part of its page: the page row says when its board needs you, and boards have no rows of their own', async () => {
+  const info = await (await fetch(`${B}/_lab/pages`)).json();
+  const row = (p) => info.pages.find((x) => x.path === p);
+  assert.equal(row('/cart').board, 'needs your reply');
+  assert.equal(row('/pricing').board, '');
+  assert.equal(info.boards, undefined);
 });

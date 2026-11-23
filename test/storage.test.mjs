@@ -21,8 +21,7 @@ const folder = () => {
   return d;
 };
 // A lab on the folder, once it answers; stop() ends it and waits for it to exit.
-async function start(dir, env = {}) {
-  const port = nextPort();
+async function start(dir, env = {}, port = nextPort()) {
   const server = spawnLab(dir, port, { env: { ...process.env, PORT: String(port), ...env } });
   running.add(server);
   let log = '';
@@ -39,7 +38,7 @@ async function start(dir, env = {}) {
       server.once('exit', () => (running.delete(server), resolve()));
       server.kill('SIGTERM');
     });
-  return { B, post, list, stop, log: () => log, alive: () => server.exitCode === null, agent: () => serverJson(dir).agent };
+  return { port, B, post, list, stop, log: () => log, alive: () => server.exitCode === null, agent: () => serverJson(dir).agent };
 }
 
 const until = async (check, what) => {
@@ -390,5 +389,28 @@ test("a renamed page takes its board along (its of, the frames that are the page
   assert.deepEqual(await readsOf('/pricing'), [], 'and nothing is left under the old name');
   const stateFile = path.join(dir, '.lab/state.json');
   await until(() => fs.existsSync(stateFile) && readJson(stateFile).reads?.leo?.['/plans/prices']?.includes(comment.id) && !readJson(stateFile).reads.leo['/pricing'], 'the state says so too (saved, the old key dropped)');
+  await lab.stop();
+});
+
+// A write that would change nothing is skipped (#427): comments.md is the whole text of every pin, and a restart, a
+// progress line or a wait used to write all of it again.
+test('nothing changed, nothing written: a restart leaves comments.md and the page file as they were', async () => {
+  const dir = folder();
+  let lab = await start(dir);
+  await lab.post({ page: '/index', name: 'Leo', text: 'keep me', anchor });
+  const md = path.join(dir, '.lab', 'comments.md');
+  const pageFile = path.join(dir, '.lab', 'comments', 'index.json');
+  await until(() => fs.existsSync(md) && fs.readFileSync(md, 'utf8').includes('keep me'), 'comments.md written');
+  await sleep(500);
+  await lab.stop();
+  const was = (f) => `${fs.statSync(f).ino} ${fs.statSync(f).mtimeMs}`;
+  const before = [was(md), was(pageFile)];
+  lab = await start(dir, {}, lab.port);
+  await sleep(800);
+  assert.deepEqual([was(md), was(pageFile)], before, 'a start with nothing new writes neither');
+  // a file deleted meanwhile comes back with the next change
+  fs.rmSync(md);
+  await lab.post({ page: '/index', name: 'Leo', text: 'second', anchor });
+  await until(() => fs.existsSync(md) && fs.readFileSync(md, 'utf8').includes('second'), 'comments.md written again');
   await lab.stop();
 });
