@@ -56,13 +56,13 @@ try {
       const f0 = await frame(p);
       await p.keyboard.press('Control+ArrowRight');
       await settled(p);
-      await p.keyboard.press('Control+.');
+      await p.keyboard.press('Alt+.'); // ⌥ > (Leo, 23 Nov)
       await settled(p);
       await sleep(100);
       const f1 = await frame(p);
       const words = await inRoot(p, "r.querySelector('.float textarea')?.value");
       const line1 = await inRoot(p, "r.querySelector('.float .moment.live')?.textContent || ''");
-      check(eng, '⌃→ and ⌃. step the video two frames; the words stay', f1 === f0 + 2 && words === 'the logo comes in', JSON.stringify({ f0, f1, words }));
+      check(eng, '⌃→ and ⌥. step the video two frames; the words stay', f1 === f0 + 2 && words === 'the logo comes in', JSON.stringify({ f0, f1, words }));
       check(eng, 'the line follows the step', line1.endsWith(`· frame ${f1}`), line1);
       await p.keyboard.down('Control');
       await sleep(50);
