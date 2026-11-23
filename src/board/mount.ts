@@ -713,7 +713,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     e.preventDefault();
     e.stopImmediatePropagation();
     // Holding D, the board holds still: a drawing's strokes are where they were drawn on the screen, and a pan between two
-    // of them put them apart from the frames they were on (#423).
+    // of them put them apart from the frames they were on (issue 423).
     if (boardWidget()?.drawing?.()) return;
     if (e.timeStamp - wheelAt > 250) measure(); // where the box is, read once as a gesture starts, never per event
     wheelAt = e.timeStamp;

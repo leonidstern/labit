@@ -92,7 +92,7 @@ function widths(pts: number[], w?: number[]) {
 // The strokes as they are drawn, in page coordinates (kept that way as they come in, so a scroll mid-stroke leaves the
 // part already drawn on the words it was drawn on). One group a stroke, one path a segment (as wide as the pen was there).
 // A move adds to the last stroke only: its last segment again (its curve leaned on the point that had not come yet) and
-// the new one. Every line was made again on every move, 15 ms a move by 2,000 points (bench/drawings/ink-bench.mjs, #423).
+// the new one. Every line was made again on every move, 15 ms a move by 2,000 points (bench/drawings/ink-bench.mjs, issue 423).
 export function liveInk() {
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('class', 'ink live');

@@ -62,7 +62,7 @@ export const endDrag = (e) => {
     return;
   }
   // Holding D, a press that hardly moved is no click (it opened an empty box, and the next D typed a "d" into it, which
-  // then kept every stroke after it from drawing; #423): the drawing waits on, as after a stroke.
+  // then kept every stroke after it from drawing; issue 423): the drawing waits on, as after a stroke.
   if (d.ink && !d.active && e.type !== 'pointercancel') {
     S.afterDrag = true;
     setTimeout(() => (S.afterDrag = false), 0);

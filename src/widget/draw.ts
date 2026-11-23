@@ -91,7 +91,7 @@ const letterAt = (x: number, y: number) => {
 };
 
 // The line with each point the mean of it and its neighbours: a shaky hand's jitter, point to point, is not a wave (a
-// shaky straight line read as a wavy underline, #423); a wave's few px up and down over a dozen px stay.
+// shaky straight line read as a wavy underline, issue 423); a wave's few px up and down over a dozen px stay.
 const calm = (s: P[]) => s.map((p, i) => (i && i < s.length - 1 ? { ...p, x: (s[i - 1].x + p.x + s[i + 1].x) / 3, y: (s[i - 1].y + p.y + s[i + 1].y) / 3 } : p));
 
 // How often a line turns back across (left to right, then right to left): a wave goes one way, a scribble back and forth.
@@ -169,7 +169,7 @@ export function readInk(strokes: P[][], say: (e: Element | null) => string | und
     // A line drawn there and back over itself (two passes, to make it count) is the line out, not a loop round nothing:
     // it encloses next to no area (Leo, 22 Nov, #430: it read as circled).
     const far = s.reduce((k, p, i) => (dist(p, s[0]) > dist(s[k], s[0]) ? i : k), 0);
-    if (dist(s[far], s[0]) > 24 && length(s.slice(far)) > Math.max(60, length(s.slice(0, far + 1)) * 0.5) && area(s) < length(s) * 4 && turns(cut(s, 6), 1) < 4) s = s.slice(0, far + 1); // a short arrow's head is no way back (#423)
+    if (dist(s[far], s[0]) > 24 && length(s.slice(far)) > Math.max(60, length(s.slice(0, far + 1)) * 0.5) && area(s) < length(s) * 4 && turns(cut(s, 6), 1) < 4) s = s.slice(0, far + 1); // a short arrow's head is no way back (issue 423)
     const ends = dist(s[0], s[s.length - 1]);
     const c = cut(s, Math.max(3, diag * 0.06));
     // Closed, or nearly: ends close, or a loop that goes at least three quarters round one way (a quick hand stops short
@@ -187,13 +187,13 @@ export function readInk(strokes: P[][], say: (e: Element | null) => string | und
           break;
         }
       }
-    } else if (turns(cut(s, Math.max(6, diag * 0.04)), 1) >= 4) out.mark = 'scribbled over (likely: remove this)'; // turns cut to its size: a long gentle wave's shake is not a scribble (#423)
+    } else if (turns(cut(s, Math.max(6, diag * 0.04)), 1) >= 4) out.mark = 'scribbled over (likely: remove this)'; // turns cut to its size: a long gentle wave's shake is not a scribble (issue 423)
     else if (c.length === 3 && c[1].y < Math.min(c[0].y, c[2].y) - h * 0.6 && Math.abs(c[0].y - c[2].y) < h * 0.4 && w < 90) {
       out.mark = 'caret (insert here)';
       out.to = c[1];
     } else if ((tip = headAt(s))) {
       // Its head is drawn: an arrow, before it is read as a line under or beside something (a long flat arrow read as
-      // underlined, #423).
+      // underlined, issue 423).
       Object.assign(out, { mark: 'arrow', from: s[0], to: tip });
       shaft = s.slice(0, s.indexOf(tip) + 1);
     } else if (straight(s) && h < Math.max(18, w * 0.06) && w > 24) {
@@ -239,7 +239,7 @@ export function readInk(strokes: P[][], say: (e: Element | null) => string | und
   // Over a board: the board's own frame there (its view keeps its frames in a shadow root, so the page's lookup stops at the
   // view's box: an arrow on a board named "board pin-…" at both ends; Leo's drawings, 21 Nov).
   // On a board's own page the board says which frame is there (the page's lookup found the board's dialog: each mark of a
-  // drawing was "on" it, #423); between frames, the board itself.
+  // drawing was "on" it, issue 423); between frames, the board itself.
   const board = (window as unknown as { __labBoard?: { anchor?: (x: number, y: number) => { frame?: string }; box?: (id: string) => HTMLElement | null; contains?: (x: number, y: number) => boolean } }).__labBoard;
   const at = (p?: P) => {
     if (!p) return;
@@ -255,7 +255,7 @@ export function readInk(strokes: P[][], say: (e: Element | null) => string | und
   };
   // An arrow keeps its shaft only, up to the tip: the page draws it a clean head (Leo's pick H, 20 Nov), whatever the
   // hand did at the end.
-  // Up to 64 strokes are kept (16 were, and the rest went without a word, #423); past that, the drawing says how many it had.
+  // Up to 64 strokes are kept (16 were, and the rest went without a word, issue 423); past that, the drawing says how many it had.
   const kept = out.mark === 'arrow' && shaft.length > 1 ? [shaft] : strokes.slice(0, MAX_STROKES);
   // Several marks in one drawing (circle this, arrow that there, cross out those): each is read on its own and said
   // with what it is on, in the order drawn, so the words can refer to them ("move this one first, rename that"). An
