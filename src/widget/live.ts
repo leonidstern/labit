@@ -561,7 +561,11 @@ export function startLive() {
         const doc = new DOMParser().parseFromString(html, 'text/html');
         // The file is gone for now (a build that clears its folder): the lab answers with its own screen, which has no
         // widget and nobody to hear the file come back. This page stays and follows the file when it is saved again.
-        if (!res.ok || !doc.querySelector('script[data-live]')) return;
+        const tag = doc.querySelector('script[data-live]') as HTMLScriptElement | null;
+        if (!res.ok || !tag) return;
+        // The page's file is as it was when this one loaded (a lab restart with nothing saved meanwhile): nothing to do. A
+        // page with scripts of its own was reloaded here every time (#428).
+        if (tag.dataset.sum && tag.dataset.sum === W.script.dataset.sum) return;
         if (ownScripts() || scriptsOf(doc).join('\n') !== scriptsOf(document).join('\n') || sheetsOf(doc).join('\n') !== sheetsOf(document).join('\n')) return reload();
         // What you're looking at stays put: an element a third down the window keeps its place on screen. Found before
         // the change (during a cross-fade the page can't be hit-tested).
@@ -595,6 +599,7 @@ export function startLive() {
             const v = name === 'class' ? [value, ...[...H.classList].filter((c) => c.startsWith('lab-'))].join(' ') : value;
             if (name !== 'style' && H.getAttribute(name) !== v) H.setAttribute(name, v);
           }
+          W.script.dataset.sum = tag.dataset.sum || ''; // this page now is that file
           aroundMorph(() => morphKids(document.body, doc.body)); // a choice tried in the page: its words back first (thread.ts)
           // The elements that changed are outlined for a moment (not for someone who asked for less motion).
           if (!matchMedia('(prefers-reduced-motion: reduce)').matches) for (const e of [...touched].slice(0, 12)) if (e?.isConnected && e !== document.body) e.animate?.([{ outline: '2px solid Highlight' }, { outline: '2px solid transparent' }], 1200);

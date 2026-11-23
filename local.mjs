@@ -2089,7 +2089,10 @@ const widget = (page, admin, me = '', framed = false, req = null) => {
 };
 // Before the last </body>, unless that one sits inside a script (a template string); then at the end.
 // A page made for the lab may load the widget itself: that tag goes, so there is one widget, set up for local mode.
+// The tag carries a short sum of the page as its file has it (data-sum): after a lab restart the widget fetches the page
+// again and, when the sum is the same, leaves a page with its own scripts alone instead of reloading it (#428).
 const inject = (html, tag) => {
+  tag = tag.replace('<script ', `<script data-sum="${createHash('sha1').update(html).digest('hex').slice(0, 12)}" `);
   html = html.replace(/<script\b[^>]*\bsrc=["'][^"']*\/_lab\/comments\.js["'][^>]*>\s*<\/script>\s*/gi, '');
   const lower = html.toLowerCase();
   const at = lower.lastIndexOf('</body>');

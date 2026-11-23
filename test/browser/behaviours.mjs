@@ -23,6 +23,8 @@ write('s.css', 'h1{color:rgb(255,0,0)} body{margin:30px}');
 write('pic.svg', '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="42"><rect width="320" height="42" fill="#cde"/></svg>');
 write('notes.md', '# notes');
 write('data.json', '{"a":1}');
+// A page with a script of its own (it builds its words): a lab restart must not reload it when its file is unchanged (#428).
+const SCRIPTED = '<!doctype html><title>S</title><p id="s">x</p><script>document.getElementById("s").textContent = "built"</script>';
 
 let server;
 const start = () => (server = startLab(DIR, env, { root: '.', port: PORT }));
@@ -48,6 +50,7 @@ await up();
 for (const eng of ['webkit', 'chromium']) {
   write('index.html', PAGE);
   write('s.css', 'h1{color:rgb(255,0,0)} body{margin:30px}');
+  write('scripted.html', SCRIPTED);
   const browser = await pw[eng].launch();
   const ctx = await browser.newContext({ viewport: { width: 1000, height: 700 } });
   // Done pins show by default: a resolved pin stays on the page, so the go check below needs no reload
@@ -702,6 +705,10 @@ for (const eng of ['webkit', 'chromium']) {
   await p.keyboard.press('Escape');
   for (const end = Date.now() + 3000; Date.now() < end && loads < 2; ) await sleep(50);
   check(eng, 'a save it may fetch reloads the page', loads === 2, `loads ${loads}`);
+  const s = await ctx.newPage();
+  let sLoads = 0;
+  s.on('load', () => sLoads++);
+  await s.goto(B + '/scripted');
   await sleep(800);
   server.kill();
   await sleep(600);
@@ -709,6 +716,15 @@ for (const eng of ['webkit', 'chromium']) {
   await up();
   await sleep(5000);
   check(eng, 'a lab restart does not reload the page', loads === 2, `loads ${loads}`);
+  check(eng, 'nor a page with its own script whose file did not change (#428)', sLoads === 1 && (await s.textContent('#s')) === 'built', `loads ${sLoads}`);
+  // Its file saved while the lab was down: the page catches up by reloading once the lab is back.
+  server.kill();
+  await sleep(600);
+  write('scripted.html', SCRIPTED.replace('<title>S', '<title>S2'));
+  start();
+  await up();
+  for (const end = Date.now() + 6000; Date.now() < end && sLoads < 2; ) await sleep(50);
+  check(eng, 'a page with its own script whose file was saved while the lab was down reloads when it is back', sLoads === 2 && (await s.title()) === 'S2', `loads ${sLoads}`);
   await browser.close();
 }
 server.kill();
