@@ -81,17 +81,20 @@ try {
       const file = saved && path.join(DIR, '.lab/attachments', `${saved.id}-1.${im.type}`);
       check(eng, 'its file is in .lab/attachments under the comment id', Boolean(file) && fs.existsSync(file));
       check(eng, 'the agent reads its path', saved && (await (await fetch(`${B}/_lab/agent/index`)).text()).includes(`image: .lab/attachments/${saved.id}-1.${im.type} (${im.w}×${im.h})`));
-      // the thread shows the thumbnail
+      // the thread says the picture is there, in one line, no thumbnail and nothing that opens a tab (#424)
       await sleep(500);
       await p.keyboard.press('Escape');
       const pinsN = await p.locator('button.pin').count();
       for (let i = 0; i < pinsN; i++) { // ours is the one whose thread has a picture
         await p.locator('button.pin').nth(i).click();
         await sleep(700);
-        if (await p.locator('.att img').count()) break;
+        if (await p.locator('.att').count()) break;
         await p.keyboard.press('Escape');
       }
-      check(eng, 'the thread shows the picture, loaded', await until(async () => p.evaluate(() => { const r = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.att img'))?.shadowRoot; const i = r?.querySelector('.att img'); return Boolean(i && i.naturalWidth > 0); })));
+      const att = (sel) => p.evaluate((s) => { const r = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector(s))?.shadowRoot; const a = r?.querySelector(s); return a && { text: a.textContent, label: a.getAttribute('aria-label'), h: a.getBoundingClientRect().height, img: Boolean(a.closest('.msg')?.querySelector('img:not(.atts img)')), link: Boolean(a.closest('.msg')?.querySelector('a[target="_blank"]')) }; }, sel);
+      let seen;
+      await until(async () => (seen = await att('.att'))?.text);
+      check(eng, 'the thread says "1 image attached" in one short line, no thumbnail, no new-tab link', seen?.text === '1 image attached' && seen.label === '1 image attached' && seen.h <= 20 && !seen.img && !seen.link, JSON.stringify(seen));
       // a drop on a reply box carries one too
       const reply = p.locator('textarea').first();
       await reply.focus();
@@ -144,7 +147,9 @@ try {
       let said;
       for (let i = 0; i < 40 && !said; i++) { await sleep(150); said = (await list()).find((c) => c.text === 'this is the whole page'); }
       check(eng, 'the chat message is saved with the picture', said?.images?.length === 1 && said.anchor?.kind === 'page', JSON.stringify(said?.images));
-      check(eng, 'and the chat shows it, loaded', await until(async () => p.evaluate(() => { const r = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.chatwin .att img'))?.shadowRoot; const i = r?.querySelector('.chatwin .att img'); return Boolean(i && i.naturalWidth > 0); })));
+      let inChat;
+      await until(async () => (inChat = await att('.chatwin .att'))?.text);
+      check(eng, 'and the chat says so the same way', inChat?.text === '1 image attached' && !inChat.img && !inChat.link, JSON.stringify(inChat));
       check(eng, 'the agent reads it as an image: line under the message', Boolean(said) && (await (await fetch(`${B}/_lab/agent/index`)).text()).includes(`image: .lab/attachments/${said.id}-1.`));
       await p.keyboard.press('Escape');
     } finally {

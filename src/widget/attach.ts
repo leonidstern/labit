@@ -73,16 +73,18 @@ export async function send<T>(wrap: HTMLElement, list: Pic[], fn: (att: { attach
   return out;
 }
 
-/** A message's pictures, as thumbnails that open the whole one. The name is built here from the comment's id, never read
- *  from the record (a record with another n or type, or an id that is not 12 hex digits, shows nothing). */
-export function show(box: HTMLElement, item: { id: string; images?: (Image & { w?: number; h?: number })[] }) {
+/** A message's pictures, as one quiet line ("2 images attached"), not thumbnails (Leo, 22 Nov, #424: they are there for
+ *  the agent, and big thumbnails that opened in a new tab made short comments tall). The files stay as they are for the
+ *  agent. Counted only for names this part would build from the comment's id (a record with another n or type, or an id
+ *  that is not 12 hex digits, shows nothing). */
+export function show(box: HTMLElement, item: { id: string; images?: Image[] }) {
   if (!/^[a-f0-9]{12}$/.test(item.id)) return;
+  const n = (item.images || []).filter((i) => Number.isInteger(i.n) && i.n >= 1 && i.n <= MAX && /^(png|jpg|webp|gif)$/.test(i.type)).length;
+  if (!n) return;
   styled(box);
-  for (const i of item.images || []) {
-    if (!(Number.isInteger(i.n) && i.n >= 1 && i.n <= MAX && /^(png|jpg|webp|gif)$/.test(i.type))) continue;
-    const url = new URL(`/_lab/attachments/${item.id}-${i.n}.${i.type}`, import.meta.url).href;
-    const a = Object.assign(document.createElement('a'), { className: 'att', href: url, target: '_blank', rel: 'noopener' });
-    a.append(Object.assign(document.createElement('img'), { src: url, loading: 'lazy', decoding: 'async', alt: `picture ${i.w || ''}×${i.h || ''}`, width: i.w || undefined, height: i.h || undefined }));
-    box.append(a);
-  }
+  const said = `${n} image${n > 1 ? 's' : ''} attached`;
+  const line = Object.assign(document.createElement('span'), { className: 'att', textContent: said });
+  line.setAttribute('aria-label', said);
+  line.insertAdjacentHTML('afterbegin', '<svg viewBox="0 0 12 12" aria-hidden="true"><rect x="1" y="2" width="10" height="8" rx="1.5"/><path d="M1.5 9 4.5 6l2 2 1.5-1.5L10.5 9"/></svg>');
+  box.append(line);
 }
