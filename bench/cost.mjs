@@ -3,8 +3,10 @@
 // the size of the text.
 //   node bench/cost.mjs situations   [--arms full,lean] [--runs 10] [--model sonnet] [--jobs 3]
 //   node bench/cost.mjs situations-2 [...]
+//   node bench/cost.mjs drawings     [--arms full,nolines,skill-whole,skill-core] [--runs 3]   (after bench/drawings/draw.mjs)
 //   node bench/cost.mjs --summary bench/results/cost/<file>.json      (prints a saved run again)
-// Arms are what the agent is handed: full (the saved agent text) or lean (what a wait hands over: LEAN_SKIP lines left out).
+// Arms are what changes for the agent; each task lists its own (below). Situations: full (the saved agent text) or lean
+// (what a wait hands over: LEAN_SKIP lines left out).
 // Runs are shuffled across arms, so cache warm-up and drift don't all fall on one arm.
 //
 // Per run, from the host's own report (null when it doesn't say; never a guess from text size): model calls, uncached
@@ -21,13 +23,20 @@ import { LEAN_SKIP } from '../lib/comments-api.mjs';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..');
 
-// A task: the files an agent gets (copied into a fresh folder), the text it is handed, what to ask, and how to score.
+// A task: the files an agent gets (copied into a fresh folder), the text it is handed, what to ask, how to score, and
+// its arms (what changes between them: the text it is handed, extra arguments for the agent). A task with cases runs
+// each case on its own (a run is one arm on one case, --runs times each).
+const full = (text) => text;
+const lean = (text) => text.split('\n').filter((l) => !LEAN_SKIP.test(l)).join('\n');
 const situations = (n) => {
   const tag = n === 1 ? 'situations' : `situations-${n}`;
   return {
     files: ['situations', `${tag}-task.md`],
-    text: `results/${tag}-agent-text.txt`,
-    prompt: `Do the task in bench/${tag}-task.md. Use the name run as your model name in the answer file name.`,
+    text: () => readFileSync(join(HERE, `results/${tag}-agent-text.txt`), 'utf8'),
+    into: `bench/results/${tag}-agent-text.txt`,
+    prompt: () => `Do the task in bench/${tag}-task.md. Use the name run as your model name in the answer file name.`,
+    tools: 'Read,Write,Grep,Glob,Bash',
+    arms: { full: { text: full }, lean: { text: lean } },
     score: (dir) => {
       const answer = readdirSync(join(dir, 'bench/results')).find((f) => f.startsWith(`${tag}-answer-`));
       if (!answer) return { pass: 0, of: null, note: 'no answer file' };
@@ -39,11 +48,39 @@ const situations = (n) => {
     },
   };
 };
-const TASKS = { situations: situations(1), 'situations-2': situations(2) };
-const ARMS = {
-  full: (text) => text,
-  lean: (text) => text.split('\n').filter((l) => !LEAN_SKIP.test(l)).join('\n'),
+// The skill as an agent has it: whole, or only its core (start, the local lab, own pins), without the parts for
+// boards and for showing a page instead of an Artifact.
+const SKILL = readFileSync(join(ROOT, 'skills/labit/SKILL.md'), 'utf8');
+const CORE = SKILL.split(/\n(?=## )/).filter((part) => !/^## (Boards|Instead of an Artifact)/.test(part)).join('\n');
+// Drawings (bench/drawings): one drawn pin per run, its text as a wait hands it over (out/<id>.txt, from draw.mjs),
+// done in a fresh copy of the page; the scenario's check reads the edited page. Arms: the coordinates of a mark the
+// page read (`lines`) kept or left out, and the skill whole or only its core.
+const DRAWN = join(HERE, 'drawings');
+const drawings = {
+  files: [],
+  cases: async () => (await import('./drawings/scenarios.mjs')).SCENARIOS,
+  setup: (dir) => {
+    for (const f of ['pricing.html', 'site.css']) cpSync(join(DRAWN, f), join(dir, f));
+  },
+  text: (c) => {
+    const f = join(DRAWN, 'out', `${c.id}.txt`);
+    if (!existsSync(f)) throw new Error(`no ${f}: run bench/drawings/draw.mjs first`);
+    return readFileSync(f, 'utf8');
+  },
+  prompt: (c, text) => `You answer comments people leave on pages in a lab (labit). This folder is the site; the page /pricing is pricing.html. A new comment came in:\n\n${text}\n\nDo the work it asks for in the files now (no one is around to answer questions). If it truly asks nothing you can do, change nothing. Then end with one short line: what you did.`,
+  tools: 'Read,Edit,Write,Grep,Glob',
+  arms: {
+    full: { text: lean },
+    nolines: { text: (t) => lean(t).split('\n').filter((l) => !/^lines \(px/.test(l) || /^drawn: .*unclear/m.test(t)).join('\n') },
+    'skill-whole': { text: lean, args: ['--append-system-prompt', SKILL] },
+    'skill-core': { text: lean, args: ['--append-system-prompt', CORE] },
+  },
+  score: (dir, c) => {
+    const ok = Boolean(c.check(readFileSync(join(dir, 'pricing.html'), 'utf8'), readFileSync(join(DRAWN, 'pricing.html'), 'utf8')));
+    return { pass: ok ? 1 : 0, of: 1, missed: ok ? [] : [c.id] };
+  },
 };
+const TASKS = { situations: situations(1), 'situations-2': situations(2), drawings };
 
 // One run's spend, from Claude Code's stream-json lines. Each model call can come as several assistant events with the
 // same message id and the same usage: counted once.
@@ -133,14 +170,16 @@ const show = (arms) => {
   }
 };
 
-const run = (task, arm, model, text) =>
+const run = (task, arm, model, c) =>
   new Promise((done) => {
     const dir = mkdtempSync(join(tmpdir(), 'labit-cost-'));
     mkdirSync(join(dir, 'bench/results'), { recursive: true });
     for (const f of task.files) cpSync(join(HERE, f), join(dir, 'bench', f), { recursive: true });
-    writeFileSync(join(dir, 'bench', task.text), ARMS[arm](text));
+    task.setup?.(dir, c);
+    const text = task.arms[arm].text(task.text(c));
+    if (task.into) writeFileSync(join(dir, task.into), text);
     const t0 = Date.now();
-    const args = ['-p', task.prompt, '--output-format', 'stream-json', '--verbose', '--model', model, '--permission-mode', 'acceptEdits', '--allowedTools', 'Read,Write,Grep,Glob,Bash'];
+    const args = ['-p', task.prompt(c, text), '--output-format', 'stream-json', '--verbose', '--model', model, '--permission-mode', 'acceptEdits', '--allowedTools', task.tools, ...(task.arms[arm].args || [])];
     execFile('claude', args, { cwd: dir, timeout: 1500000, maxBuffer: 1 << 30 }, (err, stdout) => {
       const lines = String(stdout).split('\n').flatMap((l) => {
         try {
@@ -151,12 +190,12 @@ const run = (task, arm, model, text) =>
       });
       let score;
       try {
-        score = task.score(dir);
+        score = task.score(dir, c);
       } catch (e) {
         score = { pass: 0, of: null, note: String(e.message || e).slice(0, 200) };
       }
       rmSync(dir, { recursive: true, force: true });
-      done({ arm, ...spendOf(lines), seconds: Math.round((Date.now() - t0) / 1000), score, ...(err && !lines.length ? { error: String(err.message).slice(0, 200) } : {}) });
+      done({ arm, ...(c.id ? { case: c.id } : {}), ...spendOf(lines), seconds: Math.round((Date.now() - t0) / 1000), score, ...(err && !lines.length ? { error: String(err.message).slice(0, 200) } : {}) });
     });
   });
 
@@ -175,26 +214,26 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   const name = argv[0];
   const task = TASKS[name];
   if (!task) {
-    console.error(`usage: node bench/cost.mjs <${Object.keys(TASKS).join('|')}> [--arms full,lean] [--runs 10] [--model sonnet] [--jobs 3]`);
+    console.error(`usage: node bench/cost.mjs <${Object.keys(TASKS).join('|')}> [--arms a,b] [--runs 10] [--model sonnet] [--jobs 3]`);
     process.exit(2);
   }
-  const arms = opt('arms', 'full,lean').split(',');
-  if (arms.some((a) => !ARMS[a])) {
-    console.error(`arms: ${Object.keys(ARMS).join(', ')}`);
+  const arms = opt('arms', Object.keys(task.arms).slice(0, 2).join(',')).split(',');
+  if (arms.some((a) => !task.arms[a])) {
+    console.error(`arms of ${name}: ${Object.keys(task.arms).join(', ')}`);
     process.exit(2);
   }
   const runs = Number(opt('runs', 10));
   const model = opt('model', 'sonnet');
   const jobs = Number(opt('jobs', 3));
-  const text = readFileSync(join(HERE, task.text), 'utf8');
-  const queue = arms.flatMap((arm) => Array.from({ length: runs }, () => arm)).sort(() => Math.random() - 0.5);
+  const cases = task.cases ? await task.cases() : [{}];
+  const queue = arms.flatMap((arm) => cases.flatMap((c) => Array.from({ length: runs }, () => [arm, c]))).sort(() => Math.random() - 0.5);
   const done = [];
   await Promise.all(Array.from({ length: jobs }, async () => {
     while (queue.length) {
-      const arm = queue.shift();
-      const r = await run(task, arm, model, text);
+      const [arm, c] = queue.shift();
+      const r = await run(task, arm, model, c);
       done.push(r);
-      console.log(`${String(done.length).padStart(3)} ${arm.padEnd(5)} ${r.score.pass}/${r.score.of ?? '?'} · $${r.costUsd ?? '?'} · ${r.turns ?? '?'} turns · ${r.toolCalls} tools · ${r.pictures} pictures · ${r.seconds} s${r.error ? ` · ${r.error}` : ''}`);
+      console.log(`${String(done.length).padStart(3)} ${arm.padEnd(11)}${c.id ? ` ${c.id.padEnd(16)}` : ''} ${r.score.pass}/${r.score.of ?? '?'} · $${r.costUsd ?? '?'} · ${r.turns ?? '?'} turns · ${r.toolCalls} tools · ${r.pictures} pictures · ${r.seconds} s${r.error ? ` · ${r.error}` : ''}`);
     }
   }));
   const commit = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim();

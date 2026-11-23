@@ -129,3 +129,16 @@ Situations (batch 1), Sonnet 5.5, Claude Code 2.1.330, 20 runs per arm in two se
 | lean | 21 of 600 | 9 / 20 | $0.236 (0.220–0.252) | $0.525 | 7.5 | 340k |
 
 The lean text is about 25% shorter and costs the same per run: more than 90% of the input is the conversation read again from cache on each call, and the pin text is about 2k tokens of it. It gets more wrong (Fisher's exact test, p ≈ 0.02). Of the misses the second set names, dark mode is 5 of 10 lean runs against 1 of 10 full ones: lean leaves out the `colours:` line, the only one that says the page was dark.
+
+### Drawings and the skill, 2026-11-23
+
+`node bench/cost.mjs drawings` runs each of the 12 drawings of `drawings/` on its own (run `drawings/draw.mjs` first), the text as a wait hands it over, Sonnet 5.5, 3 runs per drawing and arm (`results/cost/drawings-sonnet-2026-11-23-09-08.json`). Every arm got 36 of 36 right.
+
+| arm | mean cost a run | median cache read |
+|---|---|---|
+| full: the drawing's text as a wait sends it | $0.056 | 119k |
+| nolines: without the `lines` coordinates of a mark the page read | $0.057 | 119k |
+| skill-whole: plus the whole skill | $0.068 | 138k |
+| skill-core: plus the skill without its Boards and Artifact parts | $0.066 | 132k |
+
+Leaving the coordinates out saves nothing on these marks (their `lines` are 47–188 characters). The skill adds about $0.01 a pin when the agent reads it with every pin; its core alone saves about $0.002 of that, within the spread.
