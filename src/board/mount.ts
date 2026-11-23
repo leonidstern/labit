@@ -9,9 +9,9 @@
 import { clamp, fitAll, fitFrame, panBy, zoomAt } from './camera.ts';
 import type { Cam, Box } from './camera.ts';
 
-type Frame = { id: string; src: string; auto?: boolean; ow?: number; oh?: number; kind?: string; file?: string; iw?: number; ih?: number; guest?: boolean; w: number; h: number; x: number; y: number; label?: string; state?: string; variantOf?: string };
+type Frame = { id: string; src: string; auto?: boolean; ow?: number; oh?: number; kind?: string; file?: string; iw?: number; ih?: number; pv?: number[]; guest?: boolean; w: number; h: number; x: number; y: number; label?: string; state?: string; variantOf?: string };
 type Board = { rev: number; frames: Frame[]; of?: string } & Record<string, unknown>;
-type Card = { f: Frame; box: HTMLElement; inner: HTMLElement; frame?: HTMLIFrameElement; seen: number };
+type Card = { f: Frame; box: HTMLElement; inner: HTMLElement; frame?: HTMLIFrameElement; seen: number; pv?: HTMLImageElement; at?: number };
 type Spot = { left: number; top: number; zone: { left: number; top: number; width: number; height: number } | null; clipped?: boolean };
 
 type MountOpts = {
@@ -169,6 +169,58 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     return el;
   };
 
+  // A picture drawn small shows its preview instead (Leo, 23 Nov: fine lines sparkled far out; as open whiteboards do it):
+  // previews of 1024, 512, 256 and 128 px, made once by the board's page and kept by the lab beside the picture. The one
+  // shown is the smallest that is drawn at most 1.4× its size. A smaller one comes at once (zooming out); a bigger one
+  // only once the camera rests, so nothing changes mid-zoom. The preview lies over the picture, which stays under it.
+  const previewOf = (c: Card, settled: boolean) => {
+    const sizes = c.f.pv;
+    if (!sizes?.length || !c.pv) return;
+    const need = Math.max(c.f.w, c.f.h) * cam.z * devicePixelRatio;
+    let at = 0; // the picture itself
+    for (const s of sizes) if (s * 1.4 >= need && (!at || s < at)) at = s;
+    const was = c.at || 0;
+    if (at === was || (!settled && (at === 0 || (was && at > was)))) return;
+    c.at = at;
+    if (at) c.pv.src = `${c.f.src}-p${at}`;
+    c.pv.style.visibility = at ? '' : 'hidden';
+  };
+  // Pictures with no previews yet get them, one at a time once the board rests, from this page (one that may add to the
+  // board: the lab refuses the rest, and then none is tried again).
+  const makingFor = new Set<string>();
+  let previews: Promise<void> = Promise.resolve(); // one picture at a time
+  let mayMake = true;
+  const makePreviews = async (c: Card, img: HTMLImageElement) => {
+    const long = Math.max(img.naturalWidth, img.naturalHeight);
+    const want = [1024, 512, 256, 128].filter((s) => s < long && !c.f.pv?.includes(s));
+    if (!mayMake || !want.length || makingFor.has(c.f.id) || c.f.src.indexOf('/_lab/board/') !== 0) return;
+    makingFor.add(c.f.id);
+    let from: CanvasImageSource = img;
+    let [w, h] = [img.naturalWidth, img.naturalHeight];
+    for (const s of want) {
+      while (Math.max(w, h) / 2 >= s) {
+        // halved step by step, each from the last: one big step skips most of the picture and comes out jagged
+        const cv = Object.assign(document.createElement('canvas'), { width: Math.round(w / 2), height: Math.round(h / 2) });
+        const x = cv.getContext('2d');
+        if (!x) return;
+        x.imageSmoothingQuality = 'high';
+        x.drawImage(from, 0, 0, cv.width, cv.height);
+        [from, w, h] = [cv, cv.width, cv.height];
+      }
+      const k = s / Math.max(w, h);
+      const cv = Object.assign(document.createElement('canvas'), { width: Math.round(w * k), height: Math.round(h * k) });
+      const x = cv.getContext('2d');
+      if (!x) return;
+      x.imageSmoothingQuality = 'high';
+      x.drawImage(from, 0, 0, cv.width, cv.height);
+      const blob = await new Promise<Blob | null>((ok) => cv.toBlob(ok, 'image/webp', 0.9));
+      if (!blob || signal.aborted) return;
+      const admin = document.querySelector<HTMLScriptElement>('script[data-admin]')?.dataset.admin;
+      const res = await fetch(`/_lab/api/image?board=${encodeURIComponent(name)}&preview=${c.f.id}`, { method: 'POST', headers: { 'content-type': blob.type, ...(admin && { 'x-lab-admin': admin }) }, body: blob, signal }).catch(() => null);
+      if (!res?.ok) return void (mayMake = res?.status !== 403 && res?.status !== 401);
+    }
+  };
+
   // One camera write per frame: a trackpad sends two or three wheel events a frame, each was a transform, a --iz restyle
   // of every label and a pin redraw (Leo, 19 Nov: "lags a lot"). Nothing here reads the page's layout, and the labels
   // are sized again only when the zoom changed (a pan restyles nothing).
@@ -191,6 +243,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       dots.style.backgroundSize = `${step}px ${step}px`;
       dots.style.opacity = String(Math.max(0, Math.min(1, (cam.z - 0.2) / 0.15))); // all there from 35 %, gone at 20 %
       world.style.setProperty('--iz', String(1 / cam.z));
+      for (const c of cards) previewOf(c, false);
       const pc = `${Math.round(cam.z * 100)}%`;
       if (zoomBtn.textContent !== pc) zoomBtn.textContent = pc;
     }
@@ -220,6 +273,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       if (!held) return go(moved || kept ? cam : fitAll(boxes(), view), false); // (which rests again, and lets the layer go then)
     }
     layered = false;
+    for (const c of cards) previewOf(c, true);
     world.style.willChange = '';
     wake();
     keepCam();
@@ -348,7 +402,13 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       inner.className = 'b';
       const c: Card = { f, box, inner, seen: 0 };
       box.dataset.id = f.id;
-      inner.appendChild(f.kind === 'image' ? Object.assign(document.createElement('img'), { src: f.src, alt: f.label || '', draggable: false, loading: 'lazy' }) : card(c));
+      if (f.kind === 'image') {
+        const img = Object.assign(document.createElement('img'), { src: f.src, alt: f.label || '', draggable: false, loading: 'lazy' });
+        c.pv = Object.assign(document.createElement('img'), { alt: '', draggable: false, className: 'pv' });
+        c.pv.style.visibility = 'hidden';
+        img.addEventListener('load', () => (previews = previews.then(() => (signal.aborted ? undefined : makePreviews(c, img))).catch((e) => console.warn('[lab] preview', e))), { once: true, signal });
+        inner.append(img, c.pv);
+      } else inner.appendChild(card(c));
       box.append(inner);
       const tag = text('div', '', box);
       tag.className = 't';
@@ -361,6 +421,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       const f = c.f;
       Object.assign(c.box.style, { left: `${f.x}px`, top: `${f.y}px`, width: `${f.w}px`, height: `${f.h}px` });
       paint(c);
+      previewOf(c, true);
     }
     if (selected && !cards.some((c) => c.f.id === selected)) selected = entered = '';
     pickFrames(picks);

@@ -216,6 +216,26 @@ try {
         check(eng, 'side by side in the order pasted, tops in line, not piled up', Boolean(both) && m2.x === m1.x + m1.w + 80 && m2.y === m1.y, JSON.stringify([m1, m2]));
       }
 
+
+      // a picture drawn small shows a preview the page made once and the lab keeps (Leo, 23 Nov: fine lines sparkled far out)
+      if (c) {
+        const kept = await until(async () => (await frames(name)).find((f) => f.id === 'c')?.pv?.length === 4, 80);
+        const pv = (await frames(name)).find((f) => f.id === 'c')?.pv;
+        check(eng, 'the page makes previews of 1024, 512, 256 and 128 px once, and the lab keeps them', Boolean(kept) && pv.join() === '1024,512,256,128' && (await fetch(`${B}/_lab/board/${name}/c-p256`)).ok, JSON.stringify(pv));
+        const shownPv = () => p.evaluate(() => { const f = document.querySelector('[data-lab-board-view]').shadowRoot.querySelector('#lab-board .f[data-id="c"]'); const v = f.querySelector('img.pv'); return { on: v.style.visibility !== 'hidden', src: v.getAttribute('src') || '', w: f.getBoundingClientRect().width }; });
+        await p.mouse.move(600, 400);
+        await p.keyboard.down('Control');
+        for (let i = 0; i < 12; i++) { await p.mouse.wheel(0, 120); await sleep(30); }
+        await p.keyboard.up('Control');
+        const far = await until(async () => { const d = await shownPv(); return d.on && d; });
+        check(eng, 'zoomed far out, a small preview shows over the picture', Boolean(far) && /-p(128|256)$/.test(far.src), JSON.stringify(far || await shownPv()));
+        await p.keyboard.down('Control');
+        for (let i = 0; i < 30; i++) { await p.mouse.wheel(0, -120); await sleep(30); }
+        await p.keyboard.up('Control');
+        check(eng, 'zoomed back in, once it rests the picture itself shows', Boolean(await until(async () => !(await shownPv()).on)), JSON.stringify(await shownPv()));
+        const bad = await fetch(`${B}/_lab/api/image?board=${name}&preview=c`, { method: 'POST', headers: { 'content-type': 'image/png', origin: B }, body: png(300, 200) });
+        check(eng, 'a preview of a size that is not one of them is refused', bad.status === 400 || bad.status === 403, String(bad.status));
+      }
     } finally {
       await browser.close();
     }

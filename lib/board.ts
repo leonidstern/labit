@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { IMAGE_FILE, imageInfo } from './images.mjs';
 
-export type Frame = { id: string; src: string; kind?: 'image'; file?: string; iw?: number; ih?: number; guest?: boolean; w: number; h: number; x?: number; y?: number; label?: string; variantOf?: string; state?: 'live' | 'picked' | 'archived'; auto?: boolean };
+export type Frame = { id: string; src: string; kind?: 'image'; file?: string; iw?: number; ih?: number; pv?: number[]; guest?: boolean; w: number; h: number; x?: number; y?: number; label?: string; variantOf?: string; state?: 'live' | 'picked' | 'archived'; auto?: boolean };
 export type Board = { v: 1; name: string; rev: number; title?: string; of?: string; frames: Frame[] };
 
 // (the commands: lib/boardact.ts)
@@ -46,6 +46,9 @@ export function check(raw: any, name: string, was?: Board | null): Board | strin
     const w = px(f.w, 200, 4000) ?? 1280;
     const out: Frame = { id: f.id, src: f.src, w, h: px(f.h, 200, 4000) ?? heightFor(w) };
     if (image) Object.assign(out, { kind: 'image', file: f.file, iw: px(f.iw, 1, 16384), ih: px(f.ih, 1, 16384), ...(f.guest === true ? { guest: true } : {}) });
+    // Its previews are the lab's to say: the stored file's, or the board as stored when a page sends its copy (which may be from before them).
+    const pv = was ? was.frames.find((g) => g.id === f.id)?.pv : f.pv;
+    if (image && Array.isArray(pv) && pv.length && pv.every((n) => PREVIEWS.includes(n))) out.pv = [...pv];
     const auto = f.auto === true || !Number.isFinite(f.x) || !Number.isFinite(f.y);
     if (!auto) [out.x, out.y] = [px(f.x, -1e6, 1e6)!, px(f.y, -1e6, 1e6)!];
     if (one(f.label, 80)) out.label = one(f.label, 80);
@@ -94,6 +97,10 @@ const safeName = (name: string) => {
 const fileOf = (root: string, name: string) => path.join(dirOf(root), `${safeName(name)}.json`);
 export const frameFile = (root: string, name: string, id: string) => path.join(dirOf(root), safeName(name), `${id}.html`);
 /** An image frame's file, in its board's folder: a plain <id>.<ext> and nothing else. */
+/** A picture's previews, by long side: made once (by the board's page) and kept beside it, shown when it is drawn small
+ * (Leo, 23 Nov: fine lines sparkled far out). Only the sizes under the picture's own long side. */
+export const PREVIEWS = [1024, 512, 256, 128];
+export const previewFile = (id: string, size: number, ext: string) => `${id}-p${size}.${ext}`;
 export const imageFile = (root: string, name: string, file: string) => {
   if (!IMAGE_FILE.test(file)) throw new Error(`not an image file name: ${String(file).slice(0, 40)}`);
   return path.join(dirOf(root), safeName(name), file);
