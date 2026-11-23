@@ -105,3 +105,29 @@ Two things could not be made into a situation, because no comment can be left th
 Two more things seen on the way: Option-click on any control also runs it (the fold button opens its fold, a menu item acts); and a click on the “…” of a cut-off title quotes a word from the hidden part.
 
 The code blocks in `situations/b2-guide.html` are written by `situations-2-guide.mjs` from the files in `situations/src/calendar`.
+
+## The loop: marks, questions, pictures, long threads (bench/multi, 23 Nov, #425)
+
+`bench/multi/run.mjs` makes the comments with the real widget (drawings, pins, a pasted picture, replies), hands an agent the page's agent text and a copy of the page, and has a second agent grade the diff and the answer. Ten cases: the four marks ones, a circle with a question, an arrow with a question, a picture-only pin, a long thread whose ask changed in its second message, a fix the person says is still wrong, and a pin made on a phone.
+
+```
+NODE_PATH=<folder with playwright-core>/node_modules node bench/multi/run.mjs sonnet 5
+LAB_ROOT=<another checkout> TAG=before …   # the same cases with another version's text
+CHECK=1 TAG=check …                        # the agent may look at the page (node shot.mjs <file> <width>)
+```
+
+Sonnet, 5 runs per case (results-loop-*.json, results-marks-fix.json):
+
+| case | before #442 | after #442 | after, may look | several marks fix |
+|---|---|---|---|---|
+| arrow with "why does this look different?" | 1 / 5 (moved it 4×) | 5 / 5 | 3 / 5 (2 partial) | |
+| circle with "what is this tag for?" | 5 / 5 | 5 / 5 | 3 / 5 (edited 2×) | |
+| move this one, rename that (arrow + circle) | 2 / 5 | 2 / 5 | 3 / 5 | 10 / 10 |
+| picture only, long thread, still wrong | 15 / 15 | 15 / 15 | 15 / 15 | |
+| phone pin | 4 / 5 | 2 / 5 (also stacked .stats) | 4 / 5 | |
+| all ten | 42 / 50, $3.16 | 43 / 50, $3.13 | 43 / 50, $3.65 | 20 / 20 marks cases |
+
+- The drawing's action line issued as an order over a question made the agent move the button; since #442 it doesn't.
+- With several marks in one drawing, the area's own "in the area: Alerts" line pulled "move this one" onto the wrong card. Leaving the area's contents out when each mark already says what it is on fixed it (10 of 10).
+- Letting the agent look at the page cost 17% more and about 2 s per pin, and didn't make it more right here: the misses were readings of the ask, not how the page looked. It also nudged two answers to a question into edits. So looking stays optional, and a done answer says whether it was checked.
+- The phone pin's misses are extra edits to other rows (.stats) that were squashed too; the grader counts them against "nothing else changes".

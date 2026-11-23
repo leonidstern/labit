@@ -99,7 +99,7 @@ export function startLive() {
     // reloads once you close it, where you were.
     // A newer version reloads the page when it's safe: not while you read a thread or the chat (it waits
     // until they're closed, so nothing moves under you), type, have words in a box, place a new comment, have a phone's
-    // keyboard up or have just touched the page.
+    // keyboard up, are drawing (until the drawing is sent, issue 428) or have just touched the page.
     for (const t of ['pointerdown', 'keydown', 'wheel', 'touchstart']) addEventListener(t, () => (touchedAt = performance.now()), { capture: true, passive: true });
     const frame = Boolean(W.S.frame); // a board's frame (frame.ts): the board holds the stream and says when it is busy
     // A board page (its key is /_board/<name>) holds its frames, which name the files it "uses": a save of a page, a .json
@@ -107,7 +107,7 @@ export function startLive() {
     // for a new widget script or comments schema, and follows the lab's comments and the board file.
     const board = Boolean(W.S.board); // exactly /_board/<name>: a variant opened by itself is a page like any other
     const busy = () =>
-      frame ? W.S.busy() || performance.now() - touchedAt < 1500 : W.S.draft || W.S.grabbing || W.S.openId || W.S.chatOpen || (W.coarse && /^(textarea|input)$/.test(W.root.activeElement?.localName || '')) ||
+      frame ? W.S.busy() || performance.now() - touchedAt < 1500 : W.S.draft || W.S.grabbing || W.S.openId || W.S.chatOpen || W.S.inking || W.S.sendingInk || W.S.drag?.active || (W.coarse && /^(textarea|input)$/.test(W.root.activeElement?.localName || '')) ||
       [...W.root.querySelectorAll('textarea')].some((t) => t.value.trim()) || performance.now() - touchedAt < 1500;
     let reloadWhenShown = false;
     let reloadTimer: any = 0;
@@ -550,6 +550,12 @@ export function startLive() {
     };
     // A page with scripts of its own is reloaded instead: patching it toward its file would undo what its scripts built.
     const ownScripts = () => scriptsOf(document).length > 0;
+    const plainPage = () =>
+      !ownScripts() && !document.querySelector('iframe[src], object[data], embed[src], video, audio') && !document.fonts?.size &&
+      !performance.getEntriesByType('resource').some((e: any) => {
+        const p = new URL(e.name).pathname;
+        return /fetch|xml/.test(e.initiatorType) && !p.startsWith('/_lab/') && p !== '/favicon.ico' && p !== location.pathname;
+      });
     let morphRun = 0;
     const morphPage = async () => {
       if (board) return;
@@ -564,7 +570,7 @@ export function startLive() {
         const tag = doc.querySelector('script[data-live]') as HTMLScriptElement | null;
         if (!res.ok || !tag) return;
         // The page's file is as it was when this one loaded (a lab restart with nothing saved meanwhile): nothing to do. A
-        // page with scripts of its own was reloaded here every time (#428).
+        // page with scripts of its own was reloaded here every time (issue 428).
         if (tag.dataset.sum && tag.dataset.sum === W.script.dataset.sum) return;
         if (ownScripts() || scriptsOf(doc).join('\n') !== scriptsOf(document).join('\n') || sheetsOf(doc).join('\n') !== sheetsOf(document).join('\n')) return reload();
         // What you're looking at stays put: an element a third down the window keeps its place on screen. Found before
@@ -717,8 +723,16 @@ export function startLive() {
         }
         if (String(v.files) !== W.script.dataset.version) {
           // The lab says which files changed (no list: a burst too big to judge, so reload as before).
-          if (board || (v.files - +W.script.dataset.version === 1 && Array.isArray(v.changed) && v.changed.length && !v.changed.some(usedHere))) W.script.dataset.version = String(v.files);
-          else reload(); // held while something is open: the comments below still come in (the agent's answer, read marks)
+          const listed = v.files - +W.script.dataset.version === 1 && Array.isArray(v.changed) && v.changed.length;
+          if (board || (listed && !v.changed.some(usedHere))) W.script.dataset.version = String(v.files);
+          // Saves missed, or a burst too big to list (a branch switch): a page with no scripts, frames or objects of its
+          // own that fetched nothing uses only its file, its styles and its pictures, so it catches up in place (issue 428).
+          // Fonts, video and sound aren't refreshed in place: a page with them reloads. The widget's own asks (the
+          // page itself, the tab icon, /_lab/) are not the page's.
+          else if (!listed && plainPage()) {
+            W.script.dataset.version = String(v.files);
+            catchUp();
+          } else reload(); // held while something is open: the comments below still come in (the agent's answer, read marks)
         }
         // Missed more than one hot update while away (asleep, offline): patch the page and refresh every stylesheet
         // and picture, instead of only the last batch of files.
