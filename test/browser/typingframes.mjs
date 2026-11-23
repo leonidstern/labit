@@ -1,5 +1,5 @@
 // Writing about a video (Leo, 23 Nov, 9b): the moment line above a new comment's box and a reply's box follows the video,
-// ⌃ ← → step it a frame while the words stay, ⌃K plays or pauses, the line names the keys while the box has the cursor,
+// ⌥ ← → step it a frame while the words stay, ⌥K plays or pauses, the line names the keys while the box has the cursor,
 // and each message keeps the moment it was sent at, a reply its own. In WebKit and Chrome's engine. Not part of `npm test`.
 // Run: node test/browser/typingframes.mjs (needs playwright; NODE_PATH can point at a node_modules that has it).
 import fs from 'node:fs';
@@ -54,21 +54,21 @@ try {
       const keysShown = await inRoot(p, "getComputedStyle(r.querySelector('.float .moment.live'), '::after').content.includes('frame')");
       check(eng, 'the new box has a live moment line, and it names the keys while typing', /^video .* · frame \d+$/.test(line0) && keysShown, JSON.stringify({ line0, keysShown }));
       const f0 = await frame(p);
-      await p.keyboard.press('Control+ArrowRight');
+      await p.keyboard.press('Alt+ArrowRight');
       await settled(p);
-      await p.keyboard.press('Alt+.'); // ⌥ > (Leo, 23 Nov)
+      await p.keyboard.press('Alt+ArrowRight');
       await settled(p);
       await sleep(100);
       const f1 = await frame(p);
       const words = await inRoot(p, "r.querySelector('.float textarea')?.value");
       const line1 = await inRoot(p, "r.querySelector('.float .moment.live')?.textContent || ''");
-      check(eng, '⌃→ and ⌥. step the video two frames; the words stay', f1 === f0 + 2 && words === 'the logo comes in', JSON.stringify({ f0, f1, words }));
+      check(eng, '⌥→ twice steps the video two frames; the words stay', f1 === f0 + 2 && words === 'the logo comes in', JSON.stringify({ f0, f1, words }));
       check(eng, 'the line follows the step', line1.endsWith(`· frame ${f1}`), line1);
-      await p.keyboard.down('Control');
+      await p.keyboard.down('Alt');
       await sleep(50);
-      const moreShown = await inRoot(p, "getComputedStyle(r.querySelector('.float .moment.live'), '::after').content.includes('second')");
-      await p.keyboard.up('Control');
-      check(eng, 'holding ⌃ names the rest', moreShown);
+      const moreShown = await inRoot(p, "getComputedStyle(r.querySelector('.float .moment.live'), '::after').content.includes('play')");
+      await p.keyboard.up('Alt');
+      check(eng, 'holding ⌥ names the rest', moreShown);
       await p.keyboard.press('Enter');
       let c;
       for (let i = 0; i < 30 && !(c = (await comments()).find((x) => !x.parent)); i++) await sleep(100);
@@ -83,7 +83,7 @@ try {
       await inRoot(p, "r.querySelector('.card textarea')?.focus()");
       await p.keyboard.type('and here');
       for (let i = 0; i < 5; i++) {
-        await p.keyboard.press('Control+ArrowRight');
+        await p.keyboard.press('Alt+ArrowRight');
         await settled(p);
       }
       await sleep(100);
@@ -97,11 +97,11 @@ try {
       check(eng, 'the thread shows each message\'s moment', shown.length === 2 && shown[1].endsWith(`frame ${f2}`), JSON.stringify(shown));
       const text = await (await fetch(`${B}/_lab/agent${PG}`)).text();
       check(eng, 'the agent reads the reply\'s moment', new RegExp(`\\(at video [\\d:.]+ of [\\d:]+ · frame ${f2}\\): and here`).test(text), text.split('\n').find((l) => /and here/.test(l)));
-      // ⌃K plays from the reply box.
+      // ⌥K plays from the reply box.
       await inRoot(p, "r.querySelector('.card textarea')?.focus()");
-      await p.keyboard.press('Control+k');
+      await p.keyboard.press('Alt+k');
       await sleep(300);
-      check(eng, '⌃K plays it', !(await p.evaluate(() => document.getElementById('vid').paused)));
+      check(eng, '⌥K plays it', !(await p.evaluate(() => document.getElementById('vid').paused)));
       await ctx.close();
     } finally {
       await browser.close();
