@@ -2019,7 +2019,11 @@ const silentNow = () => [...silent].filter(([who, q]) => (waiters.some((w) => w.
 const handedPage = new Map();
 function deliver(res, got, who = '', ack = false, key = '', label = 'Claude') {
   const on = new Set(got.marks.map(([page]) => page));
-  if (who && on.size) on.size === 1 && !String([...on][0]).startsWith('/_') ? handedPage.set(who, [...on][0]) : handedPage.delete(who);
+  if (who && on.size) {
+    const [one] = on;
+    if (on.size === 1 && !String(one).startsWith('/_')) handedPage.set(who, one);
+    else handedPage.delete(who);
+  }
   // What the marks were, to put back if the agent never confirms.
   const ids = [...new Set([...got.marks.map(([, id]) => id), ...got.handed.map(([, id]) => id)])];
   const before = ids.map((id) => [id, handoff[id] ? [...handoff[id]] : undefined]);
