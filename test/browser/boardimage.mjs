@@ -215,6 +215,22 @@ try {
         check(eng, 'two pictures pasted at once are two image frames', Boolean(both), JSON.stringify((await frames(name)).map((f) => f.id)));
         check(eng, 'side by side in the order pasted, tops in line, not piled up', Boolean(both) && m2.x === m1.x + m1.w + 80 && m2.y === m1.y, JSON.stringify([m1, m2]));
       }
+
+      // far out, a big picture is drawn from a smaller copy of itself (Safari shimmered scaling the whole one; Leo, 23 Nov)
+      if (c) {
+        const drawn = () => p.evaluate(() => { const f = document.querySelector('[data-lab-board-view]').shadowRoot.querySelector('#lab-board .f[data-id="c"]'); const on = [...f.querySelectorAll('canvas.mip')].filter((x) => !x.hidden); return { img: getComputedStyle(f.querySelector('img')).visibility, mips: f.querySelectorAll('canvas.mip').length, on: on.map((x) => x.width), w: f.getBoundingClientRect().width }; });
+        await p.mouse.move(600, 400);
+        await p.keyboard.down('Control');
+        for (let i = 0; i < 12; i++) { await p.mouse.wheel(0, 120); await sleep(30); }
+        await p.keyboard.up('Control');
+        const far = await until(async () => { const d = await drawn(); return d.on.length === 1 && d.img === 'hidden' && d; });
+        check(eng, 'zoomed far out, one smaller copy shows instead of the picture, just big enough', Boolean(far) && far.on[0] >= far.w && far.on[0] < far.w * 2 * 2 + 2, JSON.stringify(far || await drawn()));
+        await p.keyboard.down('Control');
+        for (let i = 0; i < 30; i++) { await p.mouse.wheel(0, -120); await sleep(30); }
+        await p.keyboard.up('Control');
+        const near = await until(async () => { const d = await drawn(); return d.on.length === 0 && d.img === 'visible' && d; });
+        check(eng, 'zoomed back in, the picture itself shows', Boolean(near), JSON.stringify(await drawn()));
+      }
     } finally {
       await browser.close();
     }
