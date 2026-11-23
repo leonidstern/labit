@@ -240,22 +240,11 @@ try {
         });
         check(tag, 'a long chat opens at its newest message', chat.n >= 80 && chat.lastInView && chat.lastText, JSON.stringify(chat));
         check(tag, '…laying out only the messages near the screen', chat.cv === 'auto', String(chat.cv));
-        // The browser says when the page navigated, and when a scroll ended: what the widget listens to follows what there is.
+        // The browser says when the page navigated: what the widget listens to follows what there is.
         const heard = await p.evaluate(() => [...window.__listened]);
-        check(tag, 'the widget listens to the Navigation API, and leaves the page\'s history alone', heard.includes('currententrychange') && !heard.includes('popstate') && (await p.evaluate(() => /native code/.test(history.pushState.toString()))), JSON.stringify({ listened: heard.filter((t) => /currententrychange|popstate|scrollend/.test(t)) }));
-        // The motion controls' file (src/widget/motion.ts) loads on a phone with the first thing that moves. It no longer
-        // listens for scrollend: its per-element controls that followed a scroll were taken out with the motion menus (#450).
-        if (phone) {
-          await p.evaluate(() => {
-            const d = document.body.appendChild(document.createElement('div'));
-            d.id = 'lab-test-loop';
-            d.animate([{ opacity: 0.5 }, { opacity: 1 }], { duration: 800, iterations: Infinity });
-          });
-          await sleep(1600);
-        }
-        const motionLoaded = phone ? await p.evaluate(() => performance.getEntriesByType('resource').some((e) => /\/motion\.js(\?|$)/.test(e.name))) : true;
-        if (phone) await p.evaluate(() => document.getElementById('lab-test-loop')?.remove());
-        check(tag, 'on a phone the motion controls load once something moves', motionLoaded);
+        check(tag, 'the widget listens to the Navigation API, and leaves the page\'s history alone', heard.includes('currententrychange') && !heard.includes('popstate') && (await p.evaluate(() => /native code/.test(history.pushState.toString()))), JSON.stringify({ listened: heard.filter((t) => /currententrychange|popstate/.test(t)) }));
+        // No scrollend any more: it was the phone's motion controls' (hidden while a scroll went on), and the motion menus
+        // that replaced them (#450) put nothing on the page while it scrolls.
         // A navigation inside the page: the comments of the new page are asked for, and of the old one after Back.
         const asked = [];
         p.on('request', (r) => { const m = /\/_lab\/api\/comments\?page=([^&]*)/.exec(r.url()); if (m) asked.push(decodeURIComponent(m[1])); });
