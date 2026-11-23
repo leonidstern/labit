@@ -117,7 +117,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   };
   measure();
   let latest: Board | null = null; // the board as last read: its rev and frames, for a change written back (a picture taken off)
-  type Undo = { items: { id: string; x?: number; y?: number }[]; archived: boolean };
+  type Undo = { items: { id: string; x?: number; y?: number }[]; archived: boolean; at?: number };
   const taken: Undo[] = []; // what this browser took off or moved, newest last: ⌘Z puts the last one back
   let moved = false; // the person moved the camera: a resize no longer fits everything again
   let heldCam: Cam | null = null; // the camera when the hold began
@@ -879,7 +879,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     });
     const res = await fetch(api(), { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...latest, frames }) }).catch(() => null);
     if (res?.ok) {
-      if (undo) taken.push(undo);
+      if (undo) taken.push({ ...undo, at: Date.now() });
       await load();
     } else {
       note(res?.status === 409 ? 'The board changed meanwhile: look, then try again.' : "Only the board's owner can do that.");
@@ -895,8 +895,10 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   if (!coarse) {
     on('keydown', (e: KeyboardEvent) => {
       if (typing(e) || entered) return;
+      // Backspace on the board is never the browser's "back" (WebKit's can be): with nothing picked it does nothing at all.
+      if (e.key === 'Backspace' && !e.metaKey && !e.ctrlKey && !e.altKey) e.preventDefault();
       const gone = (e.key === 'Backspace' || e.key === 'Delete') && !e.metaKey && !e.ctrlKey && !e.altKey && picks.size > 0;
-      const back = (e.metaKey || e.ctrlKey) && !e.shiftKey && e.code === 'KeyZ' && taken.length > 0;
+      const back = (e.metaKey || e.ctrlKey) && !e.shiftKey && e.code === 'KeyZ' && taken.length > 0 && !e.defaultPrevented; // prevented: the widget took this ⌘Z for a newer pin or drawing
       if (!gone && !back) return;
       e.preventDefault();
       if (gone) {
@@ -991,6 +993,8 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   };
   const boardApi = {
     name,
+    /** When the newest move or take-off ⌘Z would put back was made (0: none): one ⌘Z undoes only the newest thing, the board's or a pin's. */
+    undoAt: () => taken.at(-1)?.at || 0,
     back,
     busy: () => performance.now() - lastDown < 1500,
     key: (k: Parameters<typeof press>[0]) => press(k, true),

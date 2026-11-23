@@ -88,6 +88,40 @@ try {
         await ctx.close();
       }
 
+      // I. One thing open at a time (Leo, 23 Nov: "close it and open menu or chat"): with a thread or the chat open, one
+      // click on ⋯ closes it and opens the menu; with a thread open, the chat closes it too.
+      {
+        const [ctx, p] = await mk({ viewport: { width: 1200, height: 800 } });
+        const at = (sel) => sh(p, `(() => { const q = r.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return [q.x + q.width / 2, q.y + q.height / 2]; })()`);
+        const state = () => sh(p, `({ card: Boolean(r.querySelector('.card:not(.out)')), chat: !r.querySelector('.chatwin').hidden, menu: (() => { const m = r.querySelector('.more-menu'); return m.matches(':popover-open') || (!m.hidden && !m.classList.contains('out')); })() })`);
+        const openCard = async () => {
+          await p.evaluate('document.getElementById("p30").scrollIntoView({ block: "center" })');
+          await sleep(500);
+          const pin = await at('button.pin');
+          await p.mouse.click(pin[0], pin[1]);
+          await sleep(600);
+        };
+        await openCard();
+        const before = await state();
+        let b = await at('.more');
+        await p.mouse.click(b[0], b[1]);
+        await sleep(600);
+        const after = await state();
+        check(eng, 'a thread open, one click on ⋯ closes it and opens the menu', before.card && !after.card && after.menu, JSON.stringify([before, after]));
+        await p.keyboard.press('Escape');
+        await sleep(400);
+        await p.evaluate(() => document.activeElement?.blur());
+        await p.keyboard.press('t');
+        await sleep(600);
+        const chat = await state();
+        b = await at('.more');
+        await p.mouse.click(b[0], b[1]);
+        await sleep(600);
+        const chat2 = await state();
+        check(eng, 'the chat open, one click on ⋯ closes it and opens the menu', chat.chat && !chat2.chat && chat2.menu, JSON.stringify([chat, chat2]));
+        await ctx.close();
+      }
+
       // H. Turning the phone with a card open: the pin and its card stay on screen.
       {
         const [ctx, p] = await mk({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });

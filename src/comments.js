@@ -619,10 +619,14 @@ import { bindKeys } from './widget/keys.ts';
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || `could not save (${res.status})`);
     // A new pin or go from this tab can be taken back with Command-Z (the newest first).
-    if (data.comment && !payload.parent && !payload.action && payload.anchor?.kind !== 'page') placed.push(data.comment.id);
+    if (data.comment && !payload.parent && !payload.action && payload.anchor?.kind !== 'page') {
+      placed.push(data.comment.id);
+      placedAt.set(data.comment.id, Date.now());
+    }
     return data;
   }
   const placed = [];
+  const placedAt = new Map(); // id -> when it was placed: a board's newer move is what ⌘Z takes back first (Leo, 23 Nov)
   // Where a thread's pin goes (anchoring.ts). A board pin whose element is not shown (a closed menu or tab) would leave its
   // board out of reach with it, so it goes to the ⋯ menu as a moved pin until its element is back (Leo, 23 Nov: "be sure
   // board pin wont became stray out of viewport").
@@ -1407,8 +1411,23 @@ import { bindKeys } from './widget/keys.ts';
     if (open) [...moreMenu.querySelectorAll('button')].find((b) => !b.hidden && !b.disabled)?.focus({ preventScroll: true });
     else if (refocus) moreBtn.focus({ preventScroll: true });
   }
+  // One thing open at a time (Leo, 23 Nov: "close it and open menu or chat"): opening the menu, the boards list or the
+  // chat closes an open thread, a new comment with nothing typed in it (typed words stay) and, on a computer, the chat.
+  const closeOthers = (keepChat = false) => {
+    if (coarse) return;
+    S.openId = null;
+    if (S.draft && !/** @type {HTMLTextAreaElement | null} */ (root.querySelector('.float textarea'))?.value.trim()) S.draft = null;
+    if (!keepChat) S.chatOpen = false;
+  };
+  // Drawn again once the click is done: the bar's buttons are swapped out by a render, and the menu opens from this one.
+  // Always: a press on ⋯ already closed the chat (below), and its redraw waits for a click these buttons don't pass on.
+  const closeOthersAfter = () => {
+    closeOthers();
+    setTimeout(() => render(), 0);
+  };
   moreBtn.addEventListener('click', (e) => {
     e.stopPropagation();
+    closeOthersAfter();
     if (S.menuBoards) {
       S.menuBoards = false; // the whole menu again, not the boards
       placeBar();
@@ -1417,6 +1436,7 @@ import { bindKeys } from './widget/keys.ts';
   });
   boardsBtn.addEventListener('click', (e) => {
     e.stopPropagation();
+    closeOthersAfter();
     const open = popMenu ? moreMenu.matches(':popover-open') : !moreMenu.hidden && !moreMenu.classList.contains('out');
     if (open && S.menuBoards) return setMenu(false, true);
     S.menuBoards = true;
@@ -1480,11 +1500,7 @@ import { bindKeys } from './widget/keys.ts';
   listBtn.addEventListener('click', () => stepNew(1));
   chatBtn.addEventListener('click', () => {
     S.chatOpen = !S.chatOpen;
-    // On a computer, opening the chat closes an open thread, and a new comment with nothing typed in it.
-    if (S.chatOpen && !coarse) {
-      S.openId = null;
-      if (S.draft && !/** @type {HTMLTextAreaElement | null} */ (root.querySelector('.float textarea'))?.value.trim()) S.draft = null;
-    }
+    if (S.chatOpen) closeOthers(true);
     goOut(hint, () => (hint.hidden = true));
     render();
     // Computers: the cursor goes in the message box (phones wait for a tap, so the keyboard doesn't cover the chat).
@@ -1541,7 +1557,8 @@ import { bindKeys } from './widget/keys.ts';
       e.preventDefault();
       return;
     }
-    if (S.on && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (/^z$/i.test(e.key || '') || (!/^[a-z]$/i.test(e.key || '') && e.code === 'KeyZ')) && !typing(e) && !inOtherWidget && placed.length) {
+    if (S.on && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (/^z$/i.test(e.key || '') || (!/^[a-z]$/i.test(e.key || '') && e.code === 'KeyZ')) && !typing(e) && !inOtherWidget && placed.length
+      && !(/** @type {any} */ (window).__labBoard?.undoAt?.() > (placedAt.get(placed.at(-1)) || 0))) {
       e.preventDefault();
       return void undoLast();
     }
