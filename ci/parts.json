@@ -36,6 +36,7 @@
     "types.d.ts": "types shared by the modules"
   },
   "classes": {
+    "pinboard": "a board pin's strip host in its card (boardcam.ts); its own shadow root holds the styles, the browser tests look it up",
     "copy-all": "the copy-link button: a row of the ⋯ menu (its rules), or hidden in the corner when comments are off; comments.js looks it up",
     "moved-btn": "the 'moved' button in the bar; comments.js looks it up and the browser tests click it",
     "nm": "the name box in the first-comment form; the tests fill it",
