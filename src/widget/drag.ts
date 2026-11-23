@@ -82,6 +82,14 @@ export const endDrag = (e) => {
   // A stroke of a drawing: more may follow while D is held. It is done when D is let go, or a second after the last.
   if (d.ink) {
     S.drew = true;
+    // The smoothed line catches up: its last point is where the pen lifted (an arrow's tip lands where it was drawn).
+    const end = S.inking?.strokes.at(-1);
+    const last = end?.at(-1);
+    if (last && S.inkAt && Math.hypot(S.inkAt.x - last.x, S.inkAt.y - last.y) > 0.5) {
+      end.push({ ...S.inkAt, w: last.w });
+      S.inking.add();
+    }
+    S.inkAt = null;
     // Shift held as the pen lifts: a stroke that runs about straight becomes a straight line, flat, upright or at 45°
     // (Leo's pick S1, 20 Nov); a rough box or loop a clean rectangle or ellipse (S2). Anything else stays as drawn.
     const st = S.inking?.strokes.at(-1);
@@ -139,9 +147,8 @@ async function endInk() {
 }
 async function sendInk(ink) {
   const { readInk } = await W.part('draw').catch(() => ({ readInk: null }));
-  ink.svg.remove();
   S.lastInk = ink.strokes; // a stroke drawn while its box is open, empty, joins it (above)
-  if (!readInk) return;
+  if (!readInk) return ink.svg.remove();
   W.showAgain();
   S.openId = null;
   // An arrow's ends are named with the card or section they are in: "Shared availability" is in two plans (sims, 20 Nov).
@@ -150,7 +157,23 @@ async function sendInk(ink) {
   const read = readInk(here, (e) => e && short(`${openingTag(e)} "${short(e.textContent, 40)}"${block(e) ? ` in ${openingTag(block(e))} "${short(block(e).textContent, 30)}"` : ''}`, 200));
   // Sent as it is, what it reads as its words, with no box to send it from (Leo, 21 Nov: "just draw maybe and send dont
   // open comment to send it, just send"); words are added in its thread after.
-  await W.sendDrawing(inkAnchor(read, ZONE_MIN));
+  const was = S.posted;
+  try {
+    await W.sendDrawing(inkAnchor(read, ZONE_MIN));
+  } finally {
+    landed(ink.svg, S.posted !== was && S.posted);
+  }
+}
+// The live lines stay until the sent drawing is on the page, and go in the same frame it shows: Safari painted one
+// frame with neither between them (Leo, 23 Nov: "blinking after mouse release slightly on safari"). A frame's
+// callbacks run before it is painted, so the sent one, drawn by then, takes the live one's place with no gap or overlap.
+function landed(svg: SVGElement, id: string | false, tries = 0) {
+  requestAnimationFrame(() => {
+    const pin = id && W.pinsById.get(id);
+    const drawn = pin?.isConnected && pin.querySelector('svg')?.getBoundingClientRect().width;
+    if (drawn || !id || tries > 30) svg.remove();
+    else landed(svg, id, tries + 1);
+  });
 }
 // Selecting words. Computers: Shift + drag (or Shift + double or triple click) selects words; a plain drag marks an area
 // wherever it starts, a click pins, and the page's text can't be selected without Shift (it shows the I-beam cursor,
@@ -262,7 +285,11 @@ export function bindDrag(w: unknown) {
         S.inkT = now;
         // A pen's pressure sets the width; a mouse or finger draws thinner the faster it moves (Leo's pick 4, 20 Nov).
         const want = e.pointerType === 'pen' && e.pressure > 0 ? 1.5 + e.pressure * 4 : Math.max(1.6, Math.min(5, 5 - speed * 1.8));
-        st.push({ x, y, w: q?.w ? (q.w + want) / 2 : want });
+        // A light smoothing (Leo, 23 Nov): a point goes part of the way to the pointer, more of it the faster the hand moves,
+        // so a slow hand's shake is taken out and a quick line keeps up. The stroke ends on the pointer (endDrag).
+        const k = q ? Math.min(1, 0.35 + speed * 0.4) : 1;
+        S.inkAt = { x, y };
+        st.push({ x: q ? q.x + (x - q.x) * k : x, y: q ? q.y + (y - q.y) * k : y, w: q?.w ? (q.w + want) / 2 : want });
         return void S.inking.add();
       }
       S.zoneFrame ||= requestAnimationFrame(paintZone);

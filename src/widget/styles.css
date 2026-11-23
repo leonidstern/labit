@@ -115,7 +115,7 @@ button.pin:is(.resolved, .moved):is(:hover, .open) { opacity: 1; }
 button.pin.dragging { cursor: grabbing; transform: scale(1.1); opacity: 1; box-shadow: 0 0 0 .5px color-mix(in srgb, var(--_fg) 30%, transparent), 0 8px 20px rgba(0,0,0,.22); }
 /* A drawing (hold D and drag, draw.ts) is its own pin: its lines over its area, no marker. Only the lines take the click
    (a wider see-through copy of them). Done or resolved, it fades like a pin. */
-.ink { position: absolute; overflow: visible; pointer-events: none; opacity: .6; } /* one look, drawn and at rest, on the whole drawing (so its pen segments don't darken where they overlap) */
+svg.ink { position: absolute; overflow: visible; pointer-events: none; opacity: .6; } /* one look, drawn and at rest, on the whole drawing (so its pen segments don't darken where they overlap) */
 /* Always the red pen (Leo, 20 Nov): --lab-ink is the page's text colour on lab pages, which made lines look like content. */
 .ink path { fill: none; stroke: var(--lab-pen, var(--_red)); stroke-width: 3px; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 /* A fingertip wide (Leo's pick E, 20 Nov): 16 px was easy to miss on a phone. */
@@ -171,8 +171,11 @@ button.pin.ink, button.pin.ink:is(:hover, :active, .open) { margin: 0; backgroun
 .ptr { position: fixed; left: 0; top: 0; width: 28px; height: 28px; border-radius: 14px 14px 14px 2px; corner-shape: round;
        background: var(--_bg); box-shadow: 0 0 0 .5px color-mix(in srgb, var(--_fg) 30%, transparent), 0 2px 6px rgba(0,0,0,.18);
        display: grid; place-items: center; pointer-events: none; z-index: 2147483647; opacity: 0; will-change: transform;
-       transition: opacity var(--_t-quick) var(--_ease-out), background-color var(--_t-quick) var(--_ease-out); }
+       transition: opacity var(--_t-quick) var(--_ease-out), background-color var(--_t-quick) var(--_ease-out), width var(--_t-quick) var(--_ease-out),
+                   height var(--_t-quick) var(--_ease-out), border-radius var(--_t-quick) var(--_ease-out), translate var(--_t-quick) var(--_ease-out); }
 .ptr.show { opacity: 1; }
+.ptr.draw { width: 8px; height: 8px; border-radius: 50%; translate: -3px 23px; background: var(--lab-pen, var(--_red)); box-shadow: 0 0 0 1.5px var(--_bg); } /* holding D: the pen's tip, centred on the point (place() puts the pin's tip there) */
+.ptr.draw span { opacity: 0; transition: none; } /* the pin and the pen dot morph into each other: size, corners and colour together, not a red pin for a moment (Leo, 23 Nov: "morphing from dot to pin blinking") */
 .ptr.still { opacity: 0; transition: none; } /* a pin was just placed under it: gone at once, not a fade over the new pin */
 .ptr span { grid-area: 1 / 1; font-size: 12px; letter-spacing: 0; font-weight: 600; line-height: 1; transition: opacity var(--_t-quick) var(--_ease-out), transform var(--_t-quick) var(--_ease-out); }
 .pin.new::after { content: ''; position: absolute; top: -4px; right: -4px; width: 9px; height: 9px; border-radius: 50%;
