@@ -2164,6 +2164,9 @@ import { bindKeys } from './widget/keys.ts';
   // Computers, comments on: a click or drag doesn't select the page's text; hold Shift to select (and quote) words.
   // Fields and editable text stay selectable.
   pageStyle.textContent += `@media (pointer: fine) { html:has([data-lab-pinning]):not(.lab-shift, .lab-lit) body > :not([data-lab-comments]), html:has([data-lab-pinning]):not(.lab-shift, .lab-lit) body > :not([data-lab-comments]) :not(input, textarea, select, [contenteditable], [contenteditable] *) { -webkit-user-select: none; user-select: none; } }`;
+  // Pictures and videos are never selected by a press in comment mode, even with ⌥ or ⇧ held: Safari painted a clicked
+  // video as selected, blue over the frame you were pinning (Leo, 23 Nov: "clicking on 4.1 s selecting it").
+  pageStyle.textContent += '@media (pointer: fine) { html:has([data-lab-comments]) :is(video, img, canvas, picture) { -webkit-user-select: none; user-select: none; } }';
   bindKeys(W);
   pageStyle.textContent += 'html.lab-dragging, html.lab-dragging * { user-select: none !important; -webkit-user-select: none !important; cursor: crosshair !important; }';
   // While a sheet is open, a swipe down is the sheet's, not the browser's pull-to-refresh.
