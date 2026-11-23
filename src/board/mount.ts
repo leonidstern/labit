@@ -712,6 +712,9 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     if (!mine(e) && !overPin(e)) return;
     e.preventDefault();
     e.stopImmediatePropagation();
+    // Holding D, the board holds still: a drawing's strokes are where they were drawn on the screen, and a pan between two
+    // of them put them apart from the frames they were on (issue 423).
+    if (boardWidget()?.drawing?.()) return;
     if (e.timeStamp - wheelAt > 250) measure(); // where the box is, read once as a gesture starts, never per event
     wheelAt = e.timeStamp;
     const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? view.h : 1; // lines (a mouse in Firefox), pages, px
@@ -753,7 +756,14 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     else if (e.key === 'Tab' && !entered && cards.length) step(e.shiftKey ? -1 : 1);
     else if (e.key === 'Escape') {
       // Heard in the frame, which keeps an Esc its page used (a menu closing) to itself: this one is ours.
-      if (entered) leave();
+      // Mid-drag it cancels the drag: moved frames go back unsaved, a box being drawn goes and the pick is as before it.
+      if (down?.mode) {
+        const d = down;
+        down = null;
+        if (d.mode === 'marq') pickFrames([...d.base!]);
+        drop(d, true);
+        hand();
+      } else if (entered) leave();
       else if (picks.size) pickFrames([]);
       else if (opts.back && !coarse) back(); // an empty board's Esc goes back to the page, as ⇧B does
       else return false;
@@ -932,13 +942,15 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       return { kind: 'board', board: name, ...(f && { frame: f.id, fx: Math.round((wx - f.x) * kx(f)), fy: Math.round((wy - f.y) * ky(f)), ...(f.ow && { lay: f.w }) }), ...(f?.kind === 'image' && onPicture(f, wx - f.x, wy - f.y)), bx: wx, by: wy, selector: '', x: 0, y: 0, docX: 0, docY: 0, width: view.w, height: view.h };
     },
     // Where a board pin is, in page px (the pins' layer is the page's): with its frame, else at the point it was put.
-    spot: (a: { frame?: string; fx?: number; fy?: number; bx?: number; by?: number; zw?: number; zh?: number; pinX?: number; pinY?: number }): Spot => {
+    spot: (a: { frame?: string; fx?: number; fy?: number; bx?: number; by?: number; zw?: number; zh?: number; docW?: number; docH?: number; pinX?: number; pinY?: number }): Spot => {
       const f = cards.find((c) => c.f.id === a.frame)?.f;
       const [wx, wy] = f && a.fx !== undefined ? [f.x + a.fx / kx(f), f.y + (a.fy || 0) / ky(f)] : [a.bx || 0, a.by || 0];
       const [sx, sy] = [ox + (wx + cam.x) * cam.z, oy + (wy + cam.y) * cam.z];
       // An area or a drawing on a frame: its box is its shares of the frame (as drawn, whatever the device), from its corner, and its
       // pin where the drag ended.
-      const zone = f && a.fx !== undefined && a.zw ? { left: sx + scrollX, top: sy + scrollY, width: a.zw * f.w * cam.z, height: (a.zh || 0) * f.h * cam.z } : null;
+      // One on the board itself (not within one frame): its size is in the board's px.
+      const zone = f && a.fx !== undefined && a.zw ? { left: sx + scrollX, top: sy + scrollY, width: a.zw * f.w * cam.z, height: (a.zh || 0) * f.h * cam.z }
+        : !a.frame && a.zw && a.docW ? { left: sx + scrollX, top: sy + scrollY, width: a.docW * cam.z, height: (a.docH || 0) * cam.z } : null;
       return { left: sx + scrollX + (zone && a.pinX ? zone.width : 0), top: sy + scrollY + (zone && a.pinY ? zone.height : 0), zone, ...(((opts.clip && !inBox(sx, sy)) || !shown) && { clipped: true }) };
     },
     camera: () => ({ ...cam }),

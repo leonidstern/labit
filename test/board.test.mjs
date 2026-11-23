@@ -142,10 +142,10 @@ test('the lab watches .lab/boards: a board file bumps boards, a saved variant is
   s.close();
 });
 
-test('pages list: boards are listed, scratch frames and board keys are not pages', async () => {
+test('pages list: boards have no rows of their own; scratch frames and board keys are not pages', async () => {
   await put(B, 'name=hero', { frames: 'abc'.split('').map((id) => ({ id, src: `/_lab/board/hero/${id}`, w: 1280, h: 800 })) });
   const info = await (await fetch(`${B}/_lab/pages`)).json();
-  assert.ok(info.boards.some((b) => b.name === 'hero' && b.frames === 3));
+  assert.equal(info.boards, undefined);
   assert.equal(info.pages.some((p) => /board|\.lab/.test(p.file + p.path)), false);
 });
 

@@ -105,3 +105,81 @@ Two things could not be made into a situation, because no comment can be left th
 Two more things seen on the way: Option-click on any control also runs it (the fold button opens its fold, a menu item acts); and a click on the “…” of a cut-off title quotes a word from the hidden part.
 
 The code blocks in `situations/b2-guide.html` are written by `situations-2-guide.mjs` from the files in `situations/src/calendar`.
+
+## Cost per task
+
+`cost.mjs` runs a task above through Claude Code several times per arm, each in a fresh copy, and records what each run spent and whether it was right. The numbers are the host's own: model calls, uncached input, cache-write and cache-read input, output tokens, turns, tool calls by kind, bytes of tool results, pictures opened, wall time and cost in USD at list price. A number the host doesn't report stays unknown, never zero. Runs of different arms are shuffled together.
+
+```
+node bench/cost.mjs situations --arms full,lean --runs 10 --model sonnet    # also situations-2
+node bench/cost.mjs --summary bench/results/cost/<file>.json
+```
+
+Arms are what the agent is handed: `full`, the saved agent text, or `lean`, what a wait hands over (the lines in `LEAN_SKIP`, lib/comments-api.mjs, left out). Each arm gets the median and p90 of each number, a 95% interval for the mean cost, and the cost per run that got everything right (all runs' cost, the wrong ones too, over the right ones). The raw runs are in the same file, with the commit, the host's version and the model.
+
+Read cost per right run first: text a run doesn't get can come back as files and pictures it opens instead.
+
+### Results, 2026-11-23
+
+Situations (batch 1), Sonnet 5.5, Claude Code 2.1.330, 20 runs per arm in two sets of 10, at ebc0f88 (`results/cost/`):
+
+| arm | situations wrong | runs all right | mean cost (95%) | cost per all-right run | median turns | median cache read |
+|---|---|---|---|---|---|---|
+| full | 8 of 600 | 14 / 20 | $0.234 (0.224–0.244) | $0.334 | 8.5 | 392k |
+| lean | 21 of 600 | 9 / 20 | $0.236 (0.220–0.252) | $0.525 | 7.5 | 340k |
+
+The lean text is about 25% shorter and costs the same per run: more than 90% of the input is the conversation read again from cache on each call, and the pin text is about 2k tokens of it. It gets more wrong (Fisher's exact test, p ≈ 0.02). Of the misses the second set names, dark mode is 5 of 10 lean runs against 1 of 10 full ones: lean leaves out the `colours:` line, the only one that says the page was dark.
+
+With `colours:` back in the lean text (20 runs per arm, `results/cost/situations-sonnet-2026-11-23-08-55.json`): full 8 of 600 wrong, 14 / 20 all right, $0.236 a run; lean 8 of 600 wrong, 15 / 20 all right, $0.242 a run. Dark mode missed in 1 of 20 runs of each. The gap is gone, and the cost is still the same.
+
+With `viewport:` back too (20 runs per arm, `results/cost/situations-sonnet-2026-11-23-09-20.json`): full 10 of 600 wrong, $0.230 a run; lean 13 of 600 wrong, $0.228 a run. No gap that the runs can tell apart, and the same cost.
+
+### Drawings and the skill, 2026-11-23
+
+`node bench/cost.mjs drawings` runs each of the 12 drawings of `drawings/` on its own (run `drawings/draw.mjs` first), the text as a wait hands it over, Sonnet 5.5, 3 runs per drawing and arm (`results/cost/drawings-sonnet-2026-11-23-09-08.json`). Every arm got 36 of 36 right.
+
+| arm | mean cost a run | median cache read |
+|---|---|---|
+| full: the drawing's text as a wait sends it | $0.056 | 119k |
+| nolines: without the `lines` coordinates of a mark the page read | $0.057 | 119k |
+| skill-whole: plus the whole skill | $0.068 | 138k |
+| skill-core: plus the skill without its Boards and Artifact parts | $0.066 | 132k |
+
+Leaving the coordinates out saves nothing on these marks (their `lines` are 47–188 characters). The skill adds about $0.01 a pin when the agent reads it with every pin; its core alone saves about $0.002 of that, within the spread.
+
+### Typed pins and Artifact comments, 2026-11-23
+
+The 12 asks of the drawings, typed with the same words (`drawings/typed.mjs`: "remove", "typo", "move this into the Team plan"…): as labit pins on the same elements as the drawings, and as comments a person left on a private Artifact of the same page, read with Claude's artifact comment tool (`drawings/artifact-comments.json`). The prompt is the same for both. Sonnet 5.5, 5 runs per ask and arm (`results/cost/drawings-sonnet-2026-11-23-09-22.json`):
+
+| arm | right | mean cost a run | cost per right run |
+|---|---|---|---|
+| typed labit pins | 60 / 60 | $0.055 | $0.055 |
+| Artifact comments | 51 / 60 | $0.059 | $0.069 |
+
+The 9 misses are two comments whose Artifact anchor wasn't the element meant: "typo" on Team's "Unlimted history" was saved on Studio's "Unlimited history" (4 of 5 runs wrong), and "drop this line" on Studio's "Priority support" was saved on the Plans heading (5 of 5). The labit pins were made by a script at the exact elements and the Artifact comments by hand, so part of the gap may be where the clicks landed. The Artifact text also carries a fixed preamble of about 2.8 KB per read.
+
+## The loop: marks, questions, pictures, long threads (bench/multi, 23 Nov, #425)
+
+`bench/multi/run.mjs` makes the comments with the real widget (drawings, pins, a pasted picture, replies), hands an agent the page's agent text and a copy of the page, and has a second agent grade the diff and the answer. Ten cases: the four marks ones, a circle with a question, an arrow with a question, a picture-only pin, a long thread whose ask changed in its second message, a fix the person says is still wrong, and a pin made on a phone.
+
+```
+NODE_PATH=<folder with playwright-core>/node_modules node bench/multi/run.mjs sonnet 5
+LAB_ROOT=<another checkout> TAG=before …   # the same cases with another version's text
+CHECK=1 TAG=check …                        # the agent may look at the page (node shot.mjs <file> <width>)
+```
+
+Sonnet, 5 runs per case (results-loop-*.json, results-marks-fix.json):
+
+| case | before #442 | after #442 | after, may look | several marks fix |
+|---|---|---|---|---|
+| arrow with "why does this look different?" | 1 / 5 (moved it 4×) | 5 / 5 | 3 / 5 (2 partial) | |
+| circle with "what is this tag for?" | 5 / 5 | 5 / 5 | 3 / 5 (edited 2×) | |
+| move this one, rename that (arrow + circle) | 2 / 5 | 2 / 5 | 3 / 5 | 10 / 10 |
+| picture only, long thread, still wrong | 15 / 15 | 15 / 15 | 15 / 15 | |
+| phone pin | 4 / 5 | 2 / 5 (also stacked .stats) | 4 / 5 | |
+| all ten | 42 / 50, $3.16 | 43 / 50, $3.13 | 43 / 50, $3.65 | 20 / 20 marks cases |
+
+- The drawing's action line issued as an order over a question made the agent move the button; since #442 it doesn't.
+- With several marks in one drawing, the area's own "in the area: Alerts" line pulled "move this one" onto the wrong card. Leaving the area's contents out when each mark already says what it is on fixed it (10 of 10).
+- Letting the agent look at the page cost 17% more and about 2 s per pin, and didn't make it more right here: the misses were readings of the ask, not how the page looked. It also nudged two answers to a question into edits. So looking stays optional, and a done answer says whether it was checked.
+- The phone pin's misses are extra edits to other rows (.stats) that were squashed too; the grader counts them against "nothing else changes".

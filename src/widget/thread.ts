@@ -295,11 +295,11 @@ export function threadCard(c, fresh = new Set(), focus = false) {
   const body = W.el('div', { class: 'body' });
   const foot = W.el('div', { class: 'foot' });
   card.append(W.el('div', { class: 'handle' }), body, foot);
-  // Written on a paused video: the moment, as a chip; clicked, the page pauses there again (comments.js).
-  const chip = c.anchor?.moment && W.S.momentChip?.(c.anchor.moment, true);
-  if (chip) card.insertBefore(chip, body);
+  // A board pin (+board): its board, as a strip with Open, above its messages (boardcam.ts).
+  const board = W.boardStrip(c);
+  if (board) card.insertBefore(board, body);
   // Why its pin is not plainly on its spot, in one line.
-  const why = { lost: 'its spot is gone', hidden: 'hidden right now: its spot is not shown', unsure: 'unsure: it may not be the spot it was made on', changed: 'its words changed: check it still fits' }[W.position(c.anchor || {}).why as string];
+  const why = { lost: 'its spot is gone', hidden: 'hidden right now: its spot is not shown', unsure: 'unsure: it may not be the spot it was made on', changed: 'its words changed: check it still fits' }[W.placeOf(c).why as string];
   if (why && !c.resolved) card.insertBefore(W.el('div', { class: 'spotnote' }, why), body);
   card.addEventListener('click', (e) => e.stopPropagation());
   // Messages as in the chat: bubbles (yours on the right), the time and ✓ ✓✓ in the corner, ✅ on a done answer, and
@@ -359,12 +359,16 @@ export function threadCard(c, fresh = new Set(), focus = false) {
       box.append(q);
     }
     box.append(...W.readable(item.text));
-    if (item.images) W.part('attach').then((m) => m.show(box.appendChild(W.el('div')), item)); // "1 image attached", in the attach part (it counts only names it would build from the id)
+    if (item.images) W.part('attach').then((m) => m.show(box.appendChild(W.el('div')), item)); // "1 image attached" (a tap shows them), in the attach part (it builds the names from the id, never reads a path)
     if (item.session && Array.isArray(item.choices) && item.choices.length) {
       box.classList.add('asks');
       box.append(choicesEl(c, item, card));
     }
     if (item.session && /kept|undone/.test(item.suggest?.state)) box.append(ruleLine(item));
+    // The moment the pin was written on (Leo, 23 Nov, 4c): a quiet line under its first message, its time beside it;
+    // clicked, the page pauses there again (motion.ts).
+    const moment = item === c && c.anchor?.moment && W.S.momentLine?.(c.anchor.moment, true);
+    if (moment) box.append(W.el('span', { class: 'p when' }, moment));
     const stamp = W.stampOf(item, c, item === c && !c.resolved ? `#${W.numberOf(c)} · ` : '');
     // The offer sits in your message's corner in place of the time and tick, so the bubble keeps its size (Leo, 17 Nov:
     // 57 + 60, then "it makes bigger row"). Kept or gone, the time comes back.

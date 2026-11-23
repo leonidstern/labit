@@ -53,6 +53,9 @@ export const stampOf = (m: any, root: any, prefix = ''): HTMLElement => {
       stamp.append(el('span', { class: 'state' }, words));
     }
   }
+  // An agent's done answer says whether it looked at the result (labit reply --done --checked "…"), on the line its
+  // stamp keeps for where a message stands: "checked: opened /pricing at 390 px", or "not checked" (#425).
+  if (m.session && m.intent === 'done') stamp.append(el('span', { class: 'state' }, m.checked ? `checked: ${m.checked.length > 48 ? `${m.checked.slice(0, 47)}…` : m.checked}` : 'not checked'));
   return stamp;
 };
 
