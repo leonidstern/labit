@@ -36,3 +36,22 @@ test('a drawing of several marks leaves out the box around them all: each mark s
   assert.match(b, /^ {2}mark 2: circled on <h2> "Alerts"$/m);
   assert.doesNotMatch(b, /^in the area:|^text in area:/m);
 });
+
+test('a quick action keeps the change small but never forbids checking around', async () => {
+  const { comment } = await post({ text: 'circled', anchor: drawn('circled') });
+  const b = await block(comment.id);
+  assert.match(b, /^action: Fix this.*keep the change small/m);
+  assert.doesNotMatch(b, /no searching or checking|make the edit and stop/);
+});
+
+test("a wifi guest's drawing with no words is no order: a request to weigh", async () => {
+  process.env.LAB_STAMP_KEY = 'k';
+  const headers = { 'content-type': 'application/json', 'x-lab-stamp-key': 'k', 'x-lab-stamp': encodeURIComponent(JSON.stringify({ from: 'wifi guest' })) };
+  const body = { page: '/ink', name: 'Guest', text: 'crossed out', anchor: drawn('crossed out') };
+  const { comment } = await (await POST(new Request('http://lab/_lab/api/comments', { method: 'POST', headers, body: JSON.stringify(body) }))).json();
+  delete process.env.LAB_STAMP_KEY;
+  const b = await block(comment.id);
+  assert.match(b, /^from: wifi guest$/m);
+  assert.doesNotMatch(b, /^action:/m);
+  assert.match(b, /^the mark alone would mean: Remove this\. From a wifi guest: a request to weigh/m);
+});

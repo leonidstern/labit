@@ -1236,7 +1236,7 @@ const toldAt = new Map();
 // Sessions that have had the suggest-rule line (it waits for the first reply in a thread, so it has its own mark).
 const suggestTold = new Set();
 // What the page says about Claude: listening (a wait is open), working (it got comments and hasn't waited again
-// yet), or away (no wait, or nothing from it for two minutes after it got comments).
+// yet), or away (no wait, or nothing from it for ten minutes after it got comments).
 let mode = 'away';
 let awayTimer;
 // A wait that runs out (no pins in its time) is usually followed by the next one within seconds: the page keeps
@@ -1747,7 +1747,7 @@ const boardTold = new Map(); // session + board -> the frames text it was given 
 async function threadsText(page, threads, who = '') {
   const text = await agentText(page);
   const [frames, rest] = text.startsWith('# Board') ? text.split(/\n(?=# Comments)/) : ['', text];
-  let head = rest.split('\n## ')[0].split('\n').filter((l) => /^(page|file|frame|picked|Missing files):/.test(l) || l.startsWith(ERRORS_HEAD)).join('\n');
+  let head = rest.split('\n## ')[0].split('\n').filter((l) => /^(page|file|frame|picked|Missing files|always up to date):/.test(l) || l.startsWith(ERRORS_HEAD)).join('\n');
   if (frames && boardTold.get(`${who}\n${page}`) !== frames) {
     boardTold.set(`${who}\n${page}`, frames);
     head = `${frames.trim()}\n${head}`;
@@ -1903,12 +1903,12 @@ async function unseen(scope = pages(), who = '') {
   // hears, and again only when the lab restarts or the session changes; after that, one line.
   const standing = full
     ? `\n\n${REQUESTS} Read each thread whole (every message and reply, not only the newest) before answering; the page, URL or #section is where a pin sits, not what it asks.` +
-      `\n\nAnswer each: ${CMD} reply <id> "what you did" [--done | --question] [--resolve] (run in ${ROOT}); add --wait to the last one to listen again in the same command. Looked at the result (the page, a test)? Add --checked "<how>" to --done; without it the page says not checked.` +
+      `\n\nAnswer each: ${CMD} reply <id> --done "what you did" (or --question "…" when blocked, which leaves it open), run in ${ROOT}; add --wait --bg to the last one to listen again in the same command, in the background. Looked at the result (the page, a test)? Add --checked "<how>" to --done; without it the page says not checked.` +
       // The person sees nothing between "picked up" and the answer: a batch an agent worked through for 13 minutes looked
       // lost (Leo, 18 Nov). A --progress line first turns the ring and the pill at once, without a message (Leo, 20 Nov: less noise).
-      `\nIf it will take more than about a minute (a build, a restart, a PR): send one ${CMD} reply <id> --progress "<what you're doing>" on each first (a status line, not a message), then start, and a new one when the step changes (10 minutes after your last, the page says no update); a quick ask needs none (an answer within 2 minutes counts). A plain "go" gets no words: resolve it when done.` +
+      `\nIf it will take more than about a minute (a build, a restart, a PR): send one ${CMD} reply <id> --progress "<what you're doing>" on each first (a status line, not a message), then start, and a new one when the step changes (about 3 minutes after your last, the page says no update; with the labit plugin, about 10 while this session keeps working); a quick ask needs none (an answer within 2 minutes counts). A plain "go" gets no words: resolve it when done.` +
       `\n${WRITE_SHORT}`
-    : `\n\nAnswer each: ${CMD} reply <id> "what you did" [--done | --question] [--wait]; the standing lines (read threads whole, --progress before long work, short answers) and rules as before.`;
+    : `\n\nAnswer each: ${CMD} reply <id> --done "what you did" (or --question) [--wait --bg]; the standing lines (read threads whole, --progress before long work, short answers) and rules as before.`;
   const text = `In this message: ${count}. Read all of it; each one is marked handed to you.\n\n${whole.length ? '# New comments\n\n' : ''}${groups.length ? `${groups.join('\n')}\n\n` : ''}${blocks.join('\n\n')}` +
     standing +
     lost.map(({ page, c }) => `\n${UNMATCHED(c.id, page, c.anchor.selector)}`).join('') +
@@ -2011,6 +2011,16 @@ function deliver(res, got, who = '', ack = false, key = '', label = 'Claude') {
       return !commentsOf(page).some((r) => r.parent === id && r.session && r.createdAt >= at);
     });
     if (!quiet.length) return;
+    // A batch is worked through one pin at a time: a sign on any thread of this hand-off (an answer or a status line)
+    // restarts the clock for the others, so pins 4 and 5 of five aren't taken back while the agent is on pin 3. It only
+    // restarts it: a session that goes quiet after its first answer still loses the rest ANSWER_MS later.
+    const signs = got.handed.flatMap(([page, id]) => {
+      const c = commentsOf(page).find((x) => x.id === id);
+      const own = commentsOf(page).filter((r) => r.parent === id && r.session && r.createdAt >= at).map((r) => r.createdAt);
+      return [...own, ...(c?.progress?.at >= at ? [c.progress.at] : []), ...(c?.resolved && c.resolvedAt >= at ? [c.resolvedAt] : [])];
+    });
+    const last = signs.length ? Date.parse(signs.sort().pop()) : 0;
+    if (last && Date.now() - last < ANSWER_MS) return void setTimeout(notAnswered, last + ANSWER_MS - Date.now()).unref();
     const threads = new Set(quiet.map(([, id]) => id));
     const threadOf = (id) => {
       for (const [page] of quiet) {
@@ -3114,7 +3124,7 @@ const handler = async (req, res) => {
           return hit ? hit[0].slice('lab:comments:'.length) : undefined;
         })();
         persist(changed).catch((e) => console.error('[lab] could not save comments:', e.message));
-        if (agent && mode === 'working') setMode('working'); // still at it: restart the two minutes
+        if (agent && mode === 'working') setMode('working'); // still at it: restart the ten minutes
         broadcast();
         wake();
       }
