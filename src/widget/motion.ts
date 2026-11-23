@@ -13,6 +13,7 @@ let S: any; // the widget's state (W.S), read once at startup
 // page, pause all, speed for all); picking a moving thing brings the same sheet for that one. P pauses all, S slows all.
 // The widget's own animations keep moving, and a comment on a moving thing says which second (anchoring.ts).
 const held = new Set<any>(); // the videos and elements labit paused
+const LONG_MS = 5000; // an animation that ends counts as motion from this long on
 const pageAnims = () => document.getAnimations().filter((a) => {
   const t = (a.effect as KeyframeEffect | null)?.target;
   if (!t || W.root.contains(t)) return false;
@@ -21,7 +22,10 @@ const pageAnims = () => document.getAnimations().filter((a) => {
   // highlight on a heading you just went to (Leo, 19 Nov: "what's with the animation pause thing on headers").
   if (typeof CSSTransition !== 'undefined' && a instanceof CSSTransition) return false;
   const end = a.effect?.getComputedTiming().endTime;
-  return !(typeof end === 'number' && Number.isFinite(end));
+  if (!(typeof end === 'number' && Number.isFinite(end))) return true;
+  // A long one that is still going gets a pause too: a film or a slideshow run on one clock (Leo, 23 Nov: the motion
+  // menu didn't come on a 2-minute film). Short ones that end stay moments.
+  return end >= LONG_MS && a.playState !== 'finished';
 });
 const targetOf = (a) => (a.effect as KeyframeEffect).target;
 // An element's own animations first, then those inside it.
