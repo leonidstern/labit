@@ -11,7 +11,7 @@ import type { Cam, Box } from './camera.ts';
 
 type Frame = { id: string; src: string; auto?: boolean; ow?: number; oh?: number; kind?: string; file?: string; iw?: number; ih?: number; guest?: boolean; w: number; h: number; x: number; y: number; label?: string; state?: string; variantOf?: string };
 type Board = { rev: number; frames: Frame[]; of?: string } & Record<string, unknown>;
-type Card = { f: Frame; box: HTMLElement; inner: HTMLElement; frame?: HTMLIFrameElement; seen: number; mips?: HTMLCanvasElement[]; lv?: number };
+type Card = { f: Frame; box: HTMLElement; inner: HTMLElement; frame?: HTMLIFrameElement; seen: number; mips?: HTMLImageElement[]; lv?: number };
 type Spot = { left: number; top: number; zone: { left: number; top: number; width: number; height: number } | null; clipped?: boolean };
 
 type MountOpts = {
@@ -59,8 +59,9 @@ const css = `
 #lab-board .zm .zo{min-width:3.2em;text-align:right}
 #lab-board .zm:not(.open) .zc{display:none}
 @media (prefers-color-scheme:dark){#lab-board .zm button:hover,#lab-board .zm.open button{background:rgba(255,255,255,.08)}}
-#lab-board img,#lab-board canvas.mip{object-fit:contain}
-#lab-board canvas.mip{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#lab-board img{object-fit:contain}
+#lab-board img.mip{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#lab-board .b img{background:none;will-change:transform} /* each picture its own layer, the picture itself its texture (Safari does that only for a bare one, no background): a zoom scales it, never paints it again (Leo, 23 Nov: fine lines sparkled while zooming) */
 #lab-board.drop{outline:2px solid #1f7a4d;outline-offset:-2px}
 #lab-board .ghost{position:absolute;width:200px;height:120px;margin:-60px 0 0 -100px;display:grid;place-items:center;border:calc(1px*var(--iz,1)) dashed currentColor;background:rgba(127,127,127,.12);font-size:calc(14px*var(--iz,1));opacity:.8;pointer-events:none}
 #lab-board .note{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);z-index:6;max-width:calc(100% - 32px);padding:8px 12px;border-radius:var(--_r-s,6px);background:#1d1d1b;color:#fff;pointer-events:none}
@@ -169,23 +170,29 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     return el;
   };
 
-  // A picture far out is drawn from a smaller copy of itself, each half the one before, the one just big enough for
-  // the screen: Safari scaled the whole picture down mid-zoom with a cheap filter, and fine detail shimmered as the
-  // zoom went (Leo, 23 Nov: pictures blink while zooming at 9%).
-  const mips = (c: Card, img: HTMLImageElement) => {
-    if (signal.aborted || !img.isConnected) return;
-    const list: HTMLCanvasElement[] = [];
+  // A picture far out is drawn from a smaller copy of itself, each half the one before, the one nearest the size on
+  // screen: scaled down a lot mid-zoom, fine lines sparkled (Leo, 23 Nov: "only lines"). The copies are pictures too
+  // (not canvases: Safari showed some canvas layers blank), each shown once it is decoded.
+  const mips = async (c: Card, img: HTMLImageElement) => {
+    const list: HTMLImageElement[] = [];
     let from: CanvasImageSource = img;
-    for (let w = img.naturalWidth, h = img.naturalHeight; w >= 256; ) {
+    for (let w = img.naturalWidth, h = img.naturalHeight; w >= 256 && !signal.aborted && img.isConnected; ) {
       [w, h] = [Math.round(w / 2), Math.round(h / 2)];
-      const cv = Object.assign(document.createElement('canvas'), { width: w, height: h, className: 'mip', hidden: true });
+      const cv = Object.assign(document.createElement('canvas'), { width: w, height: h });
       const x = cv.getContext('2d');
       if (!x) break;
       x.imageSmoothingQuality = 'high';
       x.drawImage(from, 0, 0, w, h);
-      list.push((from = cv));
+      from = cv;
+      const blob = await new Promise<Blob | null>((ok) => cv.toBlob(ok, 'image/png'));
+      if (!blob) break;
+      const url = URL.createObjectURL(blob);
+      signal.addEventListener('abort', () => URL.revokeObjectURL(url), { once: true });
+      const m = Object.assign(document.createElement('img'), { src: url, alt: '', draggable: false, className: 'mip', hidden: true });
+      await m.decode().catch(() => {});
+      list.push(m);
     }
-    if (!list.length) return;
+    if (!list.length || signal.aborted || !img.isConnected) return;
     img.after(...list);
     c.mips = list;
     c.lv = -1;
@@ -195,10 +202,10 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     const list = c.mips!;
     const need = c.f.w * cam.z * devicePixelRatio;
     let lv = -1; // the picture itself
-    for (let i = list.length - 1; i >= 0; i--) if (list[i].width >= need) { lv = i; break; }
+    for (let i = list.length - 1; i >= 0; i--) if (list[i].naturalWidth * 1.4 >= need) { lv = i; break; } // drawn at most 1.4× its size: a touch soft, never sparkling
     if (lv === c.lv) return;
     c.lv = lv;
-    list.forEach((cv, i) => (cv.hidden = i !== lv));
+    list.forEach((m, i) => (m.hidden = i !== lv));
     c.inner.querySelector('img')!.style.visibility = lv < 0 ? '' : 'hidden';
   };
 
@@ -384,7 +391,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       box.dataset.id = f.id;
       if (f.kind === 'image') {
         const img = Object.assign(document.createElement('img'), { src: f.src, alt: f.label || '', draggable: false, loading: 'lazy' });
-        img.addEventListener('load', () => mips(c, img), { once: true, signal });
+        img.addEventListener('load', () => void mips(c, img), { once: true, signal });
         inner.appendChild(img);
       } else inner.appendChild(card(c));
       box.append(inner);

@@ -5,7 +5,7 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 ## Unreleased
 
 - **A page's boards are in the bar.** "boards · N" shows while the page has boards, yours and the agent's (`labit board new --of /page`); its click lists them with "new board", and the ⋯ menu has "new board" for a page with none. The comment box no longer has `+board`, and boards are no longer pins (those made before still open from their pin).
-- **Pictures on a board no longer shimmer as you zoom out in Safari.** Far out, a big picture is drawn from a smaller copy of itself, each half the one before, the one just big enough for the screen, instead of the whole picture scaled down mid-zoom.
+- **Fine lines in pictures on a board no longer sparkle as you zoom in Safari.** Each picture is its own layer, scaled as it is, and far out it is drawn from a smaller copy of itself near its size on screen.
 - **A picked frame on a board has the same thin outline as hover.** No thicker ring.
 - **A board is made on the page you asked on.** `labit board new` without `--of` is about the page of the pins the agent was handed, a board pin there; with no such page it asks which page instead of making a board of its own. The skill says the same.
 - **A drawing lands as you drew it.** Every point you drew is kept (up to 500 a line, was thinned to half a px and 200) and placed to a tenth, so the line that lands is the line you saw.
