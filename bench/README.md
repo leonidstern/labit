@@ -132,6 +132,8 @@ The lean text is about 25% shorter and costs the same per run: more than 90% of 
 
 With `colours:` back in the lean text (20 runs per arm, `results/cost/situations-sonnet-2026-11-23-08-55.json`): full 8 of 600 wrong, 14 / 20 all right, $0.236 a run; lean 8 of 600 wrong, 15 / 20 all right, $0.242 a run. Dark mode missed in 1 of 20 runs of each. The gap is gone, and the cost is still the same.
 
+With `viewport:` back too (20 runs per arm, `results/cost/situations-sonnet-2026-11-23-09-20.json`): full 10 of 600 wrong, $0.230 a run; lean 13 of 600 wrong, $0.228 a run. No gap that the runs can tell apart, and the same cost.
+
 ### Drawings and the skill, 2026-11-23
 
 `node bench/cost.mjs drawings` runs each of the 12 drawings of `drawings/` on its own (run `drawings/draw.mjs` first), the text as a wait hands it over, Sonnet 5.5, 3 runs per drawing and arm (`results/cost/drawings-sonnet-2026-11-23-09-08.json`). Every arm got 36 of 36 right.
