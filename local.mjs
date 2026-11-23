@@ -1970,7 +1970,7 @@ async function unseen(scope = pages(), who = '') {
     : `\n\nAnswer each: ${CMD} reply <id> --done "what you did" (or --question) [--wait --bg]; the standing lines (read threads whole, --progress before long work, short answers) and rules as before.`;
   // Listen again first (Leo, 23 Nov: "why stopped"): a wait that ended with a pin while the agent went on to work left
   // nobody listening for 13 minutes. Said at the top, where it is read before the work starts, not only in the answer line.
-  const again = `Listen again first: run ${CMD} wait --bg in the background now, before you work on these, so pins that come meanwhile are heard (answers then without --wait).`;
+  const again = `Listen again first: run ${CMD} wait --bg in the background now, before you work on these, so pins that come meanwhile are heard (answers then without --wait). In the middle of other work? Before going back to it, answer what is quick and send a --progress line on the rest, so the person sees you have them.`;
   const text = `In this message: ${count}. Read all of it; each one is marked handed to you.\n${again}\n\n${whole.length ? '# New comments\n\n' : ''}${groups.length ? `${groups.join('\n')}\n\n` : ''}${blocks.join('\n\n')}` +
     standing +
     lost.map(({ page, c }) => `\n${UNMATCHED(c.id, page, c.anchor.selector)}`).join('') +
@@ -2778,16 +2778,21 @@ const handler = async (req, res) => {
       const recent = (at) => Boolean(at) && now - Date.parse(at) < CLAIM_LIFE;
       // When the agent itself last wrote the line: said, or for a line from before said, its time unless it was a renewal.
       const ownLine = (p) => p?.said || (p && p.text !== RENEWAL ? p.at : '');
+      // Handed and not a word back since the person's last (no answer, no status line): `quiet`, for the hook to tell a
+      // session busy with other work mid-turn, so it says it has them instead of leaving the person looking at "picked up".
+      const quiet = [];
       const working = pages().flatMap((page) => commentsOf(page).filter((c) => !c.parent && !c.resolved && c.handedAt && !(asker && (handoff[c.id]?.[1] || ownerOf(page)) !== asker)).flatMap((c) => {
         const msgs = commentsOf(page).filter((r) => r.parent === c.id);
         const lastAt = (mine) => [c, ...msgs].filter((m) => Boolean(m.session) === mine).map((m) => m.createdAt).sort().pop() || '';
         const reply = msgs.filter((m) => m.session).sort((a, b) => a.createdAt.localeCompare(b.createdAt)).pop();
         const answered = reply && reply.createdAt > lastAt(false);
         const claimed = answered ? reply.intent === 'working' && (recent(reply.createdAt) || recent(ownLine(c.progress))) : Boolean(c.progress) && recent(ownLine(c.progress));
+        if (!answered && !claimed && !(c.progress && c.progress.at > lastAt(false)) && c.handedAt >= lastAt(false)) quiet.push({ id: c.id, at: c.handedAt });
         return claimed ? [{ page, id: c.id }] : [];
       }));
       return answer(res, {
         working,
+        quiet,
         fresh: ids.length,
         pages: [...new Set(fresh.map(({ page }) => page))],
         key: createHash('sha1').update(ids.join(',')).digest('hex').slice(0, 12),

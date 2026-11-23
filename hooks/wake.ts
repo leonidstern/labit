@@ -30,7 +30,7 @@ import type { Register } from 'claude-code';
 const EVERY_MS = 4000;
 const MAX_LABS = 4; // labs one look asks, at most
 const MAX_FILES = 40; // registry files one look reads, at most
-type Pending = { working?: { page: string; id: string }[]; fresh: number; pages: string[]; key: string; listening: boolean; last: string; for?: string; dir: string; cmd: string; url: string };
+type Pending = { working?: { page: string; id: string }[]; quiet?: { id: string; at: string }[]; fresh: number; pages: string[]; key: string; listening: boolean; last: string; for?: string; dir: string; cmd: string; url: string };
 type Lab = { port: number; key: string };
 
 let busy = false; // a main-loop turn is running
@@ -40,6 +40,12 @@ let timer: { cancel: () => void } | null = null;
 const PROGRESS_MS = 60000; // a pin's progress line is renewed once a minute at most
 const WORKING_MS = 15000; // how long the list of pins being worked on is kept before it is asked for again
 let working: { lab: Lab; page: string; id: string }[] = [];
+// Mid-turn word (#497): pins that came while this session works on something else, said with a tool's result so it can
+// say it has them now, not when its turn ends. Pins handed to its wait with no word back for QUIET_MS, or pins no wait
+// has taken while it isn't listening. Once per set of pins; the next look after WORKING_MS sees new ones.
+const QUIET_MS = 30000;
+let mid: { lab: Lab; quiet: { id: string; at: string }[]; fresh: number; listening: boolean; cmd: string; dir: string }[] = [];
+const midTold = new Set<string>();
 let workingAt = -Infinity;
 const noted = new Map<string, number>(); // lab port + pin id -> when its line was last written
 // When the last wake was submitted, until its turn starts. A wake the person cancels (Escape takes it out of the
@@ -115,14 +121,18 @@ async function note($: any, line: string): Promise<void> {
     workingAt = now;
     const me = await $.session.id();
     const list: typeof working = [];
+    const seen: typeof mid = [];
     for (const lab of await labsFor($, me)) {
       try {
         const res = await ask($, lab, me);
         const p: Pending = res.ok ? JSON.parse(res.text) : null;
-        if (mine(p, me)) for (const w of p.working || []) list.push({ lab, ...w });
+        if (!mine(p, me)) continue;
+        for (const w of p.working || []) list.push({ lab, ...w });
+        seen.push({ lab, quiet: p.quiet || [], fresh: p.fresh, listening: p.listening, cmd: p.cmd, dir: p.dir });
       } catch {}
     }
     working = list;
+    mid = seen;
   }
   for (const w of working) {
     const key = `${w.lab.port}:${w.id}`;
@@ -136,6 +146,25 @@ async function note($: any, line: string): Promise<void> {
       })
       .catch(() => {});
   }
+}
+
+// What to tell the session with this tool's result: the pins waiting on it while it works on something else, once each.
+async function midWord(): Promise<string> {
+  const now = Date.now(); // wall time, as the lab's handedAt is
+  const out: string[] = [];
+  for (const m of mid) {
+    const quiet = m.quiet.filter((q) => now - Date.parse(q.at) > QUIET_MS && !midTold.has(`${m.lab.port}:${q.id}:${q.at}`));
+    const fresh = !m.listening && m.fresh && !midTold.has(`${m.lab.port}:fresh:${m.fresh}`) ? m.fresh : 0;
+    if (!quiet.length && !fresh) continue;
+    for (const q of quiet) midTold.add(`${m.lab.port}:${q.id}:${q.at}`);
+    if (fresh) midTold.add(`${m.lab.port}:fresh:${m.fresh}`);
+    const n = (k: number) => (k === 1 ? 'a pin' : `${k} pins`);
+    out.push(
+      `labit: ${[quiet.length && `${n(quiet.length)} handed to you with no word back yet (${quiet.map((q) => q.id).join(', ')})`, fresh && `${n(fresh)} nobody has taken (run \`${m.cmd} wait --timeout 5\` in ${m.dir})`].filter(Boolean).join(', and ')}. ` +
+        `A person is waiting on ${quiet.length + fresh === 1 ? 'it' : 'them'} while you work on something else. Before your next step, answer what is quick; on the rest send \`${m.cmd} reply <id> --progress "after <what you're on now>"\` so the page says you have it. Then carry on.`,
+    );
+  }
+  return out.join('\n');
 }
 
 // Only the session's own tool calls count: a helper it started (agentId set) works on whatever it was given.
@@ -206,9 +235,13 @@ async function look($: any): Promise<void> {
 
 export const register: Register = (on) => {
   // A tool call by this session or a helper of it: the pins being worked on show it. Never delays the call.
-  on('tool.call', ($, e, next) => {
+  // Its own calls also bring the word about pins waiting on it (midWord), read with the result, never in place of it.
+  on('tool.call', async ($, e, next) => {
     void progress($, e).catch(() => {});
-    return next(e);
+    const out = await next(e);
+    if (e.agentId !== undefined || out.deny !== undefined || out.isError) return out;
+    const word = await midWord().catch(() => '');
+    return word ? { ...out, context: [...(out.context || []), word] } : out;
   });
   on('turn.start', ($, e, next) => {
     if (e.agentId === undefined) {
