@@ -15,8 +15,8 @@ button.moment:hover { color: var(--_fg); }
 .float > .moment, .foot > .moment { display: block; margin: 0 0 6px; font-size: 11px; color: var(--_muted); }
 /* Writing about a moving thing (9b): the line says the moment now, and the keys while its box has the cursor; held ⌃ names the rest. */
 .moment.live { display: flex; justify-content: space-between; gap: 8px; }
-:is(.float, .card):focus-within .moment.live::after { content: '⌃ ← → frame'; }
-:is(.float, .card):focus-within .moment.live.ctrl::after { content: '⌃⇧ ← → second · ⌃K play'; }
+:is(.float, .card):focus-within .moment.live::after { content: '⌥ < > frame'; }
+:is(.float, .card):focus-within .moment.live.ctrl::after { content: '⌥⇧ < > second · ⌃K play · ⌃ ← → too'; }
 @media (pointer: coarse) {
   .motion-sheet { padding: 8px 8px calc(10px + var(--_safe, 0px)); }
   .motion-speed { padding: 3px 4px 3px 12px; font-size: 15px; letter-spacing: -.016em; } /* lines up with the sheet's rows */
