@@ -183,6 +183,23 @@ try {
       await open();
       const z2 = await until(onA);
       check(eng, 'after a reload a drawing across frames is drawn again', Boolean(z2) && Math.abs(z2[1] - z0[1]) < 0.03, JSON.stringify({ z0, z2 }));
+      // #423: a drawing of many strokes keeps them all (16 were kept, the rest dropped without a word), and each mark in it
+      // names the frame it is on (they named the board's dialog).
+      await sleep(1200);
+      const had4 = (await comments()).length;
+      const fa4 = await rect('a');
+      await p.keyboard.down('d');
+      for (let i = 0; i < 24; i++) {
+        await p.mouse.move(fa4.x + fa4.w * 0.1 + i * 9, fa4.y + fa4.h * 0.3);
+        await p.mouse.down();
+        await p.mouse.move(fa4.x + fa4.w * 0.1 + i * 9, fa4.y + fa4.h * 0.3 + 30, { steps: 3 });
+        await p.mouse.move(fa4.x + fa4.w * 0.1 + i * 9 + 3, fa4.y + fa4.h * 0.3 + 60, { steps: 3 });
+        await p.mouse.up();
+      }
+      await p.keyboard.up('d');
+      const many = await until(async () => { const c = await comments(); return c.length > had4 ? c.at(-1) : null; });
+      const mk = many?.anchor?.ink || {};
+      check(eng, 'a drawing of 24 strokes keeps all 24, and its marks name frame a', mk.pts?.length === 24 && Boolean(mk.marks?.length) && mk.marks.every((m) => /data-id="a"/.test(m)), JSON.stringify({ lines: mk.pts?.length, marks: mk.marks?.slice(0, 2) }));
     } finally {
       await browser.close();
     }
