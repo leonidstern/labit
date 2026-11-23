@@ -19,3 +19,6 @@ button.moment:hover { color: var(--_fg); }
   .float > .moment { padding: 0 14px; }
   .more-menu .motion-speed button { min-height: 44px; min-width: 44px; padding: 6px 11px; } /* 44 pt to tap (iOS) */
 }
+/* The frame keys' row (1a, 4a): a quiet line in the menu, the keys on the right, like the ⋯ menu's (x). */
+.more-menu .motion-keys { display: flex; justify-content: space-between; gap: 12px; padding: 7px 10px; font-size: 13px; letter-spacing: -.006em; color: var(--_fg); }
+.more-menu .motion-keys span { color: var(--_muted); }

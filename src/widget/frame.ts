@@ -3,6 +3,7 @@
 // What it keeps: the page's live updates (a save patches or reloads this frame, never the board), reading the lab's
 // state from the board's stream and not opening its own, and a way to pass keys on to the board.
 import { bindLive, startLive } from './live.ts';
+import { fps, stepOfKey, stepVideo, watchFrames } from './step.ts';
 
 /** True in a board's frame: the name the board gave it, and a board on top (the name alone could be anyone's frame). */
 export const inFrame = (): boolean => {
@@ -43,10 +44,38 @@ export function startFrame(script: HTMLScriptElement | null) {
     // Esc is the board's only when nothing in the page has the focus: with a field or a menu focused it is the page's first.
     if (e.key === 'Escape' && document.activeElement && document.activeElement !== document.body && document.activeElement !== document.documentElement) return;
     if (e.defaultPrevented || t?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t?.tagName || '')) return;
+    if (frameKey(e)) return;
     const k = { key: e.key, code: e.code, shiftKey: e.shiftKey, metaKey: e.metaKey, ctrlKey: e.ctrlKey, altKey: e.altKey, repeat: e.repeat };
     // Not the board's: the widget's (D draws, E shows done, M, T, W...) as if pressed on the board's page: with the focus
     // in a live frame D drew nothing (Mac test, 21 Nov).
     if (!board()?.key?.(k)) top?.document.dispatchEvent(new KeyboardEvent('keydown', { ...k, bubbles: true, cancelable: true }));
   });
   addEventListener('keyup', (e) => top?.document.dispatchEvent(new KeyboardEvent('keyup', { key: e.key, code: e.code, shiftKey: e.shiftKey, metaKey: e.metaKey, ctrlKey: e.ctrlKey, altKey: e.altKey, bubbles: true, cancelable: true })));
+}
+
+// A video in an open frame steps as on a page (Leo, 23 Nov, 8a): ← → a frame, ⇧ a second, Space plays or pauses; an
+// arrow on a playing one pauses it first. The focused video, else the one most in view; none on screen: the board's keys.
+const shown = (v: HTMLVideoElement) => {
+  const r = v.getBoundingClientRect();
+  return Math.max(0, Math.min(r.right, innerWidth) - Math.max(r.left, 0)) * Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0));
+};
+function frameKey(e: KeyboardEvent) {
+  const space = e.key === ' ' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && !(e.target as HTMLElement | null)?.closest?.('button, a, summary');
+  if (!space && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return false;
+  const f = document.activeElement;
+  const v = f instanceof HTMLVideoElement ? f : [...document.querySelectorAll('video')].filter((x) => shown(x) > 0).sort((a, b) => shown(b) - shown(a))[0];
+  if (!v) return false;
+  watchFrames(v);
+  const d = stepOfKey(e, fps(v));
+  if (!space && !d) return false;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  if (space) {
+    if (!e.repeat) void (v.paused ? v.play().catch(() => {}) : v.pause());
+  } else if (!v.paused && !e.repeat) v.pause();
+  else {
+    v.pause();
+    stepVideo(v, d);
+  }
+  return true;
 }
