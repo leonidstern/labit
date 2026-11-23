@@ -1425,6 +1425,8 @@ import { bindKeys } from './widget/keys.ts';
     closeOthers();
     setTimeout(() => render(), 0);
   };
+  // The labit mark at the bar's end (live.ts) too (Leo, 23 Nov: "yes it should"): its click closes what is open, then does its own.
+  root.addEventListener('click', (e) => e.composedPath().some((n) => n instanceof Element && n.classList.contains('listener')) && closeOthersAfter(), true);
   moreBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     closeOthersAfter();

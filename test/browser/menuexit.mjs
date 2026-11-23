@@ -119,6 +119,17 @@ try {
         await sleep(600);
         const chat2 = await state();
         check(eng, 'the chat open, one click on ⋯ closes it and opens the menu', chat.chat && !chat2.chat && chat2.menu, JSON.stringify([chat, chat2]));
+        // the labit mark at the bar's end closes an open thread too (Leo, 23 Nov: "yes it should")
+        await p.keyboard.press('Escape');
+        await sleep(400);
+        await openCard();
+        const mk1 = await state();
+        await sh(p, `(() => { const w = r.querySelector('.listener'); if (w) w.hidden = false; })()`);
+        const lb = await at('.listener');
+        await p.mouse.click(lb[0], lb[1]);
+        await sleep(600);
+        const mk2 = await state();
+        check(eng, 'a thread open, a click on the labit mark closes it', mk1.card && !mk2.card, JSON.stringify([mk1, mk2]));
         await ctx.close();
       }
 
