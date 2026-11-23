@@ -4,6 +4,7 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 
 ## Unreleased
 
+- **Long animations get the motion menu.** An animation that ends but runs 5 s or more (a film or slideshow on one clock) now gets the right-click menu, P and S, like a loop does. Short ones that end (a highlight) are still moments.
 - **Moving pictures near a board's edge no longer moves the view.** Panned to the edge, frames dragged inward leave the camera where you put it; the edges only stop a pan, they never push the view.
 - **⌘Z on a board takes back only the newest thing.** A pin or drawing made after moving a picture goes first; the picture stays put until the next ⌘Z.
 - **One click on ⋯ or the boards list opens it, even with a comment or the chat open.** The open thread (and a new comment with nothing typed in it) closes in the same click, as the chat button already did.
