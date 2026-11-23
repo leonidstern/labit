@@ -281,15 +281,23 @@ export function bindDrag(w: unknown) {
         // The move's own place on the page: asking the window how far it is scrolled made the browser lay the page out
         // again on every move (the ink had just changed), most of what a move took (issue 423).
         const { pageX: x, pageY: y } = e;
-        const speed = q ? Math.hypot(x - q.x, y - q.y) / Math.max(1, now - (S.inkT || now - 16)) : 0; // px a ms
+        const r = S.inkAt; // the pointer's last place, before smoothing
+        const speed = r ? Math.hypot(x - r.x, y - r.y) / Math.max(1, now - (S.inkT || now - 16)) : 0; // px a ms
         S.inkT = now;
         // A pen's pressure sets the width; a mouse or finger draws thinner the faster it moves (Leo's pick 4, 20 Nov).
         const want = e.pointerType === 'pen' && e.pressure > 0 ? 1.5 + e.pressure * 4 : Math.max(1.6, Math.min(5, 5 - speed * 1.8));
-        // A light smoothing (Leo, 23 Nov): a point goes part of the way to the pointer, more of it the faster the hand moves,
-        // so a slow hand's shake is taken out and a quick line keeps up. The stroke ends on the pointer (endDrag).
-        const k = q ? Math.min(1, 0.35 + speed * 0.4) : 1;
+        const w = q?.w ? (q.w + want) / 2 : want;
+        // A light smoothing (Leo, 23 Nov): a point goes most of the way to the pointer, all of it on a quick hand, so a slow
+        // hand's shake is taken out and the line never trails. Where the hand turns sharply (an arrow's head, a corner) the
+        // line goes through the pointer's own turning point: smoothing there cut the head short and left a jump at the end
+        // (Leo, 23 Nov: "i draw big one but it draws it weirdly small").
+        const turn = q && r && Math.hypot(r.x - q.x, r.y - q.y) > 2 ? Math.atan2(y - r.y, x - r.x) - Math.atan2(r.y - q.y, r.x - q.x) : 0;
+        const sharp = Math.abs(Math.atan2(Math.sin(turn), Math.cos(turn))) > 0.9; // over about 50°
+        if (sharp) st.push({ x: r.x, y: r.y, w });
+        const k = !q || sharp ? 1 : Math.min(1, 0.7 + speed * 0.3);
+        const from = sharp ? r : q;
         S.inkAt = { x, y };
-        st.push({ x: q ? q.x + (x - q.x) * k : x, y: q ? q.y + (y - q.y) * k : y, w: q?.w ? (q.w + want) / 2 : want });
+        st.push({ x: from ? from.x + (x - from.x) * k : x, y: from ? from.y + (y - from.y) * k : y, w });
         return void S.inking.add();
       }
       S.zoneFrame ||= requestAnimationFrame(paintZone);
