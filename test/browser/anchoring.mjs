@@ -337,6 +337,35 @@ try {
       check(eng, 'a pin far down a long list is found again when a row above it goes', r.now && Math.abs(r.now.docY - r.top) < 30, JSON.stringify(r.now));
       await p.close();
 
+      // An area over one row of a panel (Leo, 23 Nov: "u moved this pin wrong"): it is on the panel (the area is taller than
+      // the row), as a share of it. Rows above it made shorter: the area stays on its row. Its own words partly changed: on
+      // it still, shown unsure. The row and two others deleted: lost, never on the block below the shrunken panel.
+      const rowsHtml = (rows) => `<div id="panel" style="width:600px;background:#eee">${rows.map(([n, more]) => `<div class="row" style="padding:8px"><b>${n}</b> <span>${n === 'FERN' ? '18h deep pool: won 1 of 5' : 'day-1 tokens · you won 8 of 11'}</span>${more ? '<p style="margin:0">Organic 77 · typical +40%</p>' : ''}</div>`).join('')}</div><div id="side"><b>Token</b> MC / Liq <span>Price / 24h</span><p>ZEST IRIS WISP CALDA AXL FERN</p></div>`;
+      const ROWS = ['ZEST', 'IRIS', 'WISP', 'CALDA', 'AXL', 'FERN'];
+      const areaCase = async (after) => {
+        const ap = await open(ctx, rowsHtml(ROWS.map((n) => [n, true])));
+        const got = await ap.evaluate(([html]) => {
+          const fern = () => [...document.querySelectorAll('.row')].find((n) => /FERN/.test(n.textContent));
+          const q = fern().getBoundingClientRect();
+          const a = A.zoneAnchor({ x0: q.left + 2, y0: q.top - 10, x1: q.left + 300, y1: q.bottom + 10 });
+          const same = A.position(a);
+          document.body.innerHTML = html;
+          const at = A.position(a);
+          const f = fern()?.getBoundingClientRect();
+          const mid = at.zone && at.zone.top + at.zone.height / 2 - scrollY;
+          return { element: a.element, sameOn: same.zone && Math.abs(same.zone.top - (q.top - 10 + scrollY)) < 1 && !same.moved && !same.why, moved: Boolean(at.moved), why: at.why || '', onFern: Boolean(f && mid >= f.top && mid <= f.bottom), told: A.spotChanged(a) };
+        }, [after]);
+        await ap.close();
+        return got;
+      };
+      r = await areaCase(rowsHtml(ROWS.map((n) => [n, n === 'FERN'])));
+      check(eng, 'an area over a row is on its panel, and on an unchanged page stays where it was drawn', r.element === '<div id="panel">' && r.sameOn, JSON.stringify(r));
+      check(eng, 'an area over a row: rows above made shorter, it stays on its row', r.onFern && !r.moved && !r.why, JSON.stringify(r));
+      r = await areaCase(rowsHtml(ROWS.map((n) => [n, false])));
+      check(eng, 'an area over a row: its own words partly changed, on it still, shown unsure', r.onFern && !r.moved && r.why === 'changed', JSON.stringify(r));
+      r = await areaCase(rowsHtml(ROWS.filter((n) => !['CALDA', 'AXL', 'FERN'].includes(n)).map((n) => [n, false])));
+      check(eng, 'an area over a row: the row deleted, it is lost (not on the block below), and told as gone', r.moved && r.told?.gone === true, JSON.stringify(r));
+
       // What an agent needs to change the thing: the rules that reach it (with the @media and the file), its box, and Astro's source.
       p = await open(ctx, '<style>.btn{padding:8px 12px}@media (max-width: 600px){.btn{padding:2px}}@media print{.btn{color:red}}.other{color:blue}</style><div data-astro-source-file="/home/me/site/src/pages/index.astro" data-astro-source-loc="12:3"><button class="btn" style="width:5000px">Buy</button></div>');
       r = await p.evaluate(() => {

@@ -101,7 +101,7 @@ type Anchor = {
 type Box = { left: number; top: number; width: number; height: number };
 
 /** Where a pin shows: its point, the area it marks (if any), and whether its spot changed. */
-type Spot = { left: number; top: number; zone: Box | null; moved?: boolean; clipped?: boolean; hidden?: boolean };
+type Spot = { left: number; top: number; zone: Box | null; moved?: boolean; clipped?: boolean; hidden?: boolean; guess?: boolean };
 
 type Deps = {
   host: HTMLElement;
@@ -1129,7 +1129,7 @@ export function position(anchor) {
   if (!at.zone) at.left = reachable(at.left);
   // A page's board view covers what is under it: the page's pins there hide (overlay.ts).
   const covered = coveredAt(at.left - scrollX, at.top - scrollY); // told apart, so a scroll under the view only asks this again
-  return { ...at, covered, why: at.hidden ? 'hidden' : doubt(), clipped: covered || at.hidden || clippedAt(findTarget(anchor), at.left - scrollX - (anchor.sx || 0), at.top - scrollY) }; // a pin beside its line: its line's spot is what a scroll box hides
+  return { ...at, covered, why: at.hidden ? 'hidden' : at.guess ? 'changed' : doubt(), clipped: covered || at.hidden || clippedAt(findTarget(anchor), at.left - scrollX - (anchor.sx || 0), at.top - scrollY) }; // a pin beside its line: its line's spot is what a scroll box hides
 }
 // A pin is never left where the page can't be scrolled to (Leo, 23 Nov: "be sure board pin wont became stray out of
 // viewport"): its element past the window's right edge on a page that cuts off sideways scrolling (overflow-x hidden), or
@@ -1231,7 +1231,16 @@ function spotOf(anchor): Spot {
       const tall = anchor.zw && Number.isFinite(anchor.oy) && anchor.docH && rect.height > 2 * anchor.docH;
       const top = rect.top + scrollY + (tall ? anchor.oy : anchor.y * rect.height);
       const zone = anchor.zw ? { left, top, width: anchor.zw * rect.width, height: tall ? anchor.docH : anchor.zh * rect.height } : null;
-      return zone ? { ...pinOf(zone, anchor), zone } : { left, top, zone };
+      if (!zone) return { left, top, zone };
+      // An area that held words is on those words, not on its share of the box: rows shortened or removed above them
+      // moved them, and the share pointed at other rows, or past the box onto the next block (Leo, 23 Nov: "u moved this
+      // pin wrong"). Words gone: lost, as a pin whose element is gone.
+      const found = followZone(anchor, node, zone); // an area with no words (a picture) keeps its share
+      if (!found) {
+        const was = { left: anchor.docX * docWidth(), top: inPage(anchor.docY, anchor.docH || 0), width: anchor.docW || zone.width, height: anchor.docH || zone.height };
+        return { ...pinOf(was, anchor), zone: was, moved: true };
+      }
+      return { ...pinOf(found.zone, anchor), zone: found.zone, ...(found.guess ? { guess: true } : {}) };
     }
   }
   // Its element is gone: its words may still be on the page.
@@ -1246,6 +1255,64 @@ function spotOf(anchor): Spot {
   if (zone) return { ...pinOf(zone, anchor), zone, moved: Boolean(anchor.selector) && anchor.selector !== 'body' };
   // Anchored to the page itself (a margin, or an area wider than any element): nothing has moved.
   return { left, top, zone, moved: Boolean(anchor.selector) && anchor.selector !== 'body' };
+}
+
+// Where an area's words are now in its box. Still in the area where its share puts it (80% of them): there. Else the
+// band of the area's height that holds the most of them, the rarer in the box the more each counts (FERN, not "won 8
+// of 11", which every row says): sure when it holds 80% of them, a guess (shown unsure) when it holds a third and a word
+// that stands once in the box, and beats the next band by half. Else null: the words are gone. Kept for a moment, as
+// the letters are (a redraw asks every pin again).
+const tokensOf = (s: string) => [...new Set(String(s || '').toLowerCase().split(/\s+/).filter((t) => /[\p{L}\p{N}]/u.test(t)))];
+let followed = new WeakMap<object, { when: number; node: Element; key: string; got: { zone: Box; guess?: boolean } | null }>();
+function followZone(anchor, node: Element, zone: Box): { zone: Box; guess?: boolean } | null {
+  const want = tokensOf(anchor.zoneText);
+  if (want.length < 2) return { zone };
+  const key = [zone.left, zone.top, zone.width, zone.height, node.getBoundingClientRect().height].map(Math.round).join();
+  const had = followed.get(anchor);
+  if (had && had.node === node && had.key === key && performance.now() - had.when < 400) return had.got;
+  const [l, t] = [zone.left - scrollX, zone.top - scrollY];
+  const r = l + zone.width;
+  type Word = ReturnType<typeof wordBoxes>[number];
+  const inX = (w: Word) => w.x >= l - 4 && w.x <= r + 4;
+  const held = (ws: Word[], top: number, bottom: number) => new Set(ws.filter((w) => inX(w) && w.y >= top && w.y <= bottom && want.includes(w.t)).map((w) => w.t));
+  let got: { zone: Box; guess?: boolean } | null = { zone };
+  const low = (ws: Word[]) => ws.map((w) => ({ ...w, t: w.t.toLowerCase() }));
+  if (held(low(wordBoxes(node, { left: l, top: t, right: r, bottom: t + zone.height })), t, t + zone.height).size < 0.8 * want.length) {
+    const all = low(wordBoxes(node, null));
+    const df = new Map<string, number>();
+    for (const w of all) df.set(w.t, (df.get(w.t) || 0) + 1);
+    const cols = all.filter(inX);
+    const bands = [...new Set(cols.filter((w) => want.includes(w.t)).map((w) => Math.round(w.y)))].map((y) => {
+      const has = held(cols, y - zone.height / 2, y + zone.height / 2);
+      return { y, has, score: [...has].reduce((s, k) => s + 1 / (df.get(k) || 1), 0) };
+    });
+    const mid = t + zone.height / 2; // a tie goes to the band nearer where the area was
+    const best = bands.reduce((a, b) => (b.score > a.score || (b.score === a.score && Math.abs(b.y - mid) < Math.abs(a.y - mid)) ? b : a), { y: 0, has: new Set<string>(), score: 0 });
+    const next = Math.max(0, ...bands.filter((b) => Math.abs(b.y - best.y) >= zone.height).map((b) => b.score));
+    const sure = best.has.size >= 0.8 * want.length;
+    const fair = best.has.size >= want.length / 3 && [...best.has].some((k) => df.get(k) === 1) && best.score >= 2 * next;
+    got = sure || fair ? { zone: { ...zone, top: best.y - zone.height / 2 + scrollY }, ...(sure ? {} : { guess: true }) } : null;
+  }
+  followed.set(anchor, { when: performance.now(), node, key, got });
+  return got;
+}
+// The words of a box, each with its middle in the window's px; with `within`, only those of text whose element meets it.
+function wordBoxes(box: Element, within: { left: number; top: number; right: number; bottom: number } | null, max = 5000) {
+  const out: { t: string; x: number; y: number }[] = [];
+  const walker = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+  const range = document.createRange();
+  for (let n = walker.nextNode() as Text | null; n && out.length < max; n = walker.nextNode() as Text | null) {
+    if (host.contains(n)) continue;
+    const pr = n.parentElement?.getBoundingClientRect();
+    if (!pr || (within && (pr.bottom < within.top || pr.top > within.bottom || pr.right < within.left || pr.left > within.right))) continue;
+    for (const m of n.data.matchAll(/\S+/g)) {
+      range.setStart(n, m.index);
+      range.setEnd(n, m.index + m[0].length);
+      const w = range.getBoundingClientRect();
+      if (w.width) out.push({ t: m[0], x: (w.left + w.right) / 2, y: (w.top + w.bottom) / 2 });
+    }
+  }
+  return out;
 }
 
 // A pin whose element is gone, by its words. Sure when they stand once on the page between the same words as before
@@ -1309,9 +1376,12 @@ function placeOf(node, anchor) {
 // re-pin"). Null when its words are still there. The pin itself stays open and where findTarget puts it.
 export function spotChanged(anchor) {
   if (!anchor.selector || anchor.kind === 'board' || anchor.kind === 'page') return null;
-  const was = short(anchor.quote?.exact || anchor.text || anchor.zoneText || anchor.fp?.t || '', 80);
+  const was = short(anchor.quote?.exact || (anchor.zw && anchor.zoneText) || anchor.text || anchor.zoneText || anchor.fp?.t || '', 80);
   const { node, sure, alike } = proof(anchor);
-  if (!node) return position(anchor).moved && was ? { was, gone: true } : null;
+  if (!node || (anchor.zw && anchor.zoneText)) {
+    if (position(anchor).moved && was) return { was, gone: true }; // an area whose words are gone from its box: gone too
+    if (!node) return null;
+  }
   if (sure && (!anchor.quote?.exact || quoteRange(anchor, node, true))) return null; // its quoted words are still there too
   const now = sectionIn(node);
   return { was, now: short(node.textContent, 80), element: openingTag(node), ...(alike ? { alike: true } : {}), ...(anchor.section && !inSection(node, anchor.section) ? { away: true, in: now } : {}) };
@@ -1321,7 +1391,7 @@ export function spotChanged(anchor) {
 // the pins in it (pins on the page itself each read the whole page).
 let letters = new WeakMap<Node, { when: number; text: string; at: [Text, number][] }>();
 /** The page's words were changed by the widget itself (a question's choice tried in place, thread.ts): read them again. */
-export const forgetLetters = () => void ((letters = new WeakMap()), (seen = null));
+export const forgetLetters = () => void ((letters = new WeakMap()), (followed = new WeakMap()), (seen = null));
 function lettersOf(node, fresh = false) {
   const had = letters.get(node);
   if (had && !fresh && performance.now() - had.when < 400) return had;
@@ -1601,22 +1671,10 @@ export function zoneAnchor({ x0, y0, x1, y1 }) {
   }
   // Text inside the zone: the words whose middle falls inside it, in reading order. (Reading it like a selection
   // between the zone's corners took the whole paragraph whenever a corner sat above or below a line of text.)
-  const words = [];
-  const walker = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
-  const range = document.createRange();
-  for (let n = walker.nextNode() as Text | null; n && words.length < 80; n = walker.nextNode() as Text | null) {
-    if (host.contains(n)) continue;
-    const pr = n.parentElement?.getBoundingClientRect();
-    if (!pr || pr.bottom < top || pr.top > bottom || pr.right < left || pr.left > right) continue;
-    for (const m of n.data.matchAll(/\S+/g)) {
-      range.setStart(n, m.index);
-      range.setEnd(n, m.index + m[0].length);
-      const w = range.getBoundingClientRect();
-      const cx = (w.left + w.right) / 2;
-      const cy = (w.top + w.bottom) / 2;
-      if (w.width && cx >= left && cx <= right && cy >= top && cy <= bottom) words.push(m[0]);
-    }
-  }
+  const words = wordBoxes(box, { left, top, right, bottom })
+    .filter((w) => w.x >= left && w.x <= right && w.y >= top && w.y <= bottom)
+    .slice(0, 80)
+    .map((w) => w.t);
   const text = short(words.join(' '), 300);
   if (text) anchor.zoneText = text;
   // What the area holds: the outermost elements that sit wholly inside it (two cards, not the page around them),
