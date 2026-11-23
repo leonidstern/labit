@@ -1266,7 +1266,8 @@ const tokensOf = (s: string) => [...new Set(String(s || '').toLowerCase().split(
 let followed = new WeakMap<object, { when: number; node: Element; key: string; got: { zone: Box; guess?: boolean } | null }>();
 function followZone(anchor, node: Element, zone: Box): { zone: Box; guess?: boolean } | null {
   const want = tokensOf(anchor.zoneText);
-  if (want.length < 2) return { zone };
+  // A drawing marks a place by its lines, and an area on a box that scrolls is on the box's window: words scroll under both.
+  if (want.length < 2 || anchor.ink || (/auto|scroll/.test(getComputedStyle(node).overflowY + getComputedStyle(node).overflowX) && node.scrollHeight + node.scrollWidth > node.clientHeight + node.clientWidth)) return { zone };
   const key = [zone.left, zone.top, zone.width, zone.height, node.getBoundingClientRect().height].map(Math.round).join();
   const had = followed.get(anchor);
   if (had && had.node === node && had.key === key && performance.now() - had.when < 400) return had.got;
