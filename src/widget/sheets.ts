@@ -280,7 +280,10 @@ export function scrollPageTo(top: number, done?: () => void) {
     const k = Math.min(1, Math.max(0, (now - t0) / ms));
     scrollTo({ top: from + (to - from) * (k < 0.5 ? 4 * k ** 3 : 1 - (-2 * k + 2) ** 3 / 2), behavior: 'instant' });
     if (k < 1) glideId = requestAnimationFrame(step);
-    else (stop(), done?.());
+    else {
+      stop();
+      done?.();
+    }
   };
   glideId = requestAnimationFrame(step);
 }
