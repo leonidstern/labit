@@ -679,6 +679,9 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     // An open comment or the chat: this tap only closes it, as a click outside one does on a page (Leo, 19 Nov: "clicking
     // outside comment should work here same as on page", "same with chat"). A drag (a pan) is no tap and closes nothing.
     if (widget?.dismiss?.()) return;
+    // A click on the canvas or on another frame closes the open one, as Esc does: the board's keys, paste and drag work again
+    // (Leo, 23 Nov: a double-click opened a frame and the board took nothing until a reload).
+    if (entered && d.id !== entered) leave();
     // A click picks the frame under it alone (none: lets go of all); with Shift it adds that frame or takes it off, and on the canvas leaves the rest.
     if (!d.hand) pickFrames(d.id ? (d.shift ? (picks.has(d.id) ? [...picks].filter((id) => id !== d.id) : [...picks, d.id]) : [d.id]) : d.shift ? picks : []);
     // A double tap opens the frame under it to use it.
@@ -847,44 +850,46 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       } else void write(placed(last.items));
     });
   }
-  // One picture to the board at a world point, a ghost there while it goes; the board is read again as soon as it is there.
-  const put = async (file: Blob, wx: number, wy: number, pin = false) => {
+  // One picture to the board at a world point (its centre; corner: its top left), a ghost there while it goes; the board is
+  // read again as soon as it is there. Gives the frame as placed, or null.
+  const put = async (file: Blob, wx: number, wy: number, pin = false, corner = false) => {
     const ghost = text('div', 'adding image…', world);
-    Object.assign(ghost.style, { left: `${wx}px`, top: `${wy}px` });
+    Object.assign(ghost.style, { left: `${wx}px`, top: `${wy}px` }, corner ? { margin: '0' } : {});
     ghost.className = 'ghost';
     try {
-      const out = await (await import(new URL('pics.js', import.meta.url).href) as typeof import('../widget/pics.ts')).send<{ frame: { id: string } }>(`?board=${encodeURIComponent(name)}${of ? `&page=${encodeURIComponent(of)}` : ''}&x=${Math.round(wx)}&y=${Math.round(wy)}`, file, 25 * 1024 * 1024, 2400);
+      const out = await (await import(new URL('pics.js', import.meta.url).href) as typeof import('../widget/pics.ts')).send<{ frame: Frame }>(`?board=${encodeURIComponent(name)}${of ? `&page=${encodeURIComponent(of)}` : ''}&x=${Math.round(wx)}&y=${Math.round(wy)}${corner ? '&corner=1' : ''}`, file, 25 * 1024 * 1024, 2400);
       await load();
       const c = find(out.frame.id);
       const r = pin && c?.box.getBoundingClientRect();
       if (r) boardWidget()?.place(r.left + r.width / 2, r.top + r.height / 2);
+      return out.frame;
     } catch (err) {
       note((err as Error).message);
-      return false;
+      return null;
     } finally {
       ghost.remove();
     }
-    return true;
   };
-  // Pictures one after another; each after the first 40 px down and right of the one before. The first error stops it.
+  // Pictures one after another, the first centred where asked and each next one beside the one before, in the order given,
+  // tops in line (Leo, 23 Nov: pasted pictures "pile up"). The first error stops it.
   const putAll = async (files: Blob[], at?: { x: number; y: number }, pin = false) => {
     measure();
-    let [wx, wy] = at ? [(at.x - ox) / cam.z - cam.x, (at.y - oy) / cam.z - cam.y] : [view.w / 2 / cam.z - cam.x, view.h / 2 / cam.z - cam.y];
-    for (const f of files.slice(0, 6)) {
-      if (!(await put(f, wx, wy, pin && f === files[0]))) break;
-      wx += 40;
-      wy += 40;
+    const [wx, wy] = at ? [(at.x - ox) / cam.z - cam.x, (at.y - oy) / cam.z - cam.y] : [view.w / 2 / cam.z - cam.x, view.h / 2 / cam.z - cam.y];
+    let prev = await put(files[0], wx, wy, pin);
+    for (const f of files.slice(1, 6)) {
+      if (!prev) break;
+      prev = await put(f, prev.x + prev.w + 80, prev.y, false, true);
     }
   };
   const pictures = (dt: DataTransfer | null) => [...(dt?.files || [])].filter((f) => f.type.startsWith('image/'));
   on('paste', (e: ClipboardEvent) => {
     if (typing(e, false) || entered) return; // a text box, or an open frame (its page gets it), has its own paste
-    const [file] = pictures(e.clipboardData);
-    if (!file) return; // a text paste stays untouched
+    const got = pictures(e.clipboardData);
+    if (!got.length) return; // a text paste stays untouched
     measure();
     if (!last && !(view.w >= innerWidth - 2 && view.h >= innerHeight - 2)) return; // a half view: the pointer is off the board, the paste is the page's
     eat(e);
-    void putAll([file], last || undefined, alt);
+    void putAll(got, last || undefined, alt); // every picture pasted, not only the first (Leo, 23 Nov)
   }, true);
   const files = (e: DragEvent) => e.dataTransfer?.types.includes('Files');
   on('dragover', (e: DragEvent) => {

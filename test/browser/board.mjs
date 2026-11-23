@@ -92,6 +92,29 @@ try {
       await p.keyboard.press('Shift+Digit2'); // the board hears keys after leaving: this would go to the frame otherwise
       await sleep(150);
       check(eng, 'after leaving, board keys work again (Shift+2)', (await cam()).z === 1);
+      // ----- a click on the empty canvas leaves an open frame too (Leo, 23 Nov: a double-click opened one and the board took nothing until a reload)
+      await p.keyboard.press('Shift+Digit1');
+      await sleep(200);
+      const ff = await p.locator('#lab-board .f[data-id="f0"]').boundingBox();
+      await p.mouse.dblclick(ff.x + ff.width / 2, ff.y + ff.height / 2);
+      await sleep(400);
+      const opened = await p.evaluate(() => __labBoard.entered());
+      const bare = await p.evaluate(() => {
+        const sr = document.querySelector('[data-lab-board-view]').shadowRoot;
+        const r = sr.querySelector('#lab-board').getBoundingClientRect();
+        for (let y = r.top + 60; y < r.bottom - 60; y += 20) for (let x = r.left + 20; x < r.right - 20; x += 20) {
+          const t = sr.elementFromPoint(x, y);
+          if (t && !t.closest('.f, button, .zm') && sr.querySelector('#lab-board').contains(t)) return { x, y };
+        }
+        return null;
+      });
+      if (bare) await p.mouse.click(bare.x, bare.y);
+      await sleep(300);
+      const left = await p.evaluate(() => ({ entered: __labBoard.entered(), pe: getComputedStyle(__labBoard.frame('f0')).pointerEvents }));
+      check(eng, 'a double-click opens a frame, and a click on the empty board leaves it', opened === 'f0' && Boolean(bare) && left.entered === '' && left.pe === 'none', JSON.stringify([opened, bare, left]));
+      await p.keyboard.press('Shift+Digit2');
+      await sleep(150);
+      check(eng, 'then board keys work again (Shift+2)', (await cam()).z === 1);
       // ----- finite edges
       await p.keyboard.press('Shift+Digit1');
       for (let i = 0; i < 10; i++) await p.mouse.wheel(-4000, -4000);

@@ -2521,7 +2521,7 @@ const imageApi = async (req, res, url) => {
     b = boardFor(name, page);
   }
   const board = { ...b, frames: b.frames.map((f) => ({ ...f })) };
-  const out = B.addImage(ROOT, board, bytes, info, at[0] === null ? undefined : { x: +at[0], y: +at[1] }, { label: url.searchParams.get('label') || '', guest });
+  const out = B.addImage(ROOT, board, bytes, info, at[0] === null ? undefined : { x: +at[0], y: +at[1], corner: url.searchParams.get('corner') === '1' }, { label: url.searchParams.get('label') || '', guest });
   if ('error' in out) return json(422, { error: out.error, text: out.error });
   boardCache.delete(name);
   boardList = null;

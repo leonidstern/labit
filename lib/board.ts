@@ -154,9 +154,9 @@ export const imageAt = (file: string) => {
   fs.closeSync(fd);
   return imageInfo(head.subarray(0, n));
 };
-/** A picture as a new frame of a stored board: its file is written, the frame put (at the given centre, or placed by the lab),
+/** A picture as a new frame of a stored board: its file is written, the frame put (at the given centre or top-left corner, or placed by the lab),
  *  rev and file saved. All of it is synchronous, so nothing can come between the read and the write. */
-export function addImage(root: string, b: Board, bytes: Buffer, info: { ext: string; w: number; h: number }, at?: { x: number; y: number }, opts?: { label?: string; after?: string; guest?: boolean }): { frame: Frame } | { error: string } {
+export function addImage(root: string, b: Board, bytes: Buffer, info: { ext: string; w: number; h: number }, at?: { x: number; y: number; corner?: boolean }, opts?: { label?: string; after?: string; guest?: boolean }): { frame: Frame } | { error: string } {
   if (counted(b.frames) >= MAX_FRAMES) return { error: `A board holds at most ${MAX_FRAMES} frames.` };
   const dir = path.join(dirOf(root), safeName(b.name));
   const left = (id: string) => { try { return fs.readdirSync(dir).some((n) => n.startsWith(`${id}.`)); } catch { return false; } };
@@ -167,7 +167,7 @@ export function addImage(root: string, b: Board, bytes: Buffer, info: { ext: str
   const w = px(info.w * k, 200, 4000)!;
   const h = px(info.h * k, 200, 4000)!;
   const f: Frame = { id, src: `/_lab/board/${b.name}/${id}`, kind: 'image', file, iw: info.w, ih: info.h, w, h, state: 'live', ...(opts?.guest ? { guest: true } : {}), ...(opts?.label ? { label: one(opts.label, 80) } : {}) };
-  if (at) [f.x, f.y] = [px(at.x - w / 2, -1e6, 1e6)!, px(at.y - h / 2, -1e6, 1e6)!];
+  if (at) [f.x, f.y] = at.corner ? [px(at.x, -1e6, 1e6)!, px(at.y, -1e6, 1e6)!] : [px(at.x - w / 2, -1e6, 1e6)!, px(at.y - h / 2, -1e6, 1e6)!]; // its centre, or (corner) its top left
   writeAtomic(imageFile(root, b.name, file), bytes);
   insert(b, f, opts?.after);
   b.rev++;
