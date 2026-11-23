@@ -343,7 +343,7 @@ const act = (el, space, d, repeat) => {
 };
 
 // Writing about a moving thing (Leo, 23 Nov, 9b): the moment line above a comment's box, a new one's or a reply's, says
-// the moment showing now and, while the box has the cursor, the keys: ⌥ ← → a frame, ⌥K plays or pauses. The comment keeps the moment the line ends on: it follows a step or a
+// the moment showing now and, while the box has the cursor, the keys: ⌥ ← → a frame. The comment keeps the moment the line ends on: it follows a step or a
 // seek, not a playing video (that one keeps the moment the pin went down until it stops).
 const lines = new Map<HTMLElement, () => void>(); // each live line and its update
 const lineOf = new WeakMap<HTMLElement, Element>(); // what it is about
@@ -371,16 +371,16 @@ const liveMoment = (anchor, keep) => {
 // ⌥ keys in a comment's box on a moving thing: the thing its line is about moves; the words stay as they are.
 const typingKey = (e) => {
   const box = e.composedPath()[0];
-  // Just ⌥ and the arrows (Leo, 23 Nov: "just option and arrows"; macOS keeps ⌃ ← → for its desktops). ⌥K by its place
-  // (⌥ turns k into ˚). They take ⌥ ← →'s word jumps in this box only while it is about a moving thing.
+  // Just ⌥ and the arrows (Leo, 23 Nov: "just option and arrows"; macOS keeps ⌃ ← → for its desktops). No play key:
+  // ⌥K opened another app's window ("option K opens chatgpt"). They take ⌥ ← →'s word jumps in this box only while it is
+  // about a moving thing.
   if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || W.coarse || !(box instanceof HTMLTextAreaElement) || !W.root.contains(box)) return false;
   const line = box.closest('.float, .card')?.querySelector<HTMLElement>('.moment.live');
   const el = line && lineOf.get(line);
   const k = e.key;
-  const play = e.code === 'KeyK';
-  if (!el?.isConnected || (!play && k !== 'ArrowLeft' && k !== 'ArrowRight')) return false;
+  if (!el?.isConnected || (k !== 'ArrowLeft' && k !== 'ArrowRight')) return false;
   swallow(e);
-  act(el, play, k === 'ArrowRight' ? 1 : -1, e.repeat); // no ⇧ (Leo: "without shift"): ⌥⇧ ← → still select words
+  act(el, false, k === 'ArrowRight' ? 1 : -1, e.repeat); // no ⇧ (Leo: "without shift"): ⌥⇧ ← → still select words
   return true;
 };
 
@@ -411,8 +411,6 @@ export function bindMotion(w: unknown) {
   W.root.append(W.el('style', {}, css)); // its styles come with it, after the widget's own
   S.momentLine = momentLine;
   S.liveMoment = liveMoment;
-  addEventListener('keyup', (e) => e.key === 'Alt' && [...lines.keys()].forEach((l) => l.classList.remove('ctrl')));
-  addEventListener('blur', () => [...lines.keys()].forEach((l) => l.classList.remove('ctrl')));
   box = W.el('div', { class: `more-menu motion-menu${W.coarse ? ' motion-sheet' : ''}`, role: 'menu', 'aria-label': 'motion', hidden: '' });
   (W.root.querySelector('.ui') || W.root).append(box);
   if (W.coarse) W.swipeDown(box, closeMotion);
@@ -457,7 +455,6 @@ export function bindMotion(w: unknown) {
   for (const v of document.querySelectorAll('video')) watchFrames(v);
   addEventListener('play', (e) => e.target instanceof HTMLVideoElement && watchFrames(e.target), true);
   addEventListener('keydown', (e) => {
-    if (e.key === 'Alt') for (const l of lines.keys()) l.classList.add('ctrl'); // held: the line names the rest
     if (typingKey(e)) return;
     if (W.coarse || !S.on || e.defaultPrevented || e.composedPath().some((n) => n instanceof HTMLElement && (n.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName)))) return;
     // Space presses a focused button or link, as ever; the arrows still step.
