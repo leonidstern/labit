@@ -61,7 +61,7 @@ const css = `
 #lab-board .zm:not(.open) .zc{display:none}
 @media (prefers-color-scheme:dark){#lab-board .zm button:hover,#lab-board .zm.open button{background:rgba(255,255,255,.08)}}
 #lab-board img{object-fit:contain}
-#lab-board .b img{background:none;will-change:transform} /* each picture its own layer, the picture itself its texture (Safari does that only for a bare one, no background): a zoom scales it, never paints it again (Leo, 23 Nov: fine lines sparkled while zooming) */
+#lab-board .b:has(> img){background:none}#lab-board .b img{background:none;will-change:transform} /* each picture its own layer, the picture itself its texture (Safari does that only for a bare one, no background): a zoom scales it, never paints it again (Leo, 23 Nov: fine lines sparkled while zooming). No white card under it: at a half pixel its edge showed through as a light line while moving (Leo, 23 Nov: "some artifacts appears sometimes when moving images") */
 #lab-board.drop{outline:2px solid #1f7a4d;outline-offset:-2px}
 #lab-board .ghost{position:absolute;width:200px;height:120px;margin:-60px 0 0 -100px;display:grid;place-items:center;border:calc(1px*var(--iz,1)) dashed currentColor;background:rgba(127,127,127,.12);font-size:calc(14px*var(--iz,1));opacity:.8;pointer-events:none}
 #lab-board .note{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);z-index:6;max-width:calc(100% - 32px);padding:8px 12px;border-radius:var(--_r-s,6px);background:#1d1d1b;color:#fff;pointer-events:none}
