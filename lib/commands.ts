@@ -224,7 +224,10 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
           server = JSON.parse(fs.readFileSync(path.join(dir, '.lab/server.json'), 'utf8'));
         } catch {} // mid-write or gone: the last one read
         try {
-          return await labCall(server, pathname, body, session);
+          const out = await labCall(server, pathname, body, session);
+          // Said so a gap shows in the agent's output with its length (the lab's log has the other side).
+          if (until) console.log(`The lab was gone for ${Math.round((Date.now() - until) / 1000 + seconds)} s and is back.`);
+          return out;
         } catch {
           if (!until) until = Date.now() + seconds * 1000;
           if (Date.now() >= until) return gone();
@@ -245,7 +248,9 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
     // says why it can't just be detected).
     const listen = async () => {
       const { seconds, capped } = waitSeconds(opts, process.stdout.isTTY === true);
-      const out = await call('/_lab/wait', { timeout: seconds, pages: listenPages(opts, true), ack: true }, 20);
+      // 2 minutes: a lab taking a newer build is usually back within a second, but one was gone 20 s and more three
+      // times on 23 Nov (while its build was made), and each wait that gave up left the person's pins unheard.
+      const out = await call('/_lab/wait', { timeout: seconds, pages: listenPages(opts, true), ack: true }, 120);
       console.log(WAIT_SAID[out.status] ?? out.text);
       // Codex can't be woken once its turn ended, and what a background command prints then is read by nobody: a
       // `wait --bg` there that confirmed its hand-off left the pins "picked up" and unread (#420, tested on Codex
