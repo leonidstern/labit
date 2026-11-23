@@ -4,6 +4,7 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 
 ## Unreleased
 
+- **Truer hand-off for agents.** The answer line shows `reply <id> --done` and `--wait --bg`; the status-line lapse is said right for agents without the plugin (3 minutes); the hand-off points to the full text at `/_lab/agent/<page>`. A drawing's quick action keeps the change small but no longer forbids checking around; a wifi guest's wordless drawing or action button is said as a request to weigh, not an order.
 - **Motion menus.** Nothing of labit sits on moving things any more. On a computer, right-click a video or a looping animation for its menu at the pointer: its moment, pause or play, speed ¼ ½ 1, comment at that moment, and pause all; a right-click anywhere else (or with ⇧) is the browser's own, and ⌥ is only for commenting again. On a phone, ⋯ → motion opens a sheet (pick on page, pause all, speed for all); a tap after "pick on page" picks a moving thing without playing it or pinning, and its sheet comes. Setting a thing back to 1 gives it its own speed back.
 - **The moment in a comment.** Every pin on a loop, animation, video or GIF shows its moment as a quiet line under its first message, beside the time (and above the box while you write); a click on it pauses the page there again, except for a GIF's, which only says.
 
