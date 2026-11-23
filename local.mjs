@@ -2459,7 +2459,7 @@ const boardApi = async (req, res, url) => {
   }
   const page = url.searchParams.get('page');
   const name = url.searchParams.get('name') || (page && B.nameOf(page));
-  if (req.method === 'GET' && !name) return json(200, { boards: (boardList ??= B.names(ROOT).flatMap((n) => boardGet(n) || [])).map(({ name, of, frames }) => ({ name, of, frames: frames.length })) });
+  if (req.method === 'GET' && !name) return json(200, { boards: (boardList ??= B.names(ROOT).flatMap((n) => boardGet(n) || [])).map(({ name, of, title, frames }) => ({ name, of, title, frames: frames.length })) });
   if (!name || !B.NAME.test(name) || (page && !B.labPath(page))) return json(400, { error: 'name a board (?name=) or a page (?page=/x)' });
   if (req.method === 'GET') {
     const was = boardGet(name);

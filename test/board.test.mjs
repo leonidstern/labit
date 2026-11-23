@@ -399,5 +399,5 @@ test('board new with no --of is about the page the agent was handed pins on; wit
   assert.match((await as('cart-asker', 'wait', '--timeout', '8', '--pages', '/cart')).out, /three cart layouts/);
   const made = await as('cart-asker', 'board', 'new', 'Cart layouts');
   assert.equal(made.code, 0, made.out);
-  assert.match(made.out, /^# Board (pin-[0-9a-f]+) · Cart layouts\nurl: http:\/\/localhost:\d+\/cart#board=\1 /);
+  assert.match(made.out, /^# Board cart-layouts · Cart layouts\nurl: http:\/\/localhost:\d+\/cart#board=cart-layouts /);
 });

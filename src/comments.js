@@ -39,7 +39,7 @@ import { holdWhileOpen } from './widget/hold.ts';
 import { inkSvg } from './widget/ink.ts';
 import { bindActions } from './widget/actions.ts';
 import { bindDrag, draftHasText, endDrag, inkSaid, offerSelection, startDrag } from './widget/drag.ts';
-import { boardOnPin, boardStrip, bindBoardCam, pinBoardGone, showBoard } from './widget/boardcam.ts';
+import { boardStrip, bindBoardCam, newBoard, pinBoardGone, showBoard } from './widget/boardcam.ts';
 import { bindFramework, overFramework, scanForFramework } from './widget/framework.ts';
 import { bindKeys } from './widget/keys.ts';
 
@@ -96,6 +96,7 @@ import { bindKeys } from './widget/keys.ts';
     get control() { return control; },
     get doneBtn() { return doneBtn; },
     get movedBtn() { return movedBtn; },
+    get boardsBtn() { return boardsBtn; },
     get drawList() { return drawList; },
     get el() { return el; },
     get pageStyle() { return pageStyle; },
@@ -306,6 +307,7 @@ import { bindKeys } from './widget/keys.ts';
     <div class="bar" hidden>
       <button class="secondary chat-btn" type="button" hidden>chat</button>
       <button class="secondary list-btn" type="button" hidden>list</button>
+      <button class="secondary boards-btn" type="button" hidden aria-expanded="false" aria-controls="lab-more" title="this page's boards"></button>
       <button class="secondary done-btn" type="button" hidden title="show or hide done pins on the page"></button>
       <button class="secondary moved-btn" type="button" hidden title="pins whose spot is gone from the page: open one to drop it on a new spot, or close it"></button>
       <button class="toggle" type="button"></button>
@@ -578,10 +580,6 @@ import { bindKeys } from './widget/keys.ts';
     S.posted = comment.id;
     holdKeyboard(); // the keyboard waits until the card has gone (sheets.ts)
     render();
-    // +board: the pin's board (src/widget/boardcam.ts), when what was sent is what +board put in the box (asked for a name
-    // first, then sent as other words, it is a plain pin).
-    if (S.boardPin?.anchor === anchor && S.boardPin.said === said) void boardOnPin(comment, said);
-    S.boardPin = null;
   }
   // A drawing goes as it is, with what it reads as, the moment it is done: no box to send it from (Leo, 21 Nov: "just
   // draw maybe and send dont open comment to send it, just send"). Undo stays (⌘Z, or the pin's card). With no name
@@ -825,8 +823,20 @@ import { bindKeys } from './widget/keys.ts';
     setMenu(false);
     mo?.openMotion();
   });
+  // The page's boards (Leo, 23 Nov, S5): a part of the bar while the page has any; it opens the ⋯ menu's place with
+  // them in it and "new board". The ⋯ menu has "new board" too, for a page with none yet.
+  const boardsBtn = /** @type {HTMLButtonElement} */ ($('.boards-btn'));
+  const newBoardBtn = el('button', { type: 'button' }, 'new board');
+  // A board opening keeps the focus off ⋯ (the menu's own click gives it back there), so Esc closes the board.
+  newBoardBtn.addEventListener('click', (e) => (e.stopPropagation(), setMenu(false), void newBoard()));
+  const boardRows = () => [...(S.pageBoards || []).map((b) => {
+    const row = el('button', { type: 'button' }, b.title || b.name);
+    row.append(el('span', { class: 'n' }, ` · ${b.frames}`));
+    row.addEventListener('click', (e) => (e.stopPropagation(), setMenu(false), void showBoard(b.name)));
+    return row;
+  }), newBoardBtn];
   function placeBar() {
-    const inMenu = !S.on ? [] : [...(labHead ? [labHead, labsBtn] : []), doneBtn, movedBtn, copyBtn, ...(coarse && mo ? [motionBtn] : []), toggleBtn, ...(versionLine ? [versionLine] : [])];
+    const inMenu = !S.on ? [] : S.menuBoards ? (S.menuRows ??= boardRows()) : [...(labHead ? [labHead, labsBtn] : []), doneBtn, movedBtn, ...(BOARDS && !S.board && self === top ? [newBoardBtn] : []), copyBtn, ...(coarse && mo ? [motionBtn] : []), toggleBtn, ...(versionLine ? [versionLine] : [])];
     // In this order every time: a part that came back (hide comments, after showing them again) went to the end, below
     // the version line.
     if (S.on && (inMenu.some((b, i) => moreMenu.children[i] !== b) || moreMenu.children.length !== inMenu.length)) moreMenu.replaceChildren(...inMenu);
@@ -1393,7 +1403,20 @@ import { bindKeys } from './widget/keys.ts';
   }
   moreBtn.addEventListener('click', (e) => {
     e.stopPropagation();
+    if (S.menuBoards) {
+      S.menuBoards = false; // the whole menu again, not the boards
+      placeBar();
+    }
     if (!popMenu) setMenu(moreMenu.hidden || moreMenu.classList.contains('out')); // leaving counts as closed (a popover: the browser)
+  });
+  boardsBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = popMenu ? moreMenu.matches(':popover-open') : !moreMenu.hidden && !moreMenu.classList.contains('out');
+    if (open && S.menuBoards) return setMenu(false, true);
+    S.menuBoards = true;
+    S.menuRows = null; // the list as it is now
+    placeBar();
+    setMenu(true);
   });
   moreMenu.addEventListener('click', () => setTimeout(() => setMenu(false, true), 0));
   // A press outside the open menu only closes it: the click it ends pins nothing (Leo, 23 Nov: "if menu opened click on
@@ -1401,7 +1424,7 @@ import { bindKeys } from './widget/keys.ts';
   addEventListener('pointerdown', (e) => {
     S.menuShut = 0;
     const open = popMenu ? moreMenu.matches(':popover-open') : !moreMenu.hidden && !moreMenu.classList.contains('out');
-    if (!open || e.composedPath().some((n) => n === moreMenu || n === moreBtn)) return;
+    if (!open || e.composedPath().some((n) => n === moreMenu || n === moreBtn || n === boardsBtn)) return;
     S.menuShut = Date.now();
     if (!popMenu) setMenu(false);
   }, true);
@@ -1759,20 +1782,6 @@ import { bindKeys } from './widget/keys.ts';
     // list itself is set in labit.json or your settings.json (`actions`, docs/settings.md): nothing on the page edits it.
     const chips = LIST.map(chip);
     row.append(...chips);
-    // +board (on a page; a guest too, who is the person on another device): the comment is sent as a pin whose card holds
-    // a board for pictures and pages, and the board opens (Leo, 23 Nov, issue 422, pick 6C: a board pin, nothing written into the
-    // page). The words typed are the pin's text and the board's title. It is labit's own, not one of your list, so it looks
-    // different and sits at the right end.
-    if (BOARDS && !S.board && draft.anchor.kind !== 'board') {
-      const own = Object.assign(actButton('+board'), { className: 'own', title: 'a pin with a board of pictures and pages' });
-      own.addEventListener('mousedown', (e) => e.preventDefault());
-      own.addEventListener('click', () => {
-        const said = field.value.trim() || 'board';
-        S.boardPin = { anchor: draft.anchor, said }; // posted() makes the board once the pin is saved
-        go(said);
-      });
-      row.append(own);
-    }
     let tries = 0;
     const measure = () => {
       if (!row.isConnected || !row.clientWidth) return void (tries++ < 10 && requestAnimationFrame(measure));

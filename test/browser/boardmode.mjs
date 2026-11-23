@@ -32,7 +32,7 @@ try {
       await sleep(500);
       check(eng, 'Shift+B does nothing: a page stays a normal page', new URL(p.url()).pathname === '/pricing');
       const items = await p.evaluate(() => { const r = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim')).shadowRoot; r.querySelector('.more').click(); return [...r.querySelectorAll('.more-menu button')].map((b) => b.textContent); });
-      check(eng, 'the ⋯ menu has no "open as board"', !items.some((t) => /board/.test(t)), JSON.stringify(items));
+      check(eng, 'the ⋯ menu has no "open as board"', !items.some((t) => /open as board/.test(t)), JSON.stringify(items));
       await p.keyboard.press('Escape');
       // a board the agent made (labit board new, or the API) is part of its page: no ⌘K row of its own (Leo, 23 Nov:
       // "no own lab for boards"); its page's row says when it needs you

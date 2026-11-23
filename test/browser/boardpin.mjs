@@ -1,7 +1,7 @@
-// A board pin (+board, src/widget/boardcam.ts; Leo, 23 Nov, issue 422, pick 6C): the comment is a pin whose card holds a
-// board, and nothing is written into the page. Its rules, each checked here:
-// 1. +board sends the words as the pin, makes board pin-<id> about this page titled with them, and opens it; the page's
-//    file is not touched.
+// A board pin (src/widget/boardcam.ts; Leo, 23 Nov, issue 422, pick 6C): a pin whose card holds a board, and nothing is
+// written into the page. +board no longer makes them (boards are the bar's now, boardsbar.mjs); those made before still
+// work. Their rules, each checked here:
+// 1. A pin with board pin-<id> about this page shows it; the page's file is not touched.
 // 2. Its card holds the board (the strip and Open); Open brings it up over the whole window.
 // 3. What happens on the board shows on the pin: an agent's question there wears the asking ring and the new dot, and the
 //    strip says "board needs your reply".
@@ -9,10 +9,7 @@
 //    the card still opens the board), and reopening brings it back.
 // 5. Dragging it to a new spot keeps the same board.
 // 6. Losing its spot (its element gone) sends it to the ⋯ menu like any pin, and its card there still opens the board.
-// 7. Taken back within its first seconds (its own key), the pin and its board are both gone.
-// 8. ⌘Z within those seconds takes it back too, and closes its board if open; ⌘Z later only closes the pin (its board
-//    and pictures stay). Opening the pin's card leaves its board's threads unread; a thread's card on the board opens
-//    without an error. +board asking for a name first, then sent as other words, is a plain pin.
+//    Opening the pin's card leaves its board's threads unread; a thread's card on the board opens without an error.
 // 9. Never stray out of view (Leo, 23 Nov): a board pin whose element is past the window's edge on a page that can't scroll
 //    sideways sits at that edge, on a computer and a phone, and its card opens in the window; one whose element is hidden
 //    goes to the ⋯ menu (its card there still opens the board) and comes back when the element shows again.
@@ -65,24 +62,15 @@ try {
       await p.goto(B + '/d');
       await sleep(1200);
 
-      // ----- 1. +board: a pin, its board, the board open; the file untouched
-      await p.click('#t');
-      await p.waitForFunction(() => document.querySelector('[data-lab-comments]')?.shadowRoot?.querySelector('.float .quick .own'), null, { timeout: 8000 });
-      await p.keyboard.type('hero refs');
-      await shadow(() => { r.querySelector('.float .quick .own').click(); });
-      const opened = await until(view, 8000);
-      const roots = (await list()).filter((c) => !c.parent);
-      const pin = roots[0];
-      const name = pin && `pin-${pin.id}`;
-      const made = name && fs.existsSync(boardFile(name)) && JSON.parse(fs.readFileSync(boardFile(name), 'utf8'));
-      check(eng, '1. +board sends the words as a pin, makes its board about this page with them as its title, and opens it',
-        opened && roots.length === 1 && pin.text === 'hero refs' && made?.title === 'hero refs' && made?.of === `/d#${name}`, JSON.stringify({ opened, roots: roots.length, text: pin?.text, made }));
+      // ----- 1. a pin that holds a board (made as +board made them): the file untouched
+      const { comment: pin } = await (await api({ name: 'leo', text: 'hero refs', anchor: { kind: 'element', selector: '#t', x: 0.5, y: 0.5, docX: 0.1, docY: 60, width: 1000 } })).json();
+      const name = `pin-${pin.id}`;
+      await fetch(B + '/_lab/api/board', { method: 'POST', headers: { 'content-type': 'application/json', origin: B, 'x-lab-admin': keys().token }, body: JSON.stringify({ action: 'new', name, of: `/d#${name}`, topic: 'hero refs' }) });
       check(eng, '1. nothing is written into the page', fs.readFileSync(FILE, 'utf8') === PAGE);
-      await p.keyboard.press('Escape');
-      await until(async () => !(await view()));
+      await p.reload();
+      await sleep(1500);
 
       // ----- 2. its card holds the board; Open opens it over the whole window
-      await sleep(3500); // past the undo seconds: the card is the pin's own
       await openPin();
       const s0 = await strip();
       check(eng, '2. the pin\'s card holds the board strip', /Board/.test(s0 || ''), String(s0));
@@ -170,62 +158,6 @@ try {
       check(eng, '4. with no open thread on its board, deleting it takes the board and its folder too', del.ok && !fs.existsSync(boardFile(name)) && !fs.existsSync(path.join(DIR, '.lab/boards', name)), String(del.status));
       for (const c of (await list()).filter((x) => !x.parent)) await api({ action: 'delete', id: c.id });
 
-      // ----- 7. taken back within its first seconds with its own key: pin and board gone
-      await p.reload();
-      await sleep(1200);
-      await p.click('#b');
-      await p.waitForFunction(() => document.querySelector('[data-lab-comments]')?.shadowRoot?.querySelector('.float .quick .own'), null, { timeout: 8000 });
-      await shadow(() => { r.querySelector('.float .quick .own').click(); });
-      await until(view, 8000);
-      const second = (await list()).find((c) => !c.parent);
-      const name2 = second && `pin-${second.id}`;
-      const madeIt = name2 && fs.existsSync(boardFile(name2));
-      const back = await p.evaluate(async ([b, id]) => (await fetch('/_lab/api/comments', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ page: '/d', action: 'delete', id, edit: localStorage.getItem(`lab-edit:${id}`) || undefined }) })).status, [B, second?.id]);
-      check(eng, '7. +board with no words names the pin "board"', second?.text === 'board', second?.text);
-      check(eng, '7. taken back with its own key, the pin and its board are both gone', madeIt && back === 200 && !(await list()).length && !fs.existsSync(boardFile(name2)), JSON.stringify({ madeIt, back }));
-      await p.keyboard.press('Escape');
-      await until(async () => !(await view()));
-
-      // ----- 8. ⌘Z: within the first seconds it takes the pin and board back and closes the board; later it only closes the pin
-      const plusBoard = async (sel) => {
-        await p.reload();
-        await sleep(1200);
-        await p.click(sel);
-        await p.waitForFunction(() => document.querySelector('[data-lab-comments]')?.shadowRoot?.querySelector('.float .quick .own'), null, { timeout: 8000 });
-        await shadow(() => { r.querySelector('.float .quick .own').click(); });
-        await until(view, 8000);
-        await until(async () => (await list()).some((c) => !c.parent && fs.existsSync(boardFile(`pin-${c.id}`))));
-        return (await list()).find((c) => !c.parent);
-      };
-      const third = await plusBoard('#t');
-      await p.keyboard.press('ControlOrMeta+z');
-      const shut = await until(async () => !(await view()), 3000);
-      check(eng, '8. ⌘Z right away takes back the pin and its board, and closes the board', shut && !(await list()).length && !fs.existsSync(boardFile(`pin-${third?.id}`)), JSON.stringify({ shut }));
-      const fourth = await plusBoard('#b');
-      await p.keyboard.press('Escape');
-      await until(async () => !(await view()));
-      await sleep(3500); // past the undo seconds
-      await p.keyboard.press('ControlOrMeta+z');
-      await sleep(900);
-      const kept = (await list()).find((c) => c.id === fourth?.id);
-      check(eng, '8. ⌘Z later closes the pin and keeps its board', kept?.resolved === true && fs.existsSync(boardFile(`pin-${fourth?.id}`)), JSON.stringify({ kept: kept && { resolved: kept.resolved } }));
-      await api({ action: 'delete', id: fourth.id });
-
-      // ----- 8. +board asking for a name first, then sent as other words: a plain pin
-      await p.reload();
-      await sleep(1200);
-      await p.evaluate(() => localStorage.removeItem('lab-name')); // after the load: the start script sets it on each one
-      await p.click('#t');
-      await p.waitForFunction(() => document.querySelector('[data-lab-comments]')?.shadowRoot?.querySelector('.float .quick .own'), null, { timeout: 8000 });
-      await shadow(() => { r.querySelector('.float .quick .own').click(); });
-      await sleep(500);
-      await shadow("const ta = r.querySelector('.float textarea'); ta.value = 'just a plain comment'; ta.dispatchEvent(new Event('input')); r.querySelector('.float input')?.focus();");
-      await p.keyboard.type('leo');
-      await p.keyboard.press('Enter');
-      await until(async () => (await list()).length);
-      await sleep(1000);
-      const plain = (await list()).find((c) => !c.parent);
-      check(eng, '8. +board abandoned for other words sends a plain pin, with no board', plain?.text === 'just a plain comment' && !fs.existsSync(boardFile(`pin-${plain.id}`)) && !(await view()), JSON.stringify({ text: plain?.text }));
       check(eng, 'no page errors', !errors.length, errors.join(' | '));
 
       // ----- 9. never stray out of view
