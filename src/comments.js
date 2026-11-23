@@ -1514,7 +1514,7 @@ import { bindKeys } from './widget/keys.ts';
   }, true);
   const typing = (e) =>
     e.composedPath().some((n) => n instanceof HTMLElement && (n.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName)));
-  document.addEventListener('keydown', (e) => {
+  const onDocKey = (e) => {
     const inOtherWidget = document.activeElement?.localName.includes('-') && document.activeElement !== host; // e.g. an input in a closed shadow root
     if (actionOf(e) === 'toggle' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat && !typing(e) && !inOtherWidget) {
       e.preventDefault();
@@ -1593,7 +1593,23 @@ import { bindKeys } from './widget/keys.ts';
       e.preventDefault();
       render();
     }
-  });
+  };
+  document.addEventListener('keydown', onDocKey);
+  // Keys typed in the widget's own boxes stay in the widget: a page that binds Space, arrows or letters (a video player,
+  // a slide deck) never hears them, so a comment can be typed in full (Leo, 23 Nov: Space played the page's player and
+  // no space reached the comment). The widget's own document keys still run, here. ⌘/Control and Esc go on as before
+  // (⌘K, the page's shortcuts, the board's Esc).
+  const inWidgetBox = (e) => {
+    const t = e.composedPath()[0];
+    return t instanceof HTMLElement && t.getRootNode() === root && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+  };
+  for (const type of ['keydown', 'keypress', 'keyup']) {
+    host.addEventListener(type, (/** @type {KeyboardEvent} */ e) => {
+      if (e.metaKey || e.ctrlKey || e.key === 'Escape' || !inWidgetBox(e)) return;
+      if (type === 'keydown') onDocKey(e);
+      e.stopPropagation();
+    });
+  }
 
   // Always ready to pin: a click on the page (not on a link or control) opens a new comment there.
   // Alt/Option-click pins on links and controls too. With a comment open, the first click outside only closes it.
