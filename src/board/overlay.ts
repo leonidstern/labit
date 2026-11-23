@@ -21,8 +21,8 @@ let lastOpts: Opts | null = null; // a forward to #board=<name> opens it as the 
 // the page's own !important on the host (an inner shadow context wins the important declarations); the height is the
 // --bv-h variable, set inline by paintSize. cursor: inherit keeps the page's pin pointer over the board.
 const CSS = `
-:host{--_radius:var(--lab-radius,12px);--_r-s:6px;all:initial!important;opacity:var(--bv-o,1)!important;translate:0 calc(var(--bv-pan,0px) + var(--bv-y,0px))!important;clip-path:var(--bv-clip,none)!important;transition:clip-path var(--bv-clip-t,0s) cubic-bezier(.32,.72,0,1),translate var(--bv-t,0ms) var(--bv-e,cubic-bezier(.32,.72,0,1))!important;display:flex!important;flex-direction:column!important;position:fixed!important;left:0!important;right:0!important;bottom:0!important;height:var(--bv-h,100%)!important;zoom:var(--bv-z,1)!important;z-index:2147482000!important;overscroll-behavior:none!important;background:#f7f7f7!important;color:#1d1d1b!important;box-shadow:0 -1px 0 rgba(0,0,0,.12),0 -8px 24px rgba(0,0,0,.08)!important;font:500 13px/1 system-ui,-apple-system,sans-serif!important;direction:ltr!important;cursor:inherit!important}
-.bv-bar{position:relative;flex:none;touch-action:none;display:flex;align-items:center;gap:6px;height:40px;padding:0 8px;background:inherit;border-bottom:1px solid rgba(0,0,0,.08);translate:0 var(--bv-bar,0px);transition:translate var(--bv-clip-t,0s) cubic-bezier(.32,.72,0,1)}
+:host{--_radius:var(--lab-radius,12px);--_r-s:6px;all:initial!important;opacity:var(--bv-o,1)!important;translate:0 calc(var(--bv-pan,0px) + var(--bv-y,0px))!important;transition:translate var(--bv-t,0ms) var(--bv-e,cubic-bezier(.32,.72,0,1))!important;display:flex!important;flex-direction:column!important;position:fixed!important;left:0!important;right:0!important;bottom:0!important;height:var(--bv-h,100%)!important;zoom:var(--bv-z,1)!important;z-index:2147482000!important;overscroll-behavior:none!important;background:#f7f7f7!important;color:#1d1d1b!important;box-shadow:0 -1px 0 rgba(0,0,0,.12),0 -8px 24px rgba(0,0,0,.08)!important;font:500 13px/1 system-ui,-apple-system,sans-serif!important;direction:ltr!important;cursor:inherit!important}
+.bv-bar{position:relative;flex:none;touch-action:none;display:flex;align-items:center;gap:6px;height:40px;padding:0 8px;background:inherit;border-bottom:1px solid rgba(0,0,0,.08)}
 :host(.full) .bv-bar{height:calc(40px + env(safe-area-inset-top,0px));padding-top:env(safe-area-inset-top,0px)}
 .bv-bar button{font:400 14px/1.4 var(--lab-font,system-ui,-apple-system,sans-serif);letter-spacing:-.011em;color:inherit;background:transparent;border:0;border-radius:var(--_r-s,6px);padding:5px 10px;cursor:pointer;transition:background-color var(--lab-t-quick,120ms) var(--lab-ease-out,cubic-bezier(0,0,.58,1))}
 .bv-bar button:hover{background:var(--lab-hover,rgba(0,0,0,.10))}
@@ -34,7 +34,6 @@ const CSS = `
 @media (prefers-color-scheme:dark){:host{background:#1b1b1a!important;color:#e9e8e4!important}.bv-bar button:hover{background:var(--lab-hover,rgba(255,255,255,.10))}.bv-bar{border-color:rgba(255,255,255,.08)}}
 @supports (corner-shape:squircle){:host{--_radius:calc(var(--lab-radius,12px)*1.8);--_r-s:11px}*{corner-shape:squircle}}
 `;
-const EDGE = 280; // ms: the view's top edge going up as the keyboard comes, and back down after
 const nameInHash = () => /^#board=([a-z0-9][a-z0-9_-]*)/i.exec(location.hash)?.[1] || '';
 const moved = () => dispatchEvent(new Event('lab-board-moved')); // the widget draws the pins again (the board's and the page's under it)
 // The view came to rest after a slide (the board read its box again, board.resized): every pin on the board is placed
@@ -107,21 +106,6 @@ export function show(name: string, o: Opts) {
   let typed = false; // the keyboard has been up since scrollFrom was taken
   let loop = 0;
   let quiet = 0;
-  // The view's top edge slides (a clip, the box itself changes size in one step: resized on every frame, the board would be
-  // laid out again on each). from → to: px cut off the top; no arguments: no cut. Answers when it is over.
-  const edge = (from?: number, to?: number) => {
-    const still = from === undefined || matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const cut = (px: number) => `inset(${px}px -100px -200px -100px)`;
-    view.style.setProperty('--bv-clip-t', '0s');
-    if (still) return (view.style.removeProperty('--bv-clip'), view.style.removeProperty('--bv-bar'), 0);
-    view.style.setProperty('--bv-clip', cut(from!));
-    view.style.setProperty('--bv-bar', `${from}px`); // the bar rides the edge
-    void bar.offsetHeight;
-    view.style.setProperty('--bv-clip-t', `${EDGE}ms`);
-    view.style.setProperty('--bv-clip', cut(to!));
-    view.style.setProperty('--bv-bar', `${to}px`);
-    return performance.now() + EDGE;
-  };
   const follow = () => {
     if (!vv || !matchMedia('(pointer: coarse)').matches) return;
     const typing = Math.abs(vv.scale - 1) < 0.01 && innerHeight - vv.height > 60; // the keyboard is up
