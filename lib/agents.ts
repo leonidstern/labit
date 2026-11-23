@@ -29,8 +29,9 @@ function agentNow(env: NodeJS.ProcessEnv = process.env): { kind: string; name: s
 }
 
 // The agent session running this command, if any: its id, a name for the page, a link and a resume command where the
-// agent has them (Claude Code: CLAUDE_CODE_SESSION_ID; Codex: CODEX_THREAD_ID; Amp: AMP_CURRENT_THREAD_ID). Any other
-// agent says its session in LAB_SESSION_ID: Cursor's start hook and opencode's plugin set it (hooks/agent.mjs).
+// agent has them (Claude Code: CLAUDE_CODE_SESSION_ID; Codex: CODEX_THREAD_ID; Amp: AMP_CURRENT_THREAD_ID; Cursor:
+// CURSOR_CONVERSATION_ID; opencode 2: OPENCODE_SESSION_ID, the ids their hooks get). Any other agent says its session in
+// LAB_SESSION_ID (Cursor's start hook still sets it, though the Cursor CLI doesn't pass it on to shells).
 // The model the session runs on, for the page: "Sonnet 5.5" from --model, LAB_MODEL or ANTHROPIC_MODEL, where an id
 // like claude-sonnet-5-5 reads as "Sonnet 5.5". Agents don't put their model in the shell's environment: they say it.
 const modelName = (m: unknown = ''): string => {
@@ -44,7 +45,7 @@ export function mySession(asked?: string, model?: string) {
   const agent = agentNow();
   const env = process.env;
   const remote = agent.kind === 'claude' || !agent.kind ? env.CLAUDE_CODE_REMOTE_SESSION_ID || '' : '';
-  const id = { claude: env.CLAUDE_CODE_SESSION_ID, codex: env.CODEX_THREAD_ID, amp: env.AMP_CURRENT_THREAD_ID }[agent.kind || 'claude'] || env.LAB_SESSION_ID || '';
+  const id = { claude: env.CLAUDE_CODE_SESSION_ID, codex: env.CODEX_THREAD_ID, amp: env.AMP_CURRENT_THREAD_ID, cursor: env.CURSOR_CONVERSATION_ID, opencode: env.OPENCODE_SESSION_ID }[agent.kind || 'claude'] || env.LAB_SESSION_ID || '';
   const name = asked || env.LAB_SESSION_NAME || (id ? `session ${id.slice(0, 8)}` : agent.name);
   const safe = /^[\w-]+$/.test(id);
   return {
