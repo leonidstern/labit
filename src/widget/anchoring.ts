@@ -45,6 +45,7 @@ type Anchor = {
   rules?: string;
   box?: string;
   chosen?: string;
+  state?: string;
   cssText?: string;
   quote?: Quote;
   /** What proves its element is the one pinned (see fingerprint). */
@@ -557,6 +558,26 @@ function quoteAt(cx, cy, shadowRoots = []) {
   return quote;
 }
 
+// The state the person saw the control in (#433): the element and the few around it that are open, picked, pressed, ticked,
+// current or off, and the open dialog it is in. Never what a field holds.
+const FLAGS = [['expanded', 'open', 'closed'], ['selected', 'selected'], ['pressed', 'pressed', 'not pressed'], ['checked', 'checked', 'not checked'], ['current', 'current']];
+function stateOf(el) {
+  const out = [];
+  for (let e = el, i = 0; e && e !== document.body && i < 4; e = e.parentElement, i++) {
+    const says = FLAGS.map(([a, yes, no]) => {
+      const v = e.getAttribute(`aria-${a}`) ?? (a === 'checked' && /^(checkbox|radio)$/.test(e.type) ? `${e.checked}` : null);
+      return v === 'false' ? no : v === 'mixed' ? `partly ${yes}` : v != null ? yes : '';
+    });
+    if (e.localName === 'details') says.push(e.open ? 'open' : 'closed');
+    if (e.matches(':disabled, [aria-disabled="true"]')) says.push('disabled');
+    const on = says.filter(Boolean);
+    if (on.length) out.push(`${e.getAttribute('role') || e.localName} "${short(e.getAttribute('aria-label') || e.labels?.[0]?.textContent || e.textContent, 30)}" ${on.join(', ')}`);
+  }
+  const dialog = el.closest('dialog[open], [role="dialog"], [role="alertdialog"]');
+  if (dialog) out.push(`inside open dialog "${short(dialog.getAttribute('aria-label') || dialog.querySelector('h1, h2, h3, [id]')?.textContent, 40)}"`);
+  return short(out.join('; '), 200);
+}
+
 export function openingTag(node) {
   const attrs = [...node.attributes]
     .filter((a) => /^(id|class|alt|role|aria-label|href|data-(?!lab-(?!action))[\w-]+)$/.test(a.name))
@@ -638,6 +659,8 @@ export function anchorAt(clickX, clickY, words = false, onto = null) {
   if (select && select.selectedIndex >= 0) {
     anchor.chosen = short(`${select.selectedIndex + 1} of ${select.options.length}: "${select.options[select.selectedIndex].text}"`, 120);
   }
+  const state = stateOf(target);
+  if (state) anchor.state = state;
   // Text that CSS adds with ::before / ::after content (a badge, a label): it isn't in the HTML.
   for (const el of [target, target.parentElement]) {
     if (!el || el === document.body) continue;
@@ -1536,7 +1559,7 @@ export function zoneAnchor({ x0, y0, x1, y1 }) {
   });
   Object.assign(anchor, schemeAt(box), { eh: Math.round(r.height) });
   // The area is on the box: its heading, the box it sits in, its component are the box's, not those of the element under the middle.
-  for (const k of ['inside', 'section', 'block', 'component', 'source', 'usedAt', 'chosen', 'cssText', 'shadow']) delete (anchor as Record<string, unknown>)[k];
+  for (const k of ['inside', 'section', 'block', 'component', 'source', 'usedAt', 'chosen', 'state', 'cssText', 'shadow']) delete (anchor as Record<string, unknown>)[k];
   Object.assign(anchor, box === document.body ? {} : around(box));
   if (box !== document.body) for (const [k, v] of Object.entries(componentAt(box))) if (v) anchor[k] = short(v, 200);
   anchor.fp = box === document.body ? undefined : fingerprint(box); // the box's, not the element under the middle
