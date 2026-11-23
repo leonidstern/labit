@@ -18,3 +18,11 @@ test('the skill says how to use boards', async () => {
   assert.match(stdout, /board new/);
   assert.match(stdout, /Picked b/);
 });
+
+test('the skill offers to report labit bugs once, to the labit repo, never faking it', async () => {
+  const { stdout } = await promisify(execFile)(process.execPath, [LAB, 'skill']);
+  assert.match(stdout, /Looks like a labit bug\. Want me to open an issue\?/);
+  assert.match(stdout, /`leonidstern\/labit` \(never the project you work in\)/);
+  assert.match(stdout, /offer once/);
+  assert.match(stdout, /never claim it was filed/);
+});

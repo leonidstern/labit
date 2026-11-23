@@ -88,8 +88,11 @@ test('a save in venv, __pycache__ or bower_components is not announced, and the 
 test('a save that changes nothing, and what editors leave beside a save, are not announced', async () => {
   await ready;
   const file = path.join(DIR, 'same.css');
+  const hot0 = state.hot;
   fs.writeFileSync(file, 'a{color:red}');
-  await sleep(400);
+  // The new file's own announcement first: on a slow runner it came after a fixed 400 ms and was taken for the re-save's.
+  await above('hot', hot0);
+  await sleep(200);
   let was = { ...state };
   fs.writeFileSync(file, 'a{color:red}'); // saved again, the same bytes
   await sleep(500);
