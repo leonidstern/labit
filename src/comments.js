@@ -1267,7 +1267,8 @@ import { bindKeys } from './widget/keys.ts';
         const near = 120;
         const under = zone && zone.top + zone.height - top < near ? zone.top + zone.height : top;
         const over = zone && top - zone.top < near ? zone.top - 12 : top - 40;
-        placeCard(card, zone ? left + 14 : left, under, nativeTie() && !boardPin ? pin : null, over);
+        const byPin = !zone || (under === top && over === top - 40); // by the pin itself: laid as a point's, beside it too
+        placeCard(card, byPin ? left : left + 14, under, nativeTie() && !boardPin ? pin : null, over);
         if (boardPin && !sheetMode.matches) onBoard(card, c.anchor);
         // A question with choices on quoted words: by its quote, in the margin or under it (thread.ts). Drawn again after
         // the pick, it stays where it was instead of jumping back under its pin.
