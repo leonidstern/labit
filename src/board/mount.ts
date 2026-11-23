@@ -303,7 +303,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   let home: number | null = null; // where the camera was before that glide (api.nudgeBack takes it there again)
   let holdOff: ReturnType<typeof setTimeout> | undefined;
   const go = (next: Cam, user = true, pan = false, camOnly = false) => {
-    const c = camOnly ? next : clamp(next, boxes(), view); // a glide's steps are its own (api.nudge): held to the edges, each would jump to them
+    const c = camOnly ? next : clamp(next, boxes(), view, cam); // a glide's steps are its own (api.nudge): held to the edges, each would jump to them
     if (user) moved = true;
     if (user) [home, heldCam] = [null, null]; // moved by hand while a keyboard holds the board: it stays where the hand left it
     if (user && (!pan || Math.abs(c.z - cam.z) > 1e-6)) focus = false;

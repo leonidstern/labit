@@ -30,16 +30,21 @@ export const fitFrame = (f: Box, v: { w: number; h: number }): Cam => {
 };
 // Finite edges: with margin m = view / 2 / z each axis is held to -(lo + len) - m + view / z <= cam <= -lo + m; when the
 // content plus margin is smaller than the view the axis centres.
-const hold = (c: number, lo: number, len: number, view: number, z: number) => {
+// From was (the camera before, at the same zoom) the edges only stop it, never push it: frames moved in from the edge make
+// the board smaller, and the view the person had panned to stays where it is (Leo, 23 Nov: "moving several images after
+// panned canvas right or left" moved the camera with them); the way back in is open, the way further out is not.
+const hold = (c: number, lo: number, len: number, view: number, z: number, was?: number) => {
   const m = view / 2 / z;
-  const [min, max] = [-(lo + len) - m + view / z, -lo + m];
+  let [min, max] = [-(lo + len) - m + view / z, -lo + m];
+  if (was !== undefined) [min, max] = [Math.min(min, was), Math.max(max, was)];
   return min > max ? (min + max) / 2 : Math.min(max, Math.max(min, c));
 };
-export const clamp = (c: Cam, b: Box[], v: { w: number; h: number }): Cam => {
+export const clamp = (c: Cam, b: Box[], v: { w: number; h: number }, was?: Cam): Cam => {
   if (!b.length) return c;
   const z = Math.min(MAX_Z, Math.max(minZ(b, v), c.z));
   const e = extent(b);
-  return { z, x: hold(c.x, e.x, e.w, v.w, z), y: hold(c.y, e.y, e.h, v.h, z) };
+  const same = was && Math.abs(was.z - z) < 1e-9 ? was : undefined;
+  return { z, x: hold(c.x, e.x, e.w, v.w, z, same?.x), y: hold(c.y, e.y, e.h, v.h, z, same?.y) };
 };
 export const panBy = (c: Cam, dx: number, dy: number): Cam => ({ ...c, x: c.x + dx / c.z, y: c.y + dy / c.z });
 /** Zoom to z2 with the world point under screen (sx, sy) staying there: cam' = s / z' - (s / z - cam). */

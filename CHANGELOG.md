@@ -4,6 +4,7 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 
 ## Unreleased
 
+- **Moving pictures near a board's edge no longer moves the view.** Panned to the edge, frames dragged inward leave the camera where you put it; the edges only stop a pan, they never push the view.
 - **⌘Z on a board takes back only the newest thing.** A pin or drawing made after moving a picture goes first; the picture stays put until the next ⌘Z.
 - **One click on ⋯ or the boards list opens it, even with a comment or the chat open.** The open thread (and a new comment with nothing typed in it) closes in the same click, as the chat button already did.
 - **Lab addresses in messages are links even without http://.** An agent's "localhost:4403/page/" (or 127.0.0.1) in a reply now opens like a full address: on the reader's own origin when it is this lab, as written otherwise.

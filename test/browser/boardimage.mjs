@@ -223,6 +223,24 @@ try {
         const backAgain = await until(async () => { const f = (await frames(name)).find((g) => g.id === 'e'); return f?.x === back.x ? f : null; });
         check(eng, 'and the next ⌘Z moves the picture back', Boolean(backAgain));
       }
+      // panned to the board's edge, the frame that made that edge moved in: the view stays where it was panned to (Leo, 23 Nov:
+      // "it happens when moving several images after panned canvas right or left")
+      {
+        await p.keyboard.press('Escape');
+        await p.keyboard.press('Shift+Digit1');
+        await sleep(500);
+        for (let i = 0; i < 10; i++) await p.mouse.wheel(4000, 0);
+        await sleep(600);
+        const cam0 = await p.evaluate(() => __labBoard.camera());
+        const far = await p.evaluate(() => { const fs = [...document.querySelector('[data-lab-board-view]').shadowRoot.querySelectorAll('#lab-board .f')].map((f) => ({ id: f.dataset.id, r: f.getBoundingClientRect() })).filter((f) => f.r.right > 0 && f.r.left < innerWidth); const f = fs.sort((a, b) => b.r.right - a.r.right)[0]; return f && { id: f.id, x: f.r.x + f.r.width / 2, y: f.r.y + f.r.height / 2 }; });
+        await p.mouse.move(far.x, far.y);
+        await p.mouse.down();
+        for (let i = 1; i <= 6; i++) await p.mouse.move(far.x - i * 50, far.y);
+        await p.mouse.up();
+        await sleep(1500);
+        const cam1 = await p.evaluate(() => __labBoard.camera());
+        check(eng, 'at the board\'s edge, moving the edge frame in leaves the camera where it was', Math.abs(cam1.x - cam0.x) < 0.5 && Math.abs(cam1.y - cam0.y) < 0.5 && cam1.z === cam0.z, JSON.stringify({ far, cam0, cam1 }));
+      }
       // with nothing picked, Backspace takes nothing off
       await p.keyboard.press('Shift+Digit1');
       await sleep(600);
