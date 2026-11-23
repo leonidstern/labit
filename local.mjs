@@ -15,7 +15,7 @@ import { AGENTS } from './lib/agents.ts';
 import { watchTree } from './lib/watch.ts';
 import { PARKED, REGISTRY, askPages, keyFor, parkedLabs, runningLabs } from './lib/labs.ts';
 import { alive, setWifi } from './lib/labcall.ts';
-import { DO_IT, PROGRESS_MS, UNMATCHED, numberOf, slim, upgrade, VERSION as SCHEMA } from './lib/schema.mjs';
+import { CLAIM_LIFE_MS, DO_IT, PROGRESS_MS, RENEWAL, UNMATCHED, numberOf, slim, upgrade, VERSION as SCHEMA } from './lib/schema.mjs';
 import { sameKey } from './lib/comments-api.mjs';
 import { cut } from './lib/cut.mjs';
 import { sourceLines } from './lib/source-line.mjs';
@@ -1816,7 +1816,7 @@ async function unseen(scope = pages(), who = '') {
     const [person, agent] = [lastBy(c, false), lastBy(c, true)];
     // A status line is a sign only while it is renewed (PROGRESS_MS); lapsed, the pin is as quiet as before it.
     const [at, line] = [now - Date.parse(c.progress?.at) < PROGRESS_LIFE ? c.progress.at : '', c.progress?.text];
-    if (person >= agent) return [[c.handedAt, at].sort().pop(), line];
+    if (person >= agent || (c.handedAt || '') > agent) return [[c.handedAt, at].sort().pop(), line]; // handed again since its last word (a correction it answered early)
     return c.progress || commentsOf(c._page).some((r) => r.parent === c.id && r.session && r.intent === 'working' && r.createdAt === agent) ? [[agent, at].sort().pop(), line] : null;
   };
   const missed = scope.flatMap((page) => commentsOf(page).filter((c) => !c.parent && !c.resolved && c.handedAt).map((c) => ({ page, c: Object.assign(Object.create(c), { _page: page }) })))
@@ -1841,7 +1841,14 @@ async function unseen(scope = pages(), who = '') {
     if (block) {
       blocks.push(block.text);
       block.ids.forEach((id) => sent.add(`${page}\n${id}`));
-      if (block.file) sameFile.set(block.file, [...(sameFile.get(block.file) || []), ...block.pins.filter((p) => p.n).map((p) => ({ page, n: p.n }))]);
+      // A pin's file is where its element is written (`written at:`, a component's file on a framework's page), else
+      // the page's own: pins on one header component from two pages are one job too (#420).
+      for (const pin of block.pins.filter((p) => p.n)) {
+        // (The page sends `source`, a guest's page too: only a plain path to a file that is there in the folder counts.)
+        const src = String(commentsOf(page).find((c) => c.id === pin.id)?.anchor?.source || '').replace(/(:\d+){1,2}$/, '');
+        const file = (/^[\w@-][\w@./-]{0,200}$/.test(src) && !src.split('/').includes('..') && fs.existsSync(path.join(ROOT, src)) && src) || block.file;
+        if (file) sameFile.set(file, [...(sameFile.get(file) || []), { page, n: pin.n }]);
+      }
     }
   }
   // Pins on the same file are one job for one writer: say so once ("Same file: options.html: 2, 5, 7"), only for 2 or more.
@@ -1898,7 +1905,7 @@ async function unseen(scope = pages(), who = '') {
       `\n\nAnswer each: ${CMD} reply <id> "what you did" [--done | --question] [--resolve] (run in ${ROOT}); add --wait to the last one to listen again in the same command.` +
       // The person sees nothing between "picked up" and the answer: a batch an agent worked through for 13 minutes looked
       // lost (Leo, 18 Nov). A --progress line first turns the ring and the pill at once, without a message (Leo, 20 Nov: less noise).
-      `\nIf it will take more than about a minute (a build, a restart, a PR): send one ${CMD} reply <id> --progress "<what you're doing>" on each first (a status line, not a message), then start; a quick ask needs none (an answer within 2 minutes counts). A plain "go" gets no words: resolve it when done.` +
+      `\nIf it will take more than about a minute (a build, a restart, a PR): send one ${CMD} reply <id> --progress "<what you're doing>" on each first (a status line, not a message), then start, and a new one when the step changes (10 minutes after your last, the page says no update); a quick ask needs none (an answer within 2 minutes counts). A plain "go" gets no words: resolve it when done.` +
       `\n${WRITE_SHORT}`
     : `\n\nAnswer each: ${CMD} reply <id> "what you did" [--done | --question] [--wait]; the standing lines (read threads whole, --progress before long work, short answers) and rules as before.`;
   const text = `In this message: ${count}. Read all of it; each one is marked handed to you.\n\n${whole.length ? '# New comments\n\n' : ''}${groups.length ? `${groups.join('\n')}\n\n` : ''}${blocks.join('\n\n')}` +
@@ -2030,6 +2037,7 @@ function deliver(res, got, who = '', ack = false, key = '', label = 'Claude') {
 // over together, in one round trip, instead of one wake-up each.
 const SETTLE_MS = Number(process.env.LAB_SETTLE_MS ?? 2000);
 const PROGRESS_LIFE = Number(process.env.LAB_PROGRESS_MS ?? PROGRESS_MS); // a status line is a sign this long
+const CLAIM_LIFE = Number(process.env.LAB_CLAIM_LIFE_MS ?? CLAIM_LIFE_MS); // the hook renews a pin this long after the agent's own last word on it
 const REMIND_MS = Number(process.env.LAB_REMIND_MS ?? 180000); // a handed pin with no answer comes back after this
 let settleTimer = null;
 function wake() {
@@ -2651,24 +2659,41 @@ const handler = async (req, res) => {
       // (claimed for half an hour so an all-pages wait doesn't take them): those are the very pages the session that
       // listened last is woken for, and leaving them out kept every `wait --pages` session from ever being woken.
       const heard = new Set(waiters.flatMap((w) => scopeOf(w)));
-      const fresh = freshIn(pages().filter((p) => !heard.has(p)));
+      const unheard = freshIn(pages().filter((p) => !heard.has(p)));
+      // A hook that names its session (?for=<id>, #420) is told only that session's pins: a page a session claimed
+      // (its wait named it, half an hour) is that session's; any other page is the one that listened last's, whose
+      // `wait` for every page hears it. Two sessions on two pages each get woken for their own (before, only the one
+      // that listened last was, and its wait couldn't take the other's pins). No session said: every pin, as before.
+      const asker = (url.searchParams.get('for') || '').slice(0, 80);
+      const owners = [...claims].filter(([p, at]) => Date.now() - at < CLAIM_MS && claimOwner.get(p)).map(([p]) => [p, claimOwner.get(p)]);
+      const ownerOf = (page) => owners.find(([p]) => covers([p], page))?.[1] || session?.id || '';
+      const fresh = asker ? unheard.filter(({ page }) => ownerOf(page) === asker) : unheard;
       const ids = fresh.map(({ c }) => c.id).sort();
       // The threads someone claimed (a status line from --progress, or an "on it" reply, since the person's last words):
-      // the plugin's hook renews that line while its own session runs tools. A pin nobody claimed gets none.
-      const working = pages().flatMap((page) => commentsOf(page).filter((c) => !c.parent && !c.resolved && c.handedAt).flatMap((c) => {
+      // the plugin's hook renews that line while its own session runs tools. A pin nobody claimed gets none, and neither
+      // does one the agent itself said nothing on for CLAIM_LIFE_MS: its line then lapses and the page says "no update"
+      // (#425: the hook's renewals alone kept a pin the agent had left looking worked on).
+      const now = Date.now();
+      const recent = (at) => Boolean(at) && now - Date.parse(at) < CLAIM_LIFE;
+      // When the agent itself last wrote the line: said, or for a line from before said, its time unless it was a renewal.
+      const ownLine = (p) => p?.said || (p && p.text !== RENEWAL ? p.at : '');
+      const working = pages().flatMap((page) => commentsOf(page).filter((c) => !c.parent && !c.resolved && c.handedAt && !(asker && (handoff[c.id]?.[1] || ownerOf(page)) !== asker)).flatMap((c) => {
         const msgs = commentsOf(page).filter((r) => r.parent === c.id);
         const lastAt = (mine) => [c, ...msgs].filter((m) => Boolean(m.session) === mine).map((m) => m.createdAt).sort().pop() || '';
         const reply = msgs.filter((m) => m.session).sort((a, b) => a.createdAt.localeCompare(b.createdAt)).pop();
         const answered = reply && reply.createdAt > lastAt(false);
-        return answered ? (reply.intent === 'working' ? [{ page, id: c.id }] : []) : c.progress ? [{ page, id: c.id }] : [];
+        const claimed = answered ? reply.intent === 'working' && (recent(reply.createdAt) || recent(ownLine(c.progress))) : Boolean(c.progress) && recent(ownLine(c.progress));
+        return claimed ? [{ page, id: c.id }] : [];
       }));
       return answer(res, {
         working,
         fresh: ids.length,
         pages: [...new Set(fresh.map(({ page }) => page))],
         key: createHash('sha1').update(ids.join(',')).digest('hex').slice(0, 12),
-        listening: waiters.length > 0,
+        // Asked for a session: whether that session has a wait open (another session's wait on other pages hears none of its pins).
+        listening: asker ? waiters.some((w) => w.sid === asker) : waiters.length > 0,
         last: session?.id || '',
+        ...(asker ? { for: asker } : {}),
         dir: ROOT,
         cmd: CMD,
         url: `http://localhost:${PORT}`,
@@ -3069,6 +3094,13 @@ const handler = async (req, res) => {
         if (out.status === 201 && staged.length) staged.forEach((f, i) => { try { fs.renameSync(f.file, path.join(ATTACH, `${comment.id}-${i + 1}.${f.type}`)); } catch (e) { console.error('[lab] could not keep a picture:', e.message); } });
         for (const name of doomed) fs.rmSync(path.join(ATTACH, name), { force: true });
         if (dropped) dropBoard(...dropped);
+        // A done said over words the agent was never handed (a correction sent while it worked) doesn't close the pin:
+        // the thread stays open, so the page doesn't show it finished and the safety net still brings it back.
+        if (agent && out.status === 201 && comment.intent === 'done' && comment.parent) {
+          const page = [...db].find(([k, m]) => k.startsWith('lab:comments:') && m.has(comment.id))?.[0].slice('lab:comments:'.length);
+          const t = page && commentsOf(page).find((c) => c.id === comment.parent);
+          if (t?.resolvedBy === 'agent' && t.handedAt && freshIn([page]).some((f) => f.c.parent === t.id)) setComment(page, t.id, { resolved: false, resolvedBy: undefined, resolvedAt: undefined });
+        }
         // Who wrote it, its intent and an agent's done closing the thread are saved by the API, in its own write.
         if (out.status === 201 && !agent) {
           const [key] = [...db].find(([k, m]) => k.startsWith('lab:comments:') && m.has(comment.id));

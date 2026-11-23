@@ -11,6 +11,10 @@
 // the line says "session activity", never the command; the wake goes only to the session that listened last, once per set
 // of pins, and names no page (a guest's pin can name anything). A helper's tool calls renew nothing.
 //
+// Each look says its session (#420), so the lab answers with that session's pins alone: two sessions listening on two
+// pages each get woken for their own. A wake whose pins are still unhanded at the next stop was not acted on: it is sent
+// once more (TRIES in all for one set of pins), never in a loop; `wait` stays what hands pins over.
+//
 // The session is the id the agent's `wait` and `reply` sign with: Codex CODEX_THREAD_ID, and LAB_SESSION_ID for the
 // others (Cursor's start hook and opencode's shell.env set it), so the lab's "listened last" is the same id here.
 import fs from 'node:fs';
@@ -22,6 +26,7 @@ const MAX_LABS = 4;
 const PROGRESS_MS = 60000; // a pin's status line is renewed once a minute at most
 const WORKING_MS = 15000; // the list of claimed pins is kept this long before the lab is asked again
 const LINE = 'session activity'; // the whole status line: a command is not an answer, and helpers' commands are other work
+const TRIES = 2; // wakes for one set of pins, at most: a stop hook that blocks again and again would never let the session stop
 
 // The lab's address and the agent's key, from .lab/server.json in a folder or one above it (a lab whose process is gone
 // left its file behind: its port may be another folder's lab by now).
@@ -76,7 +81,9 @@ const call = (lab, method, url, body) =>
     req.on('error', () => resolve(null)).on('timeout', () => req.destroy());
     req.end(data);
   });
-const pending = (lab) => call(lab, 'GET', '/_lab/pending');
+// The lab answers for this session (`for`); a lab from before #420 doesn't, and then only the one that listened last counts.
+const pending = (lab, sid) => call(lab, 'GET', `/_lab/pending?for=${encodeURIComponent(sid)}`);
+const mine = (p, sid) => Boolean(p) && (p.for ? p.for === sid : p.last === sid);
 
 // What this session remembers between calls (a hook is a new process each time): when each pin's line was last written,
 // the claimed pins the lab named, and the set of pins it was last woken for.
@@ -94,15 +101,15 @@ async function progress(sid, cwd, now = Date.now()) {
     st.workingAt = now;
     st.working = [];
     for (const lab of labsFor(cwd, sid)) {
-      const p = await pending(lab);
-      if (p?.last === sid) for (const w of p.working || []) st.working.push({ lab, ...w });
+      const p = await pending(lab, sid);
+      if (mine(p, sid)) for (const w of p.working || []) st.working.push({ lab, ...w });
     }
   }
   for (const w of st.working || []) {
     const key = `${w.lab.port}:${w.id}`;
     if (now - (st.noted[key] || 0) < PROGRESS_MS) continue;
     st.noted[key] = now;
-    await call(w.lab, 'POST', '/_lab/api/comments', { page: w.page, action: 'progress', id: w.id, text: LINE });
+    await call(w.lab, 'POST', '/_lab/api/comments', { page: w.page, action: 'progress', id: w.id, text: LINE, renew: true }); // renew: only its time moves, the agent's words stay
   }
   save(sid, st);
 }
@@ -114,9 +121,13 @@ async function wake(sid, cwd) {
   const st = load(sid);
   st.told ||= {};
   for (const lab of labsFor(cwd, sid)) {
-    const p = await pending(lab);
-    if (!p || !p.fresh || p.listening || p.last !== sid || p.key === st.told[lab.port]) continue;
-    st.told[lab.port] = p.key;
+    const p = await pending(lab, sid);
+    if (!mine(p, sid) || !p.fresh || p.listening) continue;
+    // { key, n }: the set of pins woken for and how many times (a lab state from before kept the key alone).
+    const was = typeof st.told[lab.port] === 'string' ? { key: st.told[lab.port], n: TRIES } : st.told[lab.port];
+    const n = was?.key === p.key ? was.n : 0;
+    if (n >= TRIES) continue;
+    st.told[lab.port] = { key: p.key, n: n + 1 };
     save(sid, st);
     return (
       `labit: ${p.fresh === 1 ? 'A new pin' : `${p.fresh} new pins`} (${p.url}) while you weren't listening. ` +

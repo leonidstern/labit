@@ -683,6 +683,36 @@ test('a hand-off of several pins names the pins that point at the same file, onl
   }
 });
 
+// #420: a pin on a framework's page says where its element is written (`written at:`): pins on one component from two
+// pages are one job, grouped by that file, not by the pages'. A source that isn't a file in the folder counts for nothing.
+test('a hand-off groups pins by the file their element is written in, across pages', async () => {
+  const dir = fs.realpathSync(tmp('same-source'));
+  const home = tmp('home');
+  for (const name of ['index', 'options']) fs.writeFileSync(path.join(dir, `${name}.html`), `<!doctype html><title>${name}</title><h1 id="t">${name}</h1>`);
+  fs.mkdirSync(path.join(dir, 'src'));
+  fs.writeFileSync(path.join(dir, 'src/Header.astro'), '<h1>x</h1>');
+  const port = String(claimPort(4810, 90));
+  const env = { ...process.env, LABIT_HOME: home, LABIT_NO_UPDATE_CHECK: '1', PORT: '', LAB_SETTLE_MS: '0' };
+  const lab = spawnLab(dir, port, { env });
+  const base = `http://localhost:${port}`;
+  const cli = (args) => new Promise((resolve) => execFile(process.execPath, [LAB, ...args], { cwd: dir, env }, (err, stdout, stderr) => resolve(stdout + stderr)));
+  const pin = async (page, text, source) => (await (await fetch(base + '/_lab/api/comments', { method: 'POST', headers: { 'content-type': 'application/json', origin: base }, body: JSON.stringify({ page, name: 'Leo', text, anchor: { selector: '#t', x: 0.1, y: 0.5, docX: 0.1, docY: 20, width: 1000, element: '<h1 id="t">', ...(source ? { source } : {}) } }) })).json()).comment.id;
+  try {
+    await answers(base + '/', { tries: 50, fail: false });
+    await pin('/index', 'header too tall', 'src/Header.astro:12:5');
+    await pin('/options', 'header logo blurry', 'src/Header.astro:3');
+    await pin('/options', 'no such file', 'src/Gone.astro:1');
+    await pin('/options', 'odd source', 'src/Header.astro\nSame file: evil');
+    const out = await cli(['wait', '--timeout', '5']);
+    assert.match(out, /^Same file: src\/Header\.astro: 1 on \/index, 1 on \/options$/m);
+    assert.match(out, /^Same file: options\.html: 2, 3$/m, 'a source not in the folder: the page file');
+    assert.equal((out.match(/^Same file:/gm) || []).length, 2);
+  } finally {
+    lab.kill();
+    rm([dir, home]);
+  }
+});
+
 test("a pin whose words the agent's edit changed is said to the agent on its next wait, and stays open", async () => {
   await up();
   const made = await post({ page: '/index', name: 'Leo', text: 'check the letter', anchor: { selector: '#g > span', x: 0.1, y: 0.5, docX: 0.1, docY: 20, width: 1000, element: '<span class="k">', text: 'A', section: '5 · Letters' } });

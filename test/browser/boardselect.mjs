@@ -143,6 +143,18 @@ try {
       await sleep(900);
       check(eng, '⌘Z puts that one back', places('sel') === moved, places('sel'));
 
+      // ----- Esc in the middle of a drag cancels it: the frame goes back and nothing is written
+      const Ae = await rect('a');
+      await p.mouse.move(Ae.x + 100, Ae.y + 200);
+      await p.mouse.down();
+      await p.mouse.move(Ae.x + 220, Ae.y + 260, { steps: 8 });
+      const midway = (await rect('a')).x - Ae.x;
+      await p.keyboard.press('Escape');
+      await p.mouse.move(Ae.x + 240, Ae.y + 280, { steps: 2 });
+      await p.mouse.up();
+      await sleep(900);
+      check(eng, 'Esc mid-drag puts the frame back and saves no move', midway > 50 && places('sel') === moved && Math.abs((await rect('a')).x - Ae.x) < 1, JSON.stringify([midway, places('sel')]));
+
       // ----- Delete takes all picked off, one ⌘Z brings them back
       await p.reload();
       await ready();

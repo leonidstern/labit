@@ -114,8 +114,7 @@ export const endDrag = (e) => {
   S.openId = null;
   W.begin(zoneAnchor(d));
 };
-// What a drawing sent with no words says: its mark, without the guess in brackets.
-export const inkSaid = (mark = '') => mark.replace(/\s*\(likely:.*\)$/, '') || 'drawing';
+export { inkSaid } from '../../lib/schema.mjs'; // what a drawing sent with no words says (the lab reads it back the same way)
 // A reload (the lab's or a dev server's) waits while a drawing is drawn and while drawings are being saved: a second
 // drawing begun while the first is still sent keeps it waiting. A save stops holding after 10 s (a lab that is down retries
 // for minutes; the drawing goes to a comment box if it fails).
