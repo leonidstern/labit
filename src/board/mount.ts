@@ -756,7 +756,14 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     else if (e.key === 'Tab' && !entered && cards.length) step(e.shiftKey ? -1 : 1);
     else if (e.key === 'Escape') {
       // Heard in the frame, which keeps an Esc its page used (a menu closing) to itself: this one is ours.
-      if (entered) leave();
+      // Mid-drag it cancels the drag: moved frames go back unsaved, a box being drawn goes and the pick is as before it.
+      if (down?.mode) {
+        const d = down;
+        down = null;
+        if (d.mode === 'marq') pickFrames([...d.base!]);
+        drop(d, true);
+        hand();
+      } else if (entered) leave();
       else if (picks.size) pickFrames([]);
       else if (opts.back && !coarse) back(); // an empty board's Esc goes back to the page, as ⇧B does
       else return false;

@@ -13,7 +13,7 @@ const { DIR, PORT, B } = site('agent-hooks', 9010, 9);
 for (const n of ['index', 'other']) fs.writeFileSync(path.join(DIR, n + '.html'), `<!doctype html><title>${n}</title><h1>${n}</h1>`);
 const home = tmp('home');
 const scratch = tmp('scratch'); // the hook's state files (TMPDIR)
-const env = { ...process.env, LAB_CLOSE_GRACE: '1', LAB_SETTLE_MS: '100', LAB_ACK_MS: '1500', LABIT_HOME: home, LABIT_NO_UPDATE_CHECK: '1' };
+const env = { ...process.env, LAB_CLOSE_GRACE: '1', LAB_SETTLE_MS: '100', LAB_ACK_MS: '1500', LAB_CLAIM_LIFE_MS: '3000', LABIT_HOME: home, LABIT_NO_UPDATE_CHECK: '1' };
 const server = spawnLab(DIR, PORT, { env });
 after(() => { server.kill(); rm([DIR, home, scratch]); });
 const key = () => serverJson(DIR).agent;
@@ -54,13 +54,29 @@ test('progress: only the session that listened last, only a pin it claimed, once
   const second = await progressAt(id);
   assert.ok(second > first, 'its own tool call renews the line');
   const line = (await comments()).find((c) => c.id === id).progress.text;
-  assert.equal(line, 'session activity', 'never the command');
+  assert.equal(line, 'drawing', "the agent's own words stay: a renewal moves only the time, and never says the command");
   await hook('progress', cursor('S1'));
   assert.equal(await progressAt(id), second, 'within the minute: no second line');
   assert.equal(await progressAt(free), '');
 });
 
-test('wake: the session that listened last, once per set of pins, no page named; Codex blocks the stop, Cursor follows up', async () => {
+test('progress: the hook stops renewing a pin the agent said nothing on for a while, so the page can say no update (#425)', async () => {
+  const id = (await post('left behind')).comment.id;
+  const w = await call('/_lab/wait', { timeout: 3, pages: null, ack: true }, 'S1');
+  await call('/_lab/ack', { id: w.delivery }, 'S1');
+  await call('/_lab/api/comments', { page: '/index', action: 'progress', id, text: 'building' }, 'S1');
+  assert.ok((await pending()).working.some((p) => p.id === id), 'claimed: listed for renewal');
+  await sleep(3200); // LAB_CLAIM_LIFE_MS: nothing from the agent itself since
+  assert.ok(!(await pending()).working.some((p) => p.id === id), 'no longer listed: renewals alone do not keep it claimed');
+  const before = await progressAt(id);
+  fs.rmSync(path.join(scratch, 'labit-hook-S1.json'), { force: true });
+  await hook('progress', codex('S1'));
+  assert.equal(await progressAt(id), before, 'its tool calls renew nothing now');
+  await call('/_lab/api/comments', { page: '/index', action: 'progress', id, text: 'building, step 2' }, 'S1');
+  assert.ok((await pending()).working.some((p) => p.id === id), 'a new line of its own claims it again');
+});
+
+test('wake: the session that listened last, at most twice per set of pins, no page named; Codex blocks the stop, Cursor follows up', async () => {
   await post('while you were away', '/other');
   assert.equal((await pending()).listening, false);
   assert.equal(await hook('wake', codex('S2', { hook_event_name: 'Stop' })), '', 'another session is not woken');
@@ -68,7 +84,8 @@ test('wake: the session that listened last, once per set of pins, no page named;
   assert.equal(out.decision, 'block');
   assert.match(out.reason, /^labit: A new pin \(http:\/\/localhost:\d+\) while you weren't listening\. Run `.*wait --timeout 5`/);
   assert.doesNotMatch(out.reason, /\/other/);
-  assert.equal(await hook('wake', codex('S1', { hook_event_name: 'Stop' })), '', 'the same pins never wake it twice');
+  assert.match(JSON.parse(await hook('wake', codex('S1', { hook_event_name: 'Stop' }))).reason, /A new pin/, 'still unhanded at the next stop: once more (#420)');
+  assert.equal(await hook('wake', codex('S1', { hook_event_name: 'Stop' })), '', 'then never again for the same pins');
   await post('and another', '/other');
   const next = JSON.parse(await hook('wake', cursor('S1', { hook_event_name: 'stop', status: 'completed' })));
   assert.match(next.followup_message, /^labit: 2 new pins /);
