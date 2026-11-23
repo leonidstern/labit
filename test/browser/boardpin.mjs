@@ -47,7 +47,8 @@ try {
       await ctx.addInitScript(() => { localStorage.setItem('lab-name', 'leo'); localStorage.setItem('lab-on', '1'); });
       const p = await ctx.newPage();
       const errors = [];
-      p.on('pageerror', (e) => (console.log('pageerror', e.message), errors.push(e.message)));
+      // WebKit reports a fetch cut off by a reload ("… due to access control checks") as a page error: not the widget's.
+      p.on('pageerror', (e) => (console.log('pageerror', e.message), /due to access control checks/.test(e.message) || errors.push(e.message)));
       const shadow = (fn, arg) => p.evaluate(([f, a]) => new Function('r', 'a', f)(document.querySelector('[data-lab-comments]').shadowRoot, a), [typeof fn === 'string' ? fn : fn.toString().replace(/^[^{]*{|}$/g, ''), arg]);
       const view = () => p.evaluate(() => Boolean(document.querySelector('[data-lab-board-view]')));
       const strip = () => shadow(() => { const h = r.querySelector('.card .pinboard'); return h ? (h.shadowRoot?.querySelector('.top')?.textContent || 'empty') : null; });
