@@ -3,7 +3,7 @@
 // the size of the text.
 //   node bench/cost.mjs situations   [--arms full,lean] [--runs 10] [--model sonnet] [--jobs 3]
 //   node bench/cost.mjs situations-2 [...]
-//   node bench/cost.mjs drawings     [--arms full,nolines,skill-whole,skill-core] [--runs 3]   (after bench/drawings/draw.mjs)
+//   node bench/cost.mjs drawings     [--arms full,nolines,skill-whole,skill-core,typed,artifact] [--runs 3]   (after drawings/draw.mjs, typed.mjs)
 //   node bench/cost.mjs --summary bench/results/cost/<file>.json      (prints a saved run again)
 // Arms are what changes for the agent; each task lists its own (below). Situations: full (the saved agent text) or lean
 // (what a wait hands over: LEAN_SKIP lines left out).
@@ -56,6 +56,8 @@ const CORE = SKILL.split(/\n(?=## )/).filter((part) => !/^## (Boards|Instead of 
 // done in a fresh copy of the page; the scenario's check reads the edited page. Arms: the coordinates of a mark the
 // page read (`lines`) kept or left out, and the skill whole or only its core.
 const DRAWN = join(HERE, 'drawings');
+// The same words for a labit pin and an Artifact comment: the page is pricing.html (published as index.html).
+const anyPage = (text) => `You answer comments people leave on a page. This folder is the site; the page is pricing.html (published as index.html). A new comment came in:\n\n${text}\n\nDo the work it asks for in the files now (no one is around to answer questions). If it truly asks nothing you can do, change nothing. Then end with one short line: what you did.`;
 const drawings = {
   files: [],
   cases: async () => (await import('./drawings/scenarios.mjs')).SCENARIOS,
@@ -74,6 +76,10 @@ const drawings = {
     nolines: { text: (t) => lean(t).split('\n').filter((l) => !/^lines \(px/.test(l) || /^drawn: .*unclear/m.test(t)).join('\n') },
     'skill-whole': { text: lean, args: ['--append-system-prompt', SKILL] },
     'skill-core': { text: lean, args: ['--append-system-prompt', CORE] },
+    // The same asks typed, as labit pins (drawings/typed.mjs) and as comments on an Artifact of the same page (left by a
+    // person, read with Claude's artifact comment tool: drawings/artifact-comments.json), with the same words.
+    typed: { source: (c) => readFileSync(join(DRAWN, 'out', `${c.id}.typed.txt`), 'utf8'), text: lean, prompt: (c, text) => anyPage(text) },
+    artifact: { source: (c) => JSON.parse(readFileSync(join(DRAWN, 'artifact-comments.json'), 'utf8'))[c.id], text: full, prompt: (c, text) => anyPage(text) },
   },
   score: (dir, c) => {
     const ok = Boolean(c.check(readFileSync(join(dir, 'pricing.html'), 'utf8'), readFileSync(join(DRAWN, 'pricing.html'), 'utf8')));
@@ -176,10 +182,11 @@ const run = (task, arm, model, c) =>
     mkdirSync(join(dir, 'bench/results'), { recursive: true });
     for (const f of task.files) cpSync(join(HERE, f), join(dir, 'bench', f), { recursive: true });
     task.setup?.(dir, c);
-    const text = task.arms[arm].text(task.text(c));
+    const a = task.arms[arm];
+    const text = a.text(a.source ? a.source(c) : task.text(c));
     if (task.into) writeFileSync(join(dir, task.into), text);
     const t0 = Date.now();
-    const args = ['-p', task.prompt(c, text), '--output-format', 'stream-json', '--verbose', '--model', model, '--permission-mode', 'acceptEdits', '--allowedTools', task.tools, ...(task.arms[arm].args || [])];
+    const args = ['-p', (a.prompt || task.prompt)(c, text), '--output-format', 'stream-json', '--verbose', '--model', model, '--permission-mode', 'acceptEdits', '--allowedTools', task.tools, ...(a.args || [])];
     execFile('claude', args, { cwd: dir, timeout: 1500000, maxBuffer: 1 << 30 }, (err, stdout) => {
       const lines = String(stdout).split('\n').flatMap((l) => {
         try {
