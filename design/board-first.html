@@ -63,6 +63,15 @@ code{font:13px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--code
 .mark{position:absolute;right:10px;font-size:11.5px;padding:2px 8px;border-radius:10px;background:var(--w-bg);color:var(--w-fg);box-shadow:var(--w-shadow)}
 .split{position:absolute;inset:0;display:grid;grid-template-columns:1fr 1fr}
 .split .bv{position:relative;border-left:1px solid var(--w-line);box-shadow:none}
+.bpin{position:absolute;display:flex;align-items:center;gap:6px}
+.bpin .pin{position:static}
+.ring{box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 45%,transparent)}
+.dot{position:absolute;top:-3px;right:-3px;width:7px;height:7px;border-radius:50%;background:#e0442f;border:1.5px solid var(--page)}
+.card{position:absolute;width:210px;background:var(--w-bg);color:var(--w-fg);border-radius:10px;box-shadow:var(--w-shadow);padding:10px;font-size:12.5px}
+.card .who{color:var(--w-mut);font-size:11.5px;margin-bottom:4px}
+.card .th{display:flex;gap:5px;margin:8px 0}.card .th i{flex:none;width:54px;height:38px;border-radius:4px;background:var(--ph)}
+.card .go{display:inline-block;padding:3px 10px;border-radius:6px;background:var(--w-soft)}
+.chip{position:absolute;font-size:11.5px;padding:2px 8px;border-radius:10px;background:var(--w-bg);color:var(--w-fg);box-shadow:var(--w-shadow);white-space:nowrap}
 ol.notes{margin:8px 0 0;padding-left:20px;color:var(--mut);font-size:14px}
 </style>
 </head>
@@ -195,7 +204,7 @@ ol.notes{margin:8px 0 0;padding-left:20px;color:var(--mut);font-size:14px}
 
 <!-- 5 -->
 <section id="place">
-<h2>5. A board on a page</h2>
+<h2>5. A board on a page (replaced by 6)</h2>
 <p class="lede">This is only a link into the board now. Pages where labit can't safely insert the strip (React, Next, Vue) get the small marker from 5C anyway, so this choice is about plain HTML pages.</p>
 <div class="opts">
   <div class="opt rec">
@@ -212,6 +221,33 @@ ol.notes{margin:8px 0 0;padding-left:20px;color:var(--mut);font-size:14px}
     <h3>5C · A small marker</h3>
     <div class="stage" style="height:120px"><div class="pg"><i style="width:60%"></i><i></i><i style="width:80%"></i><i style="width:50%"></i></div><span class="mark" style="top:10px">board name</span></div>
     <p class="cap">Sits on the section's edge and doesn't change the page layout. Always used on React, Next and Vue pages.</p>
+  </div>
+</div>
+</section>
+
+<!-- 6 -->
+<section id="pin">
+<h2>6. A board as a pin on the page</h2>
+<p class="lede">This replaces 5. Nothing is written into the page. A board sits at the spot you picked like any comment pin, and its comments stay with the page. The pin shows when there's new activity on the board, the way a comment pin does today. Opening it brings up the board over the whole page (3B).</p>
+<div class="opts">
+  <div class="opt">
+    <h3>6A · Pin with the word "board"</h3>
+    <div class="stage" style="height:200px"><div class="pg"><i style="width:60%"></i><i></i><i style="width:80%"></i><i style="width:50%"></i><i style="width:70%"></i></div>
+      <div class="bpin" style="left:58%;top:52px"><span class="pin" style="position:relative"><span class="dot"></span></span><span style="font-size:12px;color:var(--fg)">board</span></div></div>
+    <p class="cap">A normal pin with "board" next to it. A tap opens the board straight away. New activity shows as the pin's usual dot.</p>
+  </div>
+  <div class="opt">
+    <h3>6B · A text chip</h3>
+    <div class="stage" style="height:200px"><div class="pg"><i style="width:60%"></i><i></i><i style="width:80%"></i><i style="width:50%"></i><i style="width:70%"></i></div>
+      <span class="chip" style="left:24%;top:48px">board · needs your reply</span></div>
+    <p class="cap">No pin shape, just words at the spot that say what's waiting. A tap opens the board. Tells you the most at a glance, but it's a new kind of thing on the page.</p>
+  </div>
+  <div class="opt rec">
+    <h3>6C · A comment pin whose card holds the board<span class="tag">recommended</span></h3>
+    <div class="stage" style="height:200px"><div class="pg"><i style="width:60%"></i><i></i><i style="width:80%"></i><i style="width:50%"></i><i style="width:70%"></i></div>
+      <span class="pin ring" style="left:8%;top:40px"></span>
+      <div class="card" style="left:calc(8% + 24px);top:22px"><div class="who">board · needs your reply</div>the words you typed with +board<div class="th"><i></i><i></i><i></i></div><span class="go">Open board</span></div></div>
+    <p class="cap">The usual pin and card. The card shows the board's pictures and an "Open board" button. New activity shows on the pin's usual ring. Reuses the pin, card and status there are now, with nothing new on the page.</p>
   </div>
 </div>
 </section>
