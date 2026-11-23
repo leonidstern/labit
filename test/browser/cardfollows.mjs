@@ -104,6 +104,27 @@ try {
       await sleep(500);
       const fresh = await look();
       check(eng, 'a narrower window: the pin is where a fresh drawing puts it', Math.abs(fresh.pin[1] - s.pin[1]) < 2 && Math.abs(fresh.pin[0] - s.pin[0]) < 2, `${s.pin.map(Math.round)} vs ${fresh.pin.map(Math.round)}`);
+
+      // #467: the pin low in the window, its card open; a tall block put in above pushes the pin past the window's
+      // bottom. The card goes with its pin (above or below it), not held mid-window beside a pin that is gone.
+      await p.setViewportSize({ width: 1200, height: 800 });
+      await sleep(400);
+      const pinTop = () => shadow((r) => r.querySelector('button.pin').getBoundingClientRect().top + scrollY);
+      await p.evaluate((y) => scrollTo(0, y - 700), await pinTop());
+      await sleep(400);
+      await p.mouse.click(...(await shadow((r) => { const q = r.querySelector('button.pin').getBoundingClientRect(); return [q.x + 14, q.y + 14]; })));
+      await sleep(900);
+      fs.writeFileSync(file, page('<div id="new" style="height:600px"></div>'));
+      await sleep(2500);
+      const low = await shadow((r) => {
+        const q = r.querySelector('button.pin').getBoundingClientRect();
+        const c = r.querySelector('.card:not(.out)').getBoundingClientRect();
+        return { pin: [q.top, q.bottom], card: [c.top, c.bottom], vh: innerHeight };
+      });
+      const gap = Math.min(Math.abs(low.pin[0] - low.card[1]), Math.abs(low.card[0] - low.pin[1]));
+      check(eng, 'pushed past the window: the pin is below it', low.pin[0] > low.vh, JSON.stringify(low));
+      check(eng, 'pushed past the window: the card is still next to its pin', gap < 40, `gap ${gap.toFixed(1)} ${JSON.stringify(low)}`);
+      await p.keyboard.press('Escape');
       await p.close();
       await ctx.close();
       fs.writeFileSync(file, plain);
