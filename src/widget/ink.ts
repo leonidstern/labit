@@ -117,7 +117,7 @@ export function liveInk() {
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('class', 'ink live');
   const strokes: P[][] = [];
-  const at = (q: P) => [Math.round(q.x), Math.round(q.y)];
+  const at = (q: P) => [Math.round(q.x * 10) / 10, Math.round(q.y * 10) / 10]; // to a tenth, as the sent line is kept: whole px moved the line a little as it landed (Leo, 23 Nov, Safari)
   // Segment i of a stroke, from point i - 1 to i: its curve, read on the points around it (two before, one after), and its width.
   const seg = (s: P[], i: number) => {
     const from = Math.max(0, i - 2);
