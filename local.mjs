@@ -2014,7 +2014,12 @@ const silent = new Map(); // who -> { label, pages (null: every page), at: its l
 const silentNow = () => [...silent].filter(([who, q]) => (waiters.some((w) => w.who === who) || Date.now() - q.at < ANSWER_MS)
   && !waiters.some((w) => !silent.has(w.who) && w.key === (q.pages ? q.pages.join(',') : '*'))).map(([, q]) => ({ label: q.label, pages: q.pages }));
 // Hand the new comments to a wait; each is marked as handed over only once it is written to it.
+// The page each session was last handed pins on, when they were all on one page: a board it makes without --of is about
+// that page (Leo, 23 Nov: "new asked boards create on same page if asked inside page").
+const handedPage = new Map();
 function deliver(res, got, who = '', ack = false, key = '', label = 'Claude') {
+  const on = new Set(got.marks.map(([page]) => page));
+  if (who && on.size) on.size === 1 && !String([...on][0]).startsWith('/_') ? handedPage.set(who, [...on][0]) : handedPage.delete(who);
   // What the marks were, to put back if the agent never confirms.
   const ids = [...new Set([...got.marks.map(([, id]) => id), ...got.handed.map(([, id]) => id)])];
   const before = ids.map((id) => [id, handoff[id] ? [...handoff[id]] : undefined]);
@@ -2433,6 +2438,12 @@ const boardApi = async (req, res, url) => {
   if (req.method === 'POST') {
     if (!isAgent(req) && !isOwner(req)) return plain(res, 403, 'forbidden');
     const b = await sent(req);
+    // A board asked for with no page is about the page the agent's pins came from; with none, it says which page.
+    if (String(b.action) === 'new' && !b.name && !b.of && !b.flow) {
+      b.of = handedPage.get(whoOf(sessionFrom(req)));
+      const say = 'Say which page the board is about: labit board new "<topic>" --of /page (it is a pin on that page).';
+      if (!b.of) return json(422, { error: say, text: say });
+    }
     const env = { root: ROOT, origin, proxied: Boolean(PROXY), open: (key) => commentsOf(key).filter((c) => !c.parent && !c.resolved).length, titleOf: (p) => { const f = fileFor(boardPage(p)); return f ? titleOf(path.join(ROOT, f)) : ''; }, fileOf: (p) => fileFor(boardPage(p)) };
     // A board an agent makes about a page is a board pin on that page, as +board makes one: every board of a page shows on
     // it, none is only reachable by its address (Leo, 23 Nov: "we need to be sure no hidden boards like this"). The pin

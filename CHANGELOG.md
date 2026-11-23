@@ -7,7 +7,7 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 - **Every board of a page shows on it.** A board an agent makes about a page (`labit board new --of /page`) is a board pin on that page (on its title), as `+board` makes, named `pin-<id>`: none is reachable only by its address.
 - **Pictures on a board no longer shimmer as you zoom out in Safari.** Far out, a big picture is drawn from a smaller copy of itself, each half the one before, the one just big enough for the screen, instead of the whole picture scaled down mid-zoom.
 - **A picked frame on a board has the same thin outline as hover.** No thicker ring.
-- The labit skill puts options on the page being worked on (a board pin there), never on a board of their own or a new page.
+- **A board is made on the page you asked on.** `labit board new` without `--of` is about the page of the pins the agent was handed, a board pin there; with no such page it asks which page instead of making a board of its own. The skill says the same.
 - **A drawing lands as you drew it.** Every point you drew is kept (up to 500 a line, was thinned to half a px and 200) and placed to a tenth, so the line that lands is the line you saw.
 - **A click with the ⋯ menu open only closes it.** It no longer also starts a pin.
 - **The listening mark sits in the bar.** It is the bar's last part, after ⋯, on the bar's own colour, so it reads on a black page too (it showed only its eye there). Its words open above the bar's end.
