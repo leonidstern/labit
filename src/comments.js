@@ -39,7 +39,7 @@ import { holdWhileOpen } from './widget/hold.ts';
 import { inkSvg } from './widget/ink.ts';
 import { bindActions } from './widget/actions.ts';
 import { bindDrag, draftHasText, endDrag, inkSaid, offerSelection, startDrag } from './widget/drag.ts';
-import { addBoard, bindBoardCam, showBoard } from './widget/boardcam.ts';
+import { boardOnPin, boardStrip, bindBoardCam, pinBoardGone, showBoard } from './widget/boardcam.ts';
 import { bindFramework, overFramework, scanForFramework } from './widget/framework.ts';
 import { bindKeys } from './widget/keys.ts';
 
@@ -83,6 +83,7 @@ import { bindKeys } from './widget/keys.ts';
     get anchorAt() { return anchorAt; },
     get begin() { return begin; },
     get boards() { return BOARDS; },
+    get boardStrip() { return boardStrip; },
     get sendDrawing() { return sendDrawing; },
     get addComment() { return addComment; },
     get bar() { return bar; },
@@ -113,7 +114,6 @@ import { bindKeys } from './widget/keys.ts';
     get markSeen() { return markSeen; },
     get ms() { return ms; },
     get mine() { return mine; },
-    get motions() { return motions; },
     get nameLine() { return nameLine; },
     get numberOf() { return numberOf; },
     get openSheet() { return openSheet; },
@@ -124,6 +124,7 @@ import { bindKeys } from './widget/keys.ts';
     get pinCursorStyle() { return pinCursorStyle; },
     get placeBar() { return placeBar; },
     get position() { return position; },
+    get placeOf() { return placeOf; },
     get readable() { return readable; },
     get recheck() { return recheck; },
     get reflow() { return reflow; },
@@ -142,6 +143,7 @@ import { bindKeys } from './widget/keys.ts';
     get foldStatus() { return foldStatus; },
     get isStatus() { return isStatus; },
     get stamped() { return stamped; },
+    get swipeDown() { return swipeDown; },
     get still() { return still; },
     get store() { return store; },
     get syncReads() { return syncReads; },
@@ -298,7 +300,6 @@ import { bindKeys } from './widget/keys.ts';
     <div class="scrim"></div>
     <i class="fit" aria-hidden="true"></i>
     <div class="layer"></div>
-    <div class="motions"></div>
     <div class="ui"><div class="hint" role="status" hidden></div>
     <div class="list chatwin" hidden><div class="tabs"></div><div class="msgs"></div><div class="chat"></div></div>
     <div class="left"><button class="secondary copy-all" type="button" hidden>copy link</button></div>
@@ -337,7 +338,6 @@ import { bindKeys } from './widget/keys.ts';
   // The bar's "new" pill: J/K step through the new comments, R replies, E resolves.
   const listBtn = /** @type {HTMLButtonElement} */ ($('.list-btn'));
   const doneBtn = /** @type {HTMLButtonElement} */ ($('.done-btn'));
-  const motions = $('.motions');
   const movedBtn = /** @type {HTMLButtonElement} */ ($('.moved-btn'));
   const tabTitle = { base: '' };
   // Done pins show unless hidden (Leo, 17 Nov): closed ones are faded on the page, and D hides them.
@@ -547,7 +547,6 @@ import { bindKeys } from './widget/keys.ts';
       if (moment) anchor = { ...anchor, moment };
     }
     S.draft = { anchor };
-    if (anchor.kind !== 'board') dispatchEvent(new Event('lab-board-yield')); // a half board over the page makes way
     keepSpot(anchor);
     ptr.classList.add('still'); // the new pin is where the drawn pointer is: it goes at once (it faded over the pin), back with the next move
     render();
@@ -579,6 +578,10 @@ import { bindKeys } from './widget/keys.ts';
     S.posted = comment.id;
     holdKeyboard(); // the keyboard waits until the card has gone (sheets.ts)
     render();
+    // +board: the pin's board (src/widget/boardcam.ts), when what was sent is what +board put in the box (asked for a name
+    // first, then sent as other words, it is a plain pin).
+    if (S.boardPin?.anchor === anchor && S.boardPin.said === said) void boardOnPin(comment, said);
+    S.boardPin = null;
   }
   // A drawing goes as it is, with what it reads as, the moment it is done: no box to send it from (Leo, 21 Nov: "just
   // draw maybe and send dont open comment to send it, just send"). Undo stays (⌘Z, or the pin's card). With no name
@@ -586,7 +589,7 @@ import { bindKeys } from './widget/keys.ts';
   async function sendDrawing(anchor) {
     const name = store.get('lab-name');
     if (!name) return begin(anchor);
-    const said = inkSaid(anchor.ink.mark);
+    const said = `${inkSaid(anchor.ink.mark)}${anchor.ink.cut ? ` (the first ${anchor.ink.pts.length} of ${anchor.ink.cut} strokes kept)` : ''}`; // more than 64: said, not cut silently (issue 423)
     try {
       const { comment, edit } = await send({ name, text: said, anchor });
       posted(comment, edit, said, anchor);
@@ -604,7 +607,7 @@ import { bindKeys } from './widget/keys.ts';
     if (S.paused && payload.anchor && !payload.action) payload = { ...payload, anchor: { ...payload.anchor, paused: true, atMs: mo.msOf(mo.pausedEl(payload.anchor)) } };
     const moment = payload.anchor && !payload.action && !payload.anchor.moment ? mo?.momentFor(payload.anchor) : undefined;
     if (moment) payload = { ...payload, anchor: { ...payload.anchor, moment } };
-    if ((S.slow || mo?.slowEls.size) && payload.anchor && !payload.action) payload = { ...payload, anchor: { ...payload.anchor, slow: true } }; // at ¼ speed
+    if ((S.slow || mo?.anySlow()) && payload.anchor && !payload.action) payload = { ...payload, anchor: { ...payload.anchor, slow: true } }; // at ¼ speed
     if (!payload.action && !payload.nonce) payload = { ...payload, nonce: Math.random().toString(36).slice(2) + Date.now().toString(36) };
     for (let tries = 0; !res; tries++) {
       try {
@@ -622,6 +625,13 @@ import { bindKeys } from './widget/keys.ts';
     return data;
   }
   const placed = [];
+  // Where a thread's pin goes (anchoring.ts). A board pin whose element is not shown (a closed menu or tab) would leave its
+  // board out of reach with it, so it goes to the ⋯ menu as a moved pin until its element is back (Leo, 23 Nov: "be sure
+  // board pin wont became stray out of viewport").
+  const placeOf = (c) => {
+    const at = /** @type {any} */ (position(c.anchor || {}));
+    return at.why === 'hidden' && S.pinBoards?.has(c.id) ? { ...at, moved: true, why: 'lost' } : at;
+  };
   // Undo, 3 s after a new pin is sent (Leo, 19 Nov): its card opens with "undo" in the resolve key's place (thread.ts).
   // A tap deletes it (this computer as admin, anyone else with the pin's own key, which the lab takes for a fresh pin
   // nobody answered) and closes the card: no comment box, no words kept anywhere.
@@ -633,6 +643,7 @@ import { bindKeys } from './widget/keys.ts';
     await send({ action: 'delete', id: c.id, ...(ownKey && !S.isAdmin ? { edit: ownKey } : {}) });
     S.undo = null;
     S.comments = S.comments.filter((x) => x.id !== c.id && x.parent !== c.id);
+    pinBoardGone(c.id); // a board pin's board went with it (the lab drops it): its view closes
     if (ownKey) store.set(`lab-edit:${c.id}`, '');
     const at = placed.indexOf(c.id);
     if (at >= 0) placed.splice(at, 1);
@@ -650,10 +661,17 @@ import { bindKeys } from './widget/keys.ts';
     const c = id && S.comments.find((x) => x.id === id);
     if (!c) return;
     const ownKey = store.get(`lab-edit:${id}`);
+    // A board pin past its first seconds (the undo key's) holds what was put on its board: ⌘Z closes it, and its
+    // board stays, as a guest's ⌘Z does (issue 422: deleting it took the board and its pictures).
+    const keep = S.pinBoards?.has(id) && S.undo?.id !== id;
     try {
-      if (S.isAdmin) {
+      if (S.isAdmin && !keep) {
         await send({ action: 'delete', id });
         S.comments = S.comments.filter((x) => x.id !== id && x.parent !== id);
+        pinBoardGone(id);
+      } else if (S.isAdmin) {
+        const { comment } = await send({ action: 'resolve', id });
+        Object.assign(c, comment);
       } else if (ownKey) {
         const { comment } = await send({ action: 'resolve', id, edit: ownKey });
         Object.assign(c, comment);
@@ -795,8 +813,20 @@ import { bindKeys } from './widget/keys.ts';
       void switcher().then((m) => m?.openSwitcher());
     });
   }
+  // The motion part (src/widget/motion.ts, loaded below), once it is: declared here, as the bar reads it.
+  /** @type {any} */
+  let mo = null;
+  /** @type {Promise<any> | null} */
+  let moAsked = null;
+  // Phones (Leo, 23 Nov, 3a): ⋯ → motion opens the motion sheet; there once the page has something that moves.
+  const motionBtn = el('button', { type: 'button' }, 'motion');
+  motionBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setMenu(false);
+    mo?.openMotion();
+  });
   function placeBar() {
-    const inMenu = !S.on ? [] : [...(labHead ? [labHead, labsBtn] : []), doneBtn, movedBtn, copyBtn, toggleBtn, ...(versionLine ? [versionLine] : [])];
+    const inMenu = !S.on ? [] : [...(labHead ? [labHead, labsBtn] : []), doneBtn, movedBtn, copyBtn, ...(coarse && mo ? [motionBtn] : []), toggleBtn, ...(versionLine ? [versionLine] : [])];
     // In this order every time: a part that came back (hide comments, after showing them again) went to the end, below
     // the version line.
     if (S.on && (inMenu.some((b, i) => moreMenu.children[i] !== b) || moreMenu.children.length !== inMenu.length)) moreMenu.replaceChildren(...inMenu);
@@ -978,7 +1008,7 @@ import { bindKeys } from './widget/keys.ts';
     // messages; Leo, 17 Nov: "message scrolled up" on a phone).
     const prevAtEnd = prevBody ? prevBody.scrollHeight - prevBody.scrollTop - prevBody.clientHeight < 48 : false;
     // Every pin's place is read before anything is written, so the page lays out once per render, not once per pin.
-    const places = new Map(S.on ? threads().filter((c) => c.anchor?.kind !== 'page').map((c) => [c.id, position(c.anchor || {})]) : []);
+    const places = new Map(S.on ? threads().filter((c) => c.anchor?.kind !== 'page').map((c) => [c.id, placeOf(c)]) : []);
     readPins(threads().map((c) => (c.anchor?.kind === 'board' ? frameBox(c.anchor) : c.anchor && c.anchor.kind !== 'page' && !places.get(c.id)?.moved ? findTarget(c.anchor) : null)));
     // A pin that is still there stays the same element, updated in place, so what runs on it (the agent's ring, a pop, a
     // swap, a hover or open transition) carries on instead of starting again (Leo, 18 Nov: clicking or leaving a pin
@@ -1041,7 +1071,7 @@ import { bindKeys } from './widget/keys.ts';
     );
     toggleBtn.classList.toggle('secondary', S.on);
     host.toggleAttribute('data-labs', Boolean(!coarse && S.labsOpen)); // the page dims behind labs & pages (the widget's .scrim)
-    host.toggleAttribute('data-sheet', Boolean((coarse && S.labsOpen) || (S.on && (S.draft || S.openId || S.chatOpen)))); // phones: the sheet has the screen's bottom
+    host.toggleAttribute('data-sheet', Boolean((coarse && (S.labsOpen || S.motionOpen)) || (S.on && (S.draft || S.openId || S.chatOpen)))); // phones: the sheet has the screen's bottom
     if (coarse && appear && now) { // a sheet opening slides in once its first frame is drawn (see data-opening in styles.css)
       host.setAttribute('data-opening', '');
       requestAnimationFrame(() => requestAnimationFrame(() => host.removeAttribute('data-opening')));
@@ -1060,7 +1090,7 @@ import { bindKeys } from './widget/keys.ts';
       if (isPage(c)) return; // in the chat, not on the page
       // Done pins with nothing new in them step aside when done ones are hidden (D); an open one stays.
       if (!S.showDone && S.openId !== c.id && (c.resolved || workState(c)[0] === 'done') && !unread(c).length) return;
-      const { left, top, moved, zone, clipped, covered, why } = places.get(c.id) || position(c.anchor || {});
+      const { left, top, moved, zone, clipped, covered, why } = places.get(c.id) || placeOf(c);
       // A pin whose spot is gone is off the page: the ⋯ menu lists them ("moved · N"); an open one shows, to drop on a
       // new spot (drag) or close. The agent finishing one closes it.
       if (moved) {
@@ -1072,9 +1102,15 @@ import { bindKeys } from './widget/keys.ts';
       }
       const ink = zone && c.anchor.ink; // a drawing is its own pin: its lines, no marker (draw.ts)
       if (S.openId === c.id && !ink) add(drawZone(zone, `saved${anim}`)); // a drawn area shows its outline while open
-      const news = unread(c);
+      // A board pin (+board) wears its board's news too: the open threads on its board, their unread messages and where the
+      // agent stands with them (asking, then working), when its own thread has nothing to say (Leo, 23 Nov, issue 422).
+      const boardThreads = S.pinBoards?.has(c.id) ? S.comments.filter((x) => !x.parent && !x.resolved && x.anchor?.kind === 'board' && x.anchor.board === `pin-${c.id}`) : [];
+      const news = [...unread(c), ...boardThreads.flatMap((x) => unread(x))];
       const movable = !zone && (S.isAdmin || store.get(`lab-edit:${c.id}`));
-      const sg = lineUp().get(c.id) || { s: null, n: 0, at: '', line: '' }; // where it stands with the agent: sent, got (picked up), now (working), wait, stale, asks or done
+      const own = lineUp().get(c.id) || { s: null, n: 0, at: '', line: '' }; // where it stands with the agent: sent, got (picked up), now (working), wait, stale, asks or done
+      const pick = (st) => boardThreads.map((x) => [x, lineUp().get(x.id)]).find(([x, g]) => g?.s === st && (st !== 'asks' || unread(x).length))?.[1];
+      const busy = pick('asks') || (own.s === 'now' ? null : pick('now') || pick('stale'));
+      const sg = busy || own;
       // A question you've read goes back to a plain pin: amber is for one still unread (Leo, 20 Nov: "orange pin after
       // opening should become regular").
       const state = sg.s === 'asks' && !news.length ? null : sg.s;
@@ -1183,7 +1219,6 @@ import { bindKeys } from './widget/keys.ts';
           if (e.altKey && mayResolve(c)) return toggleResolved(c);
           // Phones: opening it goes through goTo, which moves the page so the pin sits above its sheet, not under it.
           if (coarse && S.openId !== c.id) return goTo(c);
-          if (S.openId !== c.id && c.anchor?.kind !== 'board') dispatchEvent(new Event('lab-board-yield')); // a half board makes way for a comment on the page
           S.openId = S.openId === c.id ? null : c.id;
           S.draft = null;
           render();
@@ -1240,7 +1275,7 @@ import { bindKeys } from './widget/keys.ts';
         }
         if (coarse && S.cardFull) card.classList.add('full'); // stays pulled up while you step from comment to comment
         swipeDown(card, () => ((S.openId = null), (S.cardFull = false), render()), true);
-        markSeen(news);
+        markSeen(unread(c)); // its own thread: the board's threads are read on the board, where they are seen
         if (news.length) {
           drawList(); // opened is read: the "N new" pill and the tab title count it off at once
         }
@@ -1280,9 +1315,10 @@ import { bindKeys } from './widget/keys.ts';
         },
       });
       float.append(el('div', { class: 'handle' }));
-      // Paused: the moment this pin will carry, so you know it is kept (Leo, 19 Nov: "some info in pin where it was").
-      const chip = anchor.moment && S.momentChip?.(anchor.moment); // only a paused video has one (Leo, 21 Nov)
-      if (chip) float.append(chip);
+      // The moment this pin will carry, so you know it is kept (Leo, 19 Nov: "some info in pin where it was"): a quiet
+      // line, as under the sent pin's first message (Leo, 23 Nov, 4c).
+      const when = anchor.moment && S.momentLine?.(anchor.moment);
+      if (when) float.append(when);
       const row = quickRow(draft, box);
       if (row?.children.length) float.append(row);
       float.append(box);
@@ -1314,7 +1350,7 @@ import { bindKeys } from './widget/keys.ts';
     S.draft = S.on ? keptDraft() : null; // hidden, a new comment lets go of the screen; its words wait, and come back when comments do
     S.openId = null;
     render();
-    mo?.drawMotion(); // the pause / play beside each moving thing goes and comes with the comments
+    if (!S.on) mo?.closeMotion(); // the motion menu goes with the comments
   };
   toggleBtn.addEventListener('click', () => setOn(!S.on));
   // The ⋯ menu is a disclosure: the button says whether it's open; opening puts focus on its first item, and Escape
@@ -1369,21 +1405,18 @@ import { bindKeys } from './widget/keys.ts';
       e.stopPropagation();
     }
   }, true);
-  // Motion (src/widget/motion.ts: pause and ¼ speed, the controls beside what moves, a pin's moment) is its own file, loaded
+  // Motion (src/widget/motion.ts: pause and speed from a right-click or ⋯ → motion, a pin's moment) is its own file, loaded
   // once something on the page moves (a video, an animation: looked for a second after the page starts, when one
-  // starts, and on a phone each second), when ⌥ is held, P or S is pressed, or a comment has a moment; mo: the module, once it is.
-  /** @type {any} */
-  let mo = null;
-  /** @type {Promise<any> | null} */
-  let moAsked = null;
-  const loadMotion = () => (moAsked ??= part('motion').then((m) => (m.bindMotion(W), (mo = m))).catch(() => (moAsked = null)));
+  // starts, and on a phone each second), when P or S is pressed, or a comment has a moment; mo: the module, once it is.
+  const loadMotion = () => (moAsked ??= part('motion').then((m) => (m.bindMotion(W), (mo = m), placeBar(), m)).catch(() => (moAsked = null))); // placeBar: phones get ⋯ → motion
   const lookForMotion = () => {
     if (!moAsked && (document.querySelector('video') || document.getAnimations().some((a) => !root.contains(/** @type {any} */ (a.effect)?.target)))) void loadMotion();
   };
-  addEventListener('keydown', (e) => {
-    if (e.key === 'Alt' && !coarse && !mo) void loadMotion().then((m) => m?.altMotionSet(!e.metaKey && !e.ctrlKey && !e.shiftKey)); // its own keys come once it is there: this press is its first
-  }, true);
   for (const type of ['animationstart', 'play']) addEventListener(type, lookForMotion, true);
+  // Computers: an animation a script started says nothing; the pointer moving over the page looks again (once a second),
+  // so a right-click on it opens the motion menu.
+  let lookedAt = 0;
+  if (!coarse) addEventListener('pointermove', () => !moAsked && performance.now() - lookedAt > 1000 && ((lookedAt = performance.now()), lookForMotion()), { capture: true, passive: true });
   setTimeout(lookForMotion, 1000);
   if (coarse) {
     const phone = setInterval(() => (moAsked ? clearInterval(phone) : document.hidden || lookForMotion()), 1000);
@@ -1585,8 +1618,9 @@ import { bindKeys } from './widget/keys.ts';
   const scrim = /** @type {HTMLElement} */ (root.querySelector('.scrim'));
   // The open sheet (phones): a thread, a new comment, the list or the chat.
   /** @returns {HTMLElement | null} */
-  const openSheet = () => (S.labsOpen && labs?.switcherSheet()) || root.querySelector('.card:not(.out), .float:not(.out)') || (S.chatOpen ? chatEl : null);
+  const openSheet = () => (S.motionOpen && mo?.motionSheet()) || (S.labsOpen && labs?.switcherSheet()) || root.querySelector('.card:not(.out), .float:not(.out)') || (S.chatOpen ? chatEl : null);
   const closeAll = () => {
+    if (S.motionOpen) return mo?.closeMotion(); // the motion sheet sits over the others: only it goes
     if (S.labsOpen) return labs?.closeSwitcher(); // labs & pages sits over the others: only it goes
     S.draft = null;
     S.openId = null;
@@ -1719,19 +1753,17 @@ import { bindKeys } from './widget/keys.ts';
     // list itself is set in labit.json or your settings.json (`actions`, docs/settings.md): nothing on the page edits it.
     const chips = LIST.map(chip);
     row.append(...chips);
-    // +board (on a page; a guest too, who is the person on another device): a board for pictures and pages goes into the
-    // page as a section at this spot, and opens; no pin is left (Leo, 21 Nov: "only board sections is enough"). The words
-    // typed are its title. It is labit's own, not one of your list, so it looks different and sits at the right end.
+    // +board (on a page; a guest too, who is the person on another device): the comment is sent as a pin whose card holds
+    // a board for pictures and pages, and the board opens (Leo, 23 Nov, issue 422, pick 6C: a board pin, nothing written into the
+    // page). The words typed are the pin's text and the board's title. It is labit's own, not one of your list, so it looks
+    // different and sits at the right end.
     if (BOARDS && !S.board && draft.anchor.kind !== 'board') {
-      const own = Object.assign(actButton('+board'), { className: 'own', title: 'a board of pictures and pages, as a section of the page here' });
+      const own = Object.assign(actButton('+board'), { className: 'own', title: 'a pin with a board of pictures and pages' });
       own.addEventListener('mousedown', (e) => e.preventDefault());
       own.addEventListener('click', () => {
-        const title = field.value.trim();
-        fill('');
-        S.draft = null;
-        keepSpot(null);
-        render();
-        void addBoard(draft.anchor, title);
+        const said = field.value.trim() || 'board';
+        S.boardPin = { anchor: draft.anchor, said }; // posted() makes the board once the pin is saved
+        go(said);
       });
       row.append(own);
     }
@@ -1851,7 +1883,7 @@ import { bindKeys } from './widget/keys.ts';
     viewW = document.documentElement.clientWidth;
     const all = threads().filter((c) => c.anchor?.kind !== 'page');
     const skip = (c) => scrolled && heldPin(pinsById.get(c.id));
-    const places = all.filter((c) => !skip(c)).map((c) => [pinsById.get(c.id), position(c.anchor || {}), c]).filter(([, at]) => !at.moved);
+    const places = all.filter((c) => !skip(c)).map((c) => [pinsById.get(c.id), placeOf(c), c]).filter(([, at]) => !at.moved);
     readPins(places.map(([, , c]) => (c.anchor?.kind === 'board' ? frameBox(c.anchor) : findTarget(c.anchor || {}))));
     if (places.length + all.filter(skip).length !== pinsById.size || places.some(([pin]) => !pin)) return render(); // one lost or found its spot
     for (const [pin, { left, top, clipped, covered, zone }, c] of places) {
@@ -1926,7 +1958,9 @@ import { bindKeys } from './widget/keys.ts';
   const navigated = () => {
     if (!host.isConnected && document.body) {
       document.body.append(host);
+      sized?.observe(document.body); // a new <body>: its size is the one to follow now
       fit();
+      writingIn?.focus({ preventScroll: true }); // the words being written go on where they were
     }
     if (!pageStyle.isConnected) document.head.append(pageStyle);
     if (!pinCursorStyle.isConnected) document.head.append(pinCursorStyle);
@@ -1948,11 +1982,24 @@ import { bindKeys } from './widget/keys.ts';
   // page's own history is left as it is.
   /** @type {any} */ (window).navigation.addEventListener('currententrychange', () => queueMicrotask(navigated));
   document.addEventListener('astro:after-swap', navigated);
+  // A framework's hot update that writes the whole <body> again (or swaps it) takes the widget out with it, and with it an
+  // unsent comment (issue 428): it is put back at once, its words and cursor as they were. Only <html>'s and <body>'s own
+  // children are watched, not the page below them.
+  /** @type {HTMLElement | null} */
+  let writingIn = null; // the box being written in, kept through its host being taken out (no blur to trust then)
+  root.addEventListener('focusin', (e) => (writingIn = /** @type {HTMLElement} */ (e.target)));
+  root.addEventListener('focusout', () => host.isConnected && (writingIn = null));
+  const keepOn = new MutationObserver(() => {
+    if (document.body) keepOn.observe(document.body, { childList: true });
+    if (!host.isConnected) navigated();
+  });
+  keepOn.observe(document.documentElement, { childList: true });
   // Pick up comments others left while this tab was in the background.
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && !S.draft && !root.activeElement) load();
   });
-  if ('ResizeObserver' in window) new ResizeObserver(reflow).observe(document.body);
+  const sized = 'ResizeObserver' in window ? new ResizeObserver(reflow) : null;
+  sized?.observe(document.body);
 
   // The rules that act on the page itself (the pinning cursor, a drag's no-select, a sheet's overscroll), not on the
   // widget: a stylesheet in the document's head, since the widget's own live in its shadow root. The font is the system's
@@ -1975,6 +2022,10 @@ import { bindKeys } from './widget/keys.ts';
   // or comments are switched.
   S.mouse = null; // the last mouse position
   const place = (x, y, target) => {
+    // D held (draw.ts): the pointer is the pen's tip, a dot of the ink's colour where the line goes.
+    const pen = Boolean(S.on && S.dKey);
+    document.documentElement.classList.toggle('lab-pen', pen);
+    ptr.classList.toggle('draw', pen);
     const show = Boolean(target) && target !== host && !host.contains(target) && getComputedStyle(target).cursor === 'none';
     ptr.classList.toggle('show', show);
     ptr.style.transform = `translate(${x - 1}px, ${y - 27}px)`;
@@ -2001,8 +2052,8 @@ import { bindKeys } from './widget/keys.ts';
     place(e.clientX, e.clientY, t instanceof Element ? t : null);
   }, { capture: true, passive: true });
   addEventListener('scroll', recheck, { capture: true, passive: true });
-  addEventListener('keydown', (e) => (e.key === 'Shift' || e.key === 'Alt') && recheck(), true);
-  addEventListener('keyup', (e) => (e.key === 'Shift' || e.key === 'Alt') && recheck(), true);
+  addEventListener('keydown', (e) => !e.repeat && recheck(), true); // Shift, Option, D: what the pointer is (a frame later, once the key's state is set)
+  addEventListener('keyup', recheck, true);
   document.documentElement.addEventListener('mouseleave', () => ((S.mouse = null), ptr.classList.remove('show')));
   addEventListener('blur', () => ((S.mouse = null), ptr.classList.remove('show')));
   // No pictures: where the drawn pin can't show (an open dialog or full screen draws above it, or before the mouse first
@@ -2017,9 +2068,10 @@ import { bindKeys } from './widget/keys.ts';
     const plain = `:not(${INTERACTIVE}, a *, button *, label *, [role="button"] *, [contenteditable], [contenteditable] *, ${OFF}, ${OFF} *, [data-lab-comments])`;
     const top = `dialog, dialog *, [popover], [popover] *, :fullscreen, :fullscreen *`;
     pinCursorStyle.textContent =
-      `@layer lab-pointer { html:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl) body, html:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl) body *${plain} { cursor: crosshair; } ` +
+      `@layer lab-pointer { html:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl), html:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl) body, html:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl) body *${plain} { cursor: crosshair; } ` +
       // With the drawn pointer the system one hides over plain parts of the page (not in the top layer, which is above it).
-      `html.lab-drawn:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl):not(.lab-dragging) body, html.lab-drawn:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl):not(.lab-dragging) body *${plain}:not(${top}) { cursor: none; } ` +
+      // html too: under a page shorter than the window there is no body, and the plain arrow showed (Leo, 23 Nov).
+      `html.lab-drawn:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl):not(.lab-dragging), html.lab-drawn:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl):not(.lab-dragging) body, html.lab-drawn:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl):not(.lab-dragging) body *${plain}:not(${top}) { cursor: none; } ` +
       // Holding Shift (drag to quote words): the drawn I-beam with a low ink band at its foot (C3, Leo 18 Nov; text where a cursor image isn't drawn) over the page's content, back to the pin when it's let go.
       `html:has([data-lab-pinning]).lab-shift-cur:not(.lab-dragging) body *${plain}:not(img, svg, video, canvas) { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Crect x='5' y='15.5' width='14' height='5' rx='1.5' fill='%23f0b70a' fill-opacity='.6'/%3E%3Cpath d='M9 4h6M12 4v16M9 20h6' stroke='white' stroke-width='4' stroke-linecap='round' fill='none'/%3E%3Cpath d='M9 4h6M12 4v16M9 20h6' stroke='%23141414' stroke-width='1.5' stroke-linecap='round' fill='none'/%3E%3C/svg%3E") 12 12, text; } ` +
       // The pointer is inherited, so places that aren't commented on name theirs: editable text a text cursor, a part
@@ -2027,7 +2079,10 @@ import { bindKeys } from './widget/keys.ts';
       `html:has([data-lab-pinning]) body :is([contenteditable], [contenteditable] *) { cursor: text; } html:has([data-lab-pinning]) body :is(${OFF}, ${OFF} *) { cursor: auto; } }` +
       // Holding Option (Alt) pins links and controls too: the drawn pin shows over them (the system pointer hides).
       `html.lab-alt body, html.lab-alt body *:not([data-lab-comments], [data-lab-comments] *, ${OFF}, ${OFF} *) { cursor: crosshair !important; }` +
-      `html.lab-drawn.lab-alt body, html.lab-drawn.lab-alt body *:not([data-lab-comments], [data-lab-comments] *, ${OFF}, ${OFF} *, ${top}) { cursor: none !important; }`;
+      `html.lab-drawn.lab-alt body, html.lab-drawn.lab-alt body *:not([data-lab-comments], [data-lab-comments] *, ${OFF}, ${OFF} *, ${top}) { cursor: none !important; }` +
+      // Holding D (drawing), anywhere on the page, links and controls too, even mid-stroke: the system pointer hides and the drawn
+      // one is the pen's tip (Leo, 23 Nov: "need cursor for drawing"). The widget's own parts keep theirs.
+      `html.lab-pen.lab-drawn, html.lab-pen.lab-drawn body, html.lab-pen.lab-drawn body *:not([data-lab-comments], ${top}) { cursor: none !important; } html.lab-pen [data-lab-comments] { cursor: auto !important; }`;
   }
   // Computers, comments on: a click or drag doesn't select the page's text; hold Shift to select (and quote) words.
   // Fields and editable text stay selectable.
@@ -2089,6 +2144,7 @@ import { bindKeys } from './widget/keys.ts';
     document.head.append(pageStyle, pinCursorStyle);
     refreshPinCursor();
     document.body.append(host);
+    keepOn.observe(document.body, { childList: true });
     fit();
     // The page's own selection while commenting, and the quoted words of an open text comment.
     // A soft green, so the quoted words stay readable in the page's own colour, on light and dark pages.

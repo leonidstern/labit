@@ -34,13 +34,14 @@ try {
       const items = await p.evaluate(() => { const r = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim')).shadowRoot; r.querySelector('.more').click(); return [...r.querySelectorAll('.more-menu button')].map((b) => b.textContent); });
       check(eng, 'the ⋯ menu has no "open as board"', !items.some((t) => /board/.test(t)), JSON.stringify(items));
       await p.keyboard.press('Escape');
-      // a board the agent made (labit board new, or the API) shows as a ⌘K row
+      // a board the agent made (labit board new, or the API) is part of its page: no ⌘K row of its own (Leo, 23 Nov:
+      // "no own lab for boards"); its page's row says when it needs you
       await fetch(`${B}/_lab/api/board?name=checkout`, { method: 'PUT', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ v: 1, rev: 0, frames: [{ id: 'a', src: '/pricing', w: 390, h: 844 }], of: '/pricing' }) });
       await sleep(800);
       await p.keyboard.press('Control+KeyK');
       await sleep(1200);
-      const rows = await p.evaluate(() => { const r = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim')).shadowRoot; return [...r.querySelectorAll('.sw-row[data-kind="board"]')].map((x) => x.textContent); });
-      check(eng, '⌘K lists the board: name, frames, no comment count', rows.length === 1 && /board checkout/.test(rows[0]) && /1 frame/.test(rows[0]) && !/comment|open/i.test(rows[0]), JSON.stringify(rows));
+      const rows = await p.evaluate(() => { const r = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim')).shadowRoot; return { boards: r.querySelectorAll('.sw-row[data-kind="board"]').length, pricing: r.querySelector('.sw-row[data-page="/pricing"]')?.textContent || '' }; });
+      check(eng, '⌘K has no board rows; the page row says nothing while nothing on its board needs you', rows.boards === 0 && /pricing/i.test(rows.pricing) && !/needs your reply|agent working/.test(rows.pricing), JSON.stringify(rows));
       await p.keyboard.press('Escape');
       await ctx.close();
     } finally {

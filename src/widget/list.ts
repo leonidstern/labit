@@ -17,7 +17,6 @@ export const goTo = (c, keys = false) => {
     if (view.__labBoard?.name === a.board) return void ((W.S.openId = c.id), (W.S.draft = null), W.render());
     return void view.__labBoardView?.show(a.board).then(() => setTimeout(() => ((W.S.openId = c.id), (W.S.draft = null), W.render()), 300));
   }
-  dispatchEvent(new Event('lab-board-yield')); // a half board over the page makes way for a comment on the page
   W.S.stepping = Boolean(W.S.openId);
   W.S.keepKeys = W.S.stepping && (keys || W.root.activeElement?.localName === 'textarea');
   W.S.openId = c.id;
@@ -168,7 +167,7 @@ export const stepNew = (dir) => {
 };
 
 // Open pins whose spot is gone from the page: off the page, listed in the ⋯ menu as "moved · N".
-const movedPins = (places?: Map<string, { moved?: boolean }>) => W.threads().filter((c) => !W.isPage(c) && !c.resolved && (places?.get(c.id) || W.position(c.anchor || {})).moved);
+const movedPins = (places?: Map<string, { moved?: boolean }>) => W.threads().filter((c) => !W.isPage(c) && !c.resolved && (places?.get(c.id) || W.placeOf(c)).moved);
 export const stepMoved = () => {
   const all = movedPins();
   if (all.length) goTo(all[(all.findIndex((c) => c.id === W.S.openId) + 1) % all.length]);

@@ -65,3 +65,13 @@ test('started again after parking: the session that listened last is its listene
   assert.equal(JSON.parse(fs.readFileSync(path.join(home, 'servers', `${port}.json`), 'utf8')).listener, 'sess-park');
   assert.ok(!fs.existsSync(path.join(home, 'parked', `${port}.json`)), 'no longer parked once running');
 });
+
+test('under --dev a parked lab ends the watcher too, so nothing is left running', async () => {
+  const dir = fs.realpathSync(tmp('idle-dev'));
+  fs.writeFileSync(path.join(dir, 'index.html'), '<h1>Hi</h1>');
+  const port = String(claimPort(5500, 90));
+  const lab = spawnLab(dir, port, { flags: ['--dev'], env: { ...process.env, LABIT_HOME: tmp('idle-home'), LABIT_IDLE_MS: '1500' } });
+  kids.push(lab);
+  const code = await Promise.race([new Promise((r) => lab.on('exit', r)), sleep(10000).then(() => 'still running')]);
+  assert.notEqual(code, 'still running', '--dev and its watcher ended with the parked lab');
+});
