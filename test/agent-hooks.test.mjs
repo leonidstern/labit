@@ -60,7 +60,7 @@ test('progress: only the session that listened last, only a pin it claimed, once
   assert.equal(await progressAt(free), '');
 });
 
-test('wake: the session that listened last, once per set of pins, no page named; Codex blocks the stop, Cursor follows up', async () => {
+test('wake: the session that listened last, at most twice per set of pins, no page named; Codex blocks the stop, Cursor follows up', async () => {
   await post('while you were away', '/other');
   assert.equal((await pending()).listening, false);
   assert.equal(await hook('wake', codex('S2', { hook_event_name: 'Stop' })), '', 'another session is not woken');
@@ -68,7 +68,8 @@ test('wake: the session that listened last, once per set of pins, no page named;
   assert.equal(out.decision, 'block');
   assert.match(out.reason, /^labit: A new pin \(http:\/\/localhost:\d+\) while you weren't listening\. Run `.*wait --timeout 5`/);
   assert.doesNotMatch(out.reason, /\/other/);
-  assert.equal(await hook('wake', codex('S1', { hook_event_name: 'Stop' })), '', 'the same pins never wake it twice');
+  assert.match(JSON.parse(await hook('wake', codex('S1', { hook_event_name: 'Stop' }))).reason, /A new pin/, 'still unhanded at the next stop: once more (#420)');
+  assert.equal(await hook('wake', codex('S1', { hook_event_name: 'Stop' })), '', 'then never again for the same pins');
   await post('and another', '/other');
   const next = JSON.parse(await hook('wake', cursor('S1', { hook_event_name: 'stop', status: 'completed' })));
   assert.match(next.followup_message, /^labit: 2 new pins /);
