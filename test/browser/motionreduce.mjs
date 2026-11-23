@@ -102,7 +102,6 @@ const SCENES_DESK = [
   { name: 'the ⋯ menu appears', find: `${R}.querySelector('.more-menu')`, act: (p) => rootClick(p, '.more') },
   { name: 'the ⋯ menu goes', find: `${R}.querySelector('.more-menu')`, act: (p) => p.keyboard.press('Escape') },
   { name: 'the board view appears', find: BV, act: (p) => p.click('#go') },
-  { name: 'the board view goes from full to half in one step', find: BV, act: (p) => p.evaluate(`${BV}.shadowRoot.querySelector('.bv-size').click()`), oneStep: true },
 ];
 const SCENES_PHONE = [
   { name: 'chat sheet appears', find: `${R}.querySelector('.chatwin')`, act: (p) => rootClick(p, '.chat-btn') },
@@ -118,31 +117,12 @@ const SCENES_PHONE = [
 // The pill steps away while a sheet is open: sampled together with the chat opening.
 const PILL = { name: 'the pill fades as the chat sheet opens (it does not slide)', find: `${R}.querySelector('.bar')`, act: (p) => rootClick(p, '.chat-btn') };
 
-// The board's half / full toggle is one step: the view's height changes once (the final jump), nothing else moves.
-const oneStep = async (eng, browser, ctxOpts, name, reduce) => {
-  const ctx = await browser.newContext({ ...ctxOpts, reducedMotion: reduce ? 'reduce' : 'no-preference' });
-  await ctx.addInitScript(() => { localStorage.setItem('lab-name', 'tess'); localStorage.setItem('lab-on', '1'); });
-  const p = await ctx.newPage();
-  await p.goto(B + '/');
-  await waitRoot(p);
-  await sleep(600);
-  await p.click('#go');
-  await p.waitForFunction(() => document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board'), null, { timeout: 8000 });
-  await sleep(600);
-  await sample(p, BV);
-  await p.evaluate(`${BV}.shadowRoot.querySelector('.bv-size').click()`);
-  const st = stats(await frames(p, 600));
-  check(eng, `${name}: half / full toggle is one step`, st.moves <= 1, line(st));
-  await ctx.close();
-};
-
 for (const eng of engines()) {
   const browser = await pw[eng].launch();
   try {
-    await reduced(eng, browser, 'computer', DESK, SCENES_DESK.filter((s) => !s.oneStep));
+    await reduced(eng, browser, 'computer', DESK, SCENES_DESK);
     await reduced(eng, browser, 'phone', PHONE, SCENES_PHONE);
     await reduced(eng, browser, 'phone', PHONE, [PILL]);
-    await oneStep(eng, browser, DESK, 'reduced, computer', true);
 
     // Normal motion still moves: a new comment box and a thread card translate / scale over several frames.
     {
@@ -235,7 +215,7 @@ for (const eng of engines()) {
       await p.waitForFunction(() => document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board'), null, { timeout: 8000 });
       await sleep(500);
       const hs = await p.evaluate(() => [...document.querySelector('[data-lab-board-view]').shadowRoot.querySelectorAll('.bv-bar button')].map((b) => Math.round(b.getBoundingClientRect().height)));
-      check(eng, 'computer: the board bar buttons keep their size (under 44 tall, pointer: fine)', hs.length === 2 && hs.every((h) => h < 36), hs.join(', '));
+      check(eng, 'computer: the board bar buttons keep their size (under 44 tall, pointer: fine)', hs.length === 1 && hs.every((h) => h < 36), hs.join(', '));
       await ctx.close();
     }
   } finally {
