@@ -1,7 +1,8 @@
-// The ⌥ motion control can always be reached (Leo, 19 Nov: "sometimes menu with pause is out of reach"): it stays where
-// it first showed while the thing moves, stays on screen near the edges, and lives 300 ms while the pointer crosses the
-// gap to it. A moving track, a pulsing dot, a video and a GIF box, one at the right edge, one at the bottom, in WebKit
-// and Chrome's engine. Not part of `npm test`. Run: node test/browser/motionreach.mjs (NODE_PATH to a playwright).
+// The motion menu can always be reached (Leo, 23 Nov, #421): computers right-click a moving thing and its menu opens at
+// the pointer, on screen near the edges, for the thing under the pointer and not its neighbour. Phones: ⋯ → motion opens
+// a sheet; "pick on page" then a tap on a video picks it without playing or pausing it and without a pin, and the sheet
+// comes back for it. Nothing of labit sits on the page when no menu is open. In WebKit and Chrome's engine.
+// Not part of `npm test`. Run: node test/browser/motionreach.mjs (NODE_PATH to a playwright).
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,21 +15,25 @@ const DIR = tmp('labit-reach-');
 const PORT = claimPort(7990, 30);
 const B = `http://localhost:${PORT}`;
 fs.copyFileSync(fileURLToPath(new URL('../../bench/site/media/countdown.webm', import.meta.url)), path.join(DIR, 'v.webm'));
-fs.writeFileSync(path.join(DIR, 'index.html'), `<!doctype html><meta charset="utf-8"><title>r</title>
+fs.writeFileSync(path.join(DIR, 'index.html'), `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>r</title>
 <style>@keyframes slide { to { translate: 240px } } @keyframes pulse { 50% { scale: 1.4 } }
-body { margin: 0; font: 16px sans-serif; min-height: 1400px } .row { display: flex; gap: 16px; align-items: center; padding: 20px }
-#track { width: 340px; height: 80px; background: #eee } #loop { width: 60px; height: 60px; margin: 10px; background: #333; animation: slide 1.2s linear infinite }
+body { margin: 0; font: 16px sans-serif; min-height: 1400px } .row { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; padding: 20px }
+#track { width: 340px; max-width: 80vw; height: 80px; background: #eee } #loop { width: 60px; height: 60px; margin: 10px; background: #333; animation: slide 1.2s linear infinite }
 #dot { width: 20px; height: 20px; border-radius: 50%; background: #888; animation: pulse .8s ease-in-out infinite }
-video { width: 200px } #edge { position: absolute; right: 0; top: 200px; width: 30px; height: 30px; background: #555; animation: pulse 1s infinite }
-#low { position: fixed; left: 300px; bottom: 0; width: 40px; height: 16px; background: #555; animation: pulse 1s infinite }</style>
+video { width: 200px } #edge { position: absolute; right: 0; top: 260px; width: 30px; height: 30px; background: #555; animation: pulse 1s infinite }
+#low { position: fixed; left: 120px; bottom: 0; width: 40px; height: 16px; background: #555; animation: pulse 1s infinite }
+#n1, #n2 { width: 36px; height: 36px; animation: pulse .9s infinite } #n1 { background: #444 } #n2 { background: #777 }</style>
 <div class="row"><div id="track"><div id="loop"></div></div><div id="dot"></div><video id="vid" src="v.webm" muted loop autoplay playsinline></video></div>
-<div id="edge"></div><div id="low"></div>`);
+<div class="row"><div id="n1"></div><div id="n2"></div></div>
+<div id="edge"></div><div id="low"></div><p>text</p>`);
 const server = startLab(DIR, labEnv(), { port: PORT });
 await labUp(B);
 const ROOT = "[...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim'))?.shadowRoot";
 const inRoot = (p, js) => p.evaluate(`(() => { const r = ${ROOT}; return ${js}; })()`);
-const ctl = (p) => inRoot(p, "(() => { const c = r?.querySelector('.motion-ctl.on:not(.mini)'); const b = c?.querySelector('.motion-play')?.getBoundingClientRect(); return b && { x: b.left + b.width / 2, y: b.top + b.height / 2, l: b.left, t: b.top, r: b.right, btm: b.bottom }; })()");
-const still = (p, id) => p.evaluate((i) => { const e = document.getElementById(i); return e instanceof HTMLVideoElement ? e.paused : e.getAnimations()[0]?.playState === 'paused'; }, id);
+const menu = (p) => inRoot(p, "(() => { const m = r?.querySelector('.motion-menu'); if (!m || m.hidden || (m.popover && !m.matches(':popover-open'))) return null; const b = m.getBoundingClientRect(); return { head: m.querySelector('.lab-head')?.textContent, items: [...m.querySelectorAll(':scope > button')].map((n) => n.textContent), l: b.left, t: b.top, r: b.right, btm: b.bottom }; })()");
+const tapItem = (p, label) => inRoot(p, `[...r.querySelectorAll('.motion-menu button')].find((b) => b.textContent === ${JSON.stringify(label)})?.click()`);
+const loaded = (p) => p.waitForFunction(() => performance.getEntriesByType('resource').some((e) => /\/_lab\/motion\.js/.test(e.name)), null, { timeout: 3000 }).catch(() => {});
+const box = (p, id) => p.evaluate((i) => document.getElementById(i).getBoundingClientRect().toJSON(), id);
 
 try {
   for (const eng of engines()) {
@@ -38,96 +43,72 @@ try {
       await ctx.addInitScript(() => localStorage.setItem('lab-name', 'zz-moment'));
       const p = await ctx.newPage();
       await p.goto(B + '/');
-      for (let i = 0; i < 30 && !(await inRoot(p, "Boolean(r?.querySelector('.motions'))")); i++) await sleep(100);
+      await loaded(p);
       await sleep(800);
-      // Each one: ⌥ on it, then the pointer goes to its pause in small steps (the thing keeps moving meanwhile); the
-      // control is still there, on screen, and its pause stops that one.
-      for (const [id, fx, fy] of [['loop', 0.5, 0.5], ['dot', 0.5, 0.5], ['vid', 0.3, 0.7], ['edge', 0.5, 0.5], ['low', 0.5, 0.5], ['track', 0.95, 0.9]]) {
-        const target = id === 'track' ? 'loop' : id;
-        const r = await p.evaluate((i) => document.getElementById(i).getBoundingClientRect().toJSON(), id);
-        const sx = r.left + r.width * fx, sy = r.top + r.height * fy;
-        await p.mouse.move(sx, sy);
-        await p.keyboard.down('Alt');
-        await p.mouse.move(sx + 1, sy);
-        let c = null;
-        for (let i = 0; i < 20 && !(c = await ctl(p)); i++) await sleep(50);
-        const first = c;
-        if (c) {
-          for (let k = 1; k <= 8; k++) {
-            await p.mouse.move(sx + ((c.x - sx) * k) / 8, sy + ((c.y - sy) * k) / 8);
-            await sleep(40);
-          }
-          c = await ctl(p);
-        }
-        const onScreen = Boolean(c && c.l >= 0 && c.t >= 0 && c.r <= 1000 && c.btm <= 700);
-        // Next to the pointer (Leo, 21 Nov), not at the thing's far corner; on screen even at the edge.
-        const close = Boolean(first && Math.abs(first.x - (sx + 1)) < 120 && Math.abs(first.y - sy) < 60);
-        const stayed = Boolean(c && first && Math.abs(c.x - first.x) < 2 && Math.abs(c.y - first.y) < 2);
-        if (c) await p.mouse.click(c.x, c.y, { modifiers: ['Alt'] });
-        await p.keyboard.up('Alt');
-        await sleep(300);
-        const stopped = await still(p, target);
-        check(eng, `${id}: the control opens next to the pointer, stays put, on screen, and its pause stops it`, Boolean(c) && close && onScreen && stayed && stopped, JSON.stringify({ first, c, stopped, at: [sx + 1, sy] }));
-        // Play it again for the next one.
-        await p.keyboard.press('p');
-        await sleep(150);
-        if (await still(p, target)) await p.keyboard.press('p');
-        await p.mouse.move(5, 650);
-        await sleep(300);
+      const canPlay = await p.evaluate(() => document.getElementById('vid').readyState >= 2);
+      // Each one, at its own spot: the menu is about that thing, at the pointer or pulled back on screen near an edge.
+      for (const [id, want, fx, fy] of [['loop', /^loop /, 0.5, 0.5], ['dot', /^loop /, 0.5, 0.5], ['vid', /^video /, 0.3, 0.7], ['edge', /^loop /, 0.5, 0.5], ['low', /^loop /, 0.5, 0.5], ['n1', /^loop /, 0.3, 0.5], ['n2', /^loop /, 0.7, 0.5]]) {
+        if (id === 'vid' && !canPlay) continue;
+        const r = await box(p, id);
+        const x = r.left + r.width * fx, y = r.top + r.height * fy;
+        await p.mouse.click(x, y, { button: 'right' });
+        await sleep(200);
+        const m = await menu(p);
+        const onScreen = Boolean(m && m.l >= 0 && m.t >= 0 && m.r <= 1000 && m.btm <= 700);
+        const near = Boolean(m && Math.min(Math.abs(m.l - x), Math.abs(m.r - x)) < 3 && Math.min(Math.abs(m.t - y), Math.abs(m.btm - y)) < 3);
+        await tapItem(p, 'pause');
+        await sleep(200);
+        const stopped = await p.evaluate((i) => { const e = document.getElementById(i); return e instanceof HTMLVideoElement ? e.paused : e.getAnimations()[0]?.playState === 'paused'; }, id);
+        const others = await p.evaluate((i) => ['loop', 'dot', 'n1', 'n2'].filter((o) => o !== i).every((o) => document.getElementById(o).getAnimations()[0]?.playState === 'running'), id);
+        check(eng, `${id}: its menu opens at the pointer, on screen, and its pause stops only it`, Boolean(m) && want.test(m.head || '') && onScreen && near && stopped && others, JSON.stringify({ m, at: [x, y], stopped, others }));
+        const now = await box(p, id); // where it stopped
+        await p.mouse.click(now.left + now.width * fx, now.top + now.height * fy, { button: 'right' });
+        await sleep(200);
+        await tapItem(p, 'play');
+        await sleep(200);
       }
-      // Running away (Leo, 19 Nov: "option and move cursor makes controls run away"): ⌥ on the loop, then the pointer
-      // in the gap between its track and the dot. The row holds them all, but its control (at the row's far corner) doesn't
-      // take over: the loop's stays where it was, then fades.
-      {
-        await p.keyboard.up('Alt');
-        await sleep(400);
-        const tr = await p.evaluate(() => document.getElementById('track').getBoundingClientRect().toJSON());
-        const dt = await p.evaluate(() => document.getElementById('dot').getBoundingClientRect().toJSON());
-        await p.mouse.move(tr.left + 20, tr.top + 40);
-        await p.keyboard.down('Alt');
-        await p.mouse.move(tr.left + 21, tr.top + 40);
-        let g0 = null;
-        for (let i = 0; i < 20 && !(g0 = await ctl(p)); i++) await sleep(50);
-        const gap = [];
-        for (let i = 0; i < 6; i++) {
-          await p.mouse.move((tr.right + dt.left) / 2, tr.top + 40 + (i % 2));
-          await sleep(60);
-          gap.push(await ctl(p));
-        }
-        await p.keyboard.up('Alt');
-        await sleep(300);
-        check(eng, 'the gap between moving things: the control there stays put, the box around them takes none', Boolean(g0) && gap.every((c) => !c || (Math.abs(c.x - g0.x) < 2 && Math.abs(c.y - g0.y) < 2)), JSON.stringify({ g0, gap }));
-      }
-      // Jumping (Leo, 19 Nov: "its jumping yeah"): two moving things side by side; ⌥ on the first, the pointer passes
-      // over the second on the way to the first's control: the control stays the first's, in one place.
-      await p.evaluate(() => {
-        const row = document.createElement('div');
-        row.style.cssText = 'position:absolute;left:400px;top:300px;display:flex;gap:6px';
-        row.innerHTML = '<div id="n1" style="width:36px;height:36px;background:#444;animation:pulse .9s infinite"></div><div id="n2" style="width:36px;height:36px;background:#777;animation:pulse .7s infinite"></div>';
-        document.body.append(row);
-      });
-      await sleep(400);
-      const n1 = await p.evaluate(() => document.getElementById('n1').getBoundingClientRect().toJSON());
-      const n2 = await p.evaluate(() => document.getElementById('n2').getBoundingClientRect().toJSON());
-      await p.mouse.move(n1.left + 8, n1.bottom - 8);
-      await p.keyboard.down('Alt');
-      await p.mouse.move(n1.left + 9, n1.bottom - 8);
-      let a = null;
-      for (let i = 0; i < 20 && !(a = await ctl(p)); i++) await sleep(50);
-      const seen = [];
-      // Over the neighbour and back up to the control, quickly.
-      for (const [x, y] of [[n2.left + 10, n2.bottom - 6], [n2.left + 10, n1.top + 4], [a?.x ?? 0, a?.y ?? 0]]) {
-        await p.mouse.move(x, y, { steps: 3 });
-        await sleep(60);
-        seen.push(await ctl(p));
-      }
-      const steady = Boolean(a) && seen.every((c) => c && Math.abs(c.x - a.x) < 2 && Math.abs(c.y - a.y) < 2);
-      const last = seen.at(-1);
-      if (last) await p.mouse.click(last.x, last.y, { modifiers: ['Alt'] });
-      await p.keyboard.up('Alt');
-      await sleep(300);
-      check(eng, 'passing over a neighbour keeps one control, in one place, for the first', steady && (await still(p, 'n1')) && !(await still(p, 'n2')), JSON.stringify({ a, seen }));
+      const none = await inRoot(p, "Boolean(r.querySelector('.motion-ctl, .motions'))") || (await menu(p));
+      check(eng, 'no menu open: nothing of labit on the page', !none);
       await ctx.close();
+
+      // Phones: ⋯ → motion → the sheet; pick on page; a tap on the video picks it, does nothing else, and its sheet comes.
+      const ph = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+      await ph.addInitScript(() => localStorage.setItem('lab-name', 'zz-moment'));
+      const q = await ph.newPage();
+      await q.goto(B + '/');
+      await loaded(q);
+      await sleep(1200);
+      const more = await inRoot(q, "r.querySelector('.bar .more')?.getBoundingClientRect().toJSON()");
+      await q.touchscreen.tap(more.left + more.width / 2, more.top + more.height / 2);
+      await sleep(300);
+      const row = await inRoot(q, "[...r.querySelectorAll('.more-menu button')].find((b) => b.textContent === 'motion')?.getBoundingClientRect().toJSON()");
+      check(eng, 'phone: the ⋯ menu has a motion row', Boolean(row));
+      if (row) await q.touchscreen.tap(row.left + row.width / 2, row.top + row.height / 2);
+      await sleep(400);
+      const first = await menu(q);
+      check(eng, 'phone: motion opens its sheet: pick on page, pause all, speed', first?.head === 'motion' && JSON.stringify(first.items) === JSON.stringify(['pick on page', 'pause all']) && (await inRoot(q, "Boolean(r.querySelector('.motion-sheet .motion-speed'))")), JSON.stringify(first));
+      await tapItem(q, 'pick on page');
+      await sleep(400);
+      check(eng, 'phone: picking, the sheet is gone', !(await menu(q)));
+      const target = canPlay ? 'vid' : 'loop';
+      const before = await q.evaluate(() => ({ paused: document.getElementById('vid').paused, n: [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim')).shadowRoot.querySelectorAll('.pin').length }));
+      const tr = await box(q, target);
+      await q.touchscreen.tap(tr.left + tr.width / 2, tr.top + tr.height / 2);
+      await sleep(600);
+      const picked = await menu(q);
+      const after = await q.evaluate(() => ({ paused: document.getElementById('vid').paused, n: [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim')).shadowRoot.querySelectorAll('.pin').length, draft: Boolean([...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim')).shadowRoot.querySelector('.float textarea')) }));
+      check(eng, 'phone: the tap picks it, its sheet comes, and the tap neither plays, pauses nor pins', Boolean(picked) && (canPlay ? /^video /.test(picked.head) : /^loop /.test(picked.head)) && picked.items[0] === 'pause' && picked.items.some((t) => t.startsWith('comment at')) && after.paused === before.paused && after.n === before.n && !after.draft, JSON.stringify({ picked, before, after }));
+      await tapItem(q, 'pause');
+      await sleep(300);
+      const sheetStays = await menu(q);
+      const isPaused = await q.evaluate((i) => { const e = document.getElementById(i); return e instanceof HTMLVideoElement ? e.paused : e.getAnimations()[0]?.playState === 'paused'; }, target);
+      check(eng, 'phone: pause in the sheet stops it and the sheet stays, now saying play', isPaused && sheetStays?.items[0] === 'play', JSON.stringify(sheetStays));
+      const at = sheetStays?.items.find((t) => t.startsWith('comment at'));
+      await tapItem(q, at);
+      await sleep(600);
+      const draft = await inRoot(q, "({ box: Boolean(r.querySelector('.float textarea')), line: r.querySelector('.float > .moment')?.textContent || '' })");
+      check(eng, 'phone: comment at opens a new comment that carries that moment', draft.box && (canPlay ? /video/.test(draft.line) : /loop/.test(draft.line)) && !(await menu(q)), JSON.stringify(draft));
+      await ph.close();
     } finally {
       await browser.close();
     }

@@ -4,6 +4,9 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 
 ## Unreleased
 
+- **Motion menus.** Nothing of labit sits on moving things any more. On a computer, right-click a video or a looping animation for its menu at the pointer: its moment, pause or play, speed ¼ ½ 1, comment at that moment, and pause all; a right-click anywhere else (or with ⇧) is the browser's own, and ⌥ is only for commenting again. On a phone, ⋯ → motion opens a sheet (pick on page, pause all, speed for all); a tap after "pick on page" picks a moving thing without playing it or pinning, and its sheet comes. Setting a thing back to 1 gives it its own speed back.
+- **The moment in a comment.** Every pin on a loop, animation, video or GIF shows its moment as a quiet line under its first message, beside the time (and above the box while you write); a click on it pauses the page there again, except for a GIF's, which only says.
+
 ## 0.7.1 · 2026-11-21
 
 A big round on top of 0.7.0: pins that find their place again after edits and dev-server reloads, a calmer widget on phones, questions you answer with a tap, pictures in comments, drawings that send themselves, and a board you can open over a page (off for now, see below). The full list as it landed is at the end.

@@ -1,23 +1,19 @@
 // Part of the comment widget, built as its own file (public/_lab/motion.js, scripts/build-widget.mjs) that src/comments.js
-// loads once the page has something that moves (a video, an animation), ⌥ is held, P or S is pressed, or a comment has a
-// moment. Its styles come with it. Uses the widget's own parts through W, set once at startup.
-import { momentText } from '../../lib/moment.mjs';
+// loads once the page has something that moves (a video, an animation), P or S is pressed, or a comment has a moment. Its styles come with it. Uses the widget's own parts through W, set once at startup.
+import { clock, momentText } from '../../lib/moment.mjs';
 import { selectorFor } from './anchoring.ts';
 import css from './motion.css';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let W: any;
 let S: any; // the widget's state (W.S), read once at startup
-// Pause (Leo, 19 Nov: "not in menu", "maybe with option pressed"): a small control on the moving thing itself, in
-// labit's layer over the page (nothing moves): pause / play · ¼ · its moment in ms, for that element and what is
-// inside it. Computers: on the video or loop under the pointer while ⌥ is held (⌥ is Measure's key too; a click on the
-// control never pins); let go and a paused one keeps a small ▶. Phones: in the top right corner of each one at least
-// half in view, quiet, gone while scrolling or while a sheet is open. P pauses all, S slows all. The widget's own
-// animations keep moving, and a comment on a paused video says which second (anchoring.ts).
+// Motion menus (Leo, 23 Nov, #421: 1a 2a 3a 4c 5a): nothing of labit sits on a moving thing any more. Computers: a
+// right-click on a video or a loop opens labit's motion menu at the pointer (its moment, pause, speed ¼ ½ 1, comment at
+// that moment, pause all); a right-click anywhere else is the browser's own. Phones: ⋯ → motion opens a sheet (pick on
+// page, pause all, speed for all); picking a moving thing brings the same sheet for that one. P pauses all, S slows all.
+// The widget's own animations keep moving, and a comment on a moving thing says which second (anchoring.ts).
 const held = new Set<any>(); // the videos and elements labit paused
-export const slowEls = new Set<any>(); // the elements labit slowed to ¼ (S slows all, S.slow)
-let animsNow = null; // one drawMotion's list: asked once per draw, not once per control
-const pageAnims = () => animsNow || document.getAnimations().filter((a) => {
+const pageAnims = () => document.getAnimations().filter((a) => {
   const t = (a.effect as KeyframeEffect | null)?.target;
   if (!t || W.root.contains(t)) return false;
   if (held.has(t)) return true;
@@ -127,24 +123,20 @@ const seekMoment = (m) => {
     if (!a) return false;
     a.currentTime = Number.isFinite(m.ms) ? m.ms : (t?.delay || 0) + ((m.pass || 1) - 1) * Number(t?.duration) + m.at * 1000;
   }
-  drawMotion();
+  refresh();
   return true;
 };
-// The moment, in a small chip: a label in the box being written, a button on a sent pin (back to that moment).
-const PAUSED = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 2h2v8H3zM7 2h2v8H7z"/></svg>';
-// Only a paused video gets the chip in the comment window (Leo, 21 Nov): a loop, an animation, a GIF or a video that
-// was playing is not named there. The agent still gets the moment (comments-api.mjs).
-const momentChip = (m, seek = false) => {
-  if (m.kind !== 'video' || m.playing) return null;
-  const chip = W.el(seek && m.kind !== 'gif' ? 'button' : 'div', { class: 'moment' });
-  chip.innerHTML = m.kind === 'gif' || m.playing ? '' : PAUSED; // ⏸ only for a moment that was paused
-  chip.append(W.el('span', {}, momentText(m)));
-  if (chip.localName === 'button') {
-    chip.setAttribute('type', 'button');
-    chip.title = 'pause the page at this moment';
-    chip.addEventListener('click', (e) => (e.stopPropagation(), seekMoment(m)));
+// The moment, as a quiet line (Leo, 23 Nov, 4c): under the first message of a thread, beside its time, and above the box
+// of a comment being written; every kind, in the words the agent gets. A button where the page can go back to it (a
+// video, an animation); a GIF's only says (it can't be sought).
+const momentLine = (m, seek = false) => {
+  const line = W.el(seek && m.kind !== 'gif' ? 'button' : 'span', { class: 'moment' }, momentText(m));
+  if (line.localName === 'button') {
+    line.setAttribute('type', 'button');
+    line.title = 'pause the page at this moment';
+    line.addEventListener('click', (e) => (e.stopPropagation(), seekMoment(m)));
   }
-  return chip;
+  return line;
 };
 // A pin's moment: on a GIF (it can't be paused), how long it had been showing; else, while paused, where the paused
 // thing it is about stood.
@@ -161,310 +153,202 @@ export const msOf = (el) => {
   const t = el instanceof HTMLVideoElement ? el.currentTime * 1000 : Number(animsOf(el)[0]?.currentTime);
   return Number.isFinite(t) ? Math.round(t) : undefined;
 };
-// ¼ speed (Leo, 19 Nov): S slows every page animation and video to a quarter of its speed, a control's ¼ only its own
-// element's; a pin made now says so. Motion that starts later is slowed as it starts (and by the 1 s redraw, for
-// script animations).
-const rates = new WeakMap(); // each animation's own rate, to go back to
-const wantSlow = (t) => S.slow || [...slowEls].some((e) => e.isConnected && e.contains(t));
-const slowAll = () => {
+// Speed (Leo, 23 Nov: ¼ ½ 1). S, or the speed in a phone's first sheet, sets the page's; a thing's menu sets its own,
+// which wins for it and what is inside it. Each animation and video goes back to its own rate at 1. Motion that starts
+// later takes it as it starts (and by the 1 s look, for script animations).
+let pageRate = 1;
+const rateOf = new Map<Element, number>(); // a thing's own speed, from its menu
+const ownRate = new WeakMap<object, number>(); // each animation's and video's own rate, to go back to
+const wantRate = (t) => {
+  let best = null;
+  for (const [e, r] of rateOf) if (e.isConnected && e.contains(t) && (!best || best[0].contains(e))) best = [e, r];
+  return best ? best[1] : pageRate;
+};
+export const anySlow = () => pageRate !== 1 || [...rateOf.values()].some((r) => r !== 1);
+const applyRates = () => {
+  const set = (x, r) => {
+    if (r !== 1 && !ownRate.has(x)) ownRate.set(x, x.playbackRate);
+    const base = ownRate.get(x);
+    if (base === undefined) return;
+    if (x instanceof HTMLMediaElement) x.playbackRate = base * r;
+    else x.updatePlaybackRate(base * r);
+    if (r === 1) ownRate.delete(x);
+  };
   for (const a of document.getAnimations()) {
     const t = (a.effect as KeyframeEffect | null)?.target;
-    if (!t || W.root.contains(t)) continue;
-    const slow = wantSlow(t);
-    if (slow && !rates.has(a)) {
-      rates.set(a, a.playbackRate);
-      a.updatePlaybackRate(a.playbackRate / 4);
-    } else if (!slow && rates.has(a)) {
-      a.updatePlaybackRate(rates.get(a));
-      rates.delete(a);
-    }
+    if (t && !W.root.contains(t)) set(a, wantRate(t));
   }
-  for (const v of document.querySelectorAll('video')) v.playbackRate = wantSlow(v) ? 0.25 : 1;
+  for (const v of document.querySelectorAll('video')) set(v, wantRate(v));
 };
-export const setSlow = (on) => {
-  S.slow = on;
-  if (!on) slowEls.clear();
-  slowAll();
-  drawMotion();
+const setRate = (el, r) => {
+  if (el) rateOf.set(el, r);
+  else {
+    pageRate = r;
+    rateOf.clear();
+  }
+  S.slow = pageRate !== 1; // a comment written now says so (comments.js)
+  applyRates();
+  refresh();
 };
-// The controls: one per element shown, in .motions (page coordinates, like the pins).
-const PLAY = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3.5 2.2v7.6L9.8 6z"/></svg>';
-const PAUSE = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 2h2v8H3zM7 2h2v8H7z"/></svg>';
-const ctls = new Map<any, any>();
-const ctlFor = (target) => {
-  let c = ctls.get(target);
-  if (c) return c;
-  const play = W.el('button', { type: 'button', class: 'motion-play' }) as HTMLButtonElement;
-  const slow = W.el('button', { type: 'button', class: 'motion-slow', 'aria-pressed': 'false' }, '¼') as HTMLButtonElement;
-  const ms = W.el('span', { class: 'motion-ms' });
-  const box = W.el('div', { class: 'motion-ctl', role: 'group' });
-  box.append(play, slow, ms);
-  play.addEventListener('click', (e) => (e.stopPropagation(), setItem(target, !isStill(target)), drawMotion()));
-  slow.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (slowEls.has(target) || S.slow) slowEls.delete(target);
-    else slowEls.add(target);
-    if (S.slow && !slowEls.has(target)) S.slow = false; // the page was all slowed: this one goes back, the rest stay slowed
-    slowAll();
-    drawMotion();
-  });
-  for (const type of ['pointerdown', 'mousedown', 'touchstart']) box.addEventListener(type, (e) => e.stopPropagation()); // the control's, never a pin or a hold
-  W.motions.append(box);
-  c = { box, play, slow, ms, state: '' };
-  ctls.set(target, c);
-  return c;
-};
-// Its box from its middle and its own size, so a spinning or growing thing's control stays put.
-const boxOf = (t) => {
-  const r = t.getBoundingClientRect();
-  const w = t instanceof HTMLElement ? t.offsetWidth : r.width;
-  const h = t instanceof HTMLElement ? t.offsetHeight : r.height;
-  const x = r.left + r.width / 2;
-  const y = r.top + r.height / 2;
-  return { left: x - w / 2, right: x + w / 2, top: y - h / 2, bottom: y + h / 2, w, h };
-};
-let altMotion = false; // computers: ⌥ held
-let pointerAt = null;
-let scrolling = 0; // phones: the time the last scroll ended its quiet wait
-let hot = null; // computers: the one whose full control shows
-let hotSeen = 0; // when the pointer was last on it or its control
-let hotBox = null; // its box when its control showed, in page coordinates
-let cand = null; // a neighbour the pointer is on while still in that box, and since when
-let candSince = 0;
-// An element's box at rest, without its animated transform (a sliding loop, a pulsing dot), on screen: where its
-// control goes and what counts as on it. From the layout offsets; where those can't say (SVG, a transformed or
-// sticky ancestor puts them far off), its drawn box.
-const restBox = (t) => {
-  const drawn = boxOf(t);
-  if (!(t instanceof HTMLElement) || !t.offsetParent && getComputedStyle(t).position !== 'fixed') return drawn;
-  let x = 0, y = 0, fixed = false;
-  for (let n = t; n; n = n.offsetParent as HTMLElement | null) {
-    x += n.offsetLeft + (n === t ? 0 : n.clientLeft);
-    y += n.offsetTop + (n === t ? 0 : n.clientTop);
-    if (!n.offsetParent && getComputedStyle(n).position === 'fixed') fixed = true;
-  }
-  for (let a = t.parentElement; a && a !== document.body && a !== document.documentElement; a = a.parentElement) {
-    x -= a.scrollLeft;
-    y -= a.scrollTop;
-  }
-  if (!fixed) {
-    x -= scrollX;
-    y -= scrollY;
-  }
-  const w = t.offsetWidth, h = t.offsetHeight;
-  const far = Math.max(200, 2 * (w + h));
-  if (Math.abs(x + w / 2 - (drawn.left + drawn.w / 2)) > far || Math.abs(y + h / 2 - (drawn.top + drawn.h / 2)) > far) return drawn;
-  return { left: x, top: y, right: x + w, bottom: y + h, w, h };
-};
-const under = () => {
-  if (!pointerAt) return null;
-  // On its control (wider than a small thing, so it can stick out past it): still that one.
-  const own = hot && ctls.get(hot)?.box.getBoundingClientRect();
-  if (own && hot.isConnected && pointerAt.x >= own.left && pointerAt.x <= own.right && pointerAt.y >= own.top && pointerAt.y <= own.bottom) return hot;
-  // Where it was when its control showed (its box at rest, page coordinates): a thing sliding out from under the
-  // pointer stays the one, and a neighbour sliding in doesn't take over. A moving thing inside a box that has the
-  // control does (Leo, 19 Nov: "still random sometimes": the box between things kept the control from them).
-  const was = hot?.isConnected && hotBox;
-  const inWas = Boolean(was && pointerAt.x >= was.left - scrollX && pointerAt.x <= was.right - scrollX && pointerAt.y >= was.top - scrollY && pointerAt.y <= was.bottom - scrollY);
-  const outer = outermost(moving());
-  // The thing under the mouse is a moving one or inside one (the "Buy" text in a pressed button): that one.
-  const at = document.elementFromPoint(pointerAt.x, pointerAt.y);
-  const page = at && at !== W.host && at !== document.documentElement && at !== document.body && !W.root.contains(at) ? at : null;
-  let direct = page && outer.find((t) => t.contains(page));
-  if (!direct) {
-    let best = null;
-    for (const t of outer) {
-      const b = restBox(t);
-      if (!b.w || !b.h || pointerAt.x < b.left || pointerAt.x > b.right || pointerAt.y < b.top || pointerAt.y > b.bottom) continue;
-      if (!best || b.w * b.h < best.a) best = { t, a: b.w * b.h };
-    }
-    direct = best?.t;
-  }
-  let next = direct;
-  if (!next && inWas) next = hot;
-  // A gap between things while one has its control: that control stays, then fades (300 ms), and the box around them
-  // doesn't take over (its control sits at that box's far corner: Leo, 19 Nov, "option and move cursor makes controls
-  // run away"). Without a control showing, the box offers its own.
-  if (!next && !hot?.isConnected) {
-    // Or it holds moving things (the demo box around a pressed button and its toast):
-    // its control, for all that moves inside; not the page's whole body or a box as big as half the screen.
-    // A box with one moving thing in it (a track and its loop) is that thing.
-    const r = page?.getBoundingClientRect();
-    const inside = r && r.width * r.height <= (innerWidth * innerHeight) / 2 ? outer.filter((t) => page.contains(t)) : [];
-    // Not from the gap between two of them (one on each side of the pointer): that box's control sits at its far
-    // corner, away from the pointer (Leo, 19 Nov: "option and move cursor makes controls run away").
-    const between = inside.length > 1 && (() => {
-      const bs = inside.map(restBox);
-      const { x, y } = pointerAt;
-      // Beside them on their row (or column) only: the box's own edge above or beside them all still offers its control.
-      const row = bs.filter((b) => b.top <= y && b.bottom >= y), col = bs.filter((b) => b.left <= x && b.right >= x);
-      return (row.some((b) => b.right < x) && row.some((b) => b.left > x)) || (col.some((b) => b.bottom < y) && col.some((b) => b.top > y));
-    })();
-    next = inside.length === 1 ? inside[0] : inside.length && !between ? page : null;
-  }
-  if (next && hot?.isConnected && next !== hot) {
-    // One control at a time: on its way to it the pointer crosses a neighbour (its control can lie over one), or a
-    // thing inside the box that has it; another thing takes over only once the pointer rests on it (250 ms).
-    const now = performance.now();
-    if (cand !== next) {
-      cand = next;
-      candSince = now;
-    }
-    return now - candSince >= 250 ? next : hot;
-  }
-  cand = null;
-  return next;
-};
-let motionLoop = 0;
-export const drawMotion = () => {
-  cancelAnimationFrame(motionLoop);
-  animsNow = null;
-  animsNow = pageAnims();
-  try {
-    drawMotionNow();
-  } finally {
-    animsNow = null;
-  }
-};
-const drawMotionNow = () => {
-  const vw = document.documentElement.clientWidth;
-  const vh = innerHeight;
-  const want: Map<Element, 'full' | 'mini'> = new Map();
-  if (S.on) {
-    if (!W.coarse) {
-      // Reachable (Leo, 19 Nov: "sometimes menu with pause is out of reach"): crossing the gap to the control, or the
-      // thing moving out from under the pointer, keeps it for 300 ms.
-      const next = altMotion ? under() : null;
-      const now = performance.now();
-      if (next) {
-        if (next !== hot) {
-          const b = restBox(next);
-          hotBox = { left: b.left + scrollX, right: b.right + scrollX, top: b.top + scrollY, bottom: b.bottom + scrollY };
-        }
-        hot = next;
-        hotSeen = now;
-      } else if (!(altMotion && hot?.isConnected && now - hotSeen < 300)) hot = null;
-          for (const h of outermost([...held].filter((h) => h.isConnected))) want.set(h, 'mini');
-      if (hot) want.set(hot, 'full');
-    } else if (!scrolling && !W.host.hasAttribute('data-sheet')) {
-      for (const t of outermost(moving())) {
-        const b = boxOf(t);
-        const seen = Math.max(0, Math.min(b.right, vw) - Math.max(b.left, 0)) * Math.max(0, Math.min(b.bottom, vh) - Math.max(b.top, 0));
-        if (b.w && b.h && seen >= (b.w * b.h) / 2) want.set(t, 'full');
-      }
-    }
-  }
-  for (const [t, c] of ctls) {
-    if (want.has(t)) continue;
-    if (!c.box.classList.contains('on')) {
-      if (!t.isConnected) {
-        c.box.remove();
-        ctls.delete(t);
-      }
-      continue;
-    }
-    c.spot = null; // shown again later: where the thing is then
-    c.box.classList.remove('on'); // fades out, and stays in the layer for next time
-  }
-  for (const [t, kind] of want) {
-    const c = ctlFor(t);
-    const stopped = isStill(t);
-    const state = `${stopped}${kind}`;
-    if (c.state !== state) {
-      c.state = state;
-      c.play.innerHTML = stopped ? PLAY : PAUSE;
-      const what = t instanceof HTMLVideoElement ? 'video' : 'animation';
-      c.play.setAttribute('aria-label', (c.play.title = `${stopped ? 'play' : 'pause'} this ${what} (${W.KEYS.pause.toUpperCase()}: all)`));
-      c.box.setAttribute('aria-label', `${what} controls`);
-    }
-    const slowed = S.slow || slowEls.has(t);
-    c.slow.setAttribute('aria-pressed', String(slowed));
-    c.slow.setAttribute('aria-label', (c.slow.title = `${slowed ? 'full' : 'quarter'} speed (${W.KEYS.slow.toUpperCase()}: all)`));
-    const ms = msOf(t);
-    c.ms.textContent = ms === undefined ? '' : `${ms} ms`;
-    c.box.classList.toggle('mini', kind === 'mini');
-    c.box.classList.toggle('quiet', W.coarse);
-    const b = kind === 'full' && !W.coarse ? restBox(t) : boxOf(t); // ⌥: from its box at rest, not where its animation has it
-    // A small paused thing (a dot, an icon) would be all under its ▶, so a click to pin it played it instead: its ▶
-    // sits just outside, at its top right.
-    const small = kind === 'mini' && (b.w < c.box.offsetWidth * 2 || b.h < c.box.offsetHeight * 2);
-    // A computer's full control stays where it first showed while the pointer is on it (a moving thing would carry it
-    // away from the pointer), in page coordinates; always on screen.
-    const keep = !W.coarse && kind === 'full' && c.spot?.t === t ? c.spot : null;
-    // Computers, ⌥ held (Leo, 21 Nov: "maybe 2 would work"): it opens just below and right of the pointer, so it is
-    // always in reach and never far across a big thing; above the pointer when there is no room below. Phones, and a
-    // paused thing's ▶, stay at the thing's corner.
-    const near = !keep && !W.coarse && kind === 'full' && pointerAt;
-    const w = c.box.offsetWidth, h = c.box.offsetHeight;
-    const x = keep ? keep.x - scrollX : near ? pointerAt.x + 12 + w : small ? b.right + 4 + w : b.right - 4;
-    const y = keep ? keep.y - scrollY : near ? (pointerAt.y + 14 + h + 4 > vh ? pointerAt.y - 14 - h : pointerAt.y + 14) : small ? b.top - 4 : b.top + 4;
-    const left = Math.min(Math.max(x, c.box.offsetWidth + 4), vw - 4); // a thing at the screen's edge keeps its control on screen
-    const top = Math.min(Math.max(y, 4), vh - c.box.offsetHeight - 4);
-    c.spot = kind === 'full' ? { t, x: (keep ? keep.x - scrollX : x) + scrollX, y: (keep ? keep.y - scrollY : y) + scrollY } : null;
-    c.box.style.left = `${left + scrollX}px`;
-    c.box.style.top = `${top + scrollY}px`;
-    if (!c.box.classList.contains('on')) requestAnimationFrame(() => c.box.classList.add('on')); // in the next frame: it fades in
-  }
-  // The ms and the place follow the motion, every frame, only while a full control shows (⌥, phones). Paused things
-  // keep only their ▶, which stays put: no loop (Leo, 19 Nov: "when i paused here its became laggy"); a scroll inside
-  // a box, a resize or the 1 s redraw move it.
-  if ([...want.values()].includes('full')) motionLoop = requestAnimationFrame(drawMotion);
-};
+export const setSlow = (on) => setRate(null, on ? 0.25 : 1);
 export const setPause = (on) => {
   for (const el of on ? moving().filter((el) => !isStill(el)) : [...held]) setItem(el, on);
-  drawMotion();
+  refresh();
 };
-// ⌥ is held (set by the part's own keys; comments.js calls it for the press that loaded it, which the part missed).
-export const altMotionSet = (on) => {
-  if (altMotion === on) return;
-  altMotion = on;
-  drawMotion();
-};
-let scrollQuiet = 0;
-// The browser says when a scroll ended (scrollend); a timer stays as a backstop for a scroll that never says so.
-const scrollOver = () => {
-  clearTimeout(scrollQuiet);
-  if (scrolling) {
-    scrolling = 0;
-    drawMotion();
+
+// The things a menu can be about: videos, loops, and what labit paused. Under a point: the innermost one that is the
+// element there or holds it (the video under a play button laid over it, too); else the smallest whose box holds the
+// point (a thing that slid out from under it).
+const things = () => [...new Set([...held, ...document.querySelectorAll('video'), ...pageAnims().map(targetOf)])]
+  .filter((el) => el?.isConnected && el !== document.body && el !== document.documentElement && el !== W.host && !W.root.contains(el));
+const thingAt = (x, y) => {
+  const all = things();
+  for (const n of document.elementsFromPoint(x, y)) {
+    if (n === W.host) continue;
+    const own = all.filter((t) => t.contains(n));
+    if (own.length) return own.sort((a, b) => (a.contains(b) ? 1 : b.contains(a) ? -1 : 0))[0];
   }
+  const area = (r) => r.width * r.height;
+  return all.map((t) => [t, t.getBoundingClientRect()] as const).filter(([, r]) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom)
+    .sort((p, q) => area(p[1]) - area(q[1]))[0]?.[0] || null;
 };
-let motionAgain = 0;
-const redrawMotionSoon = () => motionAgain || (motionAgain = requestAnimationFrame(() => ((motionAgain = 0), drawMotion())));
+
+// The menu (Leo, 23 Nov, 2a 3a 5a): the ⋯ menu's own box and rows, words only. Computers: a popover at the pointer,
+// above the page's own dialogs. Phones: one of the widget's sheets (the chat's drawer: its handle, swipe and dimmed page).
+let box: HTMLElement;
+let open = false;
+let target = null; // what it is about; none: the whole page (a phone's first sheet)
+let spot = null; // where it was opened or picked: a comment from it goes there
+let moment; // the target's moment as the menu opened: its first line and its comment's
+const words = (m) => momentText({ ...m, playing: undefined });
+const short = (m) => (m.kind === 'video' ? clock(m.at, true) : `${Math.round(m.at * 10) / 10} s`);
+const item = (label, run, keep = W.coarse) => {
+  const b = W.el('button', { type: 'button' }, label);
+  b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    run();
+    if (keep) refresh();
+    else closeMotion();
+  });
+  return b;
+};
+const speedRow = (now, set) => {
+  const row = W.el('div', { class: 'motion-speed', role: 'group', 'aria-label': 'speed' }, 'speed');
+  const seg = W.el('span', {});
+  for (const [t, v] of [['¼', 0.25], ['½', 0.5], ['1', 1]] as const) {
+    const b = W.el('button', { type: 'button', 'aria-pressed': String(now === v), 'aria-label': v === 1 ? 'full speed' : `${t} speed` }, t);
+    b.addEventListener('click', (e) => (e.stopPropagation(), set(v)));
+    seg.append(b);
+  }
+  row.append(seg);
+  return row;
+};
+const fill = () => {
+  const rows: HTMLElement[] = W.coarse ? [W.el('div', { class: 'handle' })] : [];
+  if (!target) {
+    rows.push(W.el('div', { class: 'lab-head' }, 'motion'), item('pick on page', startPick, false), item(S.paused ? 'play all' : 'pause all', () => setPause(!S.paused)), speedRow(pageRate, (v) => setRate(null, v)));
+  } else {
+    rows.push(W.el('div', { class: 'lab-head' }, moment ? words(moment) : nameOf(target)));
+    rows.push(item(isStill(target) ? 'play' : 'pause', () => (setItem(target, !isStill(target)), (moment = momentOf(target) || moment)))); // its moment as it stopped
+    rows.push(speedRow(rateOf.get(target) ?? pageRate, (v) => setRate(target, v)));
+    if (moment) rows.push(item(`comment at ${short(moment)}`, comment, false));
+    if (!W.coarse) rows.push(W.el('hr', {}), item(S.paused ? 'play all motion' : 'pause all motion', () => setPause(!S.paused)));
+  }
+  box.replaceChildren(...rows);
+};
+function refresh() {
+  if (open) fill();
+}
+const comment = () => {
+  const m = moment, at = spot;
+  closeMotion();
+  W.begin({ ...W.anchorAt(at.x, at.y), moment: m }); // the moment as the menu opened, not as the comment starts
+};
+const openFor = (el, at) => {
+  target = el;
+  spot = at;
+  moment = el ? momentOf(el) : undefined;
+  fill();
+  open = true;
+  box.hidden = false;
+  if (W.coarse) {
+    S.motionOpen = true;
+    return void W.render();
+  }
+  if (box.popover && !box.matches(':popover-open')) box.showPopover();
+  // At the pointer, on screen: left of it or above it where there is no room.
+  const w = box.offsetWidth, h = box.offsetHeight;
+  const x = at.x + w + 4 > innerWidth ? Math.max(4, at.x - w) : at.x;
+  const y = at.y + h + 4 > innerHeight ? Math.max(4, at.y - h) : at.y;
+  box.style.inset = `${y}px auto auto ${x}px`;
+};
+/** Phones: ⋯ → motion, the sheet for the whole page. */
+export const openMotion = () => openFor(null, null);
+/** The open sheet (phones), for the widget's own sheet handling. */
+export const motionSheet = () => (open && W.coarse ? box : null);
+export function closeMotion() {
+  if (!open) return;
+  open = false;
+  if (W.coarse) {
+    box.hidden = true;
+    S.motionOpen = false;
+    return void W.render();
+  }
+  if (box.popover && box.matches(':popover-open')) box.hidePopover();
+  box.hidden = true;
+}
+// Phones, pick on page: the sheet goes, and the next tap picks what moves there without doing what a tap does (a video's
+// play, a link, a hold's pin); a drag still scrolls. A tap on nothing that moves brings the first sheet back.
+let picking = false;
+let down = null;
+let pickedAt = -1e9;
+const startPick = () => {
+  picking = true;
+  W.say('tap something moving');
+};
+const swallow = (e) => (e.preventDefault(), e.stopImmediatePropagation());
+
 export function bindMotion(w: unknown) {
   W = w;
   S = W.S;
   W.root.append(W.el('style', {}, css)); // its styles come with it, after the widget's own
-  S.momentChip = momentChip;
-  pointerAt = S.mouse && { ...S.mouse }; // where the pointer already is: loaded by the first ⌥ or a key, nothing has moved since
-  for (const type of ['animationstart', 'transitionrun', 'play']) addEventListener(type, () => (S.slow || slowEls.size > 0) && slowAll(), true);
-  addEventListener('keydown', (e) => e.key === 'Alt' && !W.coarse && altMotionSet(!e.metaKey && !e.ctrlKey && !e.shiftKey), true);
-  addEventListener('keydown', (e) => altMotion && e.key !== 'Alt' && altMotionSet(false), true); // ⌥W, ⌥1…: a shortcut
-  addEventListener('keyup', (e) => e.key === 'Alt' && altMotionSet(false), true);
-  addEventListener('blur', () => altMotionSet(false));
-  addEventListener('pointermove', (e) => {
-    if (e.pointerType !== 'mouse') return;
-    pointerAt = { x: e.clientX, y: e.clientY };
-    if (altMotion && !e.altKey) altMotionSet(false); // its keyup went to another window
-    else if (altMotion) drawMotion();
-  }, { capture: true, passive: true });
-  addEventListener('resize', () => held.size && redrawMotionSoon(), { passive: true });
-  addEventListener('scroll', (e) => {
-    if (!W.coarse) return void (held.size && e.target !== document && redrawMotionSoon()); // a box scrolled: the ▶s in it move
-    clearTimeout(scrollQuiet);
-    if (!scrolling) {
-      scrolling = 1;
-      drawMotion();
-    }
-    scrollQuiet = window.setTimeout(scrollOver, 1500);
-  }, { capture: true, passive: true });
-  addEventListener('scrollend', () => W.coarse && scrollOver(), { capture: true, passive: true });
-  // Once a second, for what starts on its own (a phone's controls come with any loop; a slowed page slows what began since).
-  // Nothing to draw or fade out (comments off, or a computer with no ⌥ held and nothing paused): no scan of the page.
-  const idle = () => (!S.on || (!W.coarse && !altMotion && !held.size)) && ![...ctls.values()].some((c) => c.box.classList.contains('on'));
-  setInterval(() => {
-    if (S.slow || slowEls.size > 0) slowAll();
-    if (!document.hidden && !idle()) drawMotion();
-  }, 1000);
-  if (W.coarse) new MutationObserver(() => drawMotion()).observe(W.host, { attributeFilter: ['data-sheet'] }); // a sheet opens: the controls go
+  S.momentLine = momentLine;
+  box = W.el('div', { class: `more-menu motion-menu${W.coarse ? ' motion-sheet' : ''}`, role: 'menu', 'aria-label': 'motion', hidden: '' });
+  (W.root.querySelector('.ui') || W.root).append(box);
+  if (W.coarse) W.swipeDown(box, closeMotion);
+  else if ('showPopover' in HTMLElement.prototype) {
+    box.popover = 'auto';
+    box.addEventListener('toggle', (e) => (e as ToggleEvent).newState === 'closed' && ((open = false), (box.hidden = true))); // a press elsewhere, or Esc
+  } else {
+    addEventListener('pointerdown', (e) => open && !e.composedPath().includes(box) && closeMotion(), true);
+    addEventListener('keydown', (e) => open && e.key === 'Escape' && closeMotion(), true);
+  }
+  // Computers: a right-click on a moving thing (Leo, 23 Nov, 1a); anywhere else, or with ⇧, or with comments hidden, the
+  // browser's own menu. Full screen is the browser's.
+  addEventListener('contextmenu', (e) => {
+    if (W.coarse || !S.on || e.shiftKey || document.fullscreenElement || e.composedPath().includes(W.host) || W.isOff(e)) return;
+    const el = thingAt(e.clientX, e.clientY);
+    if (!el) return;
+    swallow(e);
+    openFor(el, { x: e.clientX, y: e.clientY });
+  }, true);
+  addEventListener('pointerdown', (e) => {
+    if (!picking || e.composedPath().includes(W.host)) return;
+    e.stopImmediatePropagation(); // not a hold
+    down = { x: e.clientX, y: e.clientY };
+  }, true);
+  addEventListener('pointermove', (e) => picking && down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 10 && (down = null), { capture: true, passive: true });
+  addEventListener('touchend', (e) => (picking || performance.now() - pickedAt < 600) && e.cancelable && e.preventDefault(), { capture: true, passive: false }); // no click, no video controls
+  addEventListener('pointerup', (e) => {
+    if (!picking || !down) return;
+    e.stopImmediatePropagation();
+    picking = false;
+    pickedAt = performance.now();
+    const at = down;
+    down = null;
+    openFor(thingAt(at.x, at.y), at);
+  }, true);
+  addEventListener('click', (e) => (picking || performance.now() - pickedAt < 600) && !e.composedPath().includes(W.host) && swallow(e), true);
+  for (const type of ['animationstart', 'transitionrun', 'play']) addEventListener(type, () => anySlow() && applyRates(), true);
+  setInterval(() => anySlow() && applyRates(), 1000);
 }
