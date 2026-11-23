@@ -125,6 +125,46 @@ try {
       check(eng, 'pushed past the window: the pin is below it', low.pin[0] > low.vh, JSON.stringify(low));
       check(eng, 'pushed past the window: the card is still next to its pin', gap < 40, `gap ${gap.toFixed(1)} ${JSON.stringify(low)}`);
       await p.keyboard.press('Escape');
+
+      // #467 ("clicking new glitching"): one card open, a click on another pin. The new card is drawn whole from its
+      // first frame: same height, no jump (a thread's messages were drawn at a 64 px guess for a frame, then grew).
+      fs.writeFileSync(file, plain);
+      const long = 'A long message that wraps over several lines of the card so its height is well past the first guess. '.repeat(4);
+      for (const sel of ['#p6', '#p8']) await fetch(B + '/_lab/api/comments', { method: 'POST', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ page: '/index', name: 'Sam', text: long + sel, anchor: { selector: sel, x: 0.5, y: 0.5, docX: 300, docY: 900, width: 600 } }) });
+      await p.reload();
+      await p.waitForFunction(() => [...document.querySelectorAll('*')].some((n) => n.shadowRoot?.querySelectorAll('button.pin').length >= 3), null, { timeout: 8000 });
+      await sleep(900);
+      await p.evaluate(() => scrollTo(0, document.querySelector('#p6').getBoundingClientRect().top + scrollY - 300));
+      await sleep(400);
+      const pinOf = (sel) => shadow((r, s) => {
+        const t = document.querySelector(s).getBoundingClientRect();
+        const q = [...r.querySelectorAll('button.pin')].map((b) => b.getBoundingClientRect()).sort((a, b) => Math.abs(a.top - t.top) - Math.abs(b.top - t.top))[0];
+        return [q.x + 14, q.y + 14];
+      }, sel);
+      await p.mouse.click(...(await pinOf('#p6')));
+      await sleep(900);
+      const to = await pinOf('#p8');
+      await shadow((r) => {
+        window.__frames = [];
+        const tick = () => {
+          const c = [...r.querySelectorAll('.card')].find((n) => !n.classList.contains('out') && n.getBoundingClientRect().width);
+          if (c) window.__frames.push([c.offsetHeight, c.getBoundingClientRect().top]);
+          if (window.__frames.length < 120) requestAnimationFrame(tick);
+        };
+        tick();
+      });
+      await p.mouse.click(...to);
+      await sleep(1500);
+      const frames = await p.evaluate('window.__frames');
+      const last = frames.at(-1);
+      // From the first frame the new card shows: its height is its final one.
+      const firstNew = frames.findIndex((f, i) => i > 0 && Math.abs(f[1] - frames[0][1]) > 1);
+      const fresh2 = frames.slice(Math.max(firstNew, 0));
+      const hs = fresh2.map((f) => f[0]);
+      check(eng, 'another pin clicked: its card has its height from the first frame', Math.max(...hs) - Math.min(...hs) < 2, `heights ${[...new Set(hs)].join(", ")}`);
+      const jumps = fresh2.slice(1).map((f, i) => Math.abs(f[1] - fresh2[i][1]));
+      check(eng, 'another pin clicked: its card does not jump', Math.max(0, ...jumps) < 12, `largest step ${Math.max(0, ...jumps).toFixed(1)}, ends at ${last}`);
+      await p.keyboard.press('Escape');
       await p.close();
       await ctx.close();
       fs.writeFileSync(file, plain);
