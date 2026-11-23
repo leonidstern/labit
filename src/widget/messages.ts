@@ -48,14 +48,15 @@ export const stampOf = (m: any, root: any, prefix = ''): HTMLElement => {
     // 20 Nov: "its jumping and moving things"). The line is always there while it waits, so only its words change.
     // With no agent listening there is nothing to say yet, and no line.
     if (!answered && latest && root && (sg || !d.S.unheard)) {
-      const got = root.handedAt && root.handedAt >= m.createdAt;
-      const words = { now: 'on it', stale: 'quiet for a while', wait: `waiting · ${ord(sg?.n ?? 0)} in line`, missed: 'not answered' }[sg?.s as string] || (got ? 'picked up' : 'sent');
+      // Short, and only what the ticks don't say: sent and picked up are ✓ and ✓✓ (Leo, 23 Nov: "make it super short and
+      // remove unnecessary"). The line is kept, empty, so the bubble doesn't move when words come.
+      const words = { now: 'on it', stale: 'quiet', wait: `${ord(sg?.n ?? 0)} in line`, missed: 'no answer' }[sg?.s as string] || '';
       stamp.append(el('span', { class: 'state' }, words));
     }
   }
-  // An agent's done answer says whether it looked at the result (labit reply --done --checked "…"), on the line its
-  // stamp keeps for where a message stands: "checked: opened /pricing at 390 px", or "not checked" (#425).
-  if (m.session && m.intent === 'done') stamp.append(el('span', { class: 'state' }, m.checked ? `checked: ${m.checked.length > 48 ? `${m.checked.slice(0, 47)}…` : m.checked}` : 'not checked'));
+  // An agent's done answer says it looked at the result (labit reply --done --checked "…", #425), on the line its stamp
+  // keeps for where a message stands. Just "checked", how it checked on hover; nothing when it didn't (Leo, 23 Nov: the long line ran out of the column).
+  if (m.session && m.intent === 'done' && m.checked) stamp.append(el('span', { class: 'state', title: m.checked }, 'checked'));
   return stamp;
 };
 

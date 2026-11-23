@@ -167,6 +167,7 @@ export function readInk(strokes: P[][], say: (e: Element | null) => string | und
   let [s, t] = lines;
   let shaft: P[] = [];
   let tip: P | undefined;
+  let headLen = 0; // how long the drawn head's legs were: the clean head is drawn as big (Leo, 23 Nov: "i draw big one but it draws it weirdly small")
   if (lines.length === 1) {
     // A line drawn there and back over itself (two passes, to make it count) is the line out, not a loop round nothing:
     // it encloses next to no area (Leo, 22 Nov, #430: it read as circled).
@@ -199,12 +200,18 @@ export function readInk(strokes: P[][], say: (e: Element | null) => string | und
       // Its head is drawn: an arrow, before it is read as a line under or beside something (a long flat arrow read as
       // underlined, issue 423).
       Object.assign(out, { mark: 'arrow', from: s[0], to: tip });
+      headLen = Math.max(...s.slice(s.indexOf(tip)).map((q) => dist(q, tip!)));
       shaft = s.slice(0, s.indexOf(tip) + 1);
     } else if (straight(s) && h < Math.max(18, w * 0.06) && w > 24) {
       const y = (box.t + box.b) / 2;
       const mid = (box.l + box.r) / 2;
-      const on = letterAt(mid, y);
-      if (on && y > on.top + on.height * 0.25 && y < on.bottom - on.height * 0.2) {
+      // Asked at five places along the line itself, not once at the middle of its box: a hand's line slopes, and its
+      // middle may fall on a space or past the words (Leo, 23 Nov: a line through a heading read as underlined).
+      const probes = [0.2, 0.35, 0.5, 0.65, 0.8].map((f) => s[Math.round(f * (s.length - 1))]).map((q) => ({ q, on: letterAt(q.x, q.y) }));
+      const hits = probes.filter((h) => h.on);
+      const through = hits.filter(({ q, on }) => q.y > on!.top + on!.height * 0.25 && q.y < on!.bottom - on!.height * 0.2);
+      const on = through[0]?.on;
+      if (on && through.length * 2 > hits.length) {
         out.mark = 'crossed out (likely: remove this)';
         [box.t, box.b] = [on.top, on.bottom];
       } else {
@@ -236,6 +243,7 @@ export function readInk(strokes: P[][], say: (e: Element | null) => string | und
     else if (lt < ls * 0.5 && dist(t[0], s[s.length - 1]) < Math.max(30, lt)) {
       Object.assign(out, { mark: 'arrow', from: s[0], to: s[s.length - 1] });
       shaft = s;
+      headLen = Math.max(...t.map((q) => dist(q, s[s.length - 1])));
     }
   }
   // What is under a point on the page itself: labit's own bars and layers (data-lab-comments) are skipped (sims, 20 Nov:
@@ -254,6 +262,9 @@ export function readInk(strokes: P[][], say: (e: Element | null) => string | und
       return r && p.x >= r.left && p.x <= r.right && p.y >= r.top && p.y <= r.bottom ? say(f) : 'the board, outside any frame';
     }
     const hit = document.elementsFromPoint(p.x, p.y).find((e) => !e.closest('[data-lab-comments]')) || null;
+    // Below a short page, or in a margin, the hit is <html> or <body>: empty space, not their text (which was labit's own
+    // script, quoted as the page's: "arrow from <html> "try{localStorage…", 23 Nov).
+    if (!hit || hit === document.documentElement || hit === document.body) return 'empty space on the page';
     const inView = (hit as HTMLElement | null)?.shadowRoot?.elementsFromPoint(p.x, p.y).find((e) => e.closest('.f[data-id]'));
     return say(inView?.closest('.f[data-id]') || hit);
   };
@@ -282,6 +293,6 @@ export function readInk(strokes: P[][], say: (e: Element | null) => string | und
         return r.from || r.to ? `${what} from ${r.from || '?'} to ${r.to || '?'}` : `${what}${on ? ` on ${on}` : ''}`;
       });
   }
-  return { mark: out.mark, from: at(out.from), to: at(out.to), box, lines: kept.map(thin), ...(marks ? { marks } : {}), ...(strokes.length > kept.length && out.mark !== 'arrow' ? { cut: strokes.length } : {}) };
+  return { mark: out.mark, from: at(out.from), to: at(out.to), box, lines: kept.map(thin), ...(marks ? { marks } : {}), ...(headLen ? { head: Math.round(Math.min(60, Math.max(12, headLen))) } : {}), ...(strokes.length > kept.length && out.mark !== 'arrow' ? { cut: strokes.length } : {}) };
 }
 

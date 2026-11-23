@@ -92,7 +92,7 @@ type Anchor = {
   zoneItems?: string[];
   zoneText?: string;
   /** A drawing (hold D and drag, draw.ts): what its lines read as, and the lines in 0–1000 of the area. */
-  ink?: { mark: string; from?: string; to?: string; pts: number[][]; w?: number[][]; marks?: string[]; cut?: number };
+  ink?: { mark: string; from?: string; to?: string; pts: number[][]; w?: number[][]; marks?: string[]; cut?: number; head?: number };
   shownFor?: number;
   build?: string;
 };
