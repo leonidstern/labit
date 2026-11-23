@@ -90,6 +90,12 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
     process.exit(0);
   }
 
+  // `labit gc`: what each lab keeps in its .lab and what could go. Only reports (lib/gc.ts).
+  if (pos[0] === 'gc') {
+    console.log((await import('./gc.ts')).gcReport());
+    process.exit(0);
+  }
+
   // `labit list`: what runs, so an agent reuses a lab instead of starting another.
   if (pos[0] === 'list') {
     const labs = runningLabs();
