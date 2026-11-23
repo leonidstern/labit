@@ -1816,7 +1816,7 @@ async function unseen(scope = pages(), who = '') {
     const [person, agent] = [lastBy(c, false), lastBy(c, true)];
     // A status line is a sign only while it is renewed (PROGRESS_MS); lapsed, the pin is as quiet as before it.
     const [at, line] = [now - Date.parse(c.progress?.at) < PROGRESS_LIFE ? c.progress.at : '', c.progress?.text];
-    if (person >= agent) return [[c.handedAt, at].sort().pop(), line];
+    if (person >= agent || (c.handedAt || '') > agent) return [[c.handedAt, at].sort().pop(), line]; // handed again since its last word (a correction it answered early)
     return c.progress || commentsOf(c._page).some((r) => r.parent === c.id && r.session && r.intent === 'working' && r.createdAt === agent) ? [[agent, at].sort().pop(), line] : null;
   };
   const missed = scope.flatMap((page) => commentsOf(page).filter((c) => !c.parent && !c.resolved && c.handedAt).map((c) => ({ page, c: Object.assign(Object.create(c), { _page: page }) })))
@@ -3086,6 +3086,13 @@ const handler = async (req, res) => {
         if (out.status === 201 && staged.length) staged.forEach((f, i) => { try { fs.renameSync(f.file, path.join(ATTACH, `${comment.id}-${i + 1}.${f.type}`)); } catch (e) { console.error('[lab] could not keep a picture:', e.message); } });
         for (const name of doomed) fs.rmSync(path.join(ATTACH, name), { force: true });
         if (dropped) dropBoard(...dropped);
+        // A done said over words the agent was never handed (a correction sent while it worked) doesn't close the pin:
+        // the thread stays open, so the page doesn't show it finished and the safety net still brings it back.
+        if (agent && out.status === 201 && comment.intent === 'done' && comment.parent) {
+          const page = [...db].find(([k, m]) => k.startsWith('lab:comments:') && m.has(comment.id))?.[0].slice('lab:comments:'.length);
+          const t = page && commentsOf(page).find((c) => c.id === comment.parent);
+          if (t?.resolvedBy === 'agent' && t.handedAt && freshIn([page]).some((f) => f.c.parent === t.id)) setComment(page, t.id, { resolved: false, resolvedBy: undefined, resolvedAt: undefined });
+        }
         // Who wrote it, its intent and an agent's done closing the thread are saved by the API, in its own write.
         if (out.status === 201 && !agent) {
           const [key] = [...db].find(([k, m]) => k.startsWith('lab:comments:') && m.has(comment.id));
