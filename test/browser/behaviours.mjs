@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { claimPort } from './port.mjs';
-import { playwright, LAB, tmp, labEnv, startLab, sleep, check, finish } from './harness.mjs';
+import { playwright, engines, LAB, tmp, labEnv, startLab, sleep, check, finish } from './harness.mjs';
 
 const pw = playwright({ ciFails: true });
 
@@ -47,7 +47,7 @@ async function untilApi(pred, ms) {
 
 start();
 await up();
-for (const eng of ['webkit', 'chromium']) {
+for (const eng of engines()) {
   write('index.html', PAGE);
   write('s.css', 'h1{color:rgb(255,0,0)} body{margin:30px}');
   write('scripted.html', SCRIPTED);
