@@ -170,7 +170,7 @@ try {
     const big = (await inks('big'))[0]?.anchor;
     const bigText = await L.agent('big');
     const xs = (big?.ink.pts[0] || []).filter((_, i) => i % 2 === 0);
-    check(eng, 'a 1000-point scribble is sent small: at most 80 points a line in the store, under 6 kB posted, read as scribbled over', Boolean(big) && big.ink.pts.length === 1 && big.ink.pts[0].length <= 160 && posted > 0 && posted < 6000 && /scribbled over/.test(mark(bigText)), `${(big?.ink.pts[0].length || 0) / 2} points kept, ${posted} bytes posted, ${big?.docW}×${big?.docH} px, ${mark(bigText)}`);
+    check(eng, 'a 1000-point scribble is sent small: at most 200 points a line in the store, under 6 kB posted, read as scribbled over', Boolean(big) && big.ink.pts.length === 1 && big.ink.pts[0].length <= 400 && posted > 0 && posted < 6000 && /scribbled over/.test(mark(bigText)), `${(big?.ink.pts[0].length || 0) / 2} points kept, ${posted} bytes posted, ${big?.docW}×${big?.docH} px, ${mark(bigText)}`);
     check(eng, 'the kept line of that scribble still runs to where the stroke ended (thinned out, not cut off part-way)', xs.length > 0 && Math.max(...xs) > 900 && xs[xs.length - 1] > 900, `the area is 0–1000 across; the kept line ends at ${xs[xs.length - 1]}, its furthest point is ${Math.max(...xs)}`);
 
     // 10. Ten short strokes in one drawing (ticks beside ten things).

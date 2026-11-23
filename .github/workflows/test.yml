@@ -89,12 +89,12 @@ jobs:
         engine: ${{ fromJSON(github.event_name == 'pull_request' && '["webkit"]' || '["webkit", "chromium"]') }}
         # Groups of about the same length on the Mac (2 to 3 min each; the old "rest" took 9).
         group:
-          # behaviours; the live connection; pins finding their spot again; a phone pinch-zoomed in (zoom); a page's own CSS against the widget (pagecss); an open page following its files (livereload).
-          - { name: a, files: behaviours connection anchoring anchoring-proof moved zoom shiftkeys frame framescroll boardclose pagecss livereload devroutes }
-          # What a drag does (words, an area, a point, fields and links); the section bar; boards; how often a pin
+          # behaviours; the live connection; pins finding their spot again; a framework redrawing the page (remount); a phone pinch-zoomed in (zoom); a page's own CSS against the widget (pagecss); an open page following its files (livereload).
+          - { name: a, files: behaviours connection anchoring anchoring-proof moved zoom shiftkeys frame framescroll boardclose pagecss livereload devroutes remount }
+          # What a drag does (words, an area, a point, fields and links); the section bar; boards (boardframes: one frame saved, one put to sleep); how often a pin
           # finds its spot again after one change to the page (anchoring-torture: ~1 min an engine, its failing cells
           # listed in the file as known).
-          - { name: b, files: selection sections board boardarrange boardreload reloadstate morphstate hotrace anchoring-torture lazyparts }
+          - { name: b, files: selection sections board boardarrange boardreload boardframes reloadstate morphstate hotrace anchoring-torture lazyparts }
           # The "!" on the labit mark for a held reload (updbadge); undo; moments; native; motion; actions; shortcuts from labit.json; status updates folding (fold); where a thread or the chat opens and stays (openscroll); a phone sheet keeping the page still (sheetpan); a card scrolling off the screen with its pin (cardscroll); a card with the cursor in its reply box following the page (cardfollows).
           - { name: c, files: quickrow phonebox agentpins progress fold openscroll sheetpan cardscroll cardfollows shortcuts boardmode boardpins boardview boardcanvas boardhome boardimage boardsection boardpin attach phonepins boardzones links actions draw motionreach updbadge update undo moment nativepins native nativeboard sidepins pageerrors pincontext }
     name: browser (${{ matrix.engine }}, ${{ matrix.group.name }})
