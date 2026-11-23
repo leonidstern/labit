@@ -41,7 +41,7 @@ const css = `
 #lab-board .b{position:absolute;inset:0;background:#fff;contain:layout paint}
 #lab-board .f.off{content-visibility:hidden}
 @media (hover:hover){#lab-board:not(.alt,.grab) .f:hover{outline:calc(1px*var(--iz)) solid #1f7a4d}} /* what a click picks (Leo, 21 Nov: "cursor should have selection") */
-#lab-board .f.sel,#lab-board .f.pick{outline:calc(2px*var(--iz)) solid #1f7a4d;outline-offset:calc(1px*var(--iz))}
+#lab-board .f.sel,#lab-board .f.pick{outline:calc(1px*var(--iz)) solid #1f7a4d} /* picked or open: the same line as hover (Leo, 23 Nov: "just same as hover") */
 #lab-board:not(.alt,.grab) .f.pick .b{cursor:move} /* a selected frame is dragged, with the others selected */
 #lab-board .marq{position:absolute;z-index:4;box-sizing:border-box;border:1px solid #1f7a4d;background:color-mix(in srgb,#1f7a4d 8%,transparent);pointer-events:none}
 #lab-board iframe,#lab-board img{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff;pointer-events:none}
