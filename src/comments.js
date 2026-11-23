@@ -586,7 +586,7 @@ import { bindKeys } from './widget/keys.ts';
   async function sendDrawing(anchor) {
     const name = store.get('lab-name');
     if (!name) return begin(anchor);
-    const said = inkSaid(anchor.ink.mark);
+    const said = `${inkSaid(anchor.ink.mark)}${anchor.ink.cut ? ` (the first ${anchor.ink.pts.length} of ${anchor.ink.cut} strokes kept)` : ''}`; // more than 64: said, not cut silently (#423)
     try {
       const { comment, edit } = await send({ name, text: said, anchor });
       posted(comment, edit, said, anchor);

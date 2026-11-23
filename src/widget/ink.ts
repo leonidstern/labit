@@ -3,11 +3,11 @@
 import { zoneAnchor } from './anchoring.ts';
 
 type P = { x: number; y: number; w?: number };
-type Ink = { mark: string; from?: string; to?: string; pts: number[][]; w?: number[][]; marks?: string[] };
-type Read = { mark: string; from?: string; to?: string; box: { l: number; t: number; r: number; b: number }; lines: P[][]; marks?: string[] };
+type Ink = { mark: string; from?: string; to?: string; pts: number[][]; w?: number[][]; marks?: string[]; cut?: number };
+type Read = { mark: string; from?: string; to?: string; box: { l: number; t: number; r: number; b: number }; lines: P[][]; marks?: string[]; cut?: number };
 
 // The drawing as an area comment: the area (at least min each way), plus the lines as 0–1000 across and down it.
-export function inkAnchor({ mark, from, to, box, lines, marks }: Read, min: number) {
+export function inkAnchor({ mark, from, to, box, lines, marks, cut }: Read, min: number) {
   for (const [a, b] of [['l', 'r'], ['t', 'b']] as const) {
     if (box[b] - box[a] >= min) continue;
     const mid = (box[a] + box[b]) / 2;
@@ -18,6 +18,7 @@ export function inkAnchor({ mark, from, to, box, lines, marks }: Read, min: numb
   anchor.ink = { mark, from, to, pts: lines.map((s) => s.flatMap((p) => [fit(p.x, box.l, box.r), fit(p.y, box.t, box.b)])) };
   // The pen's width at each point, in tenths of a px (pressure with a pen, speed otherwise): Leo's pick 4, 20 Nov.
   if (marks?.length) anchor.ink.marks = marks;
+  if (cut) anchor.ink.cut = cut;
   if (lines.some((s) => s.some((p) => p.w))) anchor.ink.w = lines.map((s) => s.map((p) => Math.round((p.w || 3) * 10)));
   return anchor;
 }
@@ -89,11 +90,38 @@ function widths(pts: number[], w?: number[]) {
 }
 
 // The strokes as they are drawn, in page coordinates (kept that way as they come in, so a scroll mid-stroke leaves the
-// part already drawn on the words it was drawn on).
+// part already drawn on the words it was drawn on). One group a stroke, one path a segment (as wide as the pen was there).
+// A move adds to the last stroke only: its last segment again (its curve leaned on the point that had not come yet) and
+// the new one. Every line was made again on every move, 15 ms a move by 2,000 points (bench/drawings/ink-bench.mjs, #423).
 export function liveInk() {
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('class', 'ink live');
   const strokes: P[][] = [];
-  const paint = () => svg.replaceChildren(...strokes.flatMap((s) => widths(s.flatMap((q) => [Math.round(q.x), Math.round(q.y)]), s.map((q) => Math.round((q.w || 3) * 10)))));
-  return { svg, strokes, paint };
+  // Segment i of a stroke, from point i - 1 to i, its curve read on the points around it (two before, one after).
+  const seg = (s: P[], i: number) => {
+    const from = Math.max(0, i - 2);
+    const near = s.slice(from, i + 2);
+    const p = path(`M${Math.round(s[i - 1].x)} ${Math.round(s[i - 1].y)}${curve(near.flatMap((q) => [Math.round(q.x), Math.round(q.y)]), i - 1 - from)}`);
+    p.style.strokeWidth = `${((Math.round((s[i - 1].w || 3) * 10) + Math.round((s[i].w || 3) * 10)) / 20).toFixed(1)}px`;
+    return p;
+  };
+  const grow = (g: SVGGElement, s: P[]) => {
+    g.lastChild?.remove();
+    for (let i = g.childElementCount + 1; i < s.length; i++) g.append(seg(s, i));
+  };
+  const group = (s: P[]) => {
+    const g = document.createElementNS(NS, 'g');
+    grow(g, s);
+    return g;
+  };
+  // All of it again: a stroke taken back or made neat.
+  const paint = () => svg.replaceChildren(...strokes.map(group));
+  // The last stroke's new points (a stroke begun since: its group too).
+  const add = () => {
+    if (svg.childElementCount === strokes.length - 1) svg.append(document.createElementNS(NS, 'g'));
+    if (svg.childElementCount !== strokes.length) return paint();
+    const s = strokes.at(-1);
+    if (s) grow(svg.lastChild as SVGGElement, s);
+  };
+  return { svg, strokes, paint, add };
 }

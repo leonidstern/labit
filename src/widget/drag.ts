@@ -247,7 +247,7 @@ export function bindDrag(w: unknown) {
         // A pen's pressure sets the width; a mouse or finger draws thinner the faster it moves (Leo's pick 4, 20 Nov).
         const want = e.pointerType === 'pen' && e.pressure > 0 ? 1.5 + e.pressure * 4 : Math.max(1.6, Math.min(5, 5 - speed * 1.8));
         st.push({ x, y, w: q?.w ? (q.w + want) / 2 : want });
-        return void S.inking.paint();
+        return void S.inking.add();
       }
       S.zoneFrame ||= requestAnimationFrame(paintZone);
     },
