@@ -1,6 +1,7 @@
 {
   "$comment": "The widget's shared parts (checked by ci/reuse.mjs). Something new (a module, an animation) is listed here on purpose, with what it is, in the same pull request, so it's a choice made in review and not a copy that slipped in. Before adding one, look for the part that already does it.",
   "modules": {
+    "step.ts": "stepping a video or an animation a frame at a time: the arrow keys' step, a video's frame rate measured as it plays",
     "anchoring.ts": "where a pin sits on the page and how it finds its spot again",
     "boardcam.ts": "a board in the page: showing it, a tap on it that closes a comment, its camera moving the pins with it, and the page's pins hiding under its view",
     "sheetmove.ts": "how a drawer moves under a finger and after it lets go (glide, carry, the throw that closes it): the comment drawers (sheets.ts) and the board drawer (src/board/overlay.ts) share it",
