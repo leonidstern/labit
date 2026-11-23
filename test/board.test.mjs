@@ -178,30 +178,25 @@ import { execFile } from 'node:child_process';
 const cli = (dir, ...args) =>
   new Promise((resolve) => execFile(process.execPath, [LAB, 'board', ...args], { cwd: dir, env: process.env }, (err, stdout, stderr) => resolve({ code: err ? err.code : 0, out: stdout + stderr })));
 
-let hero = ''; // the board made first below, a board pin on /pricing (pin-<id>)
 test('board new --variants copies the page, prints the link, and each file is the page plus a base', async () => {
   const r = await cli(DIR, 'new', 'Pricing hero', '--of', '/pricing', '--variants', '3');
   assert.equal(r.code, 0, r.out);
-  // A board an agent makes about a page is a board pin on it, as +board makes (Leo, 23 Nov: no hidden boards).
-  assert.match(r.out, /^# Board (pin-[0-9a-f]+) · Pricing hero\nurl: http:\/\/localhost:\d+\/pricing#board=\1 \(the board opens over its page: its pins are that page's\)\n/);
-  hero = /# Board (\S+)/.exec(r.out)[1];
-  const pinned = (await (await fetch(`${B}/_lab/api/comments?page=/pricing`)).json()).comments.find((c) => `pin-${c.id}` === hero);
-  assert.equal(pinned?.text, 'Pricing hero', 'its pin is on the page, worded with the topic');
+  assert.match(r.out, /^# Board pricing-hero · Pricing hero\nurl: http:\/\/localhost:\d+\/pricing#board=pricing-hero \(the board opens over its page: its pins are that page's\)\n/);
   // Frame a is the page as it is now (the real page, not a copy); the variants sit beside it.
   assert.match(r.out, /\na {2}\/pricing {2}1280×800 {2}"now"\n/);
   assert.match(r.out, /\nb {2}b\.html {2}1280×800\n/);
-  assert.ok(!fs.existsSync(path.join(DIR, `.lab/boards/${hero}/a.html`)), 'now is no copy');
-  assert.equal(JSON.parse(fs.readFileSync(path.join(DIR, `.lab/boards/${hero}.json`), 'utf8')).frames[0].src, '/pricing');
+  assert.ok(!fs.existsSync(path.join(DIR, '.lab/boards/pricing-hero/a.html')), 'now is no copy');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(DIR, '.lab/boards/pricing-hero.json'), 'utf8')).frames[0].src, '/pricing');
   for (const id of 'bcd') {
-    const file = fs.readFileSync(path.join(DIR, `.lab/boards/${hero}/${id}.html`), 'utf8');
+    const file = fs.readFileSync(path.join(DIR, `.lab/boards/pricing-hero/${id}.html`), 'utf8');
     assert.match(file, /<head><base href="\/"><title>Pricing<\/title>/);
-    assert.match(await (await fetch(`${B}/_lab/board/${hero}/${id}`)).text(), /<h1>Pricing<\/h1>/);
+    assert.match(await (await fetch(`${B}/_lab/board/pricing-hero/${id}`)).text(), /<h1>Pricing<\/h1>/);
   }
   const nested = await cli(DIR, 'new', 'Deep', '--of', '/sub/deep', '--variants', '1');
   assert.equal(nested.code, 0, nested.out);
-  assert.match(fs.readFileSync(path.join(DIR, `.lab/boards/${/# Board (\S+)/.exec(nested.out)[1]}/b.html`), 'utf8'), /<base href="\/sub\/">/);
+  assert.match(fs.readFileSync(path.join(DIR, '.lab/boards/deep/b.html'), 'utf8'), /<base href="\/sub\/">/);
   const same = await cli(DIR, 'new', 'Pricing hero', '--of', '/pricing', '--variants', '2');
-  assert.notEqual(/# Board (\S+)/.exec(same.out)?.[1], hero, 'a second board of the same topic never overwrites the first');
+  assert.match(same.out, /# Board pricing-hero-2/, 'a second board of the same topic never overwrites the first');
 });
 
 test('variants: default is the caller\'s, 7 is refused, a missing page or a non-page is said plainly', async () => {
@@ -221,11 +216,10 @@ test('variants behind a dev server (or of a page that is no .html file) are the 
   assert.match(made.out, /Each variant frame is the live page with \?lab-variant=<frame>; branch on new URLSearchParams\(location\.search\)\.get\('lab-variant'\)/);
   assert.match(made.out, /Remove the branching when one is picked\./);
   assert.doesNotMatch(made.out, /folder: \.lab\/boards/, 'nothing is copied');
-  assert.equal(fs.existsSync(path.join(PX, `.lab/boards/${/# Board (\S+)/.exec(made.out)[1]}`)), false);
-  const live = /# Board (\S+)/.exec(made.out)[1];
-  const picked = await inPx('pick', live, 'c');
+  assert.equal(fs.existsSync(path.join(PX, '.lab/boards/live')), false);
+  const picked = await inPx('pick', 'live', 'c');
   assert.match(picked.out, /Picked c\. Archived a, b/);
-  assert.match((await inPx('list', live)).out, /\nc {2}\/pricing\?lab-variant=c {2}1280×800 {2}picked\n/);
+  assert.match((await inPx('list', 'live')).out, /\nc {2}\/pricing\?lab-variant=c {2}1280×800 {2}picked\n/);
   // The pick comes back to the agent as a pin on the board, saying which branch won (the board is over its page: the page's pin).
   const t = await (await fetch(`http://localhost:${PPX}/_lab/agent/pricing`)).text();
   assert.match(t, /^picked: a, b archived\. Keep the c branch \(\?lab-variant=c\) in \/pricing's source and remove the lab-variant branching, then resolve it with no words \(resolve <id>\)\.$/m);
@@ -269,13 +263,13 @@ test('widths copy no file and run narrow to wide; flow keeps its order; add puts
 
 test('add copies a file in as a new variant; list with no name lists boards; the page of a board of a page via board new --of', async () => {
   fs.writeFileSync(path.join(DIR, 'mine.html'), '<!doctype html><title>mine</title><h1>mine</h1>');
-  const r = await cli(DIR, 'add', hero, 'mine.html', '--label', 'my take');
+  const r = await cli(DIR, 'add', 'pricing-hero', 'mine.html', '--label', 'my take');
   assert.match(r.out, /Added e \(e\.html\)\./);
-  assert.match(await (await fetch(`${B}/_lab/board/${hero}/e`)).text(), /<h1>mine<\/h1>/);
+  assert.match(await (await fetch(`${B}/_lab/board/pricing-hero/e`)).text(), /<h1>mine<\/h1>/);
   const all = await cli(DIR, 'list');
-  assert.match(all.out, new RegExp(`^${hero} {2}5 frames {2}of /pricing#${hero} {2}http`, 'm'));
+  assert.match(all.out, /^pricing-hero {2}5 frames {2}of \/pricing {2}http/m);
   const one = await cli(DIR, 'new', '--of', '/sub/deep');
-  assert.match(one.out, /# Board pin-[0-9a-f]+\n.*\/sub\/deep#board=pin-/);
+  assert.match(one.out, /# Board sub--deep/);
   assert.match((await cli(DIR, 'list', 'nope')).out, /No board nope/);
 });
 
@@ -310,9 +304,9 @@ test('a board pin keeps signed numbers; the board text lists frames in order, th
   assert.match(l, new RegExp(`^# Board ${name} · Set\\nurl: http://localhost:\\d+/pricing#board=${name} \\(the board opens over its page: its pins are that page's\\)\\nof: /pricing \\(file pricing\\.html\\)\\n`));
   assert.match(l, /\na {2}\/pricing {2}390×844\n/);
   assert.match(l, /\nb {2}\/pricing {2}1280×800 {2}"Wide"\n/);
-  assert.match(t, new RegExp(`^on: the board ${name} over this page \\(the board of pin \\d+\\), not the page itself$`, 'm'));
+  assert.match(t, new RegExp(`^on: the board ${name} over this page, not the page itself$`, 'm'));
   assert.match(t, /^near: frame b "Wide" \(\/pricing at 1280×800\), 120 px left of its left edge, 40 px below its top$/m);
-  assert.doesNotMatch(t.split('\n## ').find((x) => x.includes('these should share a header')), /selector \(at comment time\)|where on element/); // (the boards' own pins, at the page's top left, have them)
+  assert.doesNotMatch(t, /selector \(at comment time\)|where on element/);
   // the frames of the board the pin names follow the page's own text, with the pins open on each
   assert.match(t, new RegExp(`# The frames of board ${name}, which the pins above name\\n# Board ${name} · Set`));
   assert.match(t, /\nb {2}\/pricing {2}1280×800 {2}"Wide" {2}1 open\n/);

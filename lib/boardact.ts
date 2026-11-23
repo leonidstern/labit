@@ -30,12 +30,10 @@ export const shown = (b: Board, f: Frame) => (f.kind === 'image' ? `pasted image
 export const sized = (f: Frame) => `${f.kind === 'image' ? `${f.iw}×${f.ih} px shown at ` : ''}${f.w}×${f.h}`;
 /** Where a board is opened: over its page when it is about one this lab has (one set of pins, the page's), else at its own address. */
 export const where = (origin: string, b: Board, home?: boolean) => (home && b.of ? `${origin}${b.of.split('#')[0]}#board=${b.name}` : `${origin}/_lab/board/${b.name}`);
-/** The page a board is about, as said to an agent: a board pin's board (of /pricing#pin-<id>) is that page's, its own name not repeated. */
-const ofSaid = (b: Board) => (b.of || '').replace(`#${b.name}`, '').replace('#', ' #');
 /** The board as plain text: one line per frame, in order. `pins(frame)` is its open pins. */
 export function text(b: Board, o: { origin: string; file?: string | null; json?: boolean; home?: boolean; pins?: (f: Frame) => number }): string {
   const lines = [`# Board ${b.name}${b.title ? ` · ${b.title}` : ''}`, `url: ${where(o.origin, b, o.home)}${o.home ? ' (the board opens over its page: its pins are that page\'s)' : ''}`];
-  if (b.of) lines.push(`of: ${ofSaid(b)}${o.file ? ` (file ${o.file})` : ''}`);
+  if (b.of) lines.push(`of: ${b.of.replace('#', ' #')}${o.file ? ` (file ${o.file})` : ''}`);
   if (o.json) lines.push(`file: .lab/boards/${b.name}.json`);
   if (b.frames.some((f) => f.src.startsWith('/_lab/') && f.kind !== 'image')) lines.push(`folder: .lab/boards/${b.name}/ (edit a frame's file; it reloads)`);
   if (b.frames.some(live)) lines.push(LIVE_SAID);
@@ -49,7 +47,7 @@ export function text(b: Board, o: { origin: string; file?: string | null; json?:
 export const frameLine = (b: Board, f: Frame, file?: string | null) => {
   const beside = b.frames.filter((g) => g.id !== f.id && g.state !== 'archived').map((g) => g.id);
   const gone = b.frames.filter((g) => g.state === 'archived').map((g) => g.id);
-  const line = `frame: ${f.id} of board ${b.name} (${[b.of && `variant of ${ofSaid(b)}`, sized(f), f.guest && 'from a wifi guest', f.state === 'archived' && 'archived', f.label && `"${f.label}"`, beside.length && `beside ${beside.slice(0, 6).join(', ')}`].filter(Boolean).join(', ')})`;
+  const line = `frame: ${f.id} of board ${b.name} (${[b.of && `variant of ${b.of.replace('#', ' #')}`, sized(f), f.guest && 'from a wifi guest', f.state === 'archived' && 'archived', f.label && `"${f.label}"`, beside.length && `beside ${beside.slice(0, 6).join(', ')}`].filter(Boolean).join(', ')})`;
   const copy = (g: Frame) => g.src.startsWith('/_lab/') && g.kind !== 'image';
   const others = b.frames.filter((g) => g.id !== f.id);
   const page = file || b.of?.split('#')[0] || 'the page';
