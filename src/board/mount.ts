@@ -172,41 +172,71 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
 
   // A picture far out is drawn from a smaller copy of itself, each half the one before, the one nearest the size on
   // screen: scaled down a lot mid-zoom, fine lines sparkled (Leo, 23 Nov: "only lines"). The copies are pictures too
-  // (not canvases: Safari showed some canvas layers blank), each shown once it is decoded.
-  const mips = async (c: Card, img: HTMLImageElement) => {
-    const list: HTMLImageElement[] = [];
-    let from: CanvasImageSource = img;
-    for (let w = img.naturalWidth, h = img.naturalHeight; w >= 96 && !signal.aborted && img.isConnected; ) {
-      [w, h] = [Math.round(w / 2), Math.round(h / 2)];
-      const cv = Object.assign(document.createElement('canvas'), { width: w, height: h });
-      const x = cv.getContext('2d');
-      if (!x) break;
-      x.imageSmoothingQuality = 'high';
-      x.drawImage(from, 0, 0, w, h);
-      from = cv;
-      const blob = await new Promise<Blob | null>((ok) => cv.toBlob(ok, 'image/png'));
-      if (!blob) break;
+  // (not canvases: Safari showed some canvas layers blank), each shown once it is decoded. A copy is made only when the
+  // zoom asks for it, one at a time after the board is drawn: made all at once as each picture loaded, 59 pictures of
+  // 4000 px took 4.8 s to come up instead of 0.8.
+  const levels = (img: HTMLImageElement) => {
+    let n = 0;
+    for (let w = img.naturalWidth; w >= 96; w = Math.round(w / 2)) n++;
+    return n;
+  };
+  const queue: [Card, number][] = [];
+  let making = false;
+  const make = async () => {
+    if (making) return;
+    making = true;
+    for (let job; (job = queue.shift()) && !signal.aborted; ) {
+      const [c, lv] = job;
+      const img = c.inner.querySelector('img');
+      if (!img?.isConnected || c.mips?.[lv]) continue;
+      await new Promise((ok) => requestAnimationFrame(() => setTimeout(ok))); // after a frame is drawn: never in a zoom's way
+      if (want(c, img) !== lv) continue; // the zoom went on past it
+      let from: CanvasImageSource = img;
+      let [w, h] = [img.naturalWidth, img.naturalHeight];
+      for (let i = 0; i <= lv; i++) {
+        [w, h] = [Math.round(w / 2), Math.round(h / 2)];
+        const cv = Object.assign(document.createElement('canvas'), { width: w, height: h });
+        const x = cv.getContext('2d');
+        if (!x) break;
+        x.imageSmoothingQuality = 'high';
+        x.drawImage(from, 0, 0, w, h);
+        from = cv;
+      }
+      const blob = await new Promise<Blob | null>((ok) => (from as HTMLCanvasElement).toBlob(ok, 'image/png'));
+      if (!blob || signal.aborted) continue;
       const url = URL.createObjectURL(blob);
       signal.addEventListener('abort', () => URL.revokeObjectURL(url), { once: true });
       const m = Object.assign(document.createElement('img'), { src: url, alt: '', draggable: false, className: 'mip', hidden: true });
       await m.decode().catch(() => {});
-      list.push(m);
+      if (!img.isConnected) continue;
+      img.after(m);
+      (c.mips ??= [])[lv] = m;
+      c.lv = undefined;
+      mip(c);
     }
-    if (!list.length || signal.aborted || !img.isConnected) return;
-    img.after(...list);
-    c.mips = list;
-    c.lv = -1;
-    mip(c);
+    making = false;
+  };
+  // The copy the zoom asks for now (-1: the picture itself): the smallest drawn at most 1.4× its size, a touch soft, never sparkling.
+  const want = (c: Card, img: HTMLImageElement) => {
+    const need = c.f.w * cam.z * devicePixelRatio;
+    for (let i = levels(img) - 1; i >= 0; i--) if ((img.naturalWidth / 2 ** (i + 1)) * 1.4 >= need) return i;
+    return -1;
   };
   const mip = (c: Card) => {
-    const list = c.mips!;
-    const need = c.f.w * cam.z * devicePixelRatio;
-    let lv = -1; // the picture itself
-    for (let i = list.length - 1; i >= 0; i--) if (list[i].naturalWidth * 1.4 >= need) { lv = i; break; } // drawn at most 1.4× its size: a touch soft, never sparkling
-    if (lv === c.lv) return;
-    c.lv = lv;
-    list.forEach((m, i) => (m.hidden = i !== lv));
-    c.inner.querySelector('img')!.style.visibility = lv < 0 ? '' : 'hidden';
+    const img = c.inner.querySelector('img');
+    if (!img?.naturalWidth) return;
+    const lv = want(c, img);
+    if (lv >= 0 && !c.mips?.[lv] && !queue.some(([q, l]) => q === c && l === lv)) {
+      queue.push([c, lv]);
+      void make();
+    }
+    // Till it is made, the nearest bigger one made, or the picture itself.
+    let shown = -1;
+    for (let i = lv; i >= 0; i--) if (c.mips?.[i]) { shown = i; break; }
+    if (shown === c.lv) return;
+    c.lv = shown;
+    c.mips?.forEach((m, i) => m && (m.hidden = i !== shown));
+    img.style.visibility = shown < 0 ? '' : 'hidden';
   };
 
   // One camera write per frame: a trackpad sends two or three wheel events a frame, each was a transform, a --iz restyle
@@ -231,7 +261,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       dots.style.backgroundSize = `${step}px ${step}px`;
       dots.style.opacity = String(Math.max(0, Math.min(1, (cam.z - 0.2) / 0.15))); // all there from 35 %, gone at 20 %
       world.style.setProperty('--iz', String(1 / cam.z));
-      for (const c of cards) if (c.mips) mip(c);
+      for (const c of cards) if (c.f.kind === 'image') mip(c);
       const pc = `${Math.round(cam.z * 100)}%`;
       if (zoomBtn.textContent !== pc) zoomBtn.textContent = pc;
     }
@@ -391,7 +421,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       box.dataset.id = f.id;
       if (f.kind === 'image') {
         const img = Object.assign(document.createElement('img'), { src: f.src, alt: f.label || '', draggable: false, loading: 'lazy' });
-        img.addEventListener('load', () => void mips(c, img), { once: true, signal });
+        img.addEventListener('load', () => mip(c), { once: true, signal });
         inner.appendChild(img);
       } else inner.appendChild(card(c));
       box.append(inner);
@@ -406,7 +436,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       const f = c.f;
       Object.assign(c.box.style, { left: `${f.x}px`, top: `${f.y}px`, width: `${f.w}px`, height: `${f.h}px` });
       paint(c);
-      if (c.mips) mip(c);
+      if (c.f.kind === 'image') mip(c);
     }
     if (selected && !cards.some((c) => c.f.id === selected)) selected = entered = '';
     pickFrames(picks);
