@@ -544,6 +544,17 @@ import { bindKeys } from './widget/keys.ts';
   }
   S.stayAtEnd = stayAtEnd;
   S.endStays = () => [...stays].forEach((f) => f());
+  // Beside a video (Leo, 23 Nov, 10a): a comment's box on a video opens past its edge, right else left, so the frames you
+  // step through stay in view. No room on either side (a video as wide as the window): by its pin, as before. Computers.
+  const besideVideo = (a) => {
+    if (coarse || !a || a.kind === 'board' || a.kind === 'page') return null;
+    const el = findTarget(a);
+    const v = el instanceof HTMLVideoElement ? el : el?.closest?.('video');
+    if (!v) return null;
+    const r = v.getBoundingClientRect(), w = 320, vw = document.documentElement.clientWidth;
+    const x = r.right + 12 + w <= vw - 12 ? r.right + 12 : r.left - 12 - w >= 12 ? r.left - 12 - w : null;
+    return x == null ? null : x + scrollX;
+  };
   function begin(anchor) {
     if (!anchor.moment) {
       const moment = mo?.momentFor(anchor); // the moment as the pin goes down, not as it is sent
@@ -1269,7 +1280,9 @@ import { bindKeys } from './widget/keys.ts';
         const under = zone && zone.top + zone.height - top < near ? zone.top + zone.height : top;
         const over = zone && top - zone.top < near ? zone.top - 12 : top - 40;
         const byPin = !zone || (under === top && over === top - 40); // by the pin itself: laid as a point's, beside it too
-        placeCard(card, byPin ? left : left + 14, under, nativeTie() && !boardPin ? pin : null, over);
+        const bx = besideVideo(c.anchor); // 10a: on a video, past its edge
+        if (bx != null) placeCard(card, bx + 14, under, null, over);
+        else placeCard(card, byPin ? left : left + 14, under, nativeTie() && !boardPin ? pin : null, over);
         if (boardPin && !sheetMode.matches) onBoard(card, c.anchor);
         // A question with choices on quoted words: by its quote, in the margin or under it (thread.ts). Drawn again after
         // the pick, it stays where it was instead of jumping back under its pin.
@@ -1348,6 +1361,7 @@ import { bindKeys } from './widget/keys.ts';
       swipeDown(float, () => ((S.draft = null), keepSpot(null), render()));
       next.push(float);
       if (zone) placeCard(float, left + 14, zone.top + zone.height);
+      else if (besideVideo(anchor) != null) placeBeside(float, besideVideo(anchor) - 36, top, null); // 10a: on a video, past its edge
       else placeBeside(float, left, top, nativeTie() && anchor.kind !== 'board' ? layer.querySelector(':scope > .pin.draft') : null);
       if (!sheetMode.matches) onBoard(float, anchor);
       draft.back = false;
@@ -1970,7 +1984,9 @@ import { bindKeys } from './widget/keys.ts';
     const held = placePin(pin, c, false, at.left, at.top, false);
     pin.style.visibility = (at.clipped && !held) || at.covered ? 'hidden' : '';
     flushPins();
-    placeCard(card, at.left, at.top, nativeTie() ? pin : null, at.top - 40);
+    const bx = besideVideo(a);
+    if (bx != null) placeCard(card, bx + 14, at.top, null, at.top - 40);
+    else placeCard(card, at.left, at.top, nativeTie() ? pin : null, at.top - 40);
     return true;
   };
   // The host sits at the page's top left corner (styles.css :host), as its box's own: a page that makes <body> or <html>
