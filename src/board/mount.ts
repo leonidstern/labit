@@ -347,7 +347,8 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       inner.className = 'b';
       const c: Card = { f, box, inner, seen: 0 };
       box.dataset.id = f.id;
-      inner.appendChild(f.kind === 'image' ? Object.assign(document.createElement('img'), { src: f.src, alt: f.label || '', draggable: false, decoding: 'async', loading: 'lazy' }) : card(c));
+      // decoding sync: Safari draws a picture again as a zoom goes and rests, and async left it blank for a frame (Leo, 23 Nov: flicker at 9%)
+      inner.appendChild(f.kind === 'image' ? Object.assign(document.createElement('img'), { src: f.src, alt: f.label || '', draggable: false, decoding: 'sync', loading: 'lazy' }) : card(c));
       box.append(inner);
       const tag = text('div', '', box);
       tag.className = 't';
