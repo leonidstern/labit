@@ -177,6 +177,7 @@ try {
       check(eng, 'no × on a picture', await p.locator('.f .rm').count() === 0);
       const nameShown = () => p.evaluate(() => getComputedStyle(document.querySelector('[data-lab-board-view]').shadowRoot.querySelector('#lab-board .f[data-id="e"] .t')).visibility === 'visible');
       check(eng, 'a picture\'s file name is not shown till it is picked', !(await nameShown()));
+      check(eng, 'nor any other frame\'s name, a page\'s too (Leo, 23 Nov: "these names too")', await p.evaluate(() => [...document.querySelector('[data-lab-board-view]').shadowRoot.querySelectorAll('#lab-board .f .t')].every((t) => getComputedStyle(t).visibility === 'hidden')));
       await p.mouse.move(rb3.x + rb3.w / 2, rb3.y + rb3.h / 2);
       await p.mouse.down();
       check(eng, 'its file name shows as the press starts, not on the lift', await nameShown());
