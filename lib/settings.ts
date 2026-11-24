@@ -25,9 +25,6 @@ const SPEC: Record<string, { type: Kind | 'shortcuts' | 'actions'; def: unknown;
   remindAfterMinutes: { type: 'number', def: 3, min: 0 },
   archiveAfterDays: { type: 'number', def: 30, min: 1 },
   updateCheck: { type: 'boolean', def: true },
-  // Boards (pictures and pages side by side, +board sections, the board drawer): off for now (Leo, 21 Nov: "hide board to
-  // boards to flag for now"). Off, the page offers none of it; boards already made stay in .lab/boards.
-  boards: { type: 'boolean', def: false },
   name: { type: 'string', def: '', only: 'personal' },
   model: { type: 'string', def: '', only: 'personal' },
   // The one lab for pages that belong to no project (tries, demos, options): agents add pages there, a folder per
@@ -44,7 +41,6 @@ const ENV: Record<string, [string, (v: string) => unknown]> = {
   stopListeningAfterMinutes: ['LAB_CLOSE_GRACE', (v) => Number(v) / 60],
   remindAfterMinutes: ['LAB_REMIND_MS', (v) => Number(v) / 60000],
   updateCheck: ['LABIT_NO_UPDATE_CHECK', () => false],
-  boards: ['LABIT_BOARDS', (v) => !/^(0|false|no|off)$/i.test(v)],
   model: ['LAB_MODEL', String],
 };
 
@@ -111,9 +107,10 @@ export function loadSettings(here: string, flags: Record<string, unknown> = {}, 
   ];
   const values: Record<string, any> = {};
   const from: Record<string, string> = {};
-  // `flags` is the old experiments switch (gone 20 Nov): it stays in somebody's file, and is skipped without a word.
+  // `flags` is the old experiments switch (gone 20 Nov) and `boards` the boards switch (gone 24 Nov, Leo: "remove from
+  // flag it": boards are always on): they stay in somebody's file, and are skipped without a word.
   for (const [file, data] of layers)
-    for (const key of Object.keys(data)) if (!(key in SPEC) && key !== '$schema' && key !== 'flags') problems.push(`${file}: ${key} is not a setting; ignored`);
+    for (const key of Object.keys(data)) if (!(key in SPEC) && key !== '$schema' && key !== 'flags' && key !== 'boards') problems.push(`${file}: ${key} is not a setting; ignored`);
   for (const key of Object.keys(SPEC)) {
     const s = SPEC[key];
     if (flags[key] !== undefined) {

@@ -43,7 +43,6 @@ export function labEnv(extra = {}, { settings = true } = {}) {
     ...(settings ? { PORT: '', XDG_CONFIG_HOME: extra.XDG_CONFIG_HOME ?? tmp('labit-cfg-') } : {}),
     LABIT_HOME: extra.LABIT_HOME ?? tmp('labit-home-'),
     LABIT_NO_UPDATE_CHECK: '1',
-    LABIT_BOARDS: '1', // boards are off by default; the tests of them (and of everything beside them) run with them on
     LABIT_EXIT_WITH_PARENT: '1',
     ...extra,
   };
