@@ -1,16 +1,18 @@
 # The reach map (ci/reach.mjs): which lines of the widget and the server, and which of the widget's CSS classes, each
 # browser test reaches, in Chromium. test.yml's plan job takes the newest one from here and runs a PR's browser tests
 # for the lines and rules it changes, instead of all of them. Made again after each merge to main that changes code or
-# tests (only the newest run goes on; a few minutes on a GitHub runner), and by hand ("Run workflow").
+# tests (about 12 minutes on a GitHub runner), and by hand ("Run workflow").
 name: reach
 on:
   push:
     branches: [main]
-    paths: ['src/**', 'lib/**', 'local.mjs', 'test/browser/**', 'ci/browser-tests.json', 'ci/reach*.mjs', 'scripts/build-widget.mjs']
+    paths: ['src/**', 'lib/**', 'local.mjs', 'test/browser/**', 'ci/browser-tests.json', 'ci/reach*.mjs', 'scripts/build-widget.mjs', '.github/workflows/reach.yml']
   workflow_dispatch:
+# One at a time, never cancelled: a merge while a map is being made waits (only the newest waiting run is kept), so a
+# busy main still gets a map. Cancelling the running one left main without any.
 concurrency:
   group: reach
-  cancel-in-progress: true
+  cancel-in-progress: false
 permissions:
   contents: read
 jobs:
