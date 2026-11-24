@@ -109,6 +109,10 @@ button.pin.done { color: var(--_green-fg); }
 .pin:is(.resolved, .moved) { opacity: .5; } /* a done pin is as big as an open one, only faded (Leo, 18 Nov) */
 .pin.moved:not(.resolved) { scale: .8; }
 .pin.unsure:not(.resolved) { outline: 1.5px dashed var(--_amber); outline-offset: 2px; } /* a guess: look-alikes, or its words changed */
+/* The agent's ring sits on the same edge: both at once read as one half-amber, half-green ring, a loader that looks
+   stuck (Leo, 24 Nov). The ring wins; the card still says the spot is a guess. Most often its words changed because
+   the agent is editing them. */
+.pin.unsure:has(> .ring:not(.gone)) { outline: 0; }
 .spotnote { padding: 6px 12px 0; font-size: 12px; letter-spacing: 0; color: var(--_muted); }
 button.pin:is(.resolved, .moved):is(:hover, .open) { opacity: 1; }
 .pin.grab { touch-action: none; }
