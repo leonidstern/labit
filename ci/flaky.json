@@ -1,6 +1,4 @@
 {
-  "motionreduce": "Frame-by-frame motion check: GitHub's macOS runners drop frames (passes on a fast Mac). Fails as a warning.",
-  "sheetrelease": "First-frame distance of a sheet's release: GitHub's macOS runners are too slow for its 20% budget. Fails as a warning.",
-  "areacard": "The pin isn't where the scroll put it on GitHub's macOS runners (fine on a fast Mac). Fails as a warning.",
-  "boardsbar": "Esc right after opening a board from the bar goes to the closing menu on slow runners. Fails as a warning."
+  "motionreduce": "Records an animation frame by frame: GitHub's 3-core macOS runners start recording late and drop frames, so the ramp it checks is missed (passes on a fast Mac). Fails as a warning.",
+  "sheetrelease": "Checks a sheet's first frame moves under 20% of the way: on GitHub's macOS runners the first recorded frame is already halfway (passes on a fast Mac). Fails as a warning."
 }
