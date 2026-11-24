@@ -39,6 +39,12 @@ for (const eng of engines('chromium')) {
     // stay there. They used to swap back and forth on every key near the box's tallest: the words, wider without the name
     // beside them, fell under the limit and the name came back, then went again (Leo, 24 Nov, iPhone: "jumping").
     await p.evaluate(() => [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim')).shadowRoot.querySelector('.float textarea').focus());
+    // The sheet done settling first (its slide in, the keyboard's room on a slow runner): only the typing is measured.
+    for (let last = -1, same = 0; same < 4; await sleep(100)) {
+      const top = await p.evaluate(() => Math.round([...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim')).shadowRoot.querySelector('.float').getBoundingClientRect().top));
+      same = top === last ? same + 1 : 0;
+      last = top;
+    }
     const seen = [];
     for (const ch of 'The sheet should hold still while I type a long comment, line after line, until it scrolls inside. '.repeat(4)) {
       await p.keyboard.type(ch);
