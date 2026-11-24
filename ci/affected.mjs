@@ -105,19 +105,20 @@ export function listEdit(diff) {
 }
 
 // The browser jobs: the picked tests packed into shards per engine, longest first onto the shortest shard, so they
-// end at about the same time. As many shards as the tests need at about TARGET seconds each, at most RUNNERS
-// jobs split between the engines (a PR's WebKit-only run can take all 10, a release 5 per engine). The
-// bench rides on the first WebKit shard.
-const RUNNERS = 10; // GitHub runs 20 jobs at once for this repo: 10 browser jobs leave room for the rest and a second PR
+// end at about the same time. As many shards as the tests need at about TARGET seconds each, at most RUNNERS[engine]:
+// WebKit runs on GitHub's macOS runners (Safari's own WebKit; Linux WebKit draws, scrolls and times frames otherwise),
+// 5 at once for a free account; Chromium on Linux, 5 so a release keeps room for a PR. The bench rides on the first
+// WebKit shard.
+const RUNNERS = { webkit: 5, chromium: 5 };
 const TARGET = 120;
 export function shards(picked, { engines = ['webkit'], times = readTimes(), bench = false, runners = RUNNERS } = {}) {
+  const limit = (engine) => (typeof runners === 'number' ? Math.max(1, Math.floor(runners / engines.length)) : runners[engine] ?? 5);
   const names = picked === 'all' ? Object.keys(times) : picked.split(/\s+/).filter(Boolean);
   const cost = (n) => times[n] ?? TARGET; // a test with no time yet counts as a whole shard
   const total = names.reduce((s, n) => s + cost(n), 0);
-  const most = Math.max(1, Math.floor(runners / engines.length));
-  const k = Math.min(most, Math.max(1, Math.ceil(total / TARGET)), Math.max(1, names.length));
   const jobs = [];
   for (const engine of engines) {
+    const k = Math.min(limit(engine), Math.max(1, Math.ceil(total / TARGET)), Math.max(1, names.length));
     const bins = Array.from({ length: k }, () => ({ files: [], secs: 0 }));
     for (const n of [...names].sort((a, b) => cost(b) - cost(a) || a.localeCompare(b))) {
       const bin = bins.reduce((lo, b) => (b.secs < lo.secs ? b : lo));
@@ -126,11 +127,11 @@ export function shards(picked, { engines = ['webkit'], times = readTimes(), benc
     }
     bins.forEach((b, i) => {
       const withBench = bench && engine === 'webkit' && i === 0;
-      if (b.files.length || withBench) jobs.push({ engine, shard: `${i + 1}/${k}`, files: b.files.join(' '), bench: withBench, secs: b.secs });
+      if (b.files.length || withBench) jobs.push({ engine, os: engine === 'webkit' ? 'macos-latest' : 'ubuntu-latest', shard: `${i + 1}/${k}`, files: b.files.join(' '), bench: withBench, secs: b.secs });
     });
   }
   // The bench alone, with no WebKit in this run: a job of its own on WebKit.
-  if (bench && !jobs.some((j) => j.bench)) jobs.push({ engine: 'webkit', shard: 'bench', files: '', bench: true, secs: 0 });
+  if (bench && !jobs.some((j) => j.bench)) jobs.push({ engine: 'webkit', os: 'macos-latest', shard: 'bench', files: '', bench: true, secs: 0 });
   return jobs;
 }
 

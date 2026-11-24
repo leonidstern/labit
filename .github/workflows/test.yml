@@ -94,16 +94,14 @@ jobs:
 
   # The widget in real browsers: Safari's engine (WebKit) and Chrome's. Playwright is installed only here (--no-save),
   # so labit itself keeps zero dependencies. One job per shard the plan made, side by side.
-  # On GitHub's Linux runners (Leo, 24 Nov: free for a public repo; only the iOS simulator stays on his Mac), in
-  # Playwright's own image: WebKit and Chromium with everything they need are in it, nothing installed per run.
+  # On GitHub's runners (Leo, 24 Nov: free for a public repo; only the iOS simulator stays on his Mac): WebKit on macOS,
+  # Safari's own engine (on Linux, WebKit's frames, wheel scrolling and timing differ: sheetrelease, motionreduce and
+  # cardscroll failed there), Chromium on Linux. Playwright's browsers are cached per version.
   browser:
     needs: plan
     if: needs.plan.outputs.jobs != '[]'
-    runs-on: ubuntu-latest
-    container:
-      image: mcr.microsoft.com/playwright:v1.65.1-noble
-      options: --ipc=host # Chromium's shared memory, as Playwright's docs ask for in Docker
-    timeout-minutes: 12 # a hung browser fails here instead of holding the PR for half an hour
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15 # a hung browser fails here instead of holding the PR for half an hour
     strategy:
       fail-fast: false
       matrix:
@@ -121,6 +119,11 @@ jobs:
         with:
           node-version: 22
       - run: npm install --no-save --no-audit --no-fund playwright@1.65.1
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.os == 'macOS' && '~/Library/Caches/ms-playwright' || '~/.cache/ms-playwright' }}
+          key: playwright-1.65.1-${{ runner.os }}-${{ matrix.engine }}
+      - run: npx playwright install ${{ runner.os == 'Linux' && '--with-deps' || '' }} ${{ matrix.engine }}${{ matrix.bench && ' chromium' || '' }}
       - run: npm run build # the page script is built from src/, not kept in git
       - name: Run ${{ matrix.engine }} ${{ matrix.shard }}
         if: matrix.files != ''
@@ -133,14 +136,11 @@ jobs:
         run: node bench/run.mjs
 
   # Native features (ci/native.mjs): what Safari's engine and Chrome's can do that labit could use, as a table in the
-  # job's summary. Fails only when a feature labit uses goes missing from one of them. In the same image as the browsers.
+  # job's summary. Fails only when a feature labit uses goes missing from one of them. On macOS, for Safari's WebKit.
   native:
     needs: plan
     if: needs.plan.outputs.native == 'true'
-    runs-on: ubuntu-latest
-    container:
-      image: mcr.microsoft.com/playwright:v1.65.1-noble
-      options: --ipc=host
+    runs-on: macos-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
@@ -148,6 +148,11 @@ jobs:
         with:
           node-version: 22
       - run: npm install --no-save --no-audit --no-fund playwright@1.65.1
+      - uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/ms-playwright
+          key: playwright-1.65.1-macOS-native
+      - run: npx playwright install webkit chromium
       - run: node ci/native.mjs
 
   # One required check name for branch protection, green only when every browser job is, or when the plan picked no
