@@ -57,6 +57,6 @@ try {
   }
 } finally {
   server.kill();
-  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
 }
 finish();

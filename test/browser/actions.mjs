@@ -75,7 +75,7 @@ try {
 } finally {
   for (const l of labs) {
     l.server.kill();
-    fs.rmSync(l.dir, { recursive: true, force: true });
+    fs.rmSync(l.dir, { recursive: true, force: true, maxRetries: 5 });
   }
 }
 finish();

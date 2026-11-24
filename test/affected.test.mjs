@@ -88,3 +88,23 @@ test('main runs the browsers only for a version bump', async () => {
   assert.equal(onMain('+    "dev": "node scripts/dev.mjs",').tests, '');
   assert.equal(onMain('').tests, '');
 });
+
+test('reach map: a changed line runs the tests that ran it; one no test ran runs all (widget) or none (server)', async () => {
+  const { backTo, touched, classesAt } = await import('../ci/affected.mjs');
+  const map = { commit: 'abc12345', failed: ['ink'], tests: { fluid: { 'src/widget/x.ts': '1-10', 'local.mjs': '5-9', '#classes': 'card pin' }, board: { 'src/widget/x.ts': '20-30', 'local.mjs': '5', '#classes': 'frame' }, ink: {}, boardpins: {}, native: {}, selection: { '#classes': 'pin' } } };
+  const on = (files, lines, classes = []) => affected(files, { tests, reach, map, linesOf: () => lines, classesOf: () => classes });
+  assert.equal(on(['src/widget/x.ts'], [3]).tests, 'fluid ink'); // ink failed while the map was made: it always runs
+  assert.equal(on(['src/widget/x.ts'], [3, 25]).tests, 'board fluid ink');
+  assert.equal(on(['src/widget/x.ts'], [15]).tests, 'all'); // no test ran it: maybe only WebKit does
+  assert.equal(on(['src/widget/x.ts'], null).tests, 'all'); // can't be placed
+  assert.equal(on(['local.mjs'], [5]).tests, 'board fluid ink');
+  assert.equal(on(['local.mjs'], [100]).tests, ''); // a server line no browser test runs: the unit tests' part
+  assert.equal(on(['src/widget/styles.css'], null, ['frame']).tests, 'board ink');
+  assert.equal(on(['src/widget/styles.css'], null, []).tests, 'all'); // :host, a keyframe: no class to go by
+  assert.equal(affected(['src/widget/x.ts'], { tests, reach }).tests, 'all'); // no map
+  // Lines through a diff: kept, shifted past an insertion, a rewritten line becomes the lines it replaced.
+  const diff = '@@ -5,0 +6,2 @@\n@@ -10,2 +12,1 @@';
+  assert.deepEqual([3, 6, 8, 12, 13].map((l) => backTo([l], diff)), [[3], [5, 6], [6], [10, 11], [12]]);
+  assert.deepEqual(touched('@@ -4,2 +4,3 @@\n@@ -9,0 +11,1 @@'), [4, 5, 9, 10]);
+  assert.deepEqual(classesAt('.a{color:red}\n:host{--x:1}\n@media (x){\n  .b .c,\n  .d {\n    margin:0;\n  }\n}', [1, 2, 6]), ['a', 'b', 'c', 'd']);
+});

@@ -730,7 +730,7 @@ const BUILD = tmp('labit-torture-build-');
 fs.writeFileSync(path.join(BUILD, 'entry.ts'), `export * from ${JSON.stringify(fileURLToPath(new URL('../../src/widget/anchoring.ts', import.meta.url)))};\n`);
 execFileSync('npx', ['--yes', 'esbuild@0.25.12', path.join(BUILD, 'entry.ts'), '--bundle', '--format=iife', '--global-name=__anchoring', `--outfile=${path.join(BUILD, 'anchoring.js')}`, '--log-level=warning']);
 const BUNDLE = fs.readFileSync(path.join(BUILD, 'anchoring.js'), 'utf8');
-fs.rmSync(BUILD, { recursive: true, force: true });
+fs.rmSync(BUILD, { recursive: true, force: true, maxRetries: 5 });
 
 // ---------- in the page ----------
 // What the test reads in the page, set up before the page's own scripts: the element a place among the body's elements
@@ -1022,7 +1022,7 @@ try {
   await Promise.all(ENG.map(runEngine));
 } finally {
   server.kill();
-  if (!process.env.TORTURE_KEEP) fs.rmSync(DIR, { recursive: true, force: true });
+  if (!process.env.TORTURE_KEEP) fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
   else console.log(`pages kept in ${DIR}`);
 }
 

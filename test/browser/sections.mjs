@@ -374,6 +374,6 @@ try {
   pxServer.kill();
   app.close();
   await sleep(100);
-  for (const d of [DIR, OFF_DIR, PX_DIR]) fs.rmSync(d, { recursive: true, force: true });
+  for (const d of [DIR, OFF_DIR, PX_DIR]) fs.rmSync(d, { recursive: true, force: true, maxRetries: 5 });
 }
 finish('all ok');

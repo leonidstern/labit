@@ -113,6 +113,6 @@ try {
   server.kill();
   await appDown().catch(() => {});
   await sleep(100);
-  fs.rmSync(DIR, { recursive: true, force: true });
+  fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
 }
 finish('all ok');

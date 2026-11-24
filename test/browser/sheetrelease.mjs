@@ -206,5 +206,5 @@ for (const eng of engines()) {
   await browser.close();
 }
 server.kill();
-fs.rmSync(DIR, { recursive: true, force: true });
+fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
 finish();
