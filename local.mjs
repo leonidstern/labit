@@ -1234,14 +1234,17 @@ const mayIn = (req) => isLoopback(req) || !WIFI || !!guestOk(req);
 const MARK = /\bd="([^"]+)"/.exec(fs.readFileSync(path.join(REPO, 'public/_lab/favicon.svg'), 'utf8'))?.[1];
 const markSvg = (size, style = '') =>
   `<svg width="${size}" height="${size}" viewBox="0 0 64 64" aria-hidden="true"${style ? ` style="${style}"` : ''}><path transform="translate(-1 -.5)" fill="currentColor" fill-rule="evenodd" d="${MARK}"/></svg>`;
-// Someone at this screen isn't let in yet, so nothing of the lab loads for them: the tab icon rides in the page.
-const GATE_ICON = `data:image/svg+xml,${encodeURIComponent(markSvg(64).replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ').replace('currentColor', '#141414'))}`;
+// Someone at this screen isn't let in yet, so nothing of the lab loads for them: the tab icon and the lab's design system
+// (/_lab/lab.css, light or dark as the device is) ride in the page.
+const GATE_ICON = `data:image/svg+xml,${encodeURIComponent(fs.readFileSync(path.join(REPO, 'public/_lab/favicon.svg'), 'utf8'))}`;
+const LAB_CSS = fs.readFileSync(path.join(REPO, 'public/_lab/lab.css'), 'utf8');
 const gate = (res, why = 'This lab opens with a one-time link.') =>
   res.writeHead(403, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }).end(
     `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
-      `<title>labit</title><link rel="icon" href="${GATE_ICON}"><body style="font:16px/1.5 system-ui;margin:0;display:grid;place-items:center;height:100vh;color:#111">` +
-      `<div style="max-width:22rem;padding:1.5rem;text-align:center">${markSvg(32, 'display:block;margin:0 auto .75rem')}<p style="font-weight:600;margin:0 0 .5rem">${why}</p>` +
-      `<p style="margin:0;color:#666">Ask for a fresh link and open it on this device.</p></div>`);
+      `<title>labit</title><link rel="icon" href="${GATE_ICON}"><style>${LAB_CSS}</style>` +
+      `<body class="lab" style="display:grid;place-items:center;min-height:100dvh;padding-bottom:24px">` +
+      `<div style="max-width:22rem;text-align:center">${markSvg(32, 'display:block;margin:0 auto .75rem')}<p style="font-weight:600;margin:0 0 .5rem">${why}</p>` +
+      `<p class="lab-muted">Ask for a fresh link and open it on this device.</p></div>`);
 // Where a link lands: a page of this lab (a path), never another site.
 const landing = (to) => (typeof to === 'string' && to.length < 300 && /^\/(?![/\\])\S*$/.test(to) ? to : '/');
 const GUEST_LIFE = 86400;
