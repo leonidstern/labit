@@ -29,8 +29,6 @@ export function watchFrames(v: HTMLVideoElement) {
 }
 
 export const fps = (v: HTMLVideoElement) => fpsOf.get(v) || 30;
-/** The frame rate once measured, else nothing: a moment names its frame only when it is known. */
-export const knownFps = (v: HTMLVideoElement) => fpsOf.get(v);
 /** The frame showing, from 0. */
 export const frameAt = (v: HTMLVideoElement) => Math.floor(v.currentTime * fps(v) + 1e-3);
 
