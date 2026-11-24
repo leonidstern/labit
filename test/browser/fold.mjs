@@ -59,7 +59,7 @@ async function lab(n) {
       body: JSON.stringify({ page: '/index', name: 'Leo', text, anchor: { selector: sel, x: 0.2, y: 0.5, docX: 0.1, docY: 20, width: 1000, element: `<p id="${sel.slice(1)}">` } }),
     }).then((r) => r.json()).then((j) => j.comment.id);
   const comments = () => fetch(B + '/_lab/api/comments?page=/index').then((r) => r.json()).then((j) => j.comments);
-  return { B, cli, post, comments, stop: () => (server.kill(), fs.rmSync(dir, { recursive: true, force: true })) };
+  return { B, cli, post, comments, stop: () => (server.kill(), fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5 })) };
 }
 
 for (const [n, eng] of (process.env.ENGINES || 'webkit,chromium').split(',').entries()) {

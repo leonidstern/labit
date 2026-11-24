@@ -5,7 +5,8 @@
 //
 // labit has no dependencies: package.json runs this through `npx -p esbuild@<pinned> -p terser@<pinned> node …`, which
 // puts both on PATH for this process only, and their APIs are found next to those commands.
-//   node scripts/build-widget.mjs --outfile=<file> [--watch]
+//   node scripts/build-widget.mjs --outfile=<file> [--watch] [--map]
+// --map: not minified, with an inline source map, for ci/reach.mjs (which lines of src/ each browser test runs).
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
@@ -13,6 +14,7 @@ import zlib from 'node:zlib';
 const arg = (name) => process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
 const outfile = arg('outfile') || 'public/_lab/comments.js';
 const watch = process.argv.includes('--watch');
+const mapped = process.argv.includes('--map');
 
 import { tool } from './npx-tools.mjs';
 
@@ -49,16 +51,29 @@ const shortNames = {
     });
   },
 };
+// --map: each file written as esbuild made it, its source map inside.
+const asBuilt = {
+  name: 'as-built',
+  setup(build) {
+    build.onEnd(async (result) => {
+      for (const file of result.outputFiles || []) {
+        await fs.promises.mkdir(path.dirname(file.path), { recursive: true });
+        await fs.promises.writeFile(file.path, file.text);
+      }
+    });
+  },
+};
 const options = {
   entryPoints: ['src/comments.js'],
   bundle: true,
   format: 'iife',
   legalComments: 'inline',
-  minify: true,
+  minify: !mapped,
+  ...(mapped ? { sourcemap: 'inline', sourcesContent: false } : {}),
   logLevel: 'warning',
   outfile,
   write: false, // shortNames writes each file
-  plugins: [minifiedCss, shortNames],
+  plugins: [minifiedCss, mapped ? asBuilt : shortNames],
   define: { 'globalThis.__LAB_DEBUG__': 'false' },
   metafile: true, // what each script is made of: code built into two of them is counted (bundles.json, below)
 };

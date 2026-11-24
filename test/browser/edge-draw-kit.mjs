@@ -64,7 +64,7 @@ export async function lab(pages, settings = {}) {
     // The agent's text for a page, and the page's comments as the store holds them.
     agent: async (page) => (await fetch(`${B}/_lab/agent/${page}`)).text(),
     comments: async (page) => (await (await fetch(`${B}/_lab/api/comments?page=/${page}`)).json()).comments,
-    stop: () => (server.kill(), fs.rmSync(dir, { recursive: true, force: true })),
+    stop: () => (server.kill(), fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5 })),
   };
 }
 
