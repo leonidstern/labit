@@ -135,8 +135,7 @@ export function startLive() {
         updOn = null;
         return;
       }
-      const markOn = W.coarse ? W.chatBtn : who;
-      const host: HTMLElement = shows(markOn) && markOn.querySelector('.mark') ? markOn : W.root.querySelector('.more');
+      const host: HTMLElement = shows(who) ? who : W.root.querySelector('.more'); // the mark, at the bar's right end on a phone too
       if (!host) return;
       if (updOn !== host) {
         showUpd(false);
@@ -316,7 +315,6 @@ export function startLive() {
       show(word, '~');
       whoLabel(word);
       who.classList.add('stale');
-      W.chatBtn.classList.add('stale');
       if (!who.classList.contains('working') && !last) who.classList.add('idle');
       who.hidden = false;
     };
@@ -776,13 +774,9 @@ export function startLive() {
         pill = { mode, agent, name, resume: s?.resume || '', away: s && !here ? 'no agent on this page' : 'no agent listening' };
         paintWho();
         who.classList.remove('stale');
-        W.chatBtn.classList.remove('stale');
         who.classList.toggle('idle', mode === 'away' || mode === 'quiet');
         who.classList.toggle('working', mode === 'working');
         W.listBtn.dataset.agent = mode;
-        W.chatBtn.dataset.agent = mode; // phones: with the list parked, the chat button carries the agent's mark
-        if (W.coarse && !W.chatBtn.querySelector('.mark')) W.chatBtn.insertAdjacentHTML('afterbegin', MARK);
-        if (W.coarse) W.chatBtn.title = said(); // phones: the light on the chat button says who's listening
         whoLabel(said()); // the words stay for screen readers when only the light shows
         if (s?.url && mode !== 'away') Object.assign(who, { href: s.url, target: '_blank' });
         else who.removeAttribute('href');
