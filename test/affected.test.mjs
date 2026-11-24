@@ -79,7 +79,7 @@ test('shards: every picked test runs once per engine, the longest shard near the
   assert.deepEqual(shards('c', { times, engines: ['chromium'], bench: true }).map((j) => j.engine), ['chromium', 'webkit']);
   // The real list: a full PR run fits in the runners, each shard under three minutes.
   const real = shards('all');
-  assert.ok(real.length <= 8 && Math.max(...real.map((j) => j.secs)) < 180);
+  assert.ok(real.length <= 10 && Math.max(...real.map((j) => j.secs)) < 180);
 });
 
 test('main runs the browsers only for a version bump', async () => {

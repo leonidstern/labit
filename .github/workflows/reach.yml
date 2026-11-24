@@ -1,7 +1,7 @@
 # The reach map (ci/reach.mjs): which lines of the widget and the server, and which of the widget's CSS classes, each
 # browser test reaches, in Chromium. test.yml's plan job takes the newest one from here and runs a PR's browser tests
 # for the lines and rules it changes, instead of all of them. Made again after each merge to main that changes code or
-# tests (only the newest run goes on; 4 min on Leo's Mac), and by hand ("Run workflow").
+# tests (only the newest run goes on; a few minutes on a GitHub runner), and by hand ("Run workflow").
 name: reach
 on:
   push:
@@ -15,7 +15,10 @@ permissions:
   contents: read
 jobs:
   map:
-    runs-on: [self-hosted, labit-mac]
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.65.1-noble
+      options: --ipc=host
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4

@@ -27,14 +27,14 @@ Built so a PR, mostly opened by agents, hears back in about 3 minutes, and a fai
 
 - **Only what the PR can break.** `ci/affected.mjs` picks the browser tests from the files a PR changes (the plan job's
   summary says why). Docs and CI-only PRs run none; a release runs all of them in both engines.
-- **The reach map.** `reach.yml` runs every browser test in Chromium on the Mac after each code merge to main
-  (`ci/reach.mjs`, 4 min) and keeps which lines of `src/`, `local.mjs` and `lib/` each one ran, and which widget CSS
+- **The reach map.** `reach.yml` runs every browser test in Chromium on a GitHub runner after each code merge to main
+  (`ci/reach.mjs`) and keeps which lines of `src/`, `local.mjs` and `lib/` each one ran, and which widget CSS
   classes it showed. A PR's change to those files runs the tests that reached its changed lines or CSS rules. Every
   test runs when the map can't say: no map, a widget line no test ran (it may be WebKit's alone), a CSS change with
   no class in it. A server line no browser test runs is left to the unit tests. Locally: `node ci/reach.mjs` writes
   `ci/reach-map.json`, which `ci/affected.mjs` and `npm run check` use.
-- **Even shards.** `ci/browser-tests.json` lists every browser test CI runs with its WebKit time on the Mac (seconds).
-  The plan packs the picked tests into shards of about 2 minutes, up to the Mac's 8 runners. A new browser test goes in
+- **Even shards.** `ci/browser-tests.json` lists every browser test CI runs with its WebKit time on a CI runner (seconds).
+  The plan packs the picked tests into shards of about 2 minutes, up to 10 jobs at once. A new browser test goes in
   this list, or it never runs in CI; refresh a time from a run's log ("<test> took N s") when it drifts.
 - **Unit tests in three jobs** (`node --test-shard`).
 - **Failures by name.** `ci/unit-run.mjs` and `ci/browser-run.mjs` put each failing test, with its error or its FAIL

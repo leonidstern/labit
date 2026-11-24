@@ -1,5 +1,5 @@
 // Which browser tests a pull request needs (Leo, 20 Nov: PR CI should run only the tests a change can break). The
-// browser jobs run on Leo's Mac; this picks, from the files a PR changes, which test/browser files they run.
+// browser jobs run on GitHub's runners; this picks, from the files a PR changes, which test/browser files they run.
 //
 // Rules, first match per changed file:
 // - Never affects a browser: docs, skills, hooks, examples, unit tests, the phone kit, the size gate's ci/ scripts,
@@ -83,7 +83,7 @@ const REACH = {
   'lib/update.ts': ['update'],
 };
 
-// The browser tests CI runs, with how long each takes in one engine on the Mac (seconds, from a CI run): the plan
+// The browser tests CI runs, with how long each takes in one engine on a CI runner (seconds, from a CI run): the plan
 // packs the picked ones into shards of about the same length (shards below). A file not listed never runs in CI.
 const TIMES = path.join(ROOT, 'ci/browser-tests.json');
 export const readTimes = () => JSON.parse(fs.readFileSync(TIMES, 'utf8'));
@@ -105,10 +105,10 @@ export function listEdit(diff) {
 }
 
 // The browser jobs: the picked tests packed into shards per engine, longest first onto the shortest shard, so they
-// end at about the same time. As many shards as the tests need at about TARGET seconds each, at most the Mac's
-// runners split between the engines (8 runners: a PR's WebKit-only run can take all 8, a release 4 per engine). The
+// end at about the same time. As many shards as the tests need at about TARGET seconds each, at most RUNNERS
+// jobs split between the engines (a PR's WebKit-only run can take all 10, a release 5 per engine). The
 // bench rides on the first WebKit shard.
-const RUNNERS = 8;
+const RUNNERS = 10; // GitHub runs 20 jobs at once for this repo: 10 browser jobs leave room for the rest and a second PR
 const TARGET = 120;
 export function shards(picked, { engines = ['webkit'], times = readTimes(), bench = false, runners = RUNNERS } = {}) {
   const names = picked === 'all' ? Object.keys(times) : picked.split(/\s+/).filter(Boolean);

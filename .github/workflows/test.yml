@@ -48,7 +48,7 @@ jobs:
   # widget module runs the tests that reach it, and src/comments.js, styles, the server, package.json or the build run
   # all. Merges to main run none (tested in their PR) unless they bump the version; a release and a run started by hand
   # run every test. The picked tests are packed into shards of about the same length from each file's time in
-  # ci/browser-tests.json, as many as the Mac has runners for. The reasons and the shards are in this job's summary.
+  # ci/browser-tests.json, up to 10 jobs at once. The reasons and the shards are in this job's summary.
   plan:
     runs-on: ubuntu-latest
     permissions:
@@ -77,7 +77,7 @@ jobs:
           if [ -n "$id" ]; then gh run download "$id" -R "$GITHUB_REPOSITORY" -n reach-map -D ci || echo "no reach map"; else echo "no reach map yet"; fi
       - id: pick
         env:
-          # A PR runs Safari's engine only (Leo, 20 Nov: half the Mac's work per PR; Safari is where labit is used most).
+          # A PR runs Safari's engine only (Leo, 20 Nov: half the work per PR; Safari is where labit is used most).
           # main runs both for a release, and "Run workflow" runs both by hand.
           ENGINES: ${{ github.event_name == 'pull_request' && 'webkit' || 'webkit,chromium' }}
         run: |
@@ -94,21 +94,21 @@ jobs:
 
   # The widget in real browsers: Safari's engine (WebKit) and Chrome's. Playwright is installed only here (--no-save),
   # so labit itself keeps zero dependencies. One job per shard the plan made, side by side.
-  # They run on Leo's Mac (eight self-hosted runners labelled labit-mac, one job each; Leo, 20 Nov: "most heavy ones
-  # [on my Mac] and gh only harnesses"). Only for main and for PRs from this repository: a fork's code never runs
-  # on the Mac, so a fork's PR shows "browser" failed until someone pushes it to a branch here.
+  # On GitHub's Linux runners (Leo, 24 Nov: free for a public repo; only the iOS simulator stays on his Mac), in
+  # Playwright's own image: WebKit and Chromium with everything they need are in it, nothing installed per run.
   browser:
     needs: plan
-    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && needs.plan.outputs.jobs != '[]'
-    runs-on: [self-hosted, labit-mac]
+    if: needs.plan.outputs.jobs != '[]'
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.65.1-noble
+      options: --ipc=host # Chromium's shared memory, as Playwright's docs ask for in Docker
     timeout-minutes: 12 # a hung browser fails here instead of holding the PR for half an hour
     strategy:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.plan.outputs.jobs) }}
     name: browser (${{ matrix.engine }} ${{ matrix.shard }})
-    # The Mac keeps Playwright's browsers in ~/Library/Caches/ms-playwright (chromium 1255, webkit 2388 for 1.65.1),
-    # so nothing is downloaded per run.
     env:
       ENGINES: ${{ matrix.engine }}
       # anchoring-torture: one seed of generated pages on a PR (about 35 s in WebKit), both on main and by hand, where
@@ -133,11 +133,14 @@ jobs:
         run: node bench/run.mjs
 
   # Native features (ci/native.mjs): what Safari's engine and Chrome's can do that labit could use, as a table in the
-  # job's summary. Fails only when a feature labit uses goes missing from one of them. On the Mac, beside the browser jobs.
+  # job's summary. Fails only when a feature labit uses goes missing from one of them. In the same image as the browsers.
   native:
     needs: plan
-    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && needs.plan.outputs.native == 'true'
-    runs-on: [self-hosted, labit-mac]
+    if: needs.plan.outputs.native == 'true'
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.65.1-noble
+      options: --ipc=host
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
