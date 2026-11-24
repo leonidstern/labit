@@ -17,7 +17,6 @@ export const inFrame = (): boolean => {
 type Board = { busy?: () => boolean; key?: (k: Record<string, unknown>) => unknown } & Record<string, any>;
 
 export function startFrame(script: HTMLScriptElement | null) {
-  motionUrl = new URL('motion.js', script?.src || location.href).href;
   const board = () => (top as unknown as { __labBoard: Board }).__labBoard;
   // live.ts runs on this: what it touches of the widget is a detached stand-in that is never put on the page.
   const host = document.createElement('div');
@@ -44,33 +43,10 @@ export function startFrame(script: HTMLScriptElement | null) {
     // Esc is the board's only when nothing in the page has the focus: with a field or a menu focused it is the page's first.
     if (e.key === 'Escape' && document.activeElement && document.activeElement !== document.body && document.activeElement !== document.documentElement) return;
     if (e.defaultPrevented || t?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t?.tagName || '')) return;
-    if (frameKey(e)) return;
     const k = { key: e.key, code: e.code, shiftKey: e.shiftKey, metaKey: e.metaKey, ctrlKey: e.ctrlKey, altKey: e.altKey, repeat: e.repeat };
     // Not the board's: the widget's (D draws, E shows done, M, T, W...) as if pressed on the board's page: with the focus
     // in a live frame D drew nothing (Mac test, 21 Nov).
     if (!board()?.key?.(k)) top?.document.dispatchEvent(new KeyboardEvent('keydown', { ...k, bubbles: true, cancelable: true }));
   });
   addEventListener('keyup', (e) => top?.document.dispatchEvent(new KeyboardEvent('keyup', { key: e.key, code: e.code, shiftKey: e.shiftKey, metaKey: e.metaKey, ctrlKey: e.ctrlKey, altKey: e.altKey, bubbles: true, cancelable: true })));
-}
-
-// A video in an open frame steps as on a page (Leo, 23 Nov, 8a): ← → a frame, ⇧ a second, Space plays or pauses; an
-// arrow on a playing one pauses it first. The focused video, else the one most in view; none on screen: the board's keys.
-// The stepping itself is the motion script's (motion.ts frameKey), loaded on the first such key: not in every page.
-let motionUrl = '';
-const shown = (v: HTMLVideoElement) => {
-  const r = v.getBoundingClientRect();
-  return Math.max(0, Math.min(r.right, innerWidth) - Math.max(r.left, 0)) * Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0));
-};
-function frameKey(e: KeyboardEvent) {
-  if (e.metaKey || e.ctrlKey || e.altKey) return false;
-  const space = e.key === ' ' && !e.shiftKey && !(e.target as HTMLElement | null)?.closest?.('button, a, summary');
-  if (!space && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return false;
-  const f = document.activeElement;
-  const v = f instanceof HTMLVideoElement ? f : [...document.querySelectorAll('video')].filter((x) => shown(x) > 0).sort((a, b) => shown(b) - shown(a))[0];
-  if (!v) return false;
-  e.preventDefault();
-  e.stopImmediatePropagation();
-  const k = { key: e.key, shiftKey: e.shiftKey, metaKey: false, ctrlKey: false, altKey: false, repeat: e.repeat };
-  void import(motionUrl).then((m) => m.frameKey(v, k)).catch(() => {});
-  return true;
 }

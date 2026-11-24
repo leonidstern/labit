@@ -39,9 +39,8 @@ const NO_BROWSER = [
 const REACH = {
   // The parts moved out of src/comments.js (motion, drag, keys, board camera). framework.ts has no test of
   // its own (components.js loads only on React, Vue or Svelte pages), so it runs everything.
-  'src/widget/motion.ts': ['motionreach', 'moment', 'update', 'framestep'],
-  'src/widget/step.ts': ['framestep', 'frame'],
-  'src/widget/motion.css': ['motionreach', 'moment', 'update', 'framestep'],
+  'src/widget/motion.ts': ['motionreach', 'moment', 'update'],
+  'src/widget/motion.css': ['motionreach', 'moment', 'update'],
   'src/widget/drag.ts': ['pincontext', 'selection', 'draw', 'edge-draw1', 'edge-draw2', 'edge-draw3', 'edge-draw4', 'shortcuts', 'shiftkeys'],
   'src/widget/keys.ts': ['shiftkeys', 'selection'],
   'src/widget/boardcam.ts': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardmode', 'boardpins', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard', 'boardsection', 'boardpin'],
@@ -65,7 +64,7 @@ const REACH = {
   'src/board/overlay.ts': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardhome', 'boardimage', 'phonepins', 'boardmode', 'boardpins', 'boardzones', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard', 'boardsection', 'boardpin'],
   'public/_lab/boardview.js': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardhome', 'boardimage', 'phonepins', 'boardmode', 'boardpins', 'boardzones', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard', 'boardsection', 'boardpin'],
   'public/_lab/draw.js': ['draw', 'edge-draw1', 'edge-draw2', 'edge-draw3', 'edge-draw4', 'native', 'nativepins', 'shiftkeys'],
-  'public/_lab/motion.js': ['motionreach', 'moment', 'update', 'framestep'],
+  'public/_lab/motion.js': ['motionreach', 'moment', 'update'],
   'src/widget/attach.ts': ['attach'],
   'src/widget/attach.css': ['attach'],
   'public/_lab/attach.js': ['attach'],
