@@ -1,7 +1,8 @@
 // Which lines of labit each browser test runs: the map ci/affected.mjs picks a PR's browser tests from, so a change to
 // src/comments.js or the server runs the tests that reach the changed lines, not all of them.
 //
-//   node ci/reach.mjs [--out ci/reach-map.json] [--jobs 6] [--only browser|unit] [name…]   (browser: needs playwright)
+//   node ci/reach.mjs [--out ci/reach-map.json] [--jobs 6] [--only browser|unit] [--shard i/n] [name…]   (browser: needs playwright)
+//   node ci/reach.mjs --merge part1.json part2.json … --out ci/reach-map.json
 // The unit tests (test/*.test.mjs) are mapped too, by file: the lines of the repo's code each one runs, its labs' too.
 //
 // The page scripts are built unminified with source maps (build-widget.mjs --map), every test in
@@ -22,7 +23,22 @@ const args = process.argv.slice(2);
 const opt = (n, d) => (args.includes(`--${n}`) ? args.splice(args.indexOf(`--${n}`), 2)[1] : d);
 const OUT = path.resolve(opt('out', path.join(ROOT, 'ci/reach-map.json')));
 const JOBS = Number(opt('jobs', 6));
-const names = args.length ? args : Object.keys(JSON.parse(fs.readFileSync(path.join(ROOT, 'ci/browser-tests.json'), 'utf8')));
+const ONLY = opt('only', 'both'); // browser | unit | both
+// --shard i/n: this job's part of the tests (CI runs the map as n jobs side by side, then --merge joins the parts).
+const [SHARD, SHARDS] = opt('shard', '1/1').split('/').map(Number);
+const MERGE = args.includes('--merge') ? args.splice(args.indexOf('--merge'), 1) && args.splice(0) : null;
+const TIMES = JSON.parse(fs.readFileSync(path.join(ROOT, 'ci/browser-tests.json'), 'utf8'));
+// Longest first onto the shortest part, so the parts end together; the same split on every job.
+const part = (list, cost) => {
+  const bins = Array.from({ length: SHARDS }, () => ({ items: [], secs: 0 }));
+  for (const n of [...list].sort((a, b) => cost(b) - cost(a) || a.localeCompare(b))) {
+    const bin = bins.reduce((lo, b) => (b.secs < lo.secs ? b : lo));
+    bin.items.push(n);
+    bin.secs += cost(n);
+  }
+  return bins[SHARD - 1].items;
+};
+const names = part(args.length ? args : Object.keys(TIMES), (n) => TIMES[n] ?? 60);
 const build = (...more) => execFileSync('npx', ['--yes', '-p', 'esbuild@0.25.12', '-p', 'terser@5.44.0', 'node', 'scripts/build-widget.mjs', '--outfile=public/_lab/comments.js', ...more], { cwd: ROOT, stdio: 'inherit' });
 
 // ---------- lines as ranges ----------
@@ -184,13 +200,25 @@ function reduce(dir, maps) {
   return out;
 }
 
+// --merge part.json…: the parts as one map (same commit), written to --out.
+if (import.meta.url === `file://${process.argv[1]}` && MERGE) {
+  const parts = MERGE.map((f) => JSON.parse(fs.readFileSync(f, 'utf8')));
+  const commits = new Set(parts.map((p) => p.commit));
+  if (commits.size !== 1) (console.error(`parts from different commits: ${[...commits].join(' ')}`), process.exit(1));
+  const join = (key) => Object.fromEntries(parts.flatMap((p) => Object.entries(p[key] || {})).sort(([a], [b]) => a.localeCompare(b)));
+  const map = { commit: parts[0].commit, made: new Date().toISOString(), failed: parts.flatMap((p) => p.failed || []), tests: join('tests'), unitFailed: parts.flatMap((p) => p.unitFailed || []), unit: join('unit') };
+  fs.writeFileSync(OUT, JSON.stringify(map) + '\n');
+  console.log(`${OUT}: ${Object.keys(map.tests).length} browser and ${Object.keys(map.unit).length} unit tests from ${parts.length} parts at ${map.commit.slice(0, 8)}${map.failed.length || map.unitFailed.length ? `; failed (run them always): ${[...map.failed, ...map.unitFailed].join(' ')}` : ''}`);
+  process.exit(0);
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim();
   if (execFileSync('git', ['status', '--porcelain', '--', 'src', 'lib', 'local.mjs'], { cwd: ROOT, encoding: 'utf8' }).trim()) {
     console.error('src/, lib/ or local.mjs has changes not committed: the map must match a commit.');
     process.exit(1);
   }
-  const only = opt('only', 'both'); // browser | unit | both
+  const only = ONLY;
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'labit-reach-'));
   const tests = {};
   const failed = [];
@@ -211,7 +239,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       });
     }
     if (only !== 'browser') {
-      const units = fs.readdirSync(path.join(ROOT, 'test')).filter((f) => f.endsWith('.test.mjs')).map((f) => f.slice(0, -'.test.mjs'.length)).sort();
+      // Unit files by their size, a rough stand-in for their time.
+      const units = part(fs.readdirSync(path.join(ROOT, 'test')).filter((f) => f.endsWith('.test.mjs')).map((f) => f.slice(0, -'.test.mjs'.length)), (n) => fs.statSync(path.join(ROOT, 'test', `${n}.test.mjs`)).size);
       await pool(units, async (name) => {
         const dir = path.join(work, `unit-${name}`);
         if (!(await runUnit(name, dir))) unitFailed.push(name);

@@ -28,7 +28,7 @@ Built so a PR, mostly opened by agents, hears back in about 3 minutes, and a fai
 - **Only what the PR can break.** `ci/affected.mjs` picks the browser tests from the files a PR changes (the plan job's
   summary says why). Docs and CI-only PRs run none; a release runs all of them in both engines.
 - **The reach map.** `reach.yml` runs every browser test in Chromium on a GitHub runner after each code merge to main
-  (`ci/reach.mjs`) and keeps which lines of `src/`, `local.mjs` and `lib/` each one ran, and which widget CSS
+  (`ci/reach.mjs`, eight jobs side by side, about 3 min) and keeps which lines of `src/`, `local.mjs` and `lib/` each one ran, and which widget CSS
   classes it showed. A PR's change to those files runs the tests that reached its changed lines or CSS rules. Every
   test runs when the map can't say: no map, a widget line no test ran (it may be WebKit's alone), a CSS change with
   no class in it. A server line no browser test runs is left to the unit tests. Code more than a quarter of the tests run (the lab
