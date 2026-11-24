@@ -26,9 +26,13 @@ jobs:
         with:
           node-version: 22
       - run: npm install --no-save --no-audit --no-fund playwright@1.65.1
-      - run: node ci/reach.mjs --jobs 4 --out "$RUNNER_TEMP/reach-map.json" | tee -a "$GITHUB_STEP_SUMMARY"
+      # The checkout belongs to another user than the container's root: git refuses it unless told it is safe.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - shell: bash # pipefail: a map that failed fails the job, not only its summary
+        run: node ci/reach.mjs --jobs 4 --out "$RUNNER_TEMP/reach-map.json" | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: reach-map
           path: ${{ runner.temp }}/reach-map.json
           retention-days: 30
+          if-no-files-found: error

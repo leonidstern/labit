@@ -81,8 +81,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          id=$(gh run list -R "$GITHUB_REPOSITORY" -w reach.yml -b main -s success -L 1 --json databaseId --jq '.[0].databaseId' || true)
-          if [ -n "$id" ]; then gh run download "$id" -R "$GITHUB_REPOSITORY" -n reach-map -D ci || echo "no reach map"; else echo "no reach map yet"; fi
+          # The newest successful run that has the map (a run can end without one).
+          for id in $(gh run list -R "$GITHUB_REPOSITORY" -w reach.yml -b main -s success -L 5 --json databaseId --jq '.[].databaseId' || true); do
+            gh run download "$id" -R "$GITHUB_REPOSITORY" -n reach-map -D ci 2>/dev/null && { echo "reach map from run $id"; break; }
+          done
+          [ -f ci/reach-map.json ] || echo "no reach map: every test runs"
       - id: pick
         env:
           # A PR runs Safari's engine only (Leo, 20 Nov: half the work per PR; Safari is where labit is used most).
