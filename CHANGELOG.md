@@ -2,10 +2,14 @@
 
 Versions follow [semver](https://semver.org). Before 1.0, a minor version can change how things work.
 
-## Unreleased
+## 0.8.1 · 2026-11-24
 
+A small follow-up to 0.8.0: video frame-stepping is taken back out, a pin on a video opens (or right-clicks) back to its frame, and new boards start empty.
+
+- **Video frame-stepping is gone again.** The arrow keys, ⇧ arrows and Space no longer step or play a video, and ⌥ ← → no longer step it while you write; the keys are the page's again. The moment line and per-reply frames from 0.8.0 go with it.
 - **A pin on a video opens at its frame.** Opening a pin placed on a video, clicking it again or right-clicking it takes the video back to the moment the pin went down and holds it there; the rest of the page keeps moving. Play it again as usual.
 - **A new board starts empty.** "new board" (and a pin's own board) no longer puts the page on it as a first frame; you or the agent add what goes there. Boards made with `--variants`, `--widths` or `--flow` are unchanged.
+- **The one-time link page follows light/dark** like the rest of the lab.
 
 ## 0.8.0 · 2026-11-24
 
