@@ -118,12 +118,13 @@ async function open(browser, pagePath, { name = 'Leo', context = {} } = {}) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, ...context });
   const page = await ctx.newPage();
   await page.addInitScript((n) => localStorage.setItem('lab-name', n), name);
+  if (context.hasTouch) await page.addInitScript(() => localStorage.setItem('lab-on', '1')); // labit on, as the mark's tap would leave it
   await page.addInitScript(inPage);
   await page.goto(BASE + pagePath);
   const lab = (sel) => page.locator(`[data-lab-comments] ${sel}`);
-  await lab('.toggle').waitFor();
-  if (context.hasTouch) await lab('.toggle').tap();
-  else await lab('.toggle').click();
+  await lab('.toggle').waitFor({ state: context.hasTouch ? 'attached' : 'visible' }); // a phone keeps it in its sheet
+  if (!context.hasTouch) await lab('.toggle').click(); // a phone pins with a hold, labit's mark there opens its sheet
+  else await page.waitForFunction(() => [...document.querySelectorAll('*')].some((n) => n.shadowRoot?.querySelector('.scrim')), null, { timeout: 10000 });
   // Type the comment and send it. Once posted the composer closes and the new pin stays.
   const pins = () => page.evaluate(() => document.querySelector('[data-lab-comments]').shadowRoot.querySelectorAll('button.pin').length);
   const say = async (text) => {
@@ -147,7 +148,12 @@ async function open(browser, pagePath, { name = 'Leo', context = {} } = {}) {
       await page.mouse.click(x, y);
       if (alt) await page.keyboard.up('Alt');
     },
-    tap: (x, y) => page.touchscreen.tap(x, y),
+    // A pin on a phone is a hold (the widget pins at 400 ms): a touch pointer down and held, as test/browser/phonebox.mjs.
+    tap: async (x, y) => {
+      const touch = (type) => page.evaluate(([t, px, py]) => document.elementFromPoint(px, py).dispatchEvent(new PointerEvent(t, { pointerType: 'touch', isPrimary: true, clientX: px, clientY: py, button: 0, bubbles: true, composed: true })), [type, x, y]);
+      await touch('pointerdown');
+      await page.waitForTimeout(700);
+    },
     drag: async (x0, y0, x1, y1, { alt = false } = {}) => {
       if (alt) await page.keyboard.down('Alt');
       await page.mouse.move(x0, y0);
@@ -313,7 +319,7 @@ let situations = {
       tests: 'point on text in the sticky header after scrolling to the bottom; the footer right below has the same words',
       async pin(w) {
         await w.page.evaluate(() => scrollTo(0, document.documentElement.scrollHeight));
-        await w.page.waitForTimeout(150);
+        await w.page.waitForTimeout(800); // a click while the page still scrolls pins nothing, as for a person
         await w.click(...centreOf(await w.$('word', '.site-header .tagline', 'small', 0, false)));
         return { expect: { file: P, lines: [lineOf(P, '<span class="tagline">')], words: 'small' }, needs: [has.quote('small'), has.element('<span class="tagline">'), has.selector('header')] };
       },
