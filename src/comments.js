@@ -1242,6 +1242,14 @@ import { bindKeys } from './widget/keys.ts';
           if (isTrying()) relight(); // a tried choice: its green back
           else markQuote(S.quoted);
         });
+        // A right-click on a pin on a video takes the video back to its frame and pauses it, as a click does (Leo, 24 Nov).
+        pin.addEventListener('contextmenu', (e) => {
+          const m = pinData.get(pin).c.anchor?.moment;
+          if (m?.kind !== 'video' || e.shiftKey) return;
+          e.preventDefault();
+          e.stopPropagation();
+          void (mo ? Promise.resolve(mo) : loadMotion()).then((x) => x?.showMoment(m));
+        });
         pin.addEventListener('click', (e) => {
           e.stopPropagation();
           const c = pinData.get(pin).c;
