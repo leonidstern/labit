@@ -1047,11 +1047,13 @@ function commentChangesSince(page, since) {
 function persist(page) {
   if (page) dirty.add(page);
   else for (const p of pages()) dirty.add(p);
-  version = { ...version, comments: version.comments + 1 };
-  logChanges(page, version.comments);
-  // Which pages this version changed, so an open page on another one skips the pull (a reply on /a used to make every
-  // open tab on every page ask for its changes).
-  version.commentPages = changeLog.filter((e) => e.rev === version.comments && e.page !== null).map((e) => e.page);
+  const rev = version.comments + 1;
+  logChanges(page, rev);
+  // The new version and the pages it changed go out together, so an open page on another one skips the pull (a reply
+  // on /a used to make every open tab on every page ask for its changes). Set apart, a state sent in between (the
+  // first comment on a page notes its file) said the new version changed no page, and the page it did change skipped
+  // it: that comment never showed until a reload.
+  version = { ...version, comments: rev, commentPages: changeLog.filter((e) => e.rev === rev && e.page !== null).map((e) => e.page) };
   return flush();
 }
 // A page whose file could not be written (a full disk, a folder that turned read-only) stays unsaved: its comments
