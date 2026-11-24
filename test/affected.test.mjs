@@ -72,8 +72,8 @@ test('shards: every picked test runs once per engine, the longest shard near the
   const both = shards('all', { times, engines: ['webkit', 'chromium'], runners: 8 });
   assert.ok(both.length <= 8);
   assert.equal(both.filter((j) => j.engine === 'chromium').length, both.filter((j) => j.engine === 'webkit').length);
-  // A small pick is one job; the bench rides on the first WebKit shard, or gets its own when there is none.
-  assert.deepEqual(shards('c h', { times }).map((j) => j.files), ['c h']);
+  // A small pick (under a minute) is one job; the bench rides on the first WebKit shard, or gets its own when there is none.
+  assert.deepEqual(shards('g h', { times }).map((j) => j.files), ['g h']);
   assert.equal(shards('c', { times, bench: true })[0].bench, true);
   assert.deepEqual(shards('', { times, bench: true }).map((j) => [j.files, j.bench]), [['', true]]);
   assert.deepEqual(shards('c', { times, engines: ['chromium'], bench: true }).map((j) => j.engine), ['chromium', 'webkit']);

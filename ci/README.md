@@ -31,10 +31,11 @@ Built so a PR, mostly opened by agents, hears back in about 3 minutes, and a fai
   (`ci/reach.mjs`) and keeps which lines of `src/`, `local.mjs` and `lib/` each one ran, and which widget CSS
   classes it showed. A PR's change to those files runs the tests that reached its changed lines or CSS rules. Every
   test runs when the map can't say: no map, a widget line no test ran (it may be WebKit's alone), a CSS change with
-  no class in it. A server line no browser test runs is left to the unit tests. Locally: `node ci/reach.mjs` writes
+  no class in it. A server line no browser test runs is left to the unit tests. Code more than a quarter of the tests run (the lab
+  starting, a pin drawn) picks five of them: the three that run most of that file and the two quickest. Locally: `node ci/reach.mjs` writes
   `ci/reach-map.json`, which `ci/affected.mjs` and `npm run check` use.
 - **Even shards.** `ci/browser-tests.json` lists every browser test CI runs with its WebKit time on a CI runner (seconds).
-  The plan packs the picked tests into shards of about 2 minutes, up to 10 jobs at once. A new browser test goes in
+  The plan packs the picked tests into shards of about a minute: WebKit on up to 5 macOS jobs, Chromium on Linux. A new browser test goes in
   this list, or it never runs in CI; refresh a time from a run's log ("<test> took N s") when it drifts.
 - **Unit tests in three jobs** (`node --test-shard`).
 - **Failures by name.** `ci/unit-run.mjs` and `ci/browser-run.mjs` put each failing test, with its error or its FAIL

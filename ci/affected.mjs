@@ -110,7 +110,7 @@ export function listEdit(diff) {
 // 5 at once for a free account; Chromium on Linux, 5 so a release keeps room for a PR. The bench rides on the first
 // WebKit shard.
 const RUNNERS = { webkit: 5, chromium: 5 };
-const TARGET = 120;
+const TARGET = 60;
 export function shards(picked, { engines = ['webkit'], times = readTimes(), bench = false, runners = RUNNERS } = {}) {
   const limit = (engine) => (typeof runners === 'number' ? Math.max(1, Math.floor(runners / engines.length)) : runners[engine] ?? 5);
   const names = picked === 'all' ? Object.keys(times) : picked.split(/\s+/).filter(Boolean);
@@ -182,12 +182,37 @@ export function backTo(lines, diff) {
     return [l + shift];
   }))];
 }
-export function reachOf(file, lines, map, tests) {
+// Code nearly every test runs (the lab starting, a pin drawn, a card opened) would pick nearly every test and save
+// nothing: a line more than half the tests run picks a few of them instead, the ones that run most of its file (they
+// lean on that code the most) and the quickest. A change there that breaks it breaks it for all, so a few find it;
+// every test still runs on a release, and a PR can run all by hand ("Run workflow").
+const SHARED = 0.25;
+const SAMPLE = { widest: 3, quickest: 2 };
+const lineCount = (text) => (text || '').split(',').reduce((n, part) => {
+  if (!part) return n;
+  const [a, b = a] = part.split('-').map(Number);
+  return n + b - a + 1;
+}, 0);
+function sample(names, file, map, times) {
+  const size = (n) => (file === '#classes' ? (map.tests[n][file] || '').split(' ').length : lineCount(map.tests[n][file]));
+  const widest = [...names].sort((a, b) => size(b) - size(a) || a.localeCompare(b)).slice(0, SAMPLE.widest);
+  const quickest = [...names].filter((n) => !widest.includes(n)).sort((a, b) => (times[a] ?? 60) - (times[b] ?? 60) || a.localeCompare(b)).slice(0, SAMPLE.quickest);
+  return [...widest, ...quickest];
+}
+export function reachOf(file, lines, map, tests, times = readTimes()) {
   if (!map || !lines?.length) return null;
-  const ran = Object.entries(map.tests).filter(([n, files]) => tests.has(n) && inRanges(files[file], lines)).map(([n]) => n);
-  if (!ran.length) return null;
-  const always = [...tests].filter((n) => !map.tests[n] || map.failed?.includes(n));
-  return [...new Set([...ran, ...always])];
+  const mapped = Object.keys(map.tests).filter((n) => tests.has(n));
+  const pick = new Set();
+  let reached = false;
+  for (const l of lines) {
+    const ran = mapped.filter((n) => inRanges(map.tests[n][file], [l]));
+    if (!ran.length) continue;
+    reached = true;
+    for (const n of ran.length > mapped.length * SHARED ? sample(ran, file, map, times) : ran) pick.add(n);
+  }
+  if (!reached) return null;
+  for (const n of tests) if (!map.tests[n] || map.failed?.includes(n)) pick.add(n);
+  return [...pick];
 }
 
 // The classes a stylesheet's lines style: for each line, the selectors of the rules it sits in (an @media's too).
@@ -211,11 +236,18 @@ export function classesAt(css, lines) {
   for (const l of lines) for (const m of (at[l] || '').matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)) out.add(m[1]);
   return [...out];
 }
-export function cssReach(classes, map, tests) {
+export function cssReach(classes, map, tests, times = readTimes()) {
   if (!map || !classes.length) return null;
-  const ran = Object.entries(map.tests).filter(([n, f]) => tests.has(n) && f['#classes'] && classes.some((c) => ` ${f['#classes']} `.includes(` ${c} `))).map(([n]) => n);
-  if (!ran.length) return null;
-  return [...new Set([...ran, ...[...tests].filter((n) => !map.tests[n] || map.failed?.includes(n))])];
+  const mapped = Object.keys(map.tests).filter((n) => tests.has(n));
+  const pick = new Set();
+  for (const c of classes) {
+    const ran = mapped.filter((n) => ` ${map.tests[n]['#classes'] || ''} `.includes(` ${c} `));
+    // A class nearly every test shows (a pin, a card): a few of them, as for shared code.
+    for (const n of ran.length > mapped.length * SHARED ? sample(ran, '#classes', map, times) : ran) pick.add(n);
+  }
+  if (!pick.size) return null;
+  for (const n of tests) if (!map.tests[n] || map.failed?.includes(n)) pick.add(n);
+  return [...pick];
 }
 
 export function affected(files, { tests = groupTests(), reach = REACH, diffOf = () => '', map = null, linesOf = () => null, classesOf = () => [] } = {}) {
