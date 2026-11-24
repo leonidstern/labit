@@ -1,5 +1,5 @@
 // Writing about a video (Leo, 23 Nov, 9b): the moment line above a new comment's box and a reply's box follows the video,
-// ⌥ ← → step it a frame while the words stay, the line names the keys while the box has the cursor,
+// ⌥ ← → step it a frame while the words stay, ⌥K plays or pauses, the line names the keys while the box has the cursor,
 // and each message keeps the moment it was sent at, a reply its own. In WebKit and Chrome's engine. Not part of `npm test`.
 // Run: node test/browser/typingframes.mjs (needs playwright; NODE_PATH can point at a node_modules that has it).
 import fs from 'node:fs';
@@ -64,7 +64,11 @@ try {
       const line1 = await inRoot(p, "r.querySelector('.float .moment.live')?.textContent || ''");
       check(eng, '⌥→ twice steps the video two frames; the words stay', f1 === f0 + 2 && words === 'the logo comes in', JSON.stringify({ f0, f1, words }));
       check(eng, 'the line follows the step', line1.endsWith(`· frame ${f1}`), line1);
-
+      await p.keyboard.down('Alt');
+      await sleep(50);
+      const moreShown = await inRoot(p, "getComputedStyle(r.querySelector('.float .moment.live'), '::after').content.includes('play')");
+      await p.keyboard.up('Alt');
+      check(eng, 'holding ⌥ names the rest', moreShown);
       await p.keyboard.press('Enter');
       let c;
       for (let i = 0; i < 30 && !(c = (await comments()).find((x) => !x.parent)); i++) await sleep(100);
@@ -93,11 +97,11 @@ try {
       check(eng, 'the thread shows each message\'s moment', shown.length === 2 && shown[1].endsWith(`frame ${f2}`), JSON.stringify(shown));
       const text = await (await fetch(`${B}/_lab/agent${PG}`)).text();
       check(eng, 'the agent reads the reply\'s moment', new RegExp(`\\(at video [\\d:.]+ of [\\d:]+ · frame ${f2}\\): and here`).test(text), text.split('\n').find((l) => /and here/.test(l)));
-      // ⌥K does nothing (it is another app's): the video stays paused.
+      // ⌥K plays from the reply box.
       await inRoot(p, "r.querySelector('.card textarea')?.focus()");
       await p.keyboard.press('Alt+k');
-      await sleep(200);
-      check(eng, '⌥K is left alone', await p.evaluate(() => document.getElementById('vid').paused));
+      await sleep(300);
+      check(eng, '⌥K plays it', !(await p.evaluate(() => document.getElementById('vid').paused)));
       await ctx.close();
     } finally {
       await browser.close();
