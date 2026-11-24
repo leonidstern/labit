@@ -45,12 +45,16 @@ Start it with `npx @leonidstern/labit@latest`. Use `@latest` on the other comman
 
 ## Your own pins
 
-Leave your own pins with `LAB pin <selector> "<point>" [--page /path]` when asked what you'd improve, or when something is worth a look (a bug, a review note, what you just changed). Not for status or answers (`reply`). It prints the pin's id.
-- One point per pin, each on its spot, 8 at most per ask (more is a wall of pins to read through). The page numbers them; say how many you left.
+Leave your own pins with `LAB pin <selector> "<point>" [--page /path]` when what you have to say belongs to one spot on a page in a running lab (never start a lab just to pin). It prints the pin's id. Not for status or answers (`reply`), and not for what has no spot on a page (CI, a release, research, a verdict on the whole page): those stay in chat or the PR.
+- A question you need answered about that spot, while the person works in the lab: ask it there (`--question` or `--choice`), one open at a time, not also in chat. Answering their pin? Ask on that pin. Otherwise ask in chat.
+- A review or audit of a page, or "what would you improve": one pin per finding, on its spot. The same issue in many spots is one pin ("and 4 more like this").
+- A bug or change the person should see.
+- One point per pin, each on its spot, 8 at most per ask (more is a wall of pins to read through): with more, pin the 8 that matter most and pin the next ones when asked. The page numbers them; say how many you left and how many more you have.
 - Read the selector from the file, never guess it; prefer an id (`#pricing h2`). With the page open a browser checks it: `pin` waits up to 3 s and says `pin <id> matched nothing on /page: <selector>` (the next wait too): fix and pin again. `--no-check` skips the wait.
 - Many at once: `LAB pin --file points.json` (a list of `{ selector, text, quote?, at?, page? }`). On words: `--quote "exact words"`. To ask: `--question`, or `--choice "A" --choice "B" --recommend B` (the pick comes back in your next wait). On a board: `--board <name> --frame <id> <selector> "text"` (`-` for the frame itself).
 - A wait says "spot changed" when your edit left a pin unsure or lost: settle it yourself, `LAB pin move <id> <selector> [--quote "words"]` (it goes there) or `LAB pin gone <id>` (its spot was removed).
 - "ticked: 2 of your 5 pins" in a wait: nothing to do. "<name> said: do it" (their "Do it" tap on your pin): do what it proposes, then `reply <id> --done`.
+- Fixed what your pin points at: `LAB reply <id> --done "<what changed>"`.
 
 ## Instead of an Artifact ("use lab")
 
