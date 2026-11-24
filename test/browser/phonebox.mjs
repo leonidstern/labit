@@ -52,7 +52,7 @@ for (const eng of engines('chromium')) {
     const shrinks = seen.filter((s, i) => i && s.h < seen[i - 1].h - 1).length;
     const drops = seen.filter((s, i) => i && s.top > seen[i - 1].top + 1).length;
     check(eng, `${width} px phone: typing a long comment, the name and send move under the words once and stay`, flips === 1 && seen.at(-1).tall, `flips ${flips}`);
-    check(eng, `${width} px phone: typing a long comment, the box never shrinks and the sheet's top never drops`, !shrinks && !drops, `shrinks ${shrinks}, drops ${drops}`);
+    check(eng, `${width} px phone: typing a long comment, the box never shrinks and the sheet's top never drops`, !shrinks && !drops, `shrinks ${shrinks}, drops ${drops}: ${JSON.stringify(seen.filter((s, i) => i && (s.h < seen[i - 1].h - 1 || s.top > seen[i - 1].top + 1)).map((s) => [seen.indexOf(s), seen[seen.indexOf(s) - 1], s]))}`);
     await ctx.close();
   }
   await browser.close();
