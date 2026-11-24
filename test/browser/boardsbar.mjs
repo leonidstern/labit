@@ -46,7 +46,7 @@ try {
       await shadow("r.querySelector('.boards-btn').click()");
       await sleep(300);
       const m0 = await menu();
-      check(eng, 'its click lists the boards by title with their frame counts, and new board', m0.open && m0.items.length === 3 && /^Hero options · 1$/.test(m0.items[0]) && /^Spacing · 1$/.test(m0.items[1]) && m0.items[2] === 'new board', JSON.stringify(m0));
+      check(eng, 'its click lists the boards by title with their frame counts, and new board', m0.open && m0.items.length === 3 && /^Hero options · 0$/.test(m0.items[0]) && /^Spacing · 0$/.test(m0.items[1]) && m0.items[2] === 'new board', JSON.stringify(m0));
       await shadow("[...r.querySelectorAll('.more-menu button')][1].click()");
       const opened = await until(view, 6000);
       check(eng, 'a board in the list opens over the page', opened && (await p.evaluate(() => location.hash)) === '#board=spacing');

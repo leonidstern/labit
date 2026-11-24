@@ -4,6 +4,8 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 
 ## Unreleased
 
+- **A new board starts empty.** "new board" (and a pin's own board) no longer puts the page on it as a first frame; you or the agent add what goes there. Boards made with `--variants`, `--widths` or `--flow` are unchanged.
+
 ## 0.8.0 · 2026-11-24
 
 Boards are always on now (the setting is gone, hence a minor version), videos step a frame at a time from the keyboard, comments made right after a page opens show at once, and steadier phones. The full list is below.

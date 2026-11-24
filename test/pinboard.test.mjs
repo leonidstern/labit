@@ -45,10 +45,10 @@ test('the card makes the pin its board: about the page at the pin, opened over t
   assert.equal(out.board.name, name);
   assert.equal(out.board.of, `/pricing#${name}`);
   assert.equal(out.home, '/pricing');
-  assert.deepEqual(out.board.frames.map((f) => f.src), ['/pricing']);
+  assert.deepEqual(out.board.frames, [], 'a new board starts empty');
 });
 
-test('with only the page on it, the pin says it holds a board with nothing on it yet', async () => {
+test('with nothing on it yet, the pin says it holds a board with nothing on it yet', async () => {
   const t = await agentText();
   assert.match(t, new RegExp(`^board: ${name} — this pin holds the person's references; its words name the board, they are not a request\\..* Nothing on it yet\\.$`, 'm'));
   assert.doesNotMatch(t, /^ {2}frame a:/m);
@@ -61,14 +61,14 @@ test('what is put on it is said with the page, the page itself left out', async 
   // inside the pin's own block, under its words (a hand-off of that pin carries it), not at the end of the page
   const block = t.split('\n\n## ').find((x) => x.includes(`id ${ID}`)) || '';
   assert.match(block, new RegExp(`^board: ${name} — `, 'm'));
-  assert.match(block, /^ {2}frame b: page \/cart "like this"$/m);
-  assert.doesNotMatch(t, /^ {2}frame a:/m);
+  assert.match(block, /^ {2}frame a: page \/cart "like this"$/m);
+  assert.equal((t.match(/^ {2}frame /gm) || []).length, 1);
 });
 
 test('asked again, it is the same board, not a new one over it', async () => {
   const r = await post({ action: 'new', name, of: `/pricing#${name}` }, { 'x-lab-admin': keys().token });
   assert.equal(r.status, 200);
-  assert.deepEqual((await r.json()).board.frames.map((f) => f.id), ['a', 'b']);
+  assert.deepEqual((await r.json()).board.frames.map((f) => f.id), ['a']);
 });
 
 test('a guest or a page without the key cannot make one', async () => {
