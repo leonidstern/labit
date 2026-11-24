@@ -1,6 +1,6 @@
 {
   "name": "labit",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Read and answer labit pin comments in a local lab (wait, fix, reply on the pin).",
   "author": {
     "name": "leonidstern",
