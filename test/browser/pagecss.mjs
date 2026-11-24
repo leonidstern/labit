@@ -47,6 +47,13 @@ const post = async (page, body) => (await fetch(B + '/_lab/api/comments', { meth
 // A board about each page: one frame, opened over the page by #board=<name>.
 fs.writeFileSync(path.join(DIR, 'frame.html'), '<!doctype html><meta charset="utf-8"><title>Frame</title><h1>A frame</h1>');
 for (const name of Object.keys(PAGES)) await fetch(`${B}/_lab/api/board?name=b${name}`, { method: 'PUT', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ v: 1, rev: 0, of: `/${name}`, frames: [{ id: 'a', src: '/frame', w: 390, h: 844, x: 0, y: 0, label: 'A frame' }] }) });
+// fn over the names, n at a time: [[name, result]] in the names' order.
+const inTurns = async (names, fn, n = 4) => {
+  const out = new Map();
+  const queue = [...names];
+  await Promise.all(Array.from({ length: n }, async () => { while (queue.length) { const name = queue.shift(); out.set(name, await fn(name)); } }));
+  return names.map((name) => [name, out.get(name)]);
+};
 for (const name of Object.keys(PAGES)) await post(`/${name}`, { text: 'a pin', anchor: { selector: '#a', x: 0.1, y: 0.5, docX: 0.1, docY: 60, width: 1000, element: '<p id="a">' } });
 
 // What it looks like: every part of the widget with the properties a page's rules reach by inheritance.
@@ -98,8 +105,9 @@ try {
         };
         const calm = await look('calm');
         check(eng, `${kind}: the calm page has its pin and card to compare`, Boolean(calm.pin && calm.card && Object.keys(calm.parts).length > 20), `${Object.keys(calm.parts || {}).length} parts`);
-        for (const name of Object.keys(PAGES).filter((n) => n !== 'calm')) {
-          const r = await look(name);
+        // The pages are looked at four at a time, each in its own tab (they share nothing), then checked in order.
+        const looked = await inTurns(Object.keys(PAGES).filter((n) => n !== 'calm'), look);
+        for (const [name, r] of looked) {
           const tag = `${kind}: ${name}`;
           if (r.nohost) {
             check(eng, `${tag}: the widget is on the page`, false);
@@ -159,8 +167,7 @@ try {
         check(eng, 'board: the calm page has its board to compare', Boolean(calm.parts && calm.parts['iframe.#1'] && Object.keys(calm.parts).length > 10), `${Object.keys(calm.parts || {}).length} parts`);
         // (A page that gives <body> a transform, a filter or contain makes it the box a fixed one counts from: the view is
         // drawn in that box, as any fixed element of the page is, so those pages aren't asked of it.)
-        for (const name of Object.keys(PAGES).filter((n) => n !== 'calm' && !/^body(transform|filter|contain)$/.test(n))) {
-          const r = await view(name);
+        for (const [name, r] of await inTurns(Object.keys(PAGES).filter((n) => n !== 'calm' && !/^body(transform|filter|contain)$/.test(n)), view)) {
           if (r.noview) {
             check(eng, `board: ${name}: the view is on the page`, false);
             continue;

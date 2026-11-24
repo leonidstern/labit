@@ -100,6 +100,9 @@ jobs:
     # so nothing is downloaded per run.
     env:
       ENGINES: ${{ matrix.engine }}
+      # anchoring-torture: one seed of generated pages on a PR (about 35 s in WebKit), both on main and by hand, where
+      # its KNOWN list is kept.
+      TORTURE_SEEDS: ${{ github.event_name == 'pull_request' && '1' || '1,2' }}
     steps:
       - run: echo "Running ${{ matrix.files || 'nothing' }}${{ matrix.bench && ' and the bench' || '' }}" | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/checkout@v4
