@@ -60,12 +60,10 @@ test('the first that has a setting wins: flag, variable, labit.json, your settin
   assert.deepEqual(s.problems, []);
 });
 
-test('boards are off unless a file or LABIT_BOARDS turns them on (Leo, 21 Nov: boards behind a flag for now)', () => {
-  assert.equal(setup().load().values.boards, false);
-  assert.equal(setup({ boards: true }).load().values.boards, true);
-  assert.equal(setup(null, { boards: true }).load().values.boards, true);
-  assert.equal(setup().load({}, { LABIT_BOARDS: '1' }).values.boards, true);
-  assert.equal(setup({ boards: true }).load({}, { LABIT_BOARDS: '0' }).values.boards, false, 'the variable wins');
+test('boards are always on: an old `boards` key in a file is skipped without a word (Leo, 24 Nov: "remove from flag it")', () => {
+  const s = setup({ boards: false }).load();
+  assert.equal('boards' in s.values, false);
+  assert.deepEqual(s.problems, []);
 });
 
 test('a project file can\'t name you or open your lab to the wifi; your file can\'t pick a project\'s folder', () => {

@@ -2176,14 +2176,13 @@ const LABIT_ATTR = ` data-labit="${`labit ${VERSION}${EDGE ? ` · edge: ${EDGE}`
 // The person updates when they choose; until then the lab, and a parked one started again, stays on its version.
 /** @type {{ version: string, notes: string[] } | null} */
 let UPDATE = null;
-const boardsAttr = () => (SET.boards ? ' data-boards="1"' : '');
 const updateAttr = () => (UPDATE ? ` data-update="${JSON.stringify(UPDATE).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')}"` : '');
 const widget = (page, admin, me = '', framed = false, req = null) => {
   if (!framed) markOpened(page); // a page loaded into a board's frame is not somebody opening it
   if (req && !framed && isNavigation(req.headers)) setErrors(page, deviceOf(req), []);
   return `<script src="/_lab/comments.js" data-live="/_lab/live" data-on="1" data-page="${page}" data-version="${version.files}" data-hot="${version.hot || 0}" data-lab="${version.lab}" data-widget="${version.widget}" data-schema="${SCHEMA}"` +
   `${me ? ` data-me="${me.replace(/[<>&'"]/g, '')}"` : ''}` +
-  `${KEYS_ATTR}${boardsAttr()}${actionsAttr()}${LABIT_ATTR}${updateAttr()}${PROXY ? ' data-proxied="1"' : ''} data-lab-name="${LAB_NAME.replace(/[<>&'"]/g, '')}"` +
+  `${KEYS_ATTR}${actionsAttr()}${LABIT_ATTR}${updateAttr()}${PROXY ? ' data-proxied="1"' : ''} data-lab-name="${LAB_NAME.replace(/[<>&'"]/g, '')}"` +
   `${admin ? ` data-admin="${TOKEN}"` : ''} defer></script>\n`;
 };
 // Before the last </body>, unless that one sits inside a script (a template string); then at the end.

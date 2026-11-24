@@ -168,7 +168,7 @@ export function bindBoardCam(w: unknown) {
   // and where a pin sits), and the pins move with the camera.
   S.pinBoards = new Set<string>();
   S.pageBoards = [] as Listed[];
-  if (W.boards && !S.board && self === top) {
+  if (!S.board && self === top) {
     defineSection();
     void loadPinBoards();
     Object.assign(window, { __labBoardView: { show: showBoard } });
