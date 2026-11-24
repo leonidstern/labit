@@ -45,6 +45,9 @@ async function untilApi(pred, ms) {
   for (const end = Date.now() + ms; Date.now() < end; await sleep(40)) if ((await (await fetch(B + '/_lab/api/comments?page=/index')).json()).comments.some(pred)) return;
 }
 
+// Two halves, two files, so they run side by side: this one is the page's own behaviours and saves;
+// behaviours-choices.mjs (BEHAVIOURS_PART=choices) the questions with choices (thread.ts, trial.ts), on pages of their own.
+const PART = process.env.BEHAVIOURS_PART || 'page';
 start();
 await up();
 for (const eng of engines()) {
@@ -56,6 +59,8 @@ for (const eng of engines()) {
   // Done pins show by default: a resolved pin stays on the page, so the go check below needs no reload
   // (a reload would land in the counts the save checks at the end make).
   await ctx.addInitScript(() => localStorage.setItem('lab-name', 'leo'));
+  // The choices half starts with labit on, as the page half leaves it.
+  if (PART === 'choices') await ctx.addInitScript(() => localStorage.setItem('lab-on', '1'));
   await ctx.addInitScript(() => addEventListener('load', () => fetch('/data.json').catch(() => {}))); // the page uses data.json: a save of it reloads the page
   const p = await ctx.newPage();
   let loads = 0;
@@ -66,6 +71,10 @@ for (const eng of engines()) {
   await p.goto(B + '/');
   await until(p, () => [...document.querySelectorAll('*')].some((n) => n.shadowRoot), null, 1200);
 
+  const admin = JSON.parse(fs.readFileSync(path.join(DIR, '.lab/server.json'), 'utf8')).agent;
+  const post = (body) =>
+    fetch(`${B}/_lab/api/comments`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-lab-admin': admin, 'x-lab-agent': '1' }, body: JSON.stringify(body) }).then((r) => r.json());
+  if (PART !== 'choices') {
   // Saved files
   await p.fill('#i', 'kept text');
   await p.evaluate(() => (document.querySelector('#d').open = true));
@@ -230,9 +239,6 @@ for (const eng of engines()) {
   await sleep(300);
 
   // A "go" comment is a pin like any other: your initial, and the tick once resolved.
-  const admin = JSON.parse(fs.readFileSync(path.join(DIR, '.lab/server.json'), 'utf8')).agent;
-  const post = (body) =>
-    fetch(`${B}/_lab/api/comments`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-lab-admin': admin, 'x-lab-agent': '1' }, body: JSON.stringify(body) }).then((r) => r.json());
   const page = await p.evaluate(() => document.querySelector('script[src*="comments.js"]').dataset.page);
   const placed = await post({ page, name: 'leo', text: 'go', anchor: { kind: 'element', selector: '#p3', x: 0.5, y: 0.5, docX: 0.5, docY: 200, width: 1000, element: '<p id="p3">', text: 'paragraph 3 with some words', section: '' } });
   const ticks = () => shadow(() => { return [...r.querySelectorAll('.pin')].filter((n) => n.textContent.trim() === '✓').length; });
@@ -337,6 +343,8 @@ for (const eng of engines()) {
     }
   }
   await post({ page, action: 'delete', id: work.comment.id });
+  }
+  if (PART !== 'page') {
   // Every comment on a page of ours goes, so each engine starts from nothing.
   const wipe = async (pg) => { for (const c of (await (await fetch(`${B}/_lab/api/comments?page=${pg}`)).json()).comments.filter((x) => !x.parent)) await post({ page: pg, action: 'delete', id: c.id }); };
   // A question with choices, tried in the sentence (src/widget/thread.ts, trial.ts): a page of its own, so the checks above
@@ -350,13 +358,14 @@ for (const eng of engines()) {
     write('ask.html', body(para + fill));
     await wipe('/ask');
     const q = await ctx.newPage();
-    await q.goto(B + '/ask');
-    await sleep(1200);
     const sq = (fn, arg) => q.evaluate(([f, a]) => new Function('r', 'a', f)([...document.querySelectorAll('*')].find((n) => n.shadowRoot).shadowRoot, a), [fn.toString().replace(/^[^{]*{|}$/g, ''), arg]);
     const anchor = { kind: 'text', selector: '#a', x: 0.3, y: 0.2, docX: 0.3, docY: 80, width: 1000, element: '<p id="a">', text: '…labit puts [the full guide on the page], not in chat…', quote };
     const root = (await post({ page: '/ask', name: 'leo', text: 'which reads best?', anchor })).comment;
     const asked = (await post({ page: '/ask', name: 'Claude', text: 'Which reads best?', parent: root.id, choices, recommend: 0 })).comment;
-    await sleep(1200);
+    // Opened once the question is there (it reaches an open page too, but that is the live connection's test).
+    await q.goto(B + '/ask');
+    await until(q, () => [...document.querySelectorAll('*')].find((n) => n.shadowRoot)?.shadowRoot.querySelector('button.pin'), null, 8000);
+    await sleep(300);
     const html = () => q.evaluate(() => document.querySelector('#a').innerHTML);
     const nodes = () => q.evaluate(() => { let n = 0; for (const w = document.createTreeWalker(document.querySelector('#a'), NodeFilter.SHOW_ALL); w.nextNode(); ) n++; return n; });
     const quoteRects = () => q.evaluate(() => {
@@ -684,6 +693,8 @@ for (const eng of engines()) {
     await q.close();
   }
 
+  }
+  if (PART !== 'choices') {
   // A save the page has nothing to do with leaves it alone; one it may fetch reloads it; a lab restart doesn't.
   // (A page with its own <script> is not used here: such a page never patches in place, it reloads on every HTML
   // save, which is what the checks above cover. Whether a page uses a saved script is tested in hot.test.mjs.)
@@ -725,8 +736,9 @@ for (const eng of engines()) {
   await up();
   for (const end = Date.now() + 6000; Date.now() < end && sLoads < 2; ) await sleep(50);
   check(eng, 'a page with its own script whose file was saved while the lab was down reloads when it is back', sLoads === 2 && (await s.title()) === 'S2', `loads ${sLoads}`);
+  }
   await browser.close();
 }
 server.kill();
-fs.rmSync(DIR, { recursive: true, force: true });
+fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 }); // the lab may still be writing as it ends
 finish();

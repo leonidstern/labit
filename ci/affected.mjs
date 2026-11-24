@@ -46,20 +46,20 @@ const REACH = {
   'src/widget/keys.ts': ['shiftkeys', 'selection'],
   'src/widget/boardcam.ts': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardmode', 'boardpins', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard', 'boardsection', 'boardpin'],
   'src/widget/actions.ts': ['actions'],
-  'src/widget/chat.ts': ['behaviours', 'boardclose', 'connection', 'fluid', 'native', 'progress', 'sections', 'shortcuts', 'update', 'updbadge', 'zoom'],
+  'src/widget/chat.ts': ['behaviours', 'behaviours-choices', 'boardclose', 'connection', 'fluid', 'native', 'progress', 'sections', 'shortcuts', 'update', 'updbadge', 'zoom'],
   'src/widget/draw.ts': ['draw', 'edge-draw1', 'edge-draw2', 'edge-draw3', 'edge-draw4', 'native', 'nativepins', 'shiftkeys'],
-  'src/widget/fluid.ts': ['behaviours', 'fluid', 'nativepins', 'select', 'selection', 'shortcuts'],
+  'src/widget/fluid.ts': ['behaviours', 'behaviours-choices', 'fluid', 'nativepins', 'select', 'selection', 'shortcuts'],
   'src/widget/frame.ts': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardhome', 'boardmode', 'boardpins', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard'],
   'src/widget/ink.ts': ['draw', 'edge-draw1', 'edge-draw2', 'edge-draw3', 'edge-draw4', 'native', 'nativepins', 'shiftkeys'],
-  'src/widget/messages.ts': ['behaviours', 'boardclose', 'boardcanvas', 'boardpins', 'connection', 'draw', 'edge-draw2', 'fluid', 'moment', 'native', 'progress', 'sections', 'selection', 'shortcuts', 'undo', 'update', 'updbadge', 'zoom'],
-  'src/widget/pinhold.ts': ['actions', 'behaviours', 'boardclose', 'boardcanvas', 'boardpins', 'boardview', 'boxfits', 'connection', 'draw', 'edge-draw1', 'edge-draw2', 'edge-draw3', 'edge-draw4', 'fluid', 'moment', 'moved', 'native', 'nativeboard', 'nativepins', 'progress', 'sections', 'select', 'selection', 'shortcuts', 'undo'],
+  'src/widget/messages.ts': ['behaviours', 'behaviours-choices', 'boardclose', 'boardcanvas', 'boardpins', 'connection', 'draw', 'edge-draw2', 'fluid', 'moment', 'native', 'progress', 'sections', 'selection', 'shortcuts', 'undo', 'update', 'updbadge', 'zoom'],
+  'src/widget/pinhold.ts': ['actions', 'behaviours', 'behaviours-choices', 'boardclose', 'boardcanvas', 'boardpins', 'boardview', 'boxfits', 'connection', 'draw', 'edge-draw1', 'edge-draw2', 'edge-draw3', 'edge-draw4', 'fluid', 'moment', 'moved', 'native', 'nativeboard', 'nativepins', 'progress', 'sections', 'select', 'selection', 'shortcuts', 'undo'],
   'src/widget/sections.ts': ['boardview', 'edge-draw3', 'sections', 'shortcuts'],
   'src/widget/sections.css': ['boardview', 'edge-draw3', 'sections', 'shortcuts'],
   'src/widget/select.ts': ['select'],
-  'src/widget/stick.ts': ['behaviours', 'boardclose', 'boardcanvas', 'boardpins', 'connection', 'draw', 'edge-draw2', 'fluid', 'moment', 'native', 'progress', 'sections', 'selection', 'shortcuts', 'undo', 'update', 'updbadge', 'zoom'],
-  'src/widget/switcher.ts': ['behaviours', 'boardcanvas', 'boardmode', 'moved', 'native', 'select', 'shortcuts', 'update', 'updbadge'],
-  'src/widget/switcher.css': ['behaviours', 'boardcanvas', 'boardmode', 'moved', 'native', 'select', 'shortcuts', 'update', 'updbadge'],
-  'src/widget/trial.ts': ['anchoring', 'behaviours', 'native', 'progress', 'selection', 'shortcuts'],
+  'src/widget/stick.ts': ['behaviours', 'behaviours-choices', 'boardclose', 'boardcanvas', 'boardpins', 'connection', 'draw', 'edge-draw2', 'fluid', 'moment', 'native', 'progress', 'sections', 'selection', 'shortcuts', 'undo', 'update', 'updbadge', 'zoom'],
+  'src/widget/switcher.ts': ['behaviours', 'behaviours-choices', 'boardcanvas', 'boardmode', 'moved', 'native', 'select', 'shortcuts', 'update', 'updbadge'],
+  'src/widget/switcher.css': ['behaviours', 'behaviours-choices', 'boardcanvas', 'boardmode', 'moved', 'native', 'select', 'shortcuts', 'update', 'updbadge'],
+  'src/widget/trial.ts': ['anchoring', 'behaviours', 'behaviours-choices', 'native', 'progress', 'selection', 'shortcuts'],
   'src/board/camera.ts': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardhome', 'boardmode', 'boardpins', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard'],
   'src/board/mount.ts': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardhome', 'boardimage', 'phonepins', 'boardmode', 'boardpins', 'boardzones', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard'],
   'src/board/overlay.ts': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardhome', 'boardimage', 'phonepins', 'boardmode', 'boardpins', 'boardzones', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard', 'boardsection', 'boardpin'],
@@ -72,13 +72,13 @@ const REACH = {
   'src/widget/pics.ts': ['attach', 'boardimage'],
   'public/_lab/pics.js': ['attach', 'boardimage'],
   'public/_lab/sections.js': ['boardview', 'edge-draw3', 'sections', 'shortcuts'],
-  'public/_lab/switcher.js': ['behaviours', 'boardcanvas', 'boardmode', 'moved', 'native', 'select', 'shortcuts', 'update', 'updbadge'],
-  'lib/actions.ts': ['actions', 'behaviours', 'fluid', 'nativepins', 'select', 'selection', 'shortcuts'],
-  'lib/agents.ts': ['behaviours', 'connection', 'edge-draw1', 'edge-draw2', 'edge-draw3', 'edge-draw4', 'moment', 'moved', 'native', 'progress', 'shortcuts', 'updbadge'],
+  'public/_lab/switcher.js': ['behaviours', 'behaviours-choices', 'boardcanvas', 'boardmode', 'moved', 'native', 'select', 'shortcuts', 'update', 'updbadge'],
+  'lib/actions.ts': ['actions', 'behaviours', 'behaviours-choices', 'fluid', 'nativepins', 'select', 'selection', 'shortcuts'],
+  'lib/agents.ts': ['behaviours', 'behaviours-choices', 'connection', 'edge-draw1', 'edge-draw2', 'edge-draw3', 'edge-draw4', 'moment', 'moved', 'native', 'progress', 'shortcuts', 'updbadge'],
   'lib/board.ts': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardhome', 'boardmode', 'boardpins', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard', 'sections'],
   'lib/boardact.ts': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardhome', 'boardmode', 'boardpins', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard'],
-  'lib/commands.ts': ['behaviours', 'connection', 'moved', 'progress'],
-  'lib/labcall.ts': ['behaviours', 'connection', 'moved', 'progress'],
+  'lib/commands.ts': ['behaviours', 'behaviours-choices', 'connection', 'moved', 'progress'],
+  'lib/labcall.ts': ['behaviours', 'behaviours-choices', 'connection', 'moved', 'progress'],
   'lib/proxy.ts': ['devroutes', 'sections'],
   'lib/update.ts': ['update'],
 };
@@ -134,6 +134,14 @@ export function shards(picked, { engines = ['webkit'], times = readTimes(), benc
   return jobs;
 }
 
+const readTest = (n) => {
+  try {
+    return fs.readFileSync(path.join(ROOT, 'test/browser', `${n}.mjs`), 'utf8');
+  } catch {
+    return '';
+  }
+};
+
 export function affected(files, { tests = groupTests(), reach = REACH, diffOf = () => '' } = {}) {
   const why = [];
   const pick = new Set();
@@ -148,8 +156,10 @@ export function affected(files, { tests = groupTests(), reach = REACH, diffOf = 
     }
     const t = f.match(/^test\/browser\/([\w-]+)\.mjs$/)?.[1];
     if (t && tests.has(t)) {
-      pick.add(t);
-      why.push(`${f}: runs ${t}`);
+      // And the tests that run it as part of themselves (behaviours-choices.mjs imports behaviours.mjs).
+      const also = [...tests].filter((o) => o !== t && readTest(o).includes(`'./${t}.mjs'`));
+      for (const n of [t, ...also]) pick.add(n);
+      why.push(`${f}: runs ${[t, ...also].join(' ')}`);
       continue;
     }
     if (f === 'ci/native.mjs') {
