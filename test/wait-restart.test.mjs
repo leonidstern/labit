@@ -41,3 +41,26 @@ test('a wait outlives a restart of the lab and still gets the next pin', async (
   assert.match(out, /after the restart/);
   assert.equal(code, 0);
 });
+
+test('a wait outlives two restarts further apart than it holds on for', async () => {
+  const hold = { ...env, LABIT_WAIT_HOLD_S: '3' };
+  const waiting = cli(['wait', '--bg', '--timeout', '30'], { cwd: DIR, env: hold });
+  await sleep(800);
+  for (const _ of [1, 2]) {
+    await stop(lab);
+    await sleep(500);
+    lab = start();
+    await up();
+    await sleep(4000); // past the 3 s it holds on for: the second restart is a new gap, not the first one still running
+  }
+  const res = await fetch(B + '/_lab/api/comments', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: B },
+    body: JSON.stringify({ page: '/index', name: 'Leo', text: 'after two restarts', anchor: H1 }),
+  });
+  assert.ok(res.ok);
+  const { code, out } = await waiting;
+  assert.doesNotMatch(out, /isn't running/);
+  assert.match(out, /after two restarts/);
+  assert.equal(code, 0);
+});

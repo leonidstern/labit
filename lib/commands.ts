@@ -218,19 +218,23 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
     // A lab started again has a new key in its .lab/server.json (this folder's, not a lab above): each try reads it again, so the old key isn't refused
     // (before, a wait outlived the restart and then ended on "forbidden", and the lab showed nobody listening).
     const call = async (pathname: string, body: object, seconds = 5) => {
-      let until = 0;
+      let lost = 0; // when the lab went, in this spell of not reaching it
       for (;;) {
         try {
           server = JSON.parse(fs.readFileSync(path.join(dir, '.lab/server.json'), 'utf8'));
         } catch {} // mid-write or gone: the last one read
+        const tried = Date.now();
         try {
           const out = await labCall(server, pathname, body, session);
           // Said so a gap shows in the agent's output with its length (the lab's log has the other side).
-          if (until) console.log(`The lab was gone for ${Math.round((Date.now() - until) / 1000 + seconds)} s and is back.`);
+          if (lost) console.log(`The lab was gone for ${Math.round((tried - lost) / 1000)} s and is back.`);
           return out;
         } catch {
-          if (!until) until = Date.now() + seconds * 1000;
-          if (Date.now() >= until) return gone();
+          // A try that was held open a while (a wait the lab took again after an update) reached the lab: this is a new
+          // spell. Before, the clock from the first update kept running under the held wait, and the next update, minutes
+          // later, ended it at once (23 Nov: waits died on a 0.3 s hand-over).
+          if (!lost || Date.now() - tried > 2000) lost = Date.now();
+          if (Date.now() - lost >= seconds * 1000) return gone();
           await new Promise((r) => setTimeout(r, 400));
         }
       }
@@ -250,7 +254,7 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
       const { seconds, capped } = waitSeconds(opts, process.stdout.isTTY === true);
       // 2 minutes: a lab taking a newer build is usually back within a second, but one was gone 20 s and more three
       // times on 23 Nov (while its build was made), and each wait that gave up left the person's pins unheard.
-      const out = await call('/_lab/wait', { timeout: seconds, pages: listenPages(opts, true), ack: true }, 120);
+      const out = await call('/_lab/wait', { timeout: seconds, pages: listenPages(opts, true), ack: true }, Number(process.env.LABIT_WAIT_HOLD_S) || 120);
       console.log(WAIT_SAID[out.status] ?? out.text);
       // Codex can't be woken once its turn ended, and what a background command prints then is read by nobody: a
       // `wait --bg` there that confirmed its hand-off left the pins "picked up" and unread (#420, tested on Codex
