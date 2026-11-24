@@ -55,7 +55,7 @@ export const useRedis = (fn) => (redis = fn);
 // what it changed written back (only the comments it changed, so two people's writes to one page both land).
 let turn = Promise.resolve();
 const inTurn = (fn) => {
-  const run = turn.then(fn);
+  const run = turn.then(fn).catch((e) => (console.error(e), json({ error: `could not reach the store: ${e.message}` }, 503)));
   turn = run.catch(() => {});
   return run;
 };
