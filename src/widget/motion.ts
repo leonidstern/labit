@@ -128,6 +128,19 @@ const seekMoment = (m) => {
   refresh();
   return true;
 };
+// Opening a pin placed on a video takes that video back to the frame it was placed on (Leo, 24 Nov), and holds it
+// there to be seen: only that video stops, the rest of the page goes on. Play it again as usual.
+export const showMoment = (m) => {
+  if (m?.kind !== 'video') return;
+  let el = null;
+  try {
+    el = m.sel ? document.querySelector(m.sel) : null;
+  } catch {}
+  if (!(el instanceof HTMLVideoElement) || W.root.contains(el)) return;
+  if (!isStill(el)) setItem(el, true);
+  el.currentTime = m.at;
+  refresh();
+};
 // The moment, as a quiet line (Leo, 23 Nov, 4c): under the first message of a thread, beside its time, and above the box
 // of a comment being written; every kind, in the words the agent gets. A button where the page can go back to it (a
 // video, an animation); a GIF's only says (it can't be sought).

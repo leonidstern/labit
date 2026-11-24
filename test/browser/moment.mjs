@@ -1,7 +1,7 @@
 // Pause, comment, the moment kept (Leo, 19 Nov): a pin written while the page is paused carries where the paused thing
 // stood (a CSS loop's second inside one pass and which pass, a video's time; a GIF how long it had been showing), shows
 // it as a quiet line while written and under the sent pin's first message (Leo, 23 Nov), the page stays paused after sending, and the chip on a pin takes the
-// page back to that moment. In WebKit and Chrome's engine. Not part of `npm test`.
+// page back to that moment; opening a pin on a video takes the video back to its frame. In WebKit and Chrome's engine. Not part of `npm test`.
 // Run: node test/browser/moment.mjs (needs playwright; NODE_PATH can point at a node_modules that has it).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -156,6 +156,10 @@ try {
         const got = await openNear('vid', '.card .msg .when button.moment');
         const shown = await inRoot(p, "r.querySelector('.card .msg .when button.moment')?.textContent || ''");
         check(eng, 'the sent pin on the paused video shows its moment', got && /^video \d:\d\d\.\d of \d:\d\d$/.test(shown), shown);
+        // Opened, the pin takes its video back to the frame it was placed on, held there (Leo, 24 Nov).
+        await sleep(300);
+        const opened = await p.evaluate(() => { const v = document.getElementById('vid'); return { paused: v.paused, t: v.currentTime }; });
+        check(eng, 'opening the pin takes its video back to the frame it was placed on', got && opened.paused && Math.abs(opened.t - vidPin.vm.at) < 0.11, JSON.stringify({ opened, at: vidPin.vm?.at }));
         await p.evaluate(() => { const v = document.getElementById('vid'); v.play?.(); });
         await sleep(500);
         await inRoot(p, "r.querySelector('.card button.moment').click()");

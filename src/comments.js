@@ -1003,6 +1003,7 @@ import { bindKeys } from './widget/keys.ts';
     const own = /auto|scroll|hidden|clip/.test(cs.overflowX + cs.overflowY); // html has an overflow of its own
     de.classList.add(own ? 'lab-hold-h' : 'lab-hold-b');
   };
+  let seekedFor = null; // the open pin whose video was taken back to its frame
   let viewW = 0; // the screen's width without its scrollbar (flipAt)
   function render() {
     // The bar shows from its first drawing on: as it comes in the page's source it holds one empty button with a dot, and that
@@ -1018,6 +1019,12 @@ import { bindKeys } from './widget/keys.ts';
     // A question's choice tried in the page (thread.ts): the page's own words are back before anything is read or drawn;
     // the same card drawn again tries the same row again.
     pauseTry(S.on ? S.openId : null);
+    // A pin just opened on a video: the video goes back to the frame the pin was placed on (motion.ts showMoment).
+    if (S.openId !== seekedFor) {
+      seekedFor = S.openId;
+      const m = S.openId ? S.comments.find((/** @type {any} */ x) => x.id === S.openId)?.anchor?.moment : null;
+      if (m?.kind === 'video') void (mo ? Promise.resolve(mo) : loadMotion()).then((x) => x?.showMoment(m));
+    }
     // A pick still in its 5 s of undo goes now if its card (or the chat) has closed.
     flushPick(S.on ? S.openId : null, Boolean(S.on && S.chatOpen));
     S.grabbing = false; // a pin being dragged is replaced: its drag ends here

@@ -4,6 +4,7 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 
 ## Unreleased
 
+- **A pin on a video opens at its frame.** Opening a pin placed on a video takes the video back to the moment the pin went down and holds it there; the rest of the page keeps moving. Play it again as usual.
 - **A new board starts empty.** "new board" (and a pin's own board) no longer puts the page on it as a first frame; you or the agent add what goes there. Boards made with `--variants`, `--widths` or `--flow` are unchanged.
 
 ## 0.8.0 · 2026-11-24
