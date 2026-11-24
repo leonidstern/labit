@@ -46,18 +46,23 @@ try {
         await p.reload(); // each case from a closed card
         await p.waitForFunction(() => [...document.querySelectorAll('*')].some((n) => n.shadowRoot?.querySelector('button.pin')), null, { timeout: 8000 });
         await sleep(900);
-        // The pin can still be on its way to its spot 900 ms after a load on a busy Mac (eight browser jobs at once): measured
-        // then, the scroll put it somewhere else and the click missed. Scroll until the pin sits where this case wants it.
-        for (let i = 0; i < 30; i++) {
-          const pinY = await shadow((r) => r.querySelector('button.pin').getBoundingClientRect().top + scrollY);
-          await p.evaluate(([y, f]) => scrollTo(0, y - innerHeight * f), [pinY, at]);
-          await sleep(200);
-          if (await shadow((r, f) => Math.abs(r.querySelector('button.pin').getBoundingClientRect().top - innerHeight * f) < 2, at)) break;
+        // The pin can still be on its way to its spot after a load on a slow runner, and the page's own scroll can come
+        // back late after a reload: scroll until the pin sits where this case wants it, click it, and if no card opened
+        // (the page moved under the click), do it again; three tries. What is checked is where the card opens.
+        const open = () => shadow((r) => [...r.querySelectorAll('.card')].some((n) => !n.classList.contains('out') && n.getBoundingClientRect().width));
+        for (let tries = 0; tries < 3 && !(await open()); tries++) {
+          for (let i = 0; i < 30; i++) {
+            const pinY = await shadow((r) => r.querySelector('button.pin').getBoundingClientRect().top + scrollY);
+            await p.evaluate(([y, f]) => scrollTo(0, y - innerHeight * f), [pinY, at]);
+            await sleep(200);
+            if (await shadow((r, f) => Math.abs(r.querySelector('button.pin').getBoundingClientRect().top - innerHeight * f) < 2, at)) break;
+          }
+          await sleep(500); // a press while the page still scrolls is a scroll's, not a click (as for a person)
+          const q = await shadow((r) => { const b = r.querySelector('button.pin').getBoundingClientRect(); return [b.x + 14, b.y + 14]; });
+          await p.mouse.click(q[0], q[1]);
+          for (let i = 0; i < 20 && !(await open()); i++) await sleep(100);
         }
-        await sleep(300);
-        const q = await shadow((r) => { const b = r.querySelector('button.pin').getBoundingClientRect(); return [b.x + 14, b.y + 14]; });
-        await p.mouse.click(q[0], q[1]);
-        await sleep(1000);
+        await sleep(600); // the card's own placement settles after it opens
         const s = await shadow((r) => {
           const b = r.querySelector('button.pin').getBoundingClientRect();
           const c = [...r.querySelectorAll('.card')].find((n) => !n.classList.contains('out') && n.getBoundingClientRect().width)?.getBoundingClientRect();

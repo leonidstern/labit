@@ -131,7 +131,7 @@ jobs:
         with:
           path: ${{ runner.os == 'macOS' && '~/Library/Caches/ms-playwright' || '~/.cache/ms-playwright' }}
           key: playwright-1.65.1-${{ runner.os }}-${{ matrix.engine }}
-      - run: npx playwright install ${{ runner.os == 'Linux' && '--with-deps' || '' }} ${{ matrix.engine }}${{ matrix.bench && ' chromium' || '' }}
+      - run: npx playwright install ${{ runner.os == 'Linux' && '--with-deps' || '' }} ${{ matrix.engine }}${{ (matrix.bench || matrix.native) && ' chromium' || '' }}
       - run: npm run build # the page script is built from src/, not kept in git
       - name: Run ${{ matrix.engine }} ${{ matrix.shard }}
         if: matrix.files != ''
@@ -142,26 +142,11 @@ jobs:
       # per run, in the first WebKit shard (bench/run.mjs starts Chrome itself).
       - if: matrix.bench
         run: node bench/run.mjs
-
-  # Native features (ci/native.mjs): what Safari's engine and Chrome's can do that labit could use, as a table in the
-  # job's summary. Fails only when a feature labit uses goes missing from one of them. On macOS, for Safari's WebKit.
-  native:
-    needs: plan
-    if: needs.plan.outputs.native == 'true'
-    runs-on: macos-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npm install --no-save --no-audit --no-fund playwright@1.65.1
-      - uses: actions/cache@v4
-        with:
-          path: ~/Library/Caches/ms-playwright
-          key: playwright-1.65.1-macOS-native
-      - run: npx playwright install webkit chromium
-      - run: node ci/native.mjs
+      # Native features (ci/native.mjs): what Safari's engine and Chrome's can do that labit could use, as a table in the
+      # job's summary. Fails only when a feature labit uses goes missing from one of them. In the first WebKit shard, so
+      # it takes none of the five macOS runners of its own.
+      - if: matrix.native
+        run: node ci/native.mjs
 
   # One required check name for branch protection, green only when every browser job is, or when the plan picked no
   # browser test at all (a docs or CI-only PR).

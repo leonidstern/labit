@@ -111,7 +111,7 @@ export function listEdit(diff) {
 // WebKit shard.
 const RUNNERS = { webkit: 5, chromium: 5 };
 const TARGET = 60;
-export function shards(picked, { engines = ['webkit'], times = readTimes(), bench = false, runners = RUNNERS } = {}) {
+export function shards(picked, { engines = ['webkit'], times = readTimes(), bench = false, native = false, first = [], runners = RUNNERS } = {}) {
   const limit = (engine) => (typeof runners === 'number' ? Math.max(1, Math.floor(runners / engines.length)) : runners[engine] ?? 5);
   const names = picked === 'all' ? Object.keys(times) : picked.split(/\s+/).filter(Boolean);
   const cost = (n) => times[n] ?? TARGET; // a test with no time yet counts as a whole shard
@@ -127,11 +127,15 @@ export function shards(picked, { engines = ['webkit'], times = readTimes(), benc
     }
     bins.forEach((b, i) => {
       const withBench = bench && engine === 'webkit' && i === 0;
-      if (b.files.length || withBench) jobs.push({ engine, os: engine === 'webkit' ? 'macos-latest' : 'ubuntu-latest', shard: `${i + 1}/${k}`, files: b.files.join(' '), bench: withBench, secs: b.secs });
+      const withNative = native && engine === 'webkit' && i === 0;
+      // The PR's own test files first, then longest first: a failure shows as early as it can.
+      const files = [...b.files.filter((n) => first.includes(n)), ...b.files.filter((n) => !first.includes(n))];
+      if (b.files.length || withBench || withNative) jobs.push({ engine, os: engine === 'webkit' ? 'macos-latest' : 'ubuntu-latest', shard: `${i + 1}/${k}`, files: files.join(' '), bench: withBench, native: withNative, secs: b.secs });
     });
   }
   // The bench alone, with no WebKit in this run: a job of its own on WebKit.
-  if (bench && !jobs.some((j) => j.bench)) jobs.push({ engine: 'webkit', os: 'macos-latest', shard: 'bench', files: '', bench: true, secs: 0 });
+  // The bench or the native check with no WebKit shard in this run: a job of their own on WebKit.
+  if ((bench || native) && !jobs.some((j) => j.engine === 'webkit' && j.shard.startsWith('1/'))) jobs.push({ engine: 'webkit', os: 'macos-latest', shard: bench ? 'bench' : 'native', files: '', bench, native, secs: 0 });
   return jobs;
 }
 
@@ -297,6 +301,7 @@ export function unitAffected(files, { map = null, linesOf = () => null, all = un
 export function affected(files, { tests = groupTests(), reach = REACH, diffOf = () => '', map = null, linesOf = () => null, classesOf = () => [] } = {}) {
   const why = [];
   const pick = new Set();
+  const first = new Set(); // the PR's own test files: run first in their shard, so a red PR shows red early
   let all = false;
   let native = false;
   let bench = false;
@@ -310,7 +315,7 @@ export function affected(files, { tests = groupTests(), reach = REACH, diffOf = 
     if (t && tests.has(t)) {
       // And the tests that run it as part of themselves (behaviours-choices.mjs imports behaviours.mjs).
       const also = [...tests].filter((o) => o !== t && readTest(o).includes(`'./${t}.mjs'`));
-      for (const n of [t, ...also]) pick.add(n);
+      for (const n of [t, ...also]) (pick.add(n), first.add(n));
       why.push(`${f}: runs ${[t, ...also].join(' ')}`);
       continue;
     }
@@ -373,10 +378,10 @@ export function affected(files, { tests = groupTests(), reach = REACH, diffOf = 
     all = true;
     why.push(`${f}: runs every test`);
   }
-  if (all) return { tests: 'all', native: true, bench: true, why };
+  if (all) return { tests: 'all', native: true, bench: true, first: [...first], why };
   // The native check probes the engines for what the widget uses; it follows any widget change.
   if (srcChanged) native = true;
-  return { tests: [...pick].sort().join(' '), native, bench, why };
+  return { tests: [...pick].sort().join(' '), native, bench, first: [...first], why };
 }
 
 // A merge to main was already tested in its PR, so main runs browser tests only for a release: a merge that changes
@@ -450,7 +455,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   // Unit files over up to three jobs, about eight files a job; none picked, no job.
   out.unitShards = unitCount ? Array.from({ length: Math.min(3, Math.ceil(unitCount / 8)) }, (_, i) => i + 1) : [];
   const engines = (process.env.ENGINES || 'webkit').split(',');
-  out.jobs = out.tests || out.bench ? shards(out.tests, { engines, bench: out.bench }) : [];
+  out.jobs = out.tests || out.bench || out.native ? shards(out.tests, { engines, bench: out.bench, native: out.native, first: out.first || [] }) : [];
   console.log(JSON.stringify(out, null, 2));
   if (process.env.GITHUB_OUTPUT) {
     const jobs = out.jobs.map(({ secs, ...j }) => j);
