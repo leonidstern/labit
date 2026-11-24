@@ -740,6 +740,14 @@ export function startLive() {
           else hotUpdate(v.hotFiles || []);
         }
         hotAt = hot;
+        // The page's list of comments isn't in yet (the page just loaded): a comment made between that list being read
+        // and this state is in this state's version but not in the list, and no later state would name it again. Once
+        // the list is in, whatever is newer than it is fetched.
+        if (!W.S.loaded) {
+          const want = v.comments;
+          const after = () => (W.S.loaded ? W.S.rev != null && W.S.rev < want && W.loadChanges(W.S.rev) : setTimeout(after, 100));
+          after();
+        }
         commentsRev ??= W.S.rev ?? null; // the list's own version: what was written since it was read is fetched below, not lost
         // One version on and it names the pages it changed, none of them this one: nothing to fetch. (An older lab sends
         // no commentPages; more than one version on, the pages in between aren't known.)
