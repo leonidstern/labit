@@ -20,6 +20,9 @@ type Anchor = {
   selector: string;
   /** The nearest element with an id around the spot, so an agent knows the block a pin is on. */
   block?: string;
+  /** A plain click on words: the word under it, for the agent text only (the pin stays on the element, nothing is
+   *  highlighted). "Say archive instead of this word" needs to say which word. */
+  word?: { exact: string; prefix: string; suffix: string };
   /** Where in the element, as shares of its width and height. */
   x: number;
   y: number;
@@ -746,6 +749,8 @@ export function anchorAt(clickX, clickY, words = false, onto = null) {
       if (anchor.kind === 'element') {
         const gap = between(target, clientY);
         if (gap) Object.assign(anchor, { gapAbove: gap.above, gapBelow: gap.below });
+        const w = !aside ? quoteAt(clientX, clientY, shadowRoots) : null;
+        if (w) anchor.word = { exact: w.exact, prefix: w.prefix, suffix: w.suffix };
       }
     }
   }
