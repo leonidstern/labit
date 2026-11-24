@@ -303,12 +303,12 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
     // many: pin --file points.json; on a board: pin --board <name> [--frame b] <selector|-> "text".
     if (cmd === 'pin' && !settle) {
       const usage = `${CMD} pin <selector> "text" [--page /path] | pin --file points.json | pin --board <name> --frame <id> <selector> "text"`;
-      type Point = { selector?: string; text?: string; quote?: string; at?: unknown; page?: unknown; question?: boolean; choices?: unknown; recommend?: unknown };
+      type Point = { selector?: string; text?: string; quote?: string; at?: unknown; page?: unknown; question?: boolean; choices?: unknown; hints?: unknown; hintFor?: unknown; recommend?: unknown };
       let points: Point[];
       if (opts.file !== undefined) {
         if (typeof opts.file !== 'string') die('--file takes a JSON file.');
         if (ref || words.length) die('--file holds the pins: no selector or text on the command line.');
-        const each = ['quote', 'at', 'question', 'choice', 'recommend'].filter((k) => opts[k] !== undefined);
+        const each = ['quote', 'at', 'question', 'choice', 'hint', 'recommend'].filter((k) => opts[k] !== undefined);
         if (each.length) die(`${each.map((k) => `--${k}`).join(', ')} go on a single pin: in --file put them in each pin's own entry.`);
         let list: unknown;
         try {
@@ -325,7 +325,7 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
         // On a board a pin may be on no element: with one word left over, it is the text.
         if (opts.board !== undefined && !words.length && selector) [selector, said] = ['', [ref]];
         else if (selector === '-') selector = '';
-        points = [{ selector, text: said.join(' '), quote: opts.quote, at: opts.at, question: opts.question === true, choices: Array.isArray(opts.choice) ? opts.choice : undefined, recommend: opts.recommend }];
+        points = [{ selector, text: said.join(' '), quote: opts.quote, at: opts.at, question: opts.question === true, choices: Array.isArray(opts.choice) ? opts.choice : undefined, hints: opts.hint, hintFor: opts['hint-for'], recommend: opts.recommend }];
       }
 
       let browser = false; // whether a browser has the lab open (said by the lab with its pages)
@@ -387,11 +387,17 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
         if (!text) fail(`Pin text is missing: ${CMD} pin ${selector || '<selector>'} "<point>"`);
         if (pt.quote !== undefined && (typeof pt.quote !== 'string' || !pt.quote.trim())) fail('--quote takes the exact words.');
         if (pt.quote && !selector) fail('--quote goes with a selector.');
-        let asked: { choices: string[]; recommend?: number } | undefined;
-        if (pt.choices !== undefined || pt.recommend !== undefined) {
-          const c = replyChoices({ choice: pt.choices, recommend: pt.recommend });
+        let asked: { choices: string[]; recommend?: number; hints?: string[] } | undefined;
+        if (pt.choices !== undefined || pt.recommend !== undefined || pt.hints !== undefined) {
+          // --hint after its --choice on the command line; in --file, "hints": one per choice in their order ("" for none).
+          const fromFile = opts.file !== undefined && Array.isArray(pt.hints);
+          const hint = fromFile ? (pt.hints as unknown[]).filter((h) => h !== '') : pt.hints;
+          const hintFor = fromFile ? (pt.hints as unknown[]).flatMap((h, i) => (h === '' ? [] : [i])) : pt.hintFor;
+          if (opts.file !== undefined && pt.hints !== undefined && !Array.isArray(pt.hints)) fail('"hints" is a list, one for each choice ("" for none).');
+          if (fromFile && Array.isArray(pt.choices) && (pt.hints as unknown[]).length !== pt.choices.length) fail('"hints": one for each choice ("" for none).');
+          const c = replyChoices({ choice: pt.choices, recommend: pt.recommend, ...(hint !== undefined && (!Array.isArray(hint) || hint.length) ? { hint, 'hint-for': hintFor } : {}) });
           if (c instanceof Error) fail(c.message);
-          asked = c as { choices: string[]; recommend?: number } | undefined;
+          asked = c as { choices: string[]; recommend?: number; hints?: string[] } | undefined;
         }
 
         // Where the pin goes: a page of the lab, or a board (and one of its frames).
