@@ -77,6 +77,9 @@ const until = async (f, ms = 6000) => {
   return false;
 };
 
+// Two halves, two files, side by side in CI: a (this file) the bar's reading and the lab's store; b (sections-layout.mjs,
+// SECTIONS_PART=b) where the bar sits: grids, a page's own bar, computer and phone widths, zoom, the six rules, a board.
+const PART = process.env.SECTIONS_PART || 'a';
 try {
   for (const eng of engines()) {
     const browser = await pw[eng].launch();
@@ -101,6 +104,7 @@ try {
     const L = await open(own);
     const { p, chips, states, tap, scrollTo, shadow } = L;
 
+    if (PART !== 'b') {
     // ---- the first visit: everything is read ----
     check(eng, 'first visit: a bar with four sections, none marked', (await states()) === 'Speed: Cost: Risk: Next steps:', await states());
     check(eng, 'no page name in the bar', await shadow(() => { return !r.querySelector('.sb-title') && !r.querySelector('.sbar').textContent.includes('Plan'); }));
@@ -207,6 +211,8 @@ try {
     check(eng, '...and no pin opened (no card shows its comment)', await PN.shadow(() => { return ![...r.querySelectorAll('.card')].some((c) => c.isConnected && /a pin in Risk/.test(c.textContent) && c.getBoundingClientRect().height > 0); }));
     await PN.p.context().close();
 
+    }
+    if (PART !== 'a') {
     // ---- headings inside repeated items (the cards of a grid) are not sections ----
     write('cards.html', page({ head: '.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}.card{height:100px;border:1px solid #ccc}section{height:300px}', body: sec('speed', 'Speed') + sec('cost', 'Cost') + sec('risk', 'Risk') + `<div class="grid">${Array.from({ length: 10 }, (_, i) => `<div class="card"><h2>Option ${i + 1}</h2><p>Words.</p></div>`).join('')}</div>` }));
     write('cards-list.html', page({ head: 'section{height:300px}', body: sec('speed', 'Speed') + sec('cost', 'Cost') + sec('risk', 'Risk') + `<div>${Array.from({ length: 6 }, (_, i) => `<article><h2>Post ${i + 1}</h2><p>Words.</p></article>`).join('')}</div>` }));
@@ -233,12 +239,13 @@ try {
     check(eng, 'kept: an old sectionBar: false in labit.json still gets the bar', (await F.chips()).length > 0, String((await F.chips()).length));
 
     // ---- comments hidden: no bar ----
+    const had = (await chips()).length;
     await p.keyboard.press('m');
     await sleep(500);
     check(eng, 'comments hidden: the bar goes', (await chips()).length === 0);
     await p.keyboard.press('m');
     await sleep(900);
-    check(eng, 'and comes back with them', (await chips()).length >= 5);
+    check(eng, 'and comes back with them', had > 0 && (await chips()).length === had, `${(await chips()).length} of ${had}`);
 
     // ---- a computer: the bar as wide as its tabs; too many scroll sideways under a swipe or the wheel ----
     const fit = await shadow(() => { const b = r.querySelector('.sbar').getBoundingClientRect(); const n = r.querySelector('.sb-nav'); const cs = [...n.querySelectorAll('.sb-chip')].map((c) => c.getBoundingClientRect()); return { w: b.width, l: b.left, r: innerWidth - b.right, fits: n.scrollWidth <= n.clientWidth, span: cs[cs.length - 1].right - cs[0].left }; });
@@ -366,6 +373,7 @@ try {
     const pr = { bar: (await barOf(L)).display, pad: (await pad(L)).top };
     check(eng, 'rule 6: printing: no bar, no inset', pr.bar === 'none' && pr.pad === 0, JSON.stringify(pr));
     await p.emulateMedia({ media: 'screen' });
+    }
     await browser.close();
   }
 } finally {

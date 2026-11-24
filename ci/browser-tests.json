@@ -1,6 +1,7 @@
 {
   "behaviours": 36,
-  "behaviours-choices": 59,
+  "behaviours-choices": 45,
+  "behaviours-questions": 20,
   "connection": 17,
   "anchoring": 10,
   "anchoring-proof": 6,
@@ -15,7 +16,8 @@
   "devroutes": 6,
   "remount": 16,
   "selection": 24,
-  "sections": 65,
+  "sections": 30,
+  "sections-layout": 42,
   "board": 46,
   "boardarrange": 15,
   "boardreload": 8,
