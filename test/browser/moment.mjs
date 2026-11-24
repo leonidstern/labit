@@ -168,6 +168,14 @@ try {
         await sleep(400);
         const again = await p.evaluate(() => { const v = document.getElementById('vid'); return { paused: v.paused, t: v.currentTime }; });
         check(eng, 'a second click on the pin takes the video back and pauses it again', Boolean(openPin) && again.paused && Math.abs(again.t - vidPin.vm.at) < 0.11, JSON.stringify({ again, at: vidPin.vm?.at, openPin: Boolean(openPin) }));
+        // A right-click on the pin does it too.
+        await p.evaluate(() => { const v = document.getElementById('vid'); v.currentTime = 5; v.play?.(); });
+        await sleep(400);
+        const vidPinBox = (await near('vid'))[0];
+        await p.mouse.click(vidPinBox.left + vidPinBox.width / 2, vidPinBox.top + vidPinBox.height / 2, { button: 'right' });
+        await sleep(400);
+        const right = await p.evaluate(() => { const v = document.getElementById('vid'); return { paused: v.paused, t: v.currentTime }; });
+        check(eng, 'a right-click on the pin takes the video back and pauses it', right.paused && Math.abs(right.t - vidPin.vm.at) < 0.11, JSON.stringify({ right, at: vidPin.vm?.at }));
         await openNear('vid', '.card .msg .when button.moment');
         await p.evaluate(() => { const v = document.getElementById('vid'); v.play?.(); });
         await sleep(500);
