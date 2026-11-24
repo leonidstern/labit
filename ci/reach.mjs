@@ -140,7 +140,11 @@ function runUnit(name, dir) {
     let out = '';
     child.stdout.on('data', (d) => (out += d));
     child.stderr.on('data', (d) => (out += d));
+    // A test that hangs under coverage (anchoring-torture's 4,800 pages did) is stopped after 4 min: it counts as failed,
+    // so it always runs on PRs, and the part goes on.
+    const stop = setTimeout(() => child.kill('SIGKILL'), 240_000);
     child.on('close', (code) => {
+      clearTimeout(stop);
       console.log(`unit ${name}: ${code === 0 ? 'ran' : `exit ${code}`} in ${Math.round((Date.now() - started) / 1000)} s`);
       resolve(code === 0);
     });
@@ -155,7 +159,11 @@ function runOne(name, dir) {
     let out = '';
     child.stdout.on('data', (d) => (out += d));
     child.stderr.on('data', (d) => (out += d));
+    // A test that hangs under coverage (anchoring-torture's 4,800 pages did) is stopped after 4 min: it counts as failed,
+    // so it always runs on PRs, and the part goes on.
+    const stop = setTimeout(() => child.kill('SIGKILL'), 240_000);
     child.on('close', (code) => {
+      clearTimeout(stop);
       console.log(`${name}: ${code === 0 ? 'ran' : `exit ${code}`} in ${Math.round((Date.now() - started) / 1000)} s`);
       if (code !== 0) console.log(out.split('\n').filter((l) => /^FAIL|Error/.test(l)).slice(0, 5).join('\n'));
       resolve(code === 0);
