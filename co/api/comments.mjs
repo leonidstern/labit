@@ -23,9 +23,10 @@ function who(key) {
   return revoked.includes(name.toLowerCase()) ? null : { name, owner: role === 'o' };
 }
 
-// A site's pages are kept under its name: /<site>/<path>. data-site on the script tag, else its host (dots as dashes).
+// A site's pages are kept under its name: /co/<site>/<path> (/co: a store shared with hosted labs keeps them apart).
+// data-site on the script tag, else its host (dots as dashes).
 const site = (request) => (request.headers.get('x-co-site') || '').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 63);
-const under = (s, page) => (typeof page === 'string' && page.startsWith('/') ? `/${s}${page === '/' ? '' : page}` : null);
+const under = (s, page) => (typeof page === 'string' && page.startsWith('/') ? `/co/${s}${page === '/' ? '' : page}` : null);
 
 const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type, x-co-key, x-co-site', 'access-control-max-age': '86400' };
 const withCors = (res) => {
