@@ -372,13 +372,10 @@ const liveMoment = (anchor, keep) => {
 // ⌃ keys in a comment's box on a moving thing: the thing its line is about moves; the words stay as they are.
 const typingKey = (e) => {
   const box = e.composedPath()[0];
-  // ⌥ < > too (Leo, 23 Nov): the , . keys with Option, read by their place (⌥ turns , into ≤); macOS may keep ⌃ ← →.
-  const opt = e.altKey && !e.ctrlKey && (e.code === 'Comma' || e.code === 'Period');
-  if (!(e.ctrlKey && !e.altKey) && !opt) return false;
-  if (e.metaKey || W.coarse || !(box instanceof HTMLTextAreaElement) || !W.root.contains(box)) return false;
+  if (!e.ctrlKey || e.metaKey || e.altKey || W.coarse || !(box instanceof HTMLTextAreaElement) || !W.root.contains(box)) return false;
   const line = box.closest('.float, .card')?.querySelector<HTMLElement>('.moment.live');
   const el = line && lineOf.get(line);
-  const k = e.code === 'Comma' ? 'ArrowLeft' : e.code === 'Period' ? 'ArrowRight' : e.key;
+  const k = e.key === ',' ? 'ArrowLeft' : e.key === '.' ? 'ArrowRight' : e.key;
   const play = k.toLowerCase() === 'k';
   if (!el?.isConnected || (!play && k !== 'ArrowLeft' && k !== 'ArrowRight')) return false;
   swallow(e);
@@ -414,7 +411,7 @@ export function bindMotion(w: unknown) {
   W.root.append(W.el('style', {}, css)); // its styles come with it, after the widget's own
   S.momentLine = momentLine;
   S.liveMoment = liveMoment;
-  addEventListener('keyup', (e) => (e.key === 'Control' || e.key === 'Alt') && [...lines.keys()].forEach((l) => l.classList.remove('ctrl')));
+  addEventListener('keyup', (e) => e.key === 'Control' && [...lines.keys()].forEach((l) => l.classList.remove('ctrl')));
   addEventListener('blur', () => [...lines.keys()].forEach((l) => l.classList.remove('ctrl')));
   box = W.el('div', { class: `more-menu motion-menu${W.coarse ? ' motion-sheet' : ''}`, role: 'menu', 'aria-label': 'motion', hidden: '' });
   (W.root.querySelector('.ui') || W.root).append(box);
@@ -460,7 +457,7 @@ export function bindMotion(w: unknown) {
   for (const v of document.querySelectorAll('video')) watchFrames(v);
   addEventListener('play', (e) => e.target instanceof HTMLVideoElement && watchFrames(e.target), true);
   addEventListener('keydown', (e) => {
-    if (e.key === 'Control' || e.key === 'Alt') for (const l of lines.keys()) l.classList.add('ctrl'); // held: the line names the rest
+    if (e.key === 'Control') for (const l of lines.keys()) l.classList.add('ctrl'); // held: the line names the rest
     if (typingKey(e)) return;
     if (W.coarse || !S.on || e.defaultPrevented || e.composedPath().some((n) => n instanceof HTMLElement && (n.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName)))) return;
     // Space presses a focused button or link, as ever; the arrows still step.
