@@ -3,6 +3,7 @@
 //
 //   node ci/reach.mjs [--out ci/reach-map.json] [--jobs 6] [--only browser|unit] [--shard i/n] [name…]   (browser: needs playwright)
 //   node ci/reach.mjs --merge part1.json part2.json … --out ci/reach-map.json
+//   node ci/reach.mjs --carry old-map.json --out ci/reach-map.json     the old map moved to this commit, no test run
 // The unit tests (test/*.test.mjs) are mapped too, by file: the lines of the repo's code each one runs, its labs' too.
 //
 // The page scripts are built unminified with source maps (build-widget.mjs --map), every test in
@@ -27,6 +28,7 @@ const ONLY = opt('only', 'both'); // browser | unit | both
 // --shard i/n: this job's part of the tests (CI runs the map as n jobs side by side, then --merge joins the parts).
 const [SHARD, SHARDS] = opt('shard', '1/1').split('/').map(Number);
 const MERGE = args.includes('--merge') ? args.splice(args.indexOf('--merge'), 1) && args.splice(0) : null;
+const CARRY = opt('carry', null); // an older map, carried to this commit (no tests run)
 const TIMES = JSON.parse(fs.readFileSync(path.join(ROOT, 'ci/browser-tests.json'), 'utf8'));
 // Longest first onto the shortest part, so the parts end together; the same split on every job.
 const part = (list, cost) => {
@@ -198,6 +200,58 @@ function reduce(dir, maps) {
   const out = Object.fromEntries([...files].sort(([a], [b]) => a.localeCompare(b)).map(([f, s]) => [f, toRanges(s)]));
   out['#classes'] = [...classes].sort().join(' ');
   return out;
+}
+
+// ---------- carrying a map to a newer commit, without running a test ----------
+// Each changed file's lines move through the diff (git diff -U0 old new): a line outside a change shifts; a line a
+// change rewrote becomes the new lines that replaced it; lines only added count as run when both lines around them
+// were. Lines only removed go. A file that is gone goes. Close enough between full maps, which reset it each night;
+// a test the old map doesn't know (new) is not in it, so it always runs until then.
+export function carryLines(text, diff) {
+  const old = fromRanges(text);
+  const hs = [...diff.matchAll(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/gm)].map((m) => ({ a: +m[1], b: m[2] === undefined ? 1 : +m[2], c: +m[3], d: m[4] === undefined ? 1 : +m[4] }));
+  if (!hs.length) return text;
+  const out = new Set();
+  const range = (from, n) => Array.from({ length: n }, (_, i) => from + i);
+  for (const l of old) {
+    let shift = 0;
+    let gone = false;
+    for (const h of hs) {
+      const nextOld = h.b ? h.a + h.b : h.a + 1;
+      const nextNew = h.d ? h.c + h.d : h.c + 1;
+      if (h.b && l >= h.a && l < nextOld) {
+        range(h.c, h.d).forEach((n) => out.add(n)); // rewritten: its new lines (none if only removed)
+        gone = true;
+        break;
+      }
+      if (l >= nextOld) shift = nextNew - nextOld;
+      else break;
+    }
+    if (!gone) out.add(l + shift);
+  }
+  for (const h of hs) if (!h.b && old.has(h.a) && old.has(h.a + 1)) range(h.c, h.d).forEach((n) => out.add(n));
+  return toRanges([...out]);
+}
+
+if (import.meta.url === `file://${process.argv[1]}` && CARRY) {
+  const map = JSON.parse(fs.readFileSync(CARRY, 'utf8'));
+  const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim();
+  const git = (...x) => execFileSync('git', x, { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 << 20 });
+  const changed = git('diff', '--name-only', '--no-renames', map.commit, head).split('\n').filter((f) => CODE.test(f));
+  for (const f of changed) {
+    const gone = !fs.existsSync(path.join(ROOT, f));
+    const diff = gone ? '' : git('diff', '-U0', '--no-renames', map.commit, head, '--', f);
+    for (const part of [map.tests, map.unit]) for (const lines of Object.values(part || {})) {
+      if (!lines[f]) continue;
+      if (gone) delete lines[f];
+      else lines[f] = carryLines(lines[f], diff);
+    }
+  }
+  const from = map.commit;
+  Object.assign(map, { commit: head, carriedFrom: map.carriedFrom || from, made: new Date().toISOString() });
+  fs.writeFileSync(OUT, JSON.stringify(map) + '\n');
+  console.log(`${OUT}: carried from ${from.slice(0, 8)} to ${head.slice(0, 8)} through ${changed.length} changed code file${changed.length === 1 ? '' : 's'}`);
+  process.exit(0);
 }
 
 // --merge part.json…: the parts as one map (same commit), written to --out.
