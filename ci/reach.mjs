@@ -40,10 +40,10 @@ const part = (list, cost) => {
   }
   return bins[SHARD - 1].items;
 };
-// Tests that can't be mapped: anchoring-torture opens 4,800 pages, more than coverage can follow in 4 min. Not run
-// here; listed as failed, so they run on every PR.
-const UNMAPPED = ['anchoring-torture'];
-const names = part((args.length ? args : Object.keys(TIMES)).filter((n) => !UNMAPPED.includes(n)), (n) => TIMES[n] ?? 60);
+// Tests that can't be mapped (anchoring-torture opens 4,800 pages, more than coverage can follow in 4 min), with the
+// files they are about: not run here; the map says so, and a PR runs them when it changes one of those files.
+export const UNMAPPED = { 'anchoring-torture': ['src/widget/anchoring.ts'] };
+const names = part((args.length ? args : Object.keys(TIMES)).filter((n) => !UNMAPPED[n]), (n) => TIMES[n] ?? 60);
 const build = (...more) => execFileSync('npx', ['--yes', '-p', 'esbuild@0.25.12', '-p', 'terser@5.44.0', 'node', 'scripts/build-widget.mjs', '--outfile=public/_lab/comments.js', ...more], { cwd: ROOT, stdio: 'inherit' });
 
 // ---------- lines as ranges ----------
@@ -271,7 +271,7 @@ if (import.meta.url === `file://${process.argv[1]}` && MERGE) {
   const commits = new Set(parts.map((p) => p.commit));
   if (commits.size !== 1) (console.error(`parts from different commits: ${[...commits].join(' ')}`), process.exit(1));
   const join = (key) => Object.fromEntries(parts.flatMap((p) => Object.entries(p[key] || {})).sort(([a], [b]) => a.localeCompare(b)));
-  const map = { commit: parts[0].commit, made: new Date().toISOString(), failed: parts.flatMap((p) => p.failed || []), tests: join('tests'), unitFailed: parts.flatMap((p) => p.unitFailed || []), unit: join('unit') };
+  const map = { commit: parts[0].commit, made: new Date().toISOString(), failed: parts.flatMap((p) => p.failed || []), unmapped: parts[0].unmapped || {}, tests: join('tests'), unitFailed: parts.flatMap((p) => p.unitFailed || []), unit: join('unit') };
   fs.writeFileSync(OUT, JSON.stringify(map) + '\n');
   console.log(`${OUT}: ${Object.keys(map.tests).length} browser and ${Object.keys(map.unit).length} unit tests from ${parts.length} parts at ${map.commit.slice(0, 8)}${map.failed.length || map.unitFailed.length ? `; failed (run them always): ${[...map.failed, ...map.unitFailed].join(' ')}` : ''}`);
   process.exit(0);
@@ -286,7 +286,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const only = ONLY;
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'labit-reach-'));
   const tests = {};
-  const failed = SHARD === 1 && !args.length ? [...UNMAPPED] : [];
+  const failed = [];
   const unit = {};
   const unitFailed = [];
   const maps = new Map();
@@ -320,6 +320,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
   const ordered = Object.fromEntries(names.filter((n) => tests[n]).map((n) => [n, tests[n]]));
   const units = Object.fromEntries(Object.keys(unit).sort().map((n) => [n, unit[n]]));
-  fs.writeFileSync(OUT, JSON.stringify({ commit, made: new Date().toISOString(), failed, tests: ordered, unitFailed, unit: units }) + '\n');
+  fs.writeFileSync(OUT, JSON.stringify({ commit, made: new Date().toISOString(), failed, unmapped: UNMAPPED, tests: ordered, unitFailed, unit: units }) + '\n');
   console.log(`${OUT}: ${Object.keys(ordered).length} browser and ${Object.keys(units).length} unit tests at ${commit.slice(0, 8)}${failed.length || unitFailed.length ? `; failed (run them always): ${[...failed, ...unitFailed].join(' ')}` : ''}`);
 }

@@ -215,7 +215,7 @@ export function reachOf(file, lines, map, tests, times = readTimes()) {
     for (const n of ran.length > mapped.length * SHARED ? sample(ran, file, map, times) : ran) pick.add(n);
   }
   if (!reached) return null;
-  for (const n of tests) if (!map.tests[n] || map.failed?.includes(n)) pick.add(n);
+  for (const n of tests) if ((!map.tests[n] && !map.unmapped?.[n]) || map.failed?.includes(n)) pick.add(n);
   return [...pick];
 }
 
@@ -250,7 +250,7 @@ export function cssReach(classes, map, tests, times = readTimes()) {
     for (const n of ran.length > mapped.length * SHARED ? sample(ran, '#classes', map, times) : ran) pick.add(n);
   }
   if (!pick.size) return null;
-  for (const n of tests) if (!map.tests[n] || map.failed?.includes(n)) pick.add(n);
+  for (const n of tests) if ((!map.tests[n] && !map.unmapped?.[n]) || map.failed?.includes(n)) pick.add(n);
   return [...pick];
 }
 
@@ -378,6 +378,8 @@ export function affected(files, { tests = groupTests(), reach = REACH, diffOf = 
     all = true;
     why.push(`${f}: runs every test`);
   }
+  // A test the map can't follow runs when a file it is about changes (anchoring-torture: anchoring.ts).
+  if (map?.unmapped) for (const [n, about] of Object.entries(map.unmapped)) if (tests.has(n) && files.some((f) => about.includes(f))) (pick.add(n), why.push(`${n}: about ${about.join(' ')}, changed here`));
   if (all) return { tests: 'all', native: true, bench: true, first: [...first], why };
   // The native check probes the engines for what the widget uses; it follows any widget change.
   if (srcChanged) native = true;
