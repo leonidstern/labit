@@ -199,8 +199,21 @@ export function composer({ placeholder, onSubmit, autofocus = false, opened = fa
     const long = Boolean(ph) && (box.dataset.long === ph || (!box.classList.contains('tall') && wide(ph, text)));
     if (long) box.dataset.long = ph;
     else delete box.dataset.long;
-    const tall = one && (long || text.scrollHeight > cap || (box.classList.contains('tall') && text.scrollHeight > cap - 40));
-    if (tall !== box.classList.contains('tall')) box.classList.toggle('tall', tall);
+    // Measured in the one-line layout, whichever the box is in: the words are wider without the name beside them, so in the
+    // wide layout they came out shorter than the limit, the name came back, and the box swapped layouts on every key near
+    // its tallest (Leo, 24 Nov, iPhone: the sheet jumped while typing). Swapped back before anything is drawn.
+    const wasTall = box.classList.contains('tall');
+    if (wasTall) box.classList.remove('tall');
+    const inline = text.scrollHeight;
+    const tall = one && (long || inline > cap || (wasTall && inline > cap - 40));
+    const before = !wasTall && tall && !long && box.getBoundingClientRect().height;
+    box.classList.toggle('tall', tall);
+    // Going wide never makes the box shorter (its words take fewer lines there): the sheet's top would drop for a frame.
+    if (!tall) text.style.minHeight = '';
+    else if (before) {
+      const short = before - box.getBoundingClientRect().height;
+      if (short > 0) text.style.minHeight = `${text.getBoundingClientRect().height + short}px`;
+    }
     const over = text.scrollHeight > cap + 1;
     text.style.overflowY = over ? 'auto' : 'hidden'; // a scrollbar only once the box is at its tallest
     // Words added at the end (typing, a long paste) keep the cursor in view: Safari left the box scrolled to the top.
