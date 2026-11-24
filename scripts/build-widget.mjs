@@ -5,7 +5,8 @@
 //
 // labit has no dependencies: package.json runs this through `npx -p esbuild@<pinned> -p terser@<pinned> node …`, which
 // puts both on PATH for this process only, and their APIs are found next to those commands.
-//   node scripts/build-widget.mjs --outfile=<file> [--watch] [--map]
+//   node scripts/build-widget.mjs --outfile=<file> [--watch] [--map] [--co]
+// --co: co-labit's one script (co/README.md): the page script alone, with no lab or agent parts, no parts and no lab.css.
 // --map: not minified, with an inline source map, for ci/reach.mjs (which lines of src/ each browser test runs).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -15,6 +16,7 @@ const arg = (name) => process.argv.find((a) => a.startsWith(`--${name}=`))?.slic
 const outfile = arg('outfile') || 'public/_lab/comments.js';
 const watch = process.argv.includes('--watch');
 const mapped = process.argv.includes('--map');
+const co = process.argv.includes('--co');
 
 import { tool } from './npx-tools.mjs';
 
@@ -74,7 +76,7 @@ const options = {
   outfile,
   write: false, // shortNames writes each file
   plugins: [minifiedCss, mapped ? asBuilt : shortNames],
-  define: { 'globalThis.__LAB_DEBUG__': 'false' },
+  define: { 'globalThis.__LAB_DEBUG__': 'false', 'globalThis.__LAB_CO__': String(co) },
   metafile: true, // what each script is made of: code built into two of them is counted (bundles.json, below)
 };
 // Parts the page script loads only when they are used (part(name) in src/comments.js): each one an ES module beside
@@ -94,6 +96,10 @@ const labCss = async () => {
   await fs.promises.mkdir(path.dirname(outfile), { recursive: true });
   await fs.promises.writeFile(path.join(path.dirname(outfile), 'lab.css'), tighten(code.trim()) + '\n');
 };
+if (co) {
+  await esbuild.build(options);
+  process.exit(0);
+}
 await labCss();
 if (watch) {
   for (const o of builds) await (await esbuild.context(o)).watch();

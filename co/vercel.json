@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "cd .. && npm run build:co",
+  "outputDirectory": "public",
+  "headers": [
+    { "source": "/co.js", "headers": [{ "key": "access-control-allow-origin", "value": "*" }, { "key": "cache-control", "value": "public, max-age=300" }] },
+    { "source": "/(.*)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] }
+  ]
+}

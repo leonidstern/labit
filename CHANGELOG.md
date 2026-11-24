@@ -4,6 +4,7 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 
 ## Unreleased
 
+- **co-labit: comments on your own sites.** One script tag puts labit's pins and threads on a deployed site (on Vercel, say) for the people you invite with a link; everyone else sees nothing. No lab and no agent. It is its own Vercel project from `co/`; see [co/README.md](co/README.md).
 - **A new board starts empty.** "new board" (and a pin's own board) no longer puts the page on it as a first frame; you or the agent add what goes there. Boards made with `--variants`, `--widths` or `--flow` are unchanged.
 
 ## 0.8.0 · 2026-11-24

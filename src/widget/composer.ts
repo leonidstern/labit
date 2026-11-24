@@ -101,6 +101,7 @@ export function composer({ placeholder, onSubmit, autofocus = false, opened = fa
   draftKey?: string;
 }): HTMLElement {
   const { el, store, root, refreshPinCursor, syncReads, rememberMe } = d;
+  attach &&= !globalThis.__LAB_CO__; // co-labit keeps no pictures
   const wrap = el('div', { class: 'composer' });
   const pics = (kept[draftKey] ||= []);
   const box = el('div', { class: 'box' });
