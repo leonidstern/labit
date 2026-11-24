@@ -165,7 +165,7 @@ try {
       await p.goto('about:blank');
       await ctx.close();
 
-      // A phone: the chat button carries the agent's mark, so it carries the badge.
+      // A phone: the mark sits at the bar's right end, as on a computer, so it carries the badge.
       const phone = pw.devices[eng === 'webkit' ? 'iPhone 13' : 'Pixel 7'];
       const pctx = await browser.newContext({ ...phone });
       await pctx.addInitScript(() => localStorage.setItem('lab-name', 'leo'));
@@ -174,7 +174,7 @@ try {
       let qloads = 0;
       q.on('load', () => qloads++);
       await q.goto(B + '/');
-      await waitFor(() => inRoot(q, (r) => Boolean(r.querySelector('.chat-btn .mark'))), 4000);
+      await waitFor(() => inRoot(q, (r) => { const w = r.querySelector('a.listener'); return Boolean(w && !w.hidden && w.getClientRects().length && w.querySelector('.mark')); }), 4000);
       await sleep(1600);
       // The button's own click, in the page: Playwright's tap waits for the button to be free of whatever sits over it (the
       // "hold to comment" hint, in the first seconds on an iPhone), and timed out there; what is tested is the badge.
@@ -183,7 +183,7 @@ try {
       save();
       await waitFor(async () => (await badge(q))?.shown, 4000);
       b = await badge(q);
-      check(eng, 'on a phone the badge is on the chat button, which carries the mark', b.shown && b.host === 'chat' && b.hasUpd && b.others === 1 && b.label === UPD_LABEL && qloads === 1, `${JSON.stringify(b)} loads ${qloads}`);
+      check(eng, 'on a phone the badge is on the mark at the bar\'s right end, as on a computer', b.shown && b.host === 'pill' && b.hasUpd && b.others === 1 && b.label === UPD_LABEL && qloads === 1, `${JSON.stringify(b)} loads ${qloads}`);
       await q.goto('about:blank');
       await pctx.close();
     } finally {
