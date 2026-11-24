@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "labit",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "Pin comments on pages; your agent reads them as plain text and answers on the pins. Skill: wait, fix, reply on the pin.",
   "author": { "name": "leonidstern", "url": "https://github.com/LeonidStern" },
   "homepage": "https://github.com/leonidstern/labit",

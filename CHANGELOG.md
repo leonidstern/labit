@@ -4,6 +4,21 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 
 ## Unreleased
 
+## 0.8.0 · 2026-11-24
+
+Boards are always on now (the setting is gone, hence a minor version), videos step a frame at a time from the keyboard, comments made right after a page opens show at once, and steadier phones. The full list is below.
+
+- **Step a video a frame at a time.** With comments shown on a computer, ← → step the video you right-clicked, picked or came back to from a pin one frame, ⇧← ⇧→ one second, and Space plays or pauses it. An arrow on a playing video pauses it first. The motion menu counts the frame as you step. Paused loops and animations step by 1/60 s, and a video in an open board frame steps the same way. With nothing to move, the keys stay the page's.
+- **Step the video while you write.** In a comment or reply about a video, ⌥ ← → step it one frame; your words and cursor stay put, and ⌥⇧ ← → still select words. ⌥K is left to the system. The moment line above the box follows the step, the comment keeps the moment it ends on, and each reply keeps its own moment (with its frame), which a click goes back to.
+- **The moment line fits on one line**, lined up with the box's words.
+- **A comment's box on a video opens beside it**, not over the picture.
+- **Clicking a video or picture never selects it.**
+- **A click on words tells the agent which word.** A plain click still pins the element and highlights nothing, but the agent text quotes the word under the pin again ("…unlimited [history] on every…").
+- **A comment made just after a page opens shows there without a reload.**
+- **Going to a new comment from far away opens its card by its pin.**
+- **A scrolled thread or chat fades at its top edge.**
+- **Phones: the comment box no longer jumps while you type**, and the labit mark sits at the bar's right end, as on a computer.
+- **A wait holds on for 2 minutes while the lab takes a newer build**, and wait output tells the agent to listen again first.
 - **Boards are always on.** The `boards` setting and `LABIT_BOARDS` are gone: every page has its boards part in the bar and "new board" in the ⋯ menu. An old `"boards"` in a settings file is skipped.
 - **A wait no longer ends on the second update of a lab.** The 2-minute clock from one hand-over kept running under the wait the new lab took, so the next update, any time later, ended it at once. Each gap now has its own clock.
 - **A busy agent hears about your pins mid-work.** When pins come while the agent works on something else, the labit plugin tells it with its next tool result, not when its whole task ends. It then answers what is quick and puts a status line on the rest, so the pin no longer sits at "picked up" with no word.
