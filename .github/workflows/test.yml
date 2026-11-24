@@ -120,6 +120,7 @@ jobs:
     name: browser (${{ matrix.engine }} ${{ matrix.shard }})
     env:
       ENGINES: ${{ matrix.engine }}
+      BROWSER_JOBS: 2 # two test files at a time: the runner's cores sit idle while a test waits on its browser
       # anchoring-torture: one seed of generated pages on a PR (about 35 s in WebKit), both on main and by hand, where
       # its KNOWN list is kept.
       TORTURE_SEEDS: ${{ github.event_name == 'pull_request' && '1' || '1,2' }}

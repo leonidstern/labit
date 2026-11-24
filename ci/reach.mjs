@@ -40,7 +40,10 @@ const part = (list, cost) => {
   }
   return bins[SHARD - 1].items;
 };
-const names = part(args.length ? args : Object.keys(TIMES), (n) => TIMES[n] ?? 60);
+// Tests that can't be mapped: anchoring-torture opens 4,800 pages, more than coverage can follow in 4 min. Not run
+// here; listed as failed, so they run on every PR.
+const UNMAPPED = ['anchoring-torture'];
+const names = part((args.length ? args : Object.keys(TIMES)).filter((n) => !UNMAPPED.includes(n)), (n) => TIMES[n] ?? 60);
 const build = (...more) => execFileSync('npx', ['--yes', '-p', 'esbuild@0.25.12', '-p', 'terser@5.44.0', 'node', 'scripts/build-widget.mjs', '--outfile=public/_lab/comments.js', ...more], { cwd: ROOT, stdio: 'inherit' });
 
 // ---------- lines as ranges ----------
@@ -283,7 +286,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const only = ONLY;
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'labit-reach-'));
   const tests = {};
-  const failed = [];
+  const failed = SHARD === 1 && !args.length ? [...UNMAPPED] : [];
   const unit = {};
   const unitFailed = [];
   const maps = new Map();
