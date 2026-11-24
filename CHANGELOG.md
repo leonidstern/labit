@@ -4,6 +4,7 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 
 ## Unreleased
 
+- **A wait no longer ends on the second update of a lab.** The 2-minute clock from one hand-over kept running under the wait the new lab took, so the next update, any time later, ended it at once. Each gap now has its own clock.
 - **A busy agent hears about your pins mid-work.** When pins come while the agent works on something else, the labit plugin tells it with its next tool result, not when its whole task ends. It then answers what is quick and puts a status line on the rest, so the pin no longer sits at "picked up" with no word.
 - **A lab that updates itself no longer adds another `--port` to its command each time.**
 - **An area pin follows the words it covered.** An area drawn over one row of a list stays on that row when rows above it get shorter or go; when its row's words changed it stays and shows unsure; when the row is deleted it shows as moved (and the agent is told it is gone). It used to keep its share of the box, and landed on other rows or on the next block.
