@@ -160,6 +160,15 @@ try {
         await sleep(300);
         const opened = await p.evaluate(() => { const v = document.getElementById('vid'); return { paused: v.paused, t: v.currentTime }; });
         check(eng, 'opening the pin takes its video back to the frame it was placed on', got && opened.paused && Math.abs(opened.t - vidPin.vm.at) < 0.11, JSON.stringify({ opened, at: vidPin.vm?.at }));
+        // Played on, a second click on the open pin (closing it) takes it back and pauses it again.
+        await p.evaluate(() => { const v = document.getElementById('vid'); v.currentTime = 5; v.play?.(); });
+        await sleep(400);
+        const openPin = await inRoot(p, "r.querySelector('.pin.open')?.getBoundingClientRect().toJSON()");
+        if (openPin) await p.mouse.click(openPin.left + openPin.width / 2, openPin.top + openPin.height / 2);
+        await sleep(400);
+        const again = await p.evaluate(() => { const v = document.getElementById('vid'); return { paused: v.paused, t: v.currentTime }; });
+        check(eng, 'a second click on the pin takes the video back and pauses it again', Boolean(openPin) && again.paused && Math.abs(again.t - vidPin.vm.at) < 0.11, JSON.stringify({ again, at: vidPin.vm?.at, openPin: Boolean(openPin) }));
+        await openNear('vid', '.card .msg .when button.moment');
         await p.evaluate(() => { const v = document.getElementById('vid'); v.play?.(); });
         await sleep(500);
         await inRoot(p, "r.querySelector('.card button.moment').click()");

@@ -1249,6 +1249,8 @@ import { bindKeys } from './widget/keys.ts';
           if (e.altKey && mayResolve(c)) return toggleResolved(c);
           // Phones: opening it goes through goTo, which moves the page so the pin sits above its sheet, not under it.
           if (coarse && S.openId !== c.id) return goTo(c);
+          // A pin on a video: each click, the one that closes it too, takes the video back to its frame (Leo, 24 Nov).
+          if (S.openId === c.id && c.anchor?.moment?.kind === 'video') void (mo ? Promise.resolve(mo) : loadMotion()).then((x) => x?.showMoment(c.anchor.moment));
           S.openId = S.openId === c.id ? null : c.id;
           S.draft = null;
           render();
