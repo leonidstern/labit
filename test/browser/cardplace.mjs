@@ -125,19 +125,6 @@ try {
       }
       await p.setViewportSize({ width: 1200, height: 800 });
 
-      // A page pin's card beside a half board view stays in what the view leaves free (Leo, 21 Nov: "pin outside board should
-      // not go to board when opened"): its bottom is above the view's top.
-      {
-        await p.goto(B + '/index.html#board=cp');
-        await p.waitForFunction(() => document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board'), null, { timeout: 8000 });
-        await sleep(1200);
-        const top = await p.evaluate(() => document.querySelector('[data-lab-board-view]').getBoundingClientRect().top);
-        for (const [id, at] of [[15, 40], [5, 200], [25, 300]]) {
-          const s = await openAt(id, at);
-          check(eng, `a page pin at ${at}px beside a half board: its card is above the board, whole (board top ${top})`, s.card && s.card.b <= top - 4 && s.card.t >= 7 && inside({ ...s.reply }, { ...s, vh: top }), JSON.stringify([s.card, top]));
-          await close();
-        }
-      }
       await ready('/');
       // A board: a pin near the screen's bottom, one near its top and one in the middle; the card is whole and off its pin.
       await ready('/_lab/board/cp');

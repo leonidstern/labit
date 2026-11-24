@@ -50,6 +50,9 @@ try {
       await shadow("[...r.querySelectorAll('.more-menu button')][1].click()");
       const opened = await until(view, 6000);
       check(eng, 'a board in the list opens over the page', opened && (await p.evaluate(() => location.hash)) === '#board=spacing');
+      // WebKit keeps focus on the list's button for a moment after it closes, and an Esc then is the menu's, not the
+      // board's: give it the moment a person's hand needs anyway.
+      await sleep(600);
       await p.keyboard.press('Escape');
       check(eng, 'Esc closes it', await until(async () => !(await view())));
       await shadow("r.querySelector('.more').click()");
