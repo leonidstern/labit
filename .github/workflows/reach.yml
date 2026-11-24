@@ -1,23 +1,53 @@
 # The reach map (ci/reach.mjs): which lines of the widget and the server, and which of the widget's CSS classes, each
-# browser test reaches, in Chromium. test.yml's plan job takes the newest one from here and runs a PR's browser tests
-# for the lines and rules it changes, instead of all of them. Made again after each merge to main that changes code or
-# tests, and by hand ("Run workflow"). Eight jobs side by side each map a part of the tests (about 3 min), and a last
-# job joins the parts into the one map PRs download.
+# browser test and each unit test file reaches. test.yml's plan job takes the newest one and runs a PR's tests for the
+# lines and rules it changes, instead of all of them.
+# - Each night (and by hand, "Run workflow"): made new, eight jobs side by side, about 3 min, then joined.
+# - After a merge to main: the newest map is carried to the new commit, its lines moved through the diff, no test run
+#   (seconds). A test the map doesn't know yet runs on every PR until the night's map.
 name: reach
 on:
   push:
     branches: [main]
-    paths: ['src/**', 'lib/**', 'local.mjs', 'test/browser/**', 'ci/browser-tests.json', 'ci/reach*.mjs', 'scripts/build-widget.mjs', '.github/workflows/reach.yml']
+    paths: ['src/**', 'lib/**', 'local.mjs', 'hooks/**', 'ci/**', 'bench/**', 'scripts/**', 'test/**', '.github/workflows/reach.yml']
+  schedule:
+    - cron: '17 3 * * *'
   workflow_dispatch:
-# One at a time, never cancelled: a merge while a map is being made waits (only the newest waiting run is kept), so a
-# busy main still gets a map. Cancelling the running one left main without any.
+# One at a time, never cancelled: a merge while a map is being made waits (only the newest waiting run is kept).
 concurrency:
   group: reach
   cancel-in-progress: false
 permissions:
   contents: read
+  actions: read # the newest map, to carry
 jobs:
+  # After a merge: the newest map carried to this commit. No map yet: the night makes one.
+  carry:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the map's commit, for the diff
+      - name: The newest map
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for id in $(gh run list -R "$GITHUB_REPOSITORY" -w reach.yml -b main -s success -L 10 --json databaseId --jq '.[].databaseId'); do
+            gh run download "$id" -R "$GITHUB_REPOSITORY" -n reach-map -D old 2>/dev/null && { echo "from run $id"; break; }
+          done
+      - if: hashFiles('old/reach-map.json') != ''
+        run: node ci/reach.mjs --carry old/reach-map.json --out "$RUNNER_TEMP/reach-map.json" | tee -a "$GITHUB_STEP_SUMMARY"
+        shell: bash
+      - if: hashFiles('old/reach-map.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: reach-map
+          path: ${{ runner.temp }}/reach-map.json
+          retention-days: 30
+          if-no-files-found: error
+
   map:
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     container:
       image: mcr.microsoft.com/playwright:v1.65.1-noble
@@ -48,7 +78,7 @@ jobs:
   # The parts as one map. A part that failed leaves its tests out of the map: those always run until the next map.
   merge:
     needs: map
-    if: always() && !cancelled()
+    if: always() && !cancelled() && github.event_name != 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
