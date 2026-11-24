@@ -1744,7 +1744,7 @@ const remember = (w) => {
 // Who hears this page right now: a wait that named it, else one that named none. Null means a comment here waits
 // until someone listens -- worth saying out loud on a page that has something waiting.
 const listenerOf = (key) => (waiters.find((w) => w.pages && covers(w.pages, key)) || waiters.find((w) => !w.pages))?.label || null;
-// Threads still waiting on someone: nobody answered, or the newest word in them is a person's (the agent's carry a
+// Threads still waiting on an agent: the newest word in them is a person's (the agent's carry a
 // session, set by the lab alone: a name says nothing, "Campbell" has Campbell in it and "aider" is no listed agent). An answered thread
 // left unresolved is bookkeeping, not work; counting those made a day-old page read as a backlog of 52 when one
 // comment was waiting, and nothing that cries wolf like that gets read twice.
@@ -1755,7 +1755,8 @@ const waitingOn = (key) => {
   return all.filter((c) => {
     if (c.parent || c.resolved) return false;
     const reps = replies.get(c.id) || [];
-    return !reps.length || !reps[reps.length - 1].session;
+    // An agent's own pin nobody answered yet waits on the person, not on an agent: 8 review pins are not 8 asks.
+    return !(reps.length ? reps[reps.length - 1] : c).session;
   }).length;
 };
 // Where a board's open threads stand, in plain words (Leo, 23 Nov, #422: "only what needs you", no counts): 'needs your

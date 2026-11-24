@@ -98,6 +98,8 @@ test("the pages' waiting count reads who wrote last from the reply's session, no
     body: JSON.stringify({ page: '/index', parent: id, name: 'Campbell', text: 'and the footer?' }), // a person, with an agent-like name
   });
   assert.equal(await waiting(), 1, 'a person named Campbell wrote last');
+  await cli(dir, ['pin', '#x', 'A review note', '--page', '/index', '--no-check'], { LAB_AGENT: 'aider' });
+  assert.equal(await waiting(), 1, "the agent's own pin, unanswered, waits on the person, not on an agent");
 });
 
 test('a listening Codex session is shown by name, with its resume command', async () => {
