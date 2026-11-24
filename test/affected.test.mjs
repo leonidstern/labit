@@ -1,14 +1,14 @@
 // ci/affected.mjs: which browser tests a PR's changed files need.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { affected, groupEdit, groupTests } from '../ci/affected.mjs';
+import { affected, groupTests, listEdit, readTimes, shards } from '../ci/affected.mjs';
 
 const tests = new Set(['fluid', 'board', 'boardpins', 'ink', 'selection', 'native']);
 const reach = { 'src/widget/ink.ts': ['ink', 'selection'], 'src/board/mount.ts': ['board', 'boardpins', 'gone'] };
 const run = (files, diffOf) => affected(files, { tests, reach, diffOf });
 
 test('docs, skills, unit tests and other workflows run no browser test', () => {
-  const r = run(['README.md', 'CHANGELOG.md', 'docs/settings.md', 'skills/labit/SKILL.md', 'test/local.test.mjs', 'test/phone/sim.mjs', '.github/workflows/gates.yml', 'ci/metrics.mjs']);
+  const r = run(['README.md', 'CHANGELOG.md', 'docs/settings.md', 'skills/labit/SKILL.md', 'test/local.test.mjs', 'test/phone/sim.mjs', '.github/workflows/gates.yml', 'ci/metrics.mjs', 'ci/flaky.json', 'ci/unit-run.mjs', 'ci/pr-check.mjs']);
   assert.equal(r.tests, '');
   assert.equal(r.native, false);
   assert.equal(r.bench, false);
@@ -39,24 +39,47 @@ test('ci/native.mjs runs the native check only; bench/ the bench only', () => {
   assert.deepEqual([run(['bench/run.mjs']).tests, run(['bench/run.mjs']).bench], ['', true]);
 });
 
-test('test.yml: a test added to a group runs that test; any other change runs everything', () => {
-  const groups = `@@ -1 +1 @@
--          - { name: b, files: selection ink }
-+          - { name: b, files: selection ink board }
-+          # board: pins on a board`;
-  assert.deepEqual(groupEdit(groups), ['board']);
-  assert.equal(run(['.github/workflows/test.yml', 'test/browser/board.mjs'], () => groups).tests, 'board');
-  const other = `@@ -1 +1 @@
--    timeout-minutes: 12
-+    timeout-minutes: 15`;
-  assert.equal(groupEdit(other), null);
-  assert.equal(run(['.github/workflows/test.yml'], () => other).tests, 'all');
+test('ci/browser-tests.json: a test added runs that test, a new time runs nothing; test.yml runs everything', () => {
+  const list = `@@ -1 +1 @@
+-  "selection": 20,
++  "selection": 25,
++  "board": 38,`;
+  assert.deepEqual(listEdit(list), ['board']);
+  assert.equal(run(['ci/browser-tests.json', 'test/browser/board.mjs'], () => list).tests, 'board');
+  assert.equal(run(['ci/browser-tests.json'], () => '-  "selection": 20,\n+  "selection": 25,').tests, '');
+  assert.equal(listEdit('+  "_note": "x",'), null);
+  assert.equal(run(['ci/browser-tests.json'], () => '+  "_note": "x",').tests, 'all');
+  assert.equal(run(['.github/workflows/test.yml']).tests, 'all');
 });
 
-test('the groups are read from test.yml', () => {
-  const names = groupTests();
+test('the CI tests and their times are read from ci/browser-tests.json, and each is a test file', async () => {
+  const fs = await import('node:fs');
+  const times = readTimes();
+  const names = groupTests(times);
   assert.ok(names.size > 10);
-  for (const n of names) assert.match(n, /^[\w-]+$/);
+  for (const n of names) {
+    assert.ok(fs.existsSync(new URL(`./browser/${n}.mjs`, import.meta.url)), n);
+    assert.ok(Number.isInteger(times[n]) && times[n] > 0, n);
+  }
+});
+
+test('shards: every picked test runs once per engine, the longest shard near the even share, never more jobs than runners', () => {
+  const times = { a: 100, b: 90, c: 60, d: 50, e: 40, f: 30, g: 20, h: 10 };
+  const all = shards('all', { times, runners: 8 });
+  assert.deepEqual(all.flatMap((j) => j.files.split(' ')).sort(), Object.keys(times));
+  assert.ok(all.length <= 8 && all.length >= 2);
+  assert.ok(Math.max(...all.map((j) => j.secs)) <= 120);
+  const both = shards('all', { times, engines: ['webkit', 'chromium'], runners: 8 });
+  assert.ok(both.length <= 8);
+  assert.equal(both.filter((j) => j.engine === 'chromium').length, both.filter((j) => j.engine === 'webkit').length);
+  // A small pick is one job; the bench rides on the first WebKit shard, or gets its own when there is none.
+  assert.deepEqual(shards('c h', { times }).map((j) => j.files), ['c h']);
+  assert.equal(shards('c', { times, bench: true })[0].bench, true);
+  assert.deepEqual(shards('', { times, bench: true }).map((j) => [j.files, j.bench]), [['', true]]);
+  assert.deepEqual(shards('c', { times, engines: ['chromium'], bench: true }).map((j) => j.engine), ['chromium', 'webkit']);
+  // The real list: a full PR run fits in the runners, each shard under three minutes.
+  const real = shards('all');
+  assert.ok(real.length <= 8 && Math.max(...real.map((j) => j.secs)) < 180);
 });
 
 test('main runs the browsers only for a version bump', async () => {

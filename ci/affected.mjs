@@ -4,7 +4,7 @@
 // Rules, first match per changed file:
 // - Never affects a browser: docs, skills, hooks, examples, unit tests, the phone kit, the size gate's ci/ scripts,
 //   workflows other than test.yml. Nothing runs for these.
-// - A browser test that a group in test.yml runs: that test.
+// - A browser test that CI runs (listed in ci/browser-tests.json): that test.
 // - A widget module with a known reach (REACH below): the tests listed for it.
 // - public/_lab/*.js built from src/: nothing of its own when the PR also changes src/ (it is the build of those
 //   files, and the size gate's staleBuild check already holds it to them); everything when it changes alone.
@@ -14,10 +14,11 @@
 // A merge to main (--main) runs nothing unless it bumps the version, a release, which runs everything; a run started by
 // hand runs everything (--all).
 //
-//   node ci/affected.mjs <base> <head>    prints {"tests":"all"|"a b c","native":bool,"bench":bool,"why":[…]}
+//   node ci/affected.mjs <base> <head>    prints {"tests":"all"|"a b c","native":bool,"bench":bool,"jobs":[…],"why":[…]}
 //   node ci/affected.mjs --main <before> <after>
 //   node ci/affected.mjs --all
-// In CI the same JSON goes to $GITHUB_OUTPUT as tests=…, native=…, bench=…, and the reasons to the job summary.
+// In CI the same JSON goes to $GITHUB_OUTPUT as tests=…, native=…, bench=…, jobs=… (the browser matrix, engines from
+// $ENGINES, default webkit), and the reasons and shards to the job summary.
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -29,7 +30,7 @@ const NO_BROWSER = [
   /\.md$/, /^LICENSE$/, /^docs\//, /^examples\//, /^skills\//, /^hooks\//, /^plugin\.json$/, /^\.claude-plugin\//,
   /^knip\.json$/, /^\.oxlintrc\.json$/, /^tsconfig\.json$/, /^\.gitignore$/,
   /^test\/[^/]+\.test\.mjs$/, /^test\/harness\.mjs$/, /^test\/setup\.mjs$/, /^test\/phone\//,
-  /^ci\/(metrics|reuse)\.mjs$/, /^ci\/parts\.json$/, /^ci\/[^/]+\.sh$/,
+  /^ci\/(metrics|reuse|unit-run|pr-check)\.mjs$/, /^ci\/(parts|flaky)\.json$/, /^ci\/[^/]+\.sh$/,
   /^\.github\/workflows\/(?!test\.yml$)/,
 ];
 
@@ -82,27 +83,55 @@ const REACH = {
   'lib/update.ts': ['update'],
 };
 
-// The browser tests CI runs: every file named in a `files:` line of test.yml's groups.
-export function groupTests(yml = fs.readFileSync(path.join(ROOT, '.github/workflows/test.yml'), 'utf8')) {
-  const names = new Set();
-  for (const m of yml.matchAll(/files:\s*([\w\- ]+?)\s*\}/g)) for (const n of m[1].split(/\s+/)) if (n) names.add(n);
-  return names;
-}
+// The browser tests CI runs, with how long each takes in one engine on the Mac (seconds, from a CI run): the plan
+// packs the picked ones into shards of about the same length (shards below). A file not listed never runs in CI.
+const TIMES = path.join(ROOT, 'ci/browser-tests.json');
+export const readTimes = () => JSON.parse(fs.readFileSync(TIMES, 'utf8'));
+export const groupTests = (times = readTimes()) => new Set(Object.keys(times));
 
-// test.yml changes that only move test files between groups, add or drop them, or edit comments: the tests added to a
-// group, else null (the change is to how CI runs, so every test runs).
-export function groupEdit(diff) {
-  const lines = diff.split('\n').filter((l) => /^[+-](?![+-]{2} )/.test(l));
+// ci/browser-tests.json changes that add, drop or re-time tests: the tests added, else null (anything else in the
+// file is no list of tests, so every test runs). A new time alone runs nothing.
+export function listEdit(diff) {
   const added = new Set();
   const dropped = new Set();
-  for (const l of lines) {
+  for (const l of diff.split('\n').filter((x) => /^[+-](?![+-]{2} )/.test(x))) {
     const body = l.slice(1).trim();
-    if (body === '' || body.startsWith('#')) continue;
-    const names = body.match(/files:\s*([\w\- ]+?)\s*\}/)?.[1] ?? body.match(/^- ([\w\- ]+)$/)?.[1];
-    if (!names) return null;
-    for (const n of names.split(/\s+/)) if (n) (l[0] === '+' ? added : dropped).add(n);
+    if (body === '' || body === '{' || body === '}') continue;
+    const name = body.match(/^"([\w-]+)":\s*\d+,?$/)?.[1];
+    if (!name) return null;
+    (l[0] === '+' ? added : dropped).add(name);
   }
   return [...added].filter((n) => !dropped.has(n));
+}
+
+// The browser jobs: the picked tests packed into shards per engine, longest first onto the shortest shard, so they
+// end at about the same time. As many shards as the tests need at about TARGET seconds each, at most the Mac's
+// runners split between the engines (8 runners: a PR's WebKit-only run can take all 8, a release 4 per engine). The
+// bench rides on the first WebKit shard.
+const RUNNERS = 8;
+const TARGET = 120;
+export function shards(picked, { engines = ['webkit'], times = readTimes(), bench = false, runners = RUNNERS } = {}) {
+  const names = picked === 'all' ? Object.keys(times) : picked.split(/\s+/).filter(Boolean);
+  const cost = (n) => times[n] ?? TARGET; // a test with no time yet counts as a whole shard
+  const total = names.reduce((s, n) => s + cost(n), 0);
+  const most = Math.max(1, Math.floor(runners / engines.length));
+  const k = Math.min(most, Math.max(1, Math.ceil(total / TARGET)), Math.max(1, names.length));
+  const jobs = [];
+  for (const engine of engines) {
+    const bins = Array.from({ length: k }, () => ({ files: [], secs: 0 }));
+    for (const n of [...names].sort((a, b) => cost(b) - cost(a) || a.localeCompare(b))) {
+      const bin = bins.reduce((lo, b) => (b.secs < lo.secs ? b : lo));
+      bin.files.push(n);
+      bin.secs += cost(n);
+    }
+    bins.forEach((b, i) => {
+      const withBench = bench && engine === 'webkit' && i === 0;
+      if (b.files.length || withBench) jobs.push({ engine, shard: `${i + 1}/${k}`, files: b.files.join(' '), bench: withBench, secs: b.secs });
+    });
+  }
+  // The bench alone, with no WebKit in this run: a job of its own on WebKit.
+  if (bench && !jobs.some((j) => j.bench)) jobs.push({ engine: 'webkit', shard: 'bench', files: '', bench: true, secs: 0 });
+  return jobs;
 }
 
 export function affected(files, { tests = groupTests(), reach = REACH, diffOf = () => '' } = {}) {
@@ -133,11 +162,11 @@ export function affected(files, { tests = groupTests(), reach = REACH, diffOf = 
       why.push(`${f}: runs the bench`);
       continue;
     }
-    if (f === '.github/workflows/test.yml') {
-      const moved = groupEdit(diffOf(f));
-      if (moved) {
-        for (const n of moved) pick.add(n);
-        why.push(`${f}: only its groups changed, runs ${moved.join(' ') || 'nothing new'}`);
+    if (f === 'ci/browser-tests.json') {
+      const added = listEdit(diffOf(f));
+      if (added) {
+        for (const n of added) pick.add(n);
+        why.push(`${f}: only its list or times changed, runs ${added.join(' ') || 'nothing new'}`);
         continue;
       }
     }
@@ -167,9 +196,11 @@ export function onMain(packageDiff) {
     : { tests: '', native: false, bench: false, why: ['main: tested in its PR; only a release (a version bump) runs the browsers'] };
 }
 
-function changedFiles(base, head) {
-  return execFileSync('git', ['diff', '--name-only', '--no-renames', base, head], { cwd: ROOT, encoding: 'utf8' })
-    .split('\n').filter(Boolean);
+// The files changed from base to head; with no head, to the working tree, uncommitted and new files included.
+export function changedFiles(base, head) {
+  const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean);
+  if (head) return git('diff', '--name-only', '--no-renames', base, head);
+  return [...new Set([...git('diff', '--name-only', '--no-renames', base), ...git('ls-files', '--others', '--exclude-standard')])];
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -179,12 +210,16 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const out = a === '--all' || !a || !b ? { tests: 'all', native: true, bench: true, why: ['full run'] }
     : main ? onMain(diffOf('package.json'))
     : affected(changedFiles(a, b), { diffOf });
+  const engines = (process.env.ENGINES || 'webkit').split(',');
+  out.jobs = out.tests || out.bench ? shards(out.tests, { engines, bench: out.bench }) : [];
   console.log(JSON.stringify(out, null, 2));
   if (process.env.GITHUB_OUTPUT) {
-    fs.appendFileSync(process.env.GITHUB_OUTPUT, `tests=${out.tests}\nnative=${out.native}\nbench=${out.bench}\n`);
+    const jobs = out.jobs.map(({ secs, ...j }) => j);
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `tests=${out.tests}\nnative=${out.native}\nbench=${out.bench}\njobs=${JSON.stringify(jobs)}\n`);
   }
   if (process.env.GITHUB_STEP_SUMMARY) {
     const head = out.tests === 'all' ? 'Every browser test' : out.tests ? `Browser tests: ${out.tests}` : 'No browser tests';
-    fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### ${head}\n\n${out.why.map((w) => `- ${w}`).join('\n')}\n`);
+    const jobs = out.jobs.map((j) => `- ${j.engine} ${j.shard} (~${j.secs} s): ${j.files || '—'}${j.bench ? ' + bench' : ''}`);
+    fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### ${head}\n\n${out.why.map((w) => `- ${w}`).join('\n')}\n${jobs.length ? `\n#### Jobs\n\n${jobs.join('\n')}\n` : ''}`);
   }
 }

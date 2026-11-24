@@ -34,7 +34,8 @@
     "classes": "node ci/classes.mjs",
     "waste": "npm run --silent build && npx --yes -p esbuild@0.25.12 -p typescript@5.9.3 node ci/waste.mjs",
     "pretest": "node -e \"import('./lib/build.ts').then((m) => process.exit(m.ensureBuilt('.') ? 0 : 1))\"",
-    "test": "node --import ./test/setup.mjs --test test/*.test.mjs"
+    "test": "node --import ./test/setup.mjs --test test/*.test.mjs",
+    "check": "node ci/pr-check.mjs"
   },
   "engines": {
     "node": ">=22"

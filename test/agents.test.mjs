@@ -120,10 +120,14 @@ test("Codex's sandbox: a blocked call says so and how to get around it", async (
   const dir = tmp('sandbox');
   fs.mkdirSync(path.join(dir, '.lab'));
   fs.writeFileSync(path.join(dir, '.lab/server.json'), JSON.stringify({ port: 9, token: 'x' }));
-  const out = await cli(dir, ['wait', '--timeout', '5'], { CODEX_SANDBOX_NETWORK_DISABLED: '1', CODEX_THREAD_ID: 't' });
+  // \`pin\`, not \`wait\`: both say the same line when the lab can't be reached, but a wait holds on two minutes for a lab
+  // coming back before it says so (and this ran two of them, four minutes of the whole unit run). A pin gives up after 5 s.
+  const [out, plain] = await Promise.all([
+    cli(dir, ['pin', '#t', 'hi'], { CODEX_SANDBOX_NETWORK_DISABLED: '1', CODEX_THREAD_ID: 't' }),
+    cli(dir, ['pin', '#t', 'hi'], {}),
+  ]);
   assert.match(out, /Codex's sandbox blocks/);
   assert.match(out, /network_access=true/);
-  const plain = await cli(dir, ['wait', '--timeout', '5'], {});
   assert.match(plain, /isn't running/);
 });
 
