@@ -30,7 +30,7 @@ const NO_BROWSER = [
   /\.md$/, /^LICENSE$/, /^docs\//, /^examples\//, /^skills\//, /^hooks\//, /^plugin\.json$/, /^\.claude-plugin\//,
   /^knip\.json$/, /^\.oxlintrc\.json$/, /^tsconfig\.json$/, /^\.gitignore$/,
   /^test\/[^/]+\.test\.mjs$/, /^test\/harness\.mjs$/, /^test\/setup\.mjs$/, /^test\/phone\//,
-  /^ci\/(metrics|reuse)\.mjs$/, /^ci\/parts\.json$/, /^ci\/[^/]+\.sh$/,
+  /^ci\/(metrics|reuse|unit-run|pr-check)\.mjs$/, /^ci\/(parts|flaky)\.json$/, /^ci\/[^/]+\.sh$/,
   /^\.github\/workflows\/(?!test\.yml$)/,
 ];
 
@@ -196,9 +196,11 @@ export function onMain(packageDiff) {
     : { tests: '', native: false, bench: false, why: ['main: tested in its PR; only a release (a version bump) runs the browsers'] };
 }
 
-function changedFiles(base, head) {
-  return execFileSync('git', ['diff', '--name-only', '--no-renames', base, head], { cwd: ROOT, encoding: 'utf8' })
-    .split('\n').filter(Boolean);
+// The files changed from base to head; with no head, to the working tree, uncommitted and new files included.
+export function changedFiles(base, head) {
+  const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean);
+  if (head) return git('diff', '--name-only', '--no-renames', base, head);
+  return [...new Set([...git('diff', '--name-only', '--no-renames', base), ...git('ls-files', '--others', '--exclude-standard')])];
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

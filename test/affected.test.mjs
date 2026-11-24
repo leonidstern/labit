@@ -8,7 +8,7 @@ const reach = { 'src/widget/ink.ts': ['ink', 'selection'], 'src/board/mount.ts':
 const run = (files, diffOf) => affected(files, { tests, reach, diffOf });
 
 test('docs, skills, unit tests and other workflows run no browser test', () => {
-  const r = run(['README.md', 'CHANGELOG.md', 'docs/settings.md', 'skills/labit/SKILL.md', 'test/local.test.mjs', 'test/phone/sim.mjs', '.github/workflows/gates.yml', 'ci/metrics.mjs']);
+  const r = run(['README.md', 'CHANGELOG.md', 'docs/settings.md', 'skills/labit/SKILL.md', 'test/local.test.mjs', 'test/phone/sim.mjs', '.github/workflows/gates.yml', 'ci/metrics.mjs', 'ci/flaky.json', 'ci/unit-run.mjs', 'ci/pr-check.mjs']);
   assert.equal(r.tests, '');
   assert.equal(r.native, false);
   assert.equal(r.bench, false);

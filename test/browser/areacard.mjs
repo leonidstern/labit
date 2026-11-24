@@ -46,9 +46,15 @@ try {
         await p.reload(); // each case from a closed card
         await p.waitForFunction(() => [...document.querySelectorAll('*')].some((n) => n.shadowRoot?.querySelector('button.pin')), null, { timeout: 8000 });
         await sleep(900);
-        const pinY = await shadow((r) => r.querySelector('button.pin').getBoundingClientRect().top + scrollY);
-        await p.evaluate(([y, f]) => scrollTo(0, y - innerHeight * f), [pinY, at]);
-        await sleep(500);
+        // The pin can still be on its way to its spot 900 ms after a load on a busy Mac (eight browser jobs at once): measured
+        // then, the scroll put it somewhere else and the click missed. Scroll until the pin sits where this case wants it.
+        for (let i = 0; i < 30; i++) {
+          const pinY = await shadow((r) => r.querySelector('button.pin').getBoundingClientRect().top + scrollY);
+          await p.evaluate(([y, f]) => scrollTo(0, y - innerHeight * f), [pinY, at]);
+          await sleep(200);
+          if (await shadow((r, f) => Math.abs(r.querySelector('button.pin').getBoundingClientRect().top - innerHeight * f) < 2, at)) break;
+        }
+        await sleep(300);
         const q = await shadow((r) => { const b = r.querySelector('button.pin').getBoundingClientRect(); return [b.x + 14, b.y + 14]; });
         await p.mouse.click(q[0], q[1]);
         await sleep(1000);

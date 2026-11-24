@@ -25,8 +25,8 @@ jobs:
           node-version: ${{ matrix.node }}
       - run: npm run build # the page script is built from src/, not kept in git
       - run: node --check local.mjs && node --check src/comments.js && node --check public/_lab/comments.js && node --check lib/comments-api.mjs
-      # npm test's own command with the shard: a flag after the file list would be read as one more file pattern.
-      - run: node --import ./test/setup.mjs --test --test-shard=${{ matrix.shard }}/2 test/*.test.mjs
+      # npm test's own command with the shard; a failing test is named as an error on the PR and in the summary.
+      - run: node ci/unit-run.mjs --test-shard=${{ matrix.shard }}/2
 
   # Two quick checks in one job:
   # - Dead code: files nothing imports, and exports nothing outside their own file uses. Knip runs from npx,
@@ -110,10 +110,9 @@ jobs:
       - run: npm run build # the page script is built from src/, not kept in git
       - name: Run ${{ matrix.engine }} ${{ matrix.shard }}
         if: matrix.files != ''
-        # A file that fails runs once more before the job fails: eight browsers on one Mac make a timing check miss now
-        # and then. The retry is a warning on the run, so a file that keeps needing it is easy to spot. Each file's
-        # time is in the log ("took N s"), for ci/browser-tests.json.
-        run: for t in ${{ matrix.files }}; do echo "::group::$t"; s=$SECONDS; node test/browser/$t.mjs || { echo "::warning::$t failed once, running it again"; node test/browser/$t.mjs; }; echo "$t took $((SECONDS - s)) s"; echo "::endgroup::"; done
+        # ci/browser-run.mjs: each file once more when it fails (a warning), the failing checks' own lines as errors on
+        # the PR and in the summary, each file's time ("took N s") for ci/browser-tests.json, ci/flaky.json's quarantine.
+        run: node ci/browser-run.mjs ${{ matrix.files }}
       # Agent readability: pins on a photo, a code line and a video second must be findable from the link alone. Once
       # per run, in the first WebKit shard (bench/run.mjs starts Chrome itself).
       - if: matrix.bench
