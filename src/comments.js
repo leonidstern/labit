@@ -1349,8 +1349,7 @@ import { bindKeys } from './widget/keys.ts';
       float.append(el('div', { class: 'handle' }));
       // The moment this pin will carry, so you know it is kept (Leo, 19 Nov: "some info in pin where it was"): a quiet
       // line, as under the sent pin's first message (Leo, 23 Nov, 4c).
-      // Live (9b): it follows a step of the video while you type, and the comment keeps where it ends (motion.ts).
-      const when = anchor.moment && (S.liveMoment?.(anchor, (m) => (anchor.moment = m)) || S.momentLine?.(anchor.moment));
+      const when = anchor.moment && S.momentLine?.(anchor.moment);
       if (when) float.append(when);
       const row = quickRow(draft, box);
       if (row?.children.length) float.append(row);

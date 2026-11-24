@@ -12,16 +12,10 @@
 .moment { all: unset; font: inherit; color: inherit; font-variant-numeric: tabular-nums; }
 button.moment { cursor: pointer; text-decoration: underline; text-decoration-color: var(--_line); text-underline-offset: 2px; }
 button.moment:hover { color: var(--_fg); }
-.float > .moment, .foot > .moment { display: block; margin: 0 0 6px; padding: 0 10px 0 14px; font-size: 11px; color: var(--_muted); white-space: nowrap; } /* one line, its words where the box's words start (Leo, 23 Nov: "fit this better/align") */
-/* Writing about a moving thing (9b): the line says the moment now, and the keys while its box has the cursor; held ⌃ names the rest. */
-.moment.live { display: flex; justify-content: space-between; gap: 8px; }
-:is(.float, .card):focus-within .moment.live::after { content: '⌥ ← → frame'; }
+.float > .moment { display: block; margin: 0 0 6px; font-size: 11px; color: var(--_muted); }
 @media (pointer: coarse) {
   .motion-sheet { padding: 8px 8px calc(10px + var(--_safe, 0px)); }
   .motion-speed { padding: 3px 4px 3px 12px; font-size: 15px; letter-spacing: -.016em; } /* lines up with the sheet's rows */
   .float > .moment { padding: 0 14px; }
   .more-menu .motion-speed button { min-height: 44px; min-width: 44px; padding: 6px 11px; } /* 44 pt to tap (iOS) */
 }
-/* The frame keys' row (1a, 4a): a quiet line in the menu, the keys on the right, like the ⋯ menu's (x). */
-.more-menu .motion-keys { display: flex; justify-content: space-between; gap: 12px; padding: 7px 10px; font-size: 13px; letter-spacing: -.006em; color: var(--_fg); }
-.more-menu .motion-keys span { color: var(--_muted); }

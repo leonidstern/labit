@@ -372,9 +372,7 @@ export function threadCard(c, fresh = new Set(), focus = false) {
     if (item.session && /kept|undone/.test(item.suggest?.state)) box.append(ruleLine(item));
     // The moment the pin was written on (Leo, 23 Nov, 4c): a quiet line under its first message, its time beside it;
     // clicked, the page pauses there again (motion.ts).
-    // A reply has its own (9b: each reply keeps the moment it was sent at).
-    const at = item === c ? c.anchor?.moment : item.moment;
-    const moment = at && W.S.momentLine?.(at, true);
+    const moment = item === c && c.anchor?.moment && W.S.momentLine?.(c.anchor.moment, true);
     if (moment) box.append(W.el('span', { class: 'p when' }, moment));
     const stamp = W.stampOf(item, c, item === c && !c.resolved ? `#${W.numberOf(c)} · ` : '');
     // The offer sits in your message's corner in place of the time and tick, so the bubble keeps its size (Leo, 17 Nov:
@@ -554,10 +552,6 @@ export function threadCard(c, fresh = new Set(), focus = false) {
     if (actions) nav.append(actions);
     if (nav.firstChild) card.insertBefore(nav, body);
   }
-  // A pin on a moving thing: the reply box has the moment line too, and the reply keeps the moment it ends on (9b).
-  let at = c.anchor?.moment;
-  const live = at && W.S.liveMoment?.(c.anchor, (m) => (at = m));
-  if (live) foot.append(live);
   foot.append(
     W.composer({
       placeholder: 'reply',
@@ -565,7 +559,7 @@ export function threadCard(c, fresh = new Set(), focus = false) {
       draftKey: `lab-typing:${W.S.page}:${c.id}`,
       attach: true,
       onSubmit: async (name, text, att) => {
-        const { comment } = await W.send({ name, text, parent: c.id, ...(live ? { moment: at } : {}), ...att });
+        const { comment } = await W.send({ name, text, parent: c.id, ...att });
         W.addComment(comment);
         W.markSeen([comment]);
         // Writing in a done thread reopens it (the lab does the same): it shows as open at once, pin and buttons.
