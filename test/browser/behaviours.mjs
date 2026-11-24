@@ -45,8 +45,9 @@ async function untilApi(pred, ms) {
   for (const end = Date.now() + ms; Date.now() < end; await sleep(40)) if ((await (await fetch(B + '/_lab/api/comments?page=/index')).json()).comments.some(pred)) return;
 }
 
-// Two halves, two files, so they run side by side: this one is the page's own behaviours and saves;
-// behaviours-choices.mjs (BEHAVIOURS_PART=choices) the questions with choices (thread.ts, trial.ts), on pages of their own.
+// Three parts, three files, so they run side by side: this one is the page's own behaviours and saves;
+// behaviours-choices.mjs (BEHAVIOURS_PART=choices) a question with choices tried in the sentence (thread.ts, trial.ts);
+// behaviours-questions.mjs (=questions) words that look like HTML, a quote over two blocks, hints, touches, the chat.
 const PART = process.env.BEHAVIOURS_PART || 'page';
 start();
 await up();
@@ -59,8 +60,8 @@ for (const eng of engines()) {
   // Done pins show by default: a resolved pin stays on the page, so the go check below needs no reload
   // (a reload would land in the counts the save checks at the end make).
   await ctx.addInitScript(() => localStorage.setItem('lab-name', 'leo'));
-  // The choices half starts with labit on, as the page half leaves it.
-  if (PART === 'choices') await ctx.addInitScript(() => localStorage.setItem('lab-on', '1'));
+  // The question parts start with labit on, as the page part leaves it.
+  if (PART !== 'page') await ctx.addInitScript(() => localStorage.setItem('lab-on', '1'));
   await ctx.addInitScript(() => addEventListener('load', () => fetch('/data.json').catch(() => {}))); // the page uses data.json: a save of it reloads the page
   const p = await ctx.newPage();
   let loads = 0;
@@ -74,7 +75,7 @@ for (const eng of engines()) {
   const admin = JSON.parse(fs.readFileSync(path.join(DIR, '.lab/server.json'), 'utf8')).agent;
   const post = (body) =>
     fetch(`${B}/_lab/api/comments`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-lab-admin': admin, 'x-lab-agent': '1' }, body: JSON.stringify(body) }).then((r) => r.json());
-  if (PART !== 'choices') {
+  if (PART === 'page') {
   // Saved files
   await p.fill('#i', 'kept text');
   await p.evaluate(() => (document.querySelector('#d').open = true));
@@ -347,6 +348,7 @@ for (const eng of engines()) {
   if (PART !== 'page') {
   // Every comment on a page of ours goes, so each engine starts from nothing.
   const wipe = async (pg) => { for (const c of (await (await fetch(`${B}/_lab/api/comments?page=${pg}`)).json()).comments.filter((x) => !x.parent)) await post({ page: pg, action: 'delete', id: c.id }); };
+  if (PART === 'choices') {
   // A question with choices, tried in the sentence (src/widget/thread.ts, trial.ts): a page of its own, so the checks above
   // and the reload below keep their counts.
   {
@@ -557,18 +559,21 @@ for (const eng of engines()) {
     await q.close();
   }
 
+  }
+  if (PART === 'questions') {
   // Words that look like HTML are text; a quote across two paragraphs shows rows only.
   {
     const body = (a) => `<!doctype html><meta charset="utf-8"><title>Ask2</title><style>body{margin:30px;font:18px/1.6 serif}main{max-width:520px}</style><main>${a}</main>`;
     write('ask2.html', body('<p id="a">One sentence ends here.</p><p id="b">The next one starts here and goes on.</p><p id="c">Alone <b>bold</b> words here.</p>' + Array.from({ length: 10 }, (_, i) => `<p>Filler ${i}.</p>`).join('')));
     await wipe('/ask2');
     const q = await ctx.newPage();
-    await q.goto(B + '/ask2');
-    await sleep(1200);
     const sq = (fn, arg) => q.evaluate(([f, a]) => new Function('r', 'a', f)([...document.querySelectorAll('*')].find((n) => n.shadowRoot).shadowRoot, a), [fn.toString().replace(/^[^{]*{|}$/g, ''), arg]);
     const across = (await post({ page: '/ask2', name: 'leo', text: 'across', anchor: { kind: 'text', selector: 'body', x: 0.3, y: 0.2, docX: 0.3, docY: 80, width: 1000, element: '<body>', text: '…One [sentence ends here. The next one] starts here…', quote: { exact: 'sentence ends here. The next one', prefix: 'One ', suffix: ' starts here' } } })).comment;
     await post({ page: '/ask2', name: 'Claude', text: 'Which?', parent: across.id, choices: ['sentence ends here. The next one', 'sentence stops. The next two'], recommend: 1 });
-    await sleep(1200);
+    // Opened once the question is there (it reaches an open page too, but that is the live connection's test).
+    await q.goto(B + '/ask2');
+    await until(q, () => [...document.querySelectorAll('*')].find((n) => n.shadowRoot)?.shadowRoot.querySelector('button.pin'), null, 8000);
+    await sleep(300);
     const mine = () => q.evaluate(() => document.querySelector('#a').innerHTML + document.querySelector('#b').innerHTML);
     const before = await mine();
     await sq(() => { r.querySelector('button.pin').click(); });
@@ -599,13 +604,13 @@ for (const eng of engines()) {
     write('ask3.html', body('<p id="a">A heading-ish line of words.</p>' + Array.from({ length: 8 }, (_, i) => `<p>Filler ${i}.</p>`).join('')));
     await wipe('/ask3');
     const q = await ctx.newPage();
-    await q.goto(B + '/ask3');
-    await sleep(1200);
     const sq = (fn, arg) => q.evaluate(([f, a]) => new Function('r', 'a', f)([...document.querySelectorAll('*')].find((n) => n.shadowRoot).shadowRoot, a), [fn.toString().replace(/^[^{]*{|}$/g, ''), arg]);
     const picks = async () => (await (await fetch(`${B}/_lab/api/comments?page=/ask3`)).json()).comments.filter((x) => x.picked);
     const pin = (await post({ page: '/ask3', name: 'leo', text: 'which layout?', anchor: { kind: 'element', selector: '#a', x: 0.5, y: 0.5, docX: 0.3, docY: 80, width: 1000, element: '<p id="a">' } })).comment;
     const ask = (await post({ page: '/ask3', name: 'Claude', text: 'Which layout?', parent: pin.id, choices: ['Tabs', 'List', 'Grid'], hints: ['less scrolling', '', 'denser, harder to scan'], recommend: 0 })).comment;
-    await sleep(1200);
+    await q.goto(B + '/ask3'); // opened once the question is there, as above
+    await until(q, () => [...document.querySelectorAll('*')].find((n) => n.shadowRoot)?.shadowRoot.querySelector('button.pin'), null, 8000);
+    await sleep(300);
     await sq(() => { r.querySelector('button.pin').click(); });
     await sleep(700);
     const info = () => sq(() => {
@@ -694,7 +699,8 @@ for (const eng of engines()) {
   }
 
   }
-  if (PART !== 'choices') {
+  }
+  if (PART === 'page') {
   // A save the page has nothing to do with leaves it alone; one it may fetch reloads it; a lab restart doesn't.
   // (A page with its own <script> is not used here: such a page never patches in place, it reloads on every HTML
   // save, which is what the checks above cover. Whether a page uses a saved script is tested in hot.test.mjs.)
