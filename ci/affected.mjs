@@ -1,5 +1,5 @@
 // Which browser tests a pull request needs (Leo, 20 Nov: PR CI should run only the tests a change can break). The
-// browser jobs run on Leo's Mac; this picks, from the files a PR changes, which test/browser files they run.
+// browser jobs run on GitHub's runners; this picks, from the files a PR changes, which test/browser files they run.
 //
 // Rules, first match per changed file:
 // - Never affects a browser: docs, skills, hooks, examples, unit tests, the phone kit, the size gate's ci/ scripts,
@@ -83,7 +83,7 @@ const REACH = {
   'lib/update.ts': ['update'],
 };
 
-// The browser tests CI runs, with how long each takes in one engine on the Mac (seconds, from a CI run): the plan
+// The browser tests CI runs, with how long each takes in one engine on a CI runner (seconds, from a CI run): the plan
 // packs the picked ones into shards of about the same length (shards below). A file not listed never runs in CI.
 const TIMES = path.join(ROOT, 'ci/browser-tests.json');
 export const readTimes = () => JSON.parse(fs.readFileSync(TIMES, 'utf8'));
@@ -105,19 +105,20 @@ export function listEdit(diff) {
 }
 
 // The browser jobs: the picked tests packed into shards per engine, longest first onto the shortest shard, so they
-// end at about the same time. As many shards as the tests need at about TARGET seconds each, at most the Mac's
-// runners split between the engines (8 runners: a PR's WebKit-only run can take all 8, a release 4 per engine). The
-// bench rides on the first WebKit shard.
-const RUNNERS = 8;
-const TARGET = 120;
+// end at about the same time. As many shards as the tests need at about TARGET seconds each, at most RUNNERS[engine]:
+// WebKit runs on GitHub's macOS runners (Safari's own WebKit; Linux WebKit draws, scrolls and times frames otherwise),
+// 5 at once for a free account; Chromium on Linux, 5 so a release keeps room for a PR. The bench rides on the first
+// WebKit shard.
+const RUNNERS = { webkit: 5, chromium: 5 };
+const TARGET = 60;
 export function shards(picked, { engines = ['webkit'], times = readTimes(), bench = false, runners = RUNNERS } = {}) {
+  const limit = (engine) => (typeof runners === 'number' ? Math.max(1, Math.floor(runners / engines.length)) : runners[engine] ?? 5);
   const names = picked === 'all' ? Object.keys(times) : picked.split(/\s+/).filter(Boolean);
   const cost = (n) => times[n] ?? TARGET; // a test with no time yet counts as a whole shard
   const total = names.reduce((s, n) => s + cost(n), 0);
-  const most = Math.max(1, Math.floor(runners / engines.length));
-  const k = Math.min(most, Math.max(1, Math.ceil(total / TARGET)), Math.max(1, names.length));
   const jobs = [];
   for (const engine of engines) {
+    const k = Math.min(limit(engine), Math.max(1, Math.ceil(total / TARGET)), Math.max(1, names.length));
     const bins = Array.from({ length: k }, () => ({ files: [], secs: 0 }));
     for (const n of [...names].sort((a, b) => cost(b) - cost(a) || a.localeCompare(b))) {
       const bin = bins.reduce((lo, b) => (b.secs < lo.secs ? b : lo));
@@ -126,11 +127,11 @@ export function shards(picked, { engines = ['webkit'], times = readTimes(), benc
     }
     bins.forEach((b, i) => {
       const withBench = bench && engine === 'webkit' && i === 0;
-      if (b.files.length || withBench) jobs.push({ engine, shard: `${i + 1}/${k}`, files: b.files.join(' '), bench: withBench, secs: b.secs });
+      if (b.files.length || withBench) jobs.push({ engine, os: engine === 'webkit' ? 'macos-latest' : 'ubuntu-latest', shard: `${i + 1}/${k}`, files: b.files.join(' '), bench: withBench, secs: b.secs });
     });
   }
   // The bench alone, with no WebKit in this run: a job of its own on WebKit.
-  if (bench && !jobs.some((j) => j.bench)) jobs.push({ engine: 'webkit', shard: 'bench', files: '', bench: true, secs: 0 });
+  if (bench && !jobs.some((j) => j.bench)) jobs.push({ engine: 'webkit', os: 'macos-latest', shard: 'bench', files: '', bench: true, secs: 0 });
   return jobs;
 }
 
@@ -181,12 +182,37 @@ export function backTo(lines, diff) {
     return [l + shift];
   }))];
 }
-export function reachOf(file, lines, map, tests) {
+// Code nearly every test runs (the lab starting, a pin drawn, a card opened) would pick nearly every test and save
+// nothing: a line more than half the tests run picks a few of them instead, the ones that run most of its file (they
+// lean on that code the most) and the quickest. A change there that breaks it breaks it for all, so a few find it;
+// every test still runs on a release, and a PR can run all by hand ("Run workflow").
+const SHARED = 0.25;
+const SAMPLE = { widest: 3, quickest: 2 };
+const lineCount = (text) => (text || '').split(',').reduce((n, part) => {
+  if (!part) return n;
+  const [a, b = a] = part.split('-').map(Number);
+  return n + b - a + 1;
+}, 0);
+function sample(names, file, map, times) {
+  const size = (n) => (file === '#classes' ? (map.tests[n][file] || '').split(' ').length : lineCount(map.tests[n][file]));
+  const widest = [...names].sort((a, b) => size(b) - size(a) || a.localeCompare(b)).slice(0, SAMPLE.widest);
+  const quickest = [...names].filter((n) => !widest.includes(n)).sort((a, b) => (times[a] ?? 60) - (times[b] ?? 60) || a.localeCompare(b)).slice(0, SAMPLE.quickest);
+  return [...widest, ...quickest];
+}
+export function reachOf(file, lines, map, tests, times = readTimes()) {
   if (!map || !lines?.length) return null;
-  const ran = Object.entries(map.tests).filter(([n, files]) => tests.has(n) && inRanges(files[file], lines)).map(([n]) => n);
-  if (!ran.length) return null;
-  const always = [...tests].filter((n) => !map.tests[n] || map.failed?.includes(n));
-  return [...new Set([...ran, ...always])];
+  const mapped = Object.keys(map.tests).filter((n) => tests.has(n));
+  const pick = new Set();
+  let reached = false;
+  for (const l of lines) {
+    const ran = mapped.filter((n) => inRanges(map.tests[n][file], [l]));
+    if (!ran.length) continue;
+    reached = true;
+    for (const n of ran.length > mapped.length * SHARED ? sample(ran, file, map, times) : ran) pick.add(n);
+  }
+  if (!reached) return null;
+  for (const n of tests) if (!map.tests[n] || map.failed?.includes(n)) pick.add(n);
+  return [...pick];
 }
 
 // The classes a stylesheet's lines style: for each line, the selectors of the rules it sits in (an @media's too).
@@ -210,11 +236,62 @@ export function classesAt(css, lines) {
   for (const l of lines) for (const m of (at[l] || '').matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)) out.add(m[1]);
   return [...out];
 }
-export function cssReach(classes, map, tests) {
+export function cssReach(classes, map, tests, times = readTimes()) {
   if (!map || !classes.length) return null;
-  const ran = Object.entries(map.tests).filter(([n, f]) => tests.has(n) && f['#classes'] && classes.some((c) => ` ${f['#classes']} `.includes(` ${c} `))).map(([n]) => n);
-  if (!ran.length) return null;
-  return [...new Set([...ran, ...[...tests].filter((n) => !map.tests[n] || map.failed?.includes(n))])];
+  const mapped = Object.keys(map.tests).filter((n) => tests.has(n));
+  const pick = new Set();
+  for (const c of classes) {
+    const ran = mapped.filter((n) => ` ${map.tests[n]['#classes'] || ''} `.includes(` ${c} `));
+    // A class nearly every test shows (a pin, a card): a few of them, as for shared code.
+    for (const n of ran.length > mapped.length * SHARED ? sample(ran, '#classes', map, times) : ran) pick.add(n);
+  }
+  if (!pick.size) return null;
+  for (const n of tests) if (!map.tests[n] || map.failed?.includes(n)) pick.add(n);
+  return [...pick];
+}
+
+// ---------- unit tests: test/*.test.mjs files a PR needs ----------
+// From the reach map's "unit" part (the lines of the repo's code each unit file runs, its labs' too): a changed code
+// line runs the files that ran it (a few of them for code most files run, as for the browser tests); a code line no unit
+// file runs needs none. A changed test file runs itself; another file (a page, a JSON, a skill) runs the test files
+// that name it. Every file: the test setup, package.json, test.yml, no map, or a line the map can't place.
+const UNIT_ALL = /^(test\/(harness|setup)\.mjs|package\.json|\.github\/workflows\/test\.yml|ci\/(affected|unit-run)\.mjs)$/;
+const UNIT_CODE = /^(local\.mjs|(lib|src|hooks|ci|bench|scripts)\/.+\.(m?js|ts))$/;
+const unitFiles = () => fs.readdirSync(path.join(ROOT, 'test')).filter((f) => f.endsWith('.test.mjs')).map((f) => f.slice(0, -'.test.mjs'.length)).sort();
+const unitSource = (n) => fs.readFileSync(path.join(ROOT, 'test', `${n}.test.mjs`), 'utf8');
+export function unitAffected(files, { map = null, linesOf = () => null, all = unitFiles(), source = unitSource } = {}) {
+  const why = [];
+  const pick = new Set();
+  const everything = (reason) => ({ unit: 'all', why: [...why, reason] });
+  for (const f of files) {
+    const t = f.match(/^test\/([\w-]+)\.test\.mjs$/)?.[1];
+    if (t) {
+      if (all.includes(t)) pick.add(t);
+      why.push(`${f}: runs itself`);
+      continue;
+    }
+    if (UNIT_ALL.test(f)) return everything(`${f}: every unit test`);
+    if (UNIT_CODE.test(f)) {
+      if (!map?.unit) return everything(`${f}: no reach map, every unit test`);
+      const lines = linesOf(f);
+      if (!lines?.length) return everything(`${f}: the reach map can't place its change, every unit test`);
+      const mapped = Object.keys(map.unit).filter((n) => all.includes(n));
+      const ran = new Set();
+      for (const l of lines) {
+        const by = mapped.filter((n) => inRanges(map.unit[n][f], [l]));
+        for (const n of by.length > mapped.length * SHARED ? sample(by, f, { tests: map.unit }, {}) : by) ran.add(n);
+      }
+      for (const n of ran) pick.add(n);
+      why.push(ran.size ? `${f}: ${lines.length} changed line${lines.length === 1 ? '' : 's'} reached by ${[...ran].join(' ')}` : `${f}: no unit test runs its changed lines`);
+      continue;
+    }
+    const base = path.basename(f);
+    const naming = all.filter((n) => source(n).includes(base));
+    for (const n of naming) pick.add(n);
+    why.push(naming.length ? `${f}: named by ${naming.join(' ')}` : `${f}: no unit test reads it`);
+  }
+  if (map?.unit) for (const n of all) if (!map.unit[n] || map.unitFailed?.includes(n)) if (pick.size) pick.add(n);
+  return { unit: [...pick].sort().join(' '), why };
 }
 
 export function affected(files, { tests = groupTests(), reach = REACH, diffOf = () => '', map = null, linesOf = () => null, classesOf = () => [] } = {}) {
@@ -366,16 +443,24 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const out = a === '--all' || !a || !b ? { tests: 'all', native: true, bench: true, why: ['full run'] }
     : main ? onMain(diffOf('package.json'))
     : affected(changedFiles(a, b), { diffOf, ...reachFor(a, b) });
+  const unitOut = a === '--all' || !a || !b || main ? { unit: 'all', why: [] } : unitAffected(changedFiles(a, b), reachFor(a, b));
+  out.unit = unitOut.unit;
+  out.unitWhy = unitOut.why;
+  const unitCount = out.unit === 'all' ? unitFiles().length : out.unit.split(' ').filter(Boolean).length;
+  // Unit files over up to three jobs, about eight files a job; none picked, no job.
+  out.unitShards = unitCount ? Array.from({ length: Math.min(3, Math.ceil(unitCount / 8)) }, (_, i) => i + 1) : [];
   const engines = (process.env.ENGINES || 'webkit').split(',');
   out.jobs = out.tests || out.bench ? shards(out.tests, { engines, bench: out.bench }) : [];
   console.log(JSON.stringify(out, null, 2));
   if (process.env.GITHUB_OUTPUT) {
     const jobs = out.jobs.map(({ secs, ...j }) => j);
-    fs.appendFileSync(process.env.GITHUB_OUTPUT, `tests=${out.tests}\nnative=${out.native}\nbench=${out.bench}\njobs=${JSON.stringify(jobs)}\n`);
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `tests=${out.tests}\nnative=${out.native}\nbench=${out.bench}\njobs=${JSON.stringify(jobs)}\nunit=${out.unit}\nunitShards=${JSON.stringify(out.unitShards)}\nunitShardCount=${out.unitShards.length}\n`);
   }
   if (process.env.GITHUB_STEP_SUMMARY) {
     const head = out.tests === 'all' ? 'Every browser test' : out.tests ? `Browser tests: ${out.tests}` : 'No browser tests';
     const jobs = out.jobs.map((j) => `- ${j.engine} ${j.shard} (~${j.secs} s): ${j.files || '—'}${j.bench ? ' + bench' : ''}`);
+    const uhead = out.unit === 'all' ? 'Every unit test' : out.unit ? `Unit tests: ${out.unit}` : 'No unit tests';
+    fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### ${uhead}\n\n${out.unitWhy.map((w) => `- ${w}`).join('\n')}\n\n`);
     fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### ${head}\n\n${out.why.map((w) => `- ${w}`).join('\n')}\n${jobs.length ? `\n#### Jobs\n\n${jobs.join('\n')}\n` : ''}`);
   }
 }

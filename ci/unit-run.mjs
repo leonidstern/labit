@@ -2,13 +2,15 @@
 // checks page at its file and line, and the failures with their messages in the job summary, so an agent reading the PR
 // sees what broke without opening the raw log.
 //
-//   node ci/unit-run.mjs [node --test flags…]     e.g. --test-shard=1/2
+//   UNIT_FILES='ack sync' node ci/unit-run.mjs [node --test flags…]     e.g. --test-shard=1/2
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
-const files = fs.readdirSync(path.join(ROOT, 'test')).filter((f) => f.endsWith('.test.mjs')).sort().map((f) => `test/${f}`);
+// UNIT_FILES: the names the plan picked (ci/affected.mjs), space separated; unset or "all": every file.
+const picked = (process.env.UNIT_FILES || 'all').trim();
+const files = (picked === 'all' ? fs.readdirSync(path.join(ROOT, 'test')).filter((f) => f.endsWith('.test.mjs')).sort() : picked.split(/\s+/).map((n) => `${n}.test.mjs`)).map((f) => `test/${f}`);
 const esc = (s) => String(s).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
 
 const child = spawn(process.execPath, ['--import', './test/setup.mjs', '--test', ...process.argv.slice(2), ...files], { cwd: ROOT, stdio: ['ignore', 'pipe', 'inherit'] });

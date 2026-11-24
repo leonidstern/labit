@@ -8,15 +8,18 @@ concurrency:
   group: test-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
-  # Node 22 (the oldest labit supports) on every PR; 24 and 26 only on main, where they rarely differ. The unit test
-  # files are split over three jobs (node --test-shard), each running three at a time as before.
+  # Node 22 (the oldest labit supports) on every PR; 24 and 26 only on main, where they rarely differ. A PR runs the unit
+  # test files the plan picked from the reach map (the lines each file runs), over up to three jobs (node --test-shard);
+  # main runs them all.
   test:
+    needs: plan
+    if: needs.plan.outputs.unitShards != '[]'
     runs-on: ubuntu-latest
     strategy:
       matrix:
         node: ${{ fromJSON(github.event_name == 'pull_request' && '[22]' || '[22, 24, 26]') }}
-        shard: [1, 2, 3]
-    name: test (${{ matrix.node }}, ${{ matrix.shard }}/3)
+        shard: ${{ fromJSON(needs.plan.outputs.unitShards) }}
+    name: test (${{ matrix.node }}, ${{ matrix.shard }}/${{ needs.plan.outputs.unitShardCount }})
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,7 +28,9 @@ jobs:
       - run: npm run build # the page script is built from src/, not kept in git
       - run: node --check local.mjs && node --check src/comments.js && node --check public/_lab/comments.js && node --check lib/comments-api.mjs
       # npm test's own command with the shard; a failing test is named as an error on the PR and in the summary.
-      - run: node ci/unit-run.mjs --test-shard=${{ matrix.shard }}/3
+      - run: node ci/unit-run.mjs --test-shard=${{ matrix.shard }}/${{ needs.plan.outputs.unitShardCount }}
+        env:
+          UNIT_FILES: ${{ needs.plan.outputs.unit }}
 
   # Two quick checks in one job:
   # - Dead code: files nothing imports, and exports nothing outside their own file uses. Knip runs from npx,
@@ -48,7 +53,7 @@ jobs:
   # widget module runs the tests that reach it, and src/comments.js, styles, the server, package.json or the build run
   # all. Merges to main run none (tested in their PR) unless they bump the version; a release and a run started by hand
   # run every test. The picked tests are packed into shards of about the same length from each file's time in
-  # ci/browser-tests.json, as many as the Mac has runners for. The reasons and the shards are in this job's summary.
+  # ci/browser-tests.json, up to 10 jobs at once. The reasons and the shards are in this job's summary.
   plan:
     runs-on: ubuntu-latest
     permissions:
@@ -59,6 +64,9 @@ jobs:
       native: ${{ steps.pick.outputs.native }}
       bench: ${{ steps.pick.outputs.bench }}
       jobs: ${{ steps.pick.outputs.jobs }}
+      unit: ${{ steps.pick.outputs.unit }}
+      unitShards: ${{ steps.pick.outputs.unitShards }}
+      unitShardCount: ${{ steps.pick.outputs.unitShardCount }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -77,7 +85,7 @@ jobs:
           if [ -n "$id" ]; then gh run download "$id" -R "$GITHUB_REPOSITORY" -n reach-map -D ci || echo "no reach map"; else echo "no reach map yet"; fi
       - id: pick
         env:
-          # A PR runs Safari's engine only (Leo, 20 Nov: half the Mac's work per PR; Safari is where labit is used most).
+          # A PR runs Safari's engine only (Leo, 20 Nov: half the work per PR; Safari is where labit is used most).
           # main runs both for a release, and "Run workflow" runs both by hand.
           ENGINES: ${{ github.event_name == 'pull_request' && 'webkit' || 'webkit,chromium' }}
         run: |
@@ -94,21 +102,19 @@ jobs:
 
   # The widget in real browsers: Safari's engine (WebKit) and Chrome's. Playwright is installed only here (--no-save),
   # so labit itself keeps zero dependencies. One job per shard the plan made, side by side.
-  # They run on Leo's Mac (eight self-hosted runners labelled labit-mac, one job each; Leo, 20 Nov: "most heavy ones
-  # [on my Mac] and gh only harnesses"). Only for main and for PRs from this repository: a fork's code never runs
-  # on the Mac, so a fork's PR shows "browser" failed until someone pushes it to a branch here.
+  # On GitHub's runners (Leo, 24 Nov: free for a public repo; only the iOS simulator stays on his Mac): WebKit on macOS,
+  # Safari's own engine (on Linux, WebKit's frames, wheel scrolling and timing differ: sheetrelease, motionreduce and
+  # cardscroll failed there), Chromium on Linux. Playwright's browsers are cached per version.
   browser:
     needs: plan
-    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && needs.plan.outputs.jobs != '[]'
-    runs-on: [self-hosted, labit-mac]
-    timeout-minutes: 12 # a hung browser fails here instead of holding the PR for half an hour
+    if: needs.plan.outputs.jobs != '[]'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15 # a hung browser fails here instead of holding the PR for half an hour
     strategy:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.plan.outputs.jobs) }}
     name: browser (${{ matrix.engine }} ${{ matrix.shard }})
-    # The Mac keeps Playwright's browsers in ~/Library/Caches/ms-playwright (chromium 1255, webkit 2388 for 1.65.1),
-    # so nothing is downloaded per run.
     env:
       ENGINES: ${{ matrix.engine }}
       # anchoring-torture: one seed of generated pages on a PR (about 35 s in WebKit), both on main and by hand, where
@@ -121,6 +127,11 @@ jobs:
         with:
           node-version: 22
       - run: npm install --no-save --no-audit --no-fund playwright@1.65.1
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.os == 'macOS' && '~/Library/Caches/ms-playwright' || '~/.cache/ms-playwright' }}
+          key: playwright-1.65.1-${{ runner.os }}-${{ matrix.engine }}
+      - run: npx playwright install ${{ runner.os == 'Linux' && '--with-deps' || '' }} ${{ matrix.engine }}${{ matrix.bench && ' chromium' || '' }}
       - run: npm run build # the page script is built from src/, not kept in git
       - name: Run ${{ matrix.engine }} ${{ matrix.shard }}
         if: matrix.files != ''
@@ -133,11 +144,11 @@ jobs:
         run: node bench/run.mjs
 
   # Native features (ci/native.mjs): what Safari's engine and Chrome's can do that labit could use, as a table in the
-  # job's summary. Fails only when a feature labit uses goes missing from one of them. On the Mac, beside the browser jobs.
+  # job's summary. Fails only when a feature labit uses goes missing from one of them. On macOS, for Safari's WebKit.
   native:
     needs: plan
-    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && needs.plan.outputs.native == 'true'
-    runs-on: [self-hosted, labit-mac]
+    if: needs.plan.outputs.native == 'true'
+    runs-on: macos-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
@@ -145,6 +156,11 @@ jobs:
         with:
           node-version: 22
       - run: npm install --no-save --no-audit --no-fund playwright@1.65.1
+      - uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/ms-playwright
+          key: playwright-1.65.1-macOS-native
+      - run: npx playwright install webkit chromium
       - run: node ci/native.mjs
 
   # One required check name for branch protection, green only when every browser job is, or when the plan picked no

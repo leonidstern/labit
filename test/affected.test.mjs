@@ -72,14 +72,14 @@ test('shards: every picked test runs once per engine, the longest shard near the
   const both = shards('all', { times, engines: ['webkit', 'chromium'], runners: 8 });
   assert.ok(both.length <= 8);
   assert.equal(both.filter((j) => j.engine === 'chromium').length, both.filter((j) => j.engine === 'webkit').length);
-  // A small pick is one job; the bench rides on the first WebKit shard, or gets its own when there is none.
-  assert.deepEqual(shards('c h', { times }).map((j) => j.files), ['c h']);
+  // A small pick (under a minute) is one job; the bench rides on the first WebKit shard, or gets its own when there is none.
+  assert.deepEqual(shards('g h', { times }).map((j) => j.files), ['g h']);
   assert.equal(shards('c', { times, bench: true })[0].bench, true);
   assert.deepEqual(shards('', { times, bench: true }).map((j) => [j.files, j.bench]), [['', true]]);
   assert.deepEqual(shards('c', { times, engines: ['chromium'], bench: true }).map((j) => j.engine), ['chromium', 'webkit']);
-  // The real list: a full PR run fits in the runners, each shard under three minutes.
+  // The real list: a full PR run is WebKit on at most 5 macOS jobs.
   const real = shards('all');
-  assert.ok(real.length <= 8 && Math.max(...real.map((j) => j.secs)) < 180);
+  assert.ok(real.length <= 5 && real.every((j) => j.os === 'macos-latest'));
 });
 
 test('main runs the browsers only for a version bump', async () => {
@@ -107,4 +107,21 @@ test('reach map: a changed line runs the tests that ran it; one no test ran runs
   assert.deepEqual([3, 6, 8, 12, 13].map((l) => backTo([l], diff)), [[3], [5, 6], [6], [10, 11], [12]]);
   assert.deepEqual(touched('@@ -4,2 +4,3 @@\n@@ -9,0 +11,1 @@'), [4, 5, 9, 10]);
   assert.deepEqual(classesAt('.a{color:red}\n:host{--x:1}\n@media (x){\n  .b .c,\n  .d {\n    margin:0;\n  }\n}', [1, 2, 6]), ['a', 'b', 'c', 'd']);
+});
+
+test('unit tests: a changed line runs the files that ran it; a test file runs itself; setup and package.json run all', async () => {
+  const { unitAffected } = await import('../ci/affected.mjs');
+  const all = ['ack', 'board', 'sync', 'skill'];
+  const map = { unit: { ack: { 'lib/a.ts': '1-5' }, board: { 'lib/a.ts': '10-20', 'lib/board.ts': '1-9' }, sync: {}, skill: {} }, unitFailed: [] };
+  const source = (n) => (n === 'skill' ? "read('skills/labit/SKILL.md')" : '');
+  const on = (files, lines) => unitAffected(files, { map, linesOf: () => lines, all, source }).unit;
+  assert.equal(on(['lib/a.ts'], [3]), 'ack');
+  assert.equal(on(['lib/a.ts'], [3, 12]), 'ack board');
+  assert.equal(on(['lib/a.ts'], [30]), ''); // no unit file runs it
+  assert.equal(on(['lib/a.ts'], null), 'all'); // can't be placed
+  assert.equal(on(['test/sync.test.mjs']), 'sync');
+  assert.equal(on(['skills/labit/SKILL.md']), 'skill'); // named by a test
+  assert.equal(on(['docs/x.md']), '');
+  assert.equal(on(['package.json']), 'all');
+  assert.equal(unitAffected(['lib/a.ts'], { all, source }).unit, 'all'); // no map
 });

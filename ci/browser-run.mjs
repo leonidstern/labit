@@ -4,7 +4,7 @@
 //
 //   node ci/browser-run.mjs <name>…     names as in ci/browser-tests.json (test/browser/<name>.mjs); engines from ENGINES
 //
-// A file that fails runs once more: eight browsers on one Mac make a timing check miss now and then. The retry is a
+// A file that fails runs once more: a busy runner makes a timing check miss now and then. The retry is a
 // warning, so a file that keeps needing it is easy to spot. A file that fails twice fails the job, unless it is in
 // ci/flaky.json (quarantined: a known flake with an issue and a note); then it is a warning and the job goes on. Keep that
 // list short: a quarantined test still runs, but no longer guards anything.
