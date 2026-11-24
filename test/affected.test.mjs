@@ -108,3 +108,20 @@ test('reach map: a changed line runs the tests that ran it; one no test ran runs
   assert.deepEqual(touched('@@ -4,2 +4,3 @@\n@@ -9,0 +11,1 @@'), [4, 5, 9, 10]);
   assert.deepEqual(classesAt('.a{color:red}\n:host{--x:1}\n@media (x){\n  .b .c,\n  .d {\n    margin:0;\n  }\n}', [1, 2, 6]), ['a', 'b', 'c', 'd']);
 });
+
+test('unit tests: a changed line runs the files that ran it; a test file runs itself; setup and package.json run all', async () => {
+  const { unitAffected } = await import('../ci/affected.mjs');
+  const all = ['ack', 'board', 'sync', 'skill'];
+  const map = { unit: { ack: { 'lib/a.ts': '1-5' }, board: { 'lib/a.ts': '10-20', 'lib/board.ts': '1-9' }, sync: {}, skill: {} }, unitFailed: [] };
+  const source = (n) => (n === 'skill' ? "read('skills/labit/SKILL.md')" : '');
+  const on = (files, lines) => unitAffected(files, { map, linesOf: () => lines, all, source }).unit;
+  assert.equal(on(['lib/a.ts'], [3]), 'ack');
+  assert.equal(on(['lib/a.ts'], [3, 12]), 'ack board');
+  assert.equal(on(['lib/a.ts'], [30]), ''); // no unit file runs it
+  assert.equal(on(['lib/a.ts'], null), 'all'); // can't be placed
+  assert.equal(on(['test/sync.test.mjs']), 'sync');
+  assert.equal(on(['skills/labit/SKILL.md']), 'skill'); // named by a test
+  assert.equal(on(['docs/x.md']), '');
+  assert.equal(on(['package.json']), 'all');
+  assert.equal(unitAffected(['lib/a.ts'], { all, source }).unit, 'all'); // no map
+});

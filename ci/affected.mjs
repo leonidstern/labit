@@ -250,6 +250,50 @@ export function cssReach(classes, map, tests, times = readTimes()) {
   return [...pick];
 }
 
+// ---------- unit tests: test/*.test.mjs files a PR needs ----------
+// From the reach map's "unit" part (the lines of the repo's code each unit file runs, its labs' too): a changed code
+// line runs the files that ran it (a few of them for code most files run, as for the browser tests); a code line no unit
+// file runs needs none. A changed test file runs itself; another file (a page, a JSON, a skill) runs the test files
+// that name it. Every file: the test setup, package.json, test.yml, no map, or a line the map can't place.
+const UNIT_ALL = /^(test\/(harness|setup)\.mjs|package\.json|\.github\/workflows\/test\.yml|ci\/(affected|unit-run)\.mjs)$/;
+const UNIT_CODE = /^(local\.mjs|(lib|src|hooks|ci|bench|scripts)\/.+\.(m?js|ts))$/;
+const unitFiles = () => fs.readdirSync(path.join(ROOT, 'test')).filter((f) => f.endsWith('.test.mjs')).map((f) => f.slice(0, -'.test.mjs'.length)).sort();
+const unitSource = (n) => fs.readFileSync(path.join(ROOT, 'test', `${n}.test.mjs`), 'utf8');
+export function unitAffected(files, { map = null, linesOf = () => null, all = unitFiles(), source = unitSource } = {}) {
+  const why = [];
+  const pick = new Set();
+  const everything = (reason) => ({ unit: 'all', why: [...why, reason] });
+  for (const f of files) {
+    const t = f.match(/^test\/([\w-]+)\.test\.mjs$/)?.[1];
+    if (t) {
+      if (all.includes(t)) pick.add(t);
+      why.push(`${f}: runs itself`);
+      continue;
+    }
+    if (UNIT_ALL.test(f)) return everything(`${f}: every unit test`);
+    if (UNIT_CODE.test(f)) {
+      if (!map?.unit) return everything(`${f}: no reach map, every unit test`);
+      const lines = linesOf(f);
+      if (!lines?.length) return everything(`${f}: the reach map can't place its change, every unit test`);
+      const mapped = Object.keys(map.unit).filter((n) => all.includes(n));
+      const ran = new Set();
+      for (const l of lines) {
+        const by = mapped.filter((n) => inRanges(map.unit[n][f], [l]));
+        for (const n of by.length > mapped.length * SHARED ? sample(by, f, { tests: map.unit }, {}) : by) ran.add(n);
+      }
+      for (const n of ran) pick.add(n);
+      why.push(ran.size ? `${f}: ${lines.length} changed line${lines.length === 1 ? '' : 's'} reached by ${[...ran].join(' ')}` : `${f}: no unit test runs its changed lines`);
+      continue;
+    }
+    const base = path.basename(f);
+    const naming = all.filter((n) => source(n).includes(base));
+    for (const n of naming) pick.add(n);
+    why.push(naming.length ? `${f}: named by ${naming.join(' ')}` : `${f}: no unit test reads it`);
+  }
+  if (map?.unit) for (const n of all) if (!map.unit[n] || map.unitFailed?.includes(n)) if (pick.size) pick.add(n);
+  return { unit: [...pick].sort().join(' '), why };
+}
+
 export function affected(files, { tests = groupTests(), reach = REACH, diffOf = () => '', map = null, linesOf = () => null, classesOf = () => [] } = {}) {
   const why = [];
   const pick = new Set();
@@ -399,16 +443,24 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const out = a === '--all' || !a || !b ? { tests: 'all', native: true, bench: true, why: ['full run'] }
     : main ? onMain(diffOf('package.json'))
     : affected(changedFiles(a, b), { diffOf, ...reachFor(a, b) });
+  const unitOut = a === '--all' || !a || !b || main ? { unit: 'all', why: [] } : unitAffected(changedFiles(a, b), reachFor(a, b));
+  out.unit = unitOut.unit;
+  out.unitWhy = unitOut.why;
+  const unitCount = out.unit === 'all' ? unitFiles().length : out.unit.split(' ').filter(Boolean).length;
+  // Unit files over up to three jobs, about eight files a job; none picked, no job.
+  out.unitShards = unitCount ? Array.from({ length: Math.min(3, Math.ceil(unitCount / 8)) }, (_, i) => i + 1) : [];
   const engines = (process.env.ENGINES || 'webkit').split(',');
   out.jobs = out.tests || out.bench ? shards(out.tests, { engines, bench: out.bench }) : [];
   console.log(JSON.stringify(out, null, 2));
   if (process.env.GITHUB_OUTPUT) {
     const jobs = out.jobs.map(({ secs, ...j }) => j);
-    fs.appendFileSync(process.env.GITHUB_OUTPUT, `tests=${out.tests}\nnative=${out.native}\nbench=${out.bench}\njobs=${JSON.stringify(jobs)}\n`);
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `tests=${out.tests}\nnative=${out.native}\nbench=${out.bench}\njobs=${JSON.stringify(jobs)}\nunit=${out.unit}\nunitShards=${JSON.stringify(out.unitShards)}\nunitShardCount=${out.unitShards.length}\n`);
   }
   if (process.env.GITHUB_STEP_SUMMARY) {
     const head = out.tests === 'all' ? 'Every browser test' : out.tests ? `Browser tests: ${out.tests}` : 'No browser tests';
     const jobs = out.jobs.map((j) => `- ${j.engine} ${j.shard} (~${j.secs} s): ${j.files || '—'}${j.bench ? ' + bench' : ''}`);
+    const uhead = out.unit === 'all' ? 'Every unit test' : out.unit ? `Unit tests: ${out.unit}` : 'No unit tests';
+    fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### ${uhead}\n\n${out.unitWhy.map((w) => `- ${w}`).join('\n')}\n\n`);
     fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### ${head}\n\n${out.why.map((w) => `- ${w}`).join('\n')}\n${jobs.length ? `\n#### Jobs\n\n${jobs.join('\n')}\n` : ''}`);
   }
 }

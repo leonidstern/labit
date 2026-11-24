@@ -1,7 +1,8 @@
 // Which lines of labit each browser test runs: the map ci/affected.mjs picks a PR's browser tests from, so a change to
 // src/comments.js or the server runs the tests that reach the changed lines, not all of them.
 //
-//   node ci/reach.mjs [--out ci/reach-map.json] [--jobs 6] [name…]     (needs playwright, as the browser tests do)
+//   node ci/reach.mjs [--out ci/reach-map.json] [--jobs 6] [--only browser|unit] [name…]   (browser: needs playwright)
+// The unit tests (test/*.test.mjs) are mapped too, by file: the lines of the repo's code each one runs, its labs' too.
 //
 // The page scripts are built unminified with source maps (build-widget.mjs --map), every test in
 // ci/browser-tests.json runs in Chromium with ci/reach-hook.mjs loaded (page coverage) and NODE_V8_COVERAGE set (the
@@ -108,6 +109,26 @@ function linesRan(source, functions) {
   return out;
 }
 
+// The repo's own code a test can run (not tests, not this map's own hook).
+const CODE = /^(local\.mjs|(lib|src|hooks|ci|bench|scripts)\/.+\.(m?js|ts))$/;
+const NOT_CODE = /^ci\/reach(-hook)?\.mjs$/;
+
+// One unit test file (test/<name>.test.mjs) as npm test runs it, its own lines and its labs' recorded.
+function runUnit(name, dir) {
+  return new Promise((resolve) => {
+    const env = { ...process.env, NODE_V8_COVERAGE: path.join(dir, 'node'), NODE_OPTIONS: `${process.env.NODE_OPTIONS || ''} --import ${path.join(ROOT, 'ci/reach-hook.mjs')}`.trim() };
+    const started = Date.now();
+    const child = spawn(process.execPath, ['--import', './test/setup.mjs', '--test', `test/${name}.test.mjs`], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '';
+    child.stdout.on('data', (d) => (out += d));
+    child.stderr.on('data', (d) => (out += d));
+    child.on('close', (code) => {
+      console.log(`unit ${name}: ${code === 0 ? 'ran' : `exit ${code}`} in ${Math.round((Date.now() - started) / 1000)} s`);
+      resolve(code === 0);
+    });
+  });
+}
+
 function runOne(name, dir) {
   return new Promise((resolve) => {
     const env = { ...process.env, ENGINES: 'chromium', TORTURE_SEEDS: '1', LABIT_REACH_OUT: path.join(dir, 'pages'), NODE_V8_COVERAGE: path.join(dir, 'node'), NODE_OPTIONS: `${process.env.NODE_OPTIONS || ''} --import ${path.join(ROOT, 'ci/reach-hook.mjs')}`.trim() };
@@ -154,7 +175,7 @@ function reduce(dir, maps) {
     for (const r of data.result) {
       if (!r.url.startsWith('file://')) continue;
       const file = path.relative(ROOT, new URL(r.url).pathname);
-      if (!/^(local\.mjs|lib\/)/.test(file)) continue;
+      if (!CODE.test(file) || NOT_CODE.test(file)) continue;
       for (const l of linesRan(fs.readFileSync(path.join(ROOT, file), 'utf8'), r.functions)) add(file, l);
     }
   }
@@ -169,27 +190,42 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.error('src/, lib/ or local.mjs has changes not committed: the map must match a commit.');
     process.exit(1);
   }
-  build('--map');
+  const only = opt('only', 'both'); // browser | unit | both
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'labit-reach-'));
   const tests = {};
   const failed = [];
+  const unit = {};
+  const unitFailed = [];
   const maps = new Map();
+  const pool = (list, fn) => Promise.all(Array.from({ length: JOBS }, async () => {
+    while (list.length) await fn(list.shift());
+  }));
   try {
-    const queue = [...names];
-    await Promise.all(Array.from({ length: JOBS }, async () => {
-      while (queue.length) {
-        const name = queue.shift();
+    if (only !== 'unit') {
+      build('--map');
+      await pool([...names], async (name) => {
         const dir = path.join(work, name);
         // A failing test still says what it ran up to its failure; its list may be short, so it is marked.
         if (!(await runOne(name, dir))) failed.push(name);
         tests[name] = reduce(dir, maps);
-      }
-    }));
+      });
+    }
+    if (only !== 'browser') {
+      const units = fs.readdirSync(path.join(ROOT, 'test')).filter((f) => f.endsWith('.test.mjs')).map((f) => f.slice(0, -'.test.mjs'.length)).sort();
+      await pool(units, async (name) => {
+        const dir = path.join(work, `unit-${name}`);
+        if (!(await runUnit(name, dir))) unitFailed.push(name);
+        const lines = reduce(dir, maps);
+        delete lines['#classes'];
+        unit[name] = lines;
+      });
+    }
   } finally {
-    build(); // the plain page scripts back
+    if (only !== 'unit') build(); // the plain page scripts back
     fs.rmSync(work, { recursive: true, force: true });
   }
   const ordered = Object.fromEntries(names.filter((n) => tests[n]).map((n) => [n, tests[n]]));
-  fs.writeFileSync(OUT, JSON.stringify({ commit, made: new Date().toISOString(), failed, tests: ordered }) + '\n');
-  console.log(`${OUT}: ${Object.keys(ordered).length} tests at ${commit.slice(0, 8)}${failed.length ? `; failed (run them always): ${failed.join(' ')}` : ''}`);
+  const units = Object.fromEntries(Object.keys(unit).sort().map((n) => [n, unit[n]]));
+  fs.writeFileSync(OUT, JSON.stringify({ commit, made: new Date().toISOString(), failed, tests: ordered, unitFailed, unit: units }) + '\n');
+  console.log(`${OUT}: ${Object.keys(ordered).length} browser and ${Object.keys(units).length} unit tests at ${commit.slice(0, 8)}${failed.length || unitFailed.length ? `; failed (run them always): ${[...failed, ...unitFailed].join(' ')}` : ''}`);
 }

@@ -37,7 +37,9 @@ Built so a PR, mostly opened by agents, hears back in about 3 minutes, and a fai
 - **Even shards.** `ci/browser-tests.json` lists every browser test CI runs with its WebKit time on a CI runner (seconds).
   The plan packs the picked tests into shards of about a minute: WebKit on up to 5 macOS jobs, Chromium on Linux. A new browser test goes in
   this list, or it never runs in CI; refresh a time from a run's log ("<test> took N s") when it drifts.
-- **Unit tests in three jobs** (`node --test-shard`).
+- **Unit tests by the map too.** The map also keeps the lines each unit test file runs (its labs' included). A PR
+  runs the unit files that reach its changed lines (a few for code most of them run), a changed test file itself, and
+  the files that name a changed non-code file; over up to three jobs (`node --test-shard`). Main runs them all.
 - **Failures by name.** `ci/unit-run.mjs` and `ci/browser-run.mjs` put each failing test, with its error or its FAIL
   lines, on the PR's checks page (at the file and line) and in the job summary.
 - **One retry, then quarantine.** A browser file that fails runs once more (a warning). One that keeps failing on

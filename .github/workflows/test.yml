@@ -8,15 +8,18 @@ concurrency:
   group: test-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
-  # Node 22 (the oldest labit supports) on every PR; 24 and 26 only on main, where they rarely differ. The unit test
-  # files are split over three jobs (node --test-shard), each running three at a time as before.
+  # Node 22 (the oldest labit supports) on every PR; 24 and 26 only on main, where they rarely differ. A PR runs the unit
+  # test files the plan picked from the reach map (the lines each file runs), over up to three jobs (node --test-shard);
+  # main runs them all.
   test:
+    needs: plan
+    if: needs.plan.outputs.unitShards != '[]'
     runs-on: ubuntu-latest
     strategy:
       matrix:
         node: ${{ fromJSON(github.event_name == 'pull_request' && '[22]' || '[22, 24, 26]') }}
-        shard: [1, 2, 3]
-    name: test (${{ matrix.node }}, ${{ matrix.shard }}/3)
+        shard: ${{ fromJSON(needs.plan.outputs.unitShards) }}
+    name: test (${{ matrix.node }}, ${{ matrix.shard }}/${{ needs.plan.outputs.unitShardCount }})
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,7 +28,9 @@ jobs:
       - run: npm run build # the page script is built from src/, not kept in git
       - run: node --check local.mjs && node --check src/comments.js && node --check public/_lab/comments.js && node --check lib/comments-api.mjs
       # npm test's own command with the shard; a failing test is named as an error on the PR and in the summary.
-      - run: node ci/unit-run.mjs --test-shard=${{ matrix.shard }}/3
+      - run: node ci/unit-run.mjs --test-shard=${{ matrix.shard }}/${{ needs.plan.outputs.unitShardCount }}
+        env:
+          UNIT_FILES: ${{ needs.plan.outputs.unit }}
 
   # Two quick checks in one job:
   # - Dead code: files nothing imports, and exports nothing outside their own file uses. Knip runs from npx,
@@ -59,6 +64,9 @@ jobs:
       native: ${{ steps.pick.outputs.native }}
       bench: ${{ steps.pick.outputs.bench }}
       jobs: ${{ steps.pick.outputs.jobs }}
+      unit: ${{ steps.pick.outputs.unit }}
+      unitShards: ${{ steps.pick.outputs.unitShards }}
+      unitShardCount: ${{ steps.pick.outputs.unitShardCount }}
     steps:
       - uses: actions/checkout@v4
         with:
