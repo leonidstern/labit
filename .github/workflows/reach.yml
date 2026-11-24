@@ -1,7 +1,8 @@
 # The reach map (ci/reach.mjs): which lines of the widget and the server, and which of the widget's CSS classes, each
 # browser test reaches, in Chromium. test.yml's plan job takes the newest one from here and runs a PR's browser tests
 # for the lines and rules it changes, instead of all of them. Made again after each merge to main that changes code or
-# tests (about 12 minutes on a GitHub runner), and by hand ("Run workflow").
+# tests, and by hand ("Run workflow"). Eight jobs side by side each map a part of the tests (about 3 min), and a last
+# job joins the parts into the one map PRs download.
 name: reach
 on:
   push:
@@ -21,7 +22,12 @@ jobs:
     container:
       image: mcr.microsoft.com/playwright:v1.65.1-noble
       options: --ipc=host
-    timeout-minutes: 20
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    name: map (${{ matrix.shard }}/8)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -30,8 +36,28 @@ jobs:
       - run: npm install --no-save --no-audit --no-fund playwright@1.65.1
       # The checkout belongs to another user than the container's root: git refuses it unless told it is safe.
       - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - shell: bash # pipefail: a map that failed fails the job, not only its summary
-        run: node ci/reach.mjs --jobs 4 --out "$RUNNER_TEMP/reach-map.json" | tee -a "$GITHUB_STEP_SUMMARY"
+      - shell: bash # pipefail: a part that failed fails the job, not only its summary
+        run: node ci/reach.mjs --shard ${{ matrix.shard }}/8 --jobs 3 --out "$RUNNER_TEMP/reach-part.json" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reach-part-${{ matrix.shard }}
+          path: ${{ runner.temp }}/reach-part.json
+          retention-days: 1
+          if-no-files-found: error
+
+  # The parts as one map. A part that failed leaves its tests out of the map: those always run until the next map.
+  merge:
+    needs: map
+    if: always() && !cancelled()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: reach-part-*
+          path: parts
+      - run: node ci/reach.mjs --merge parts/*/reach-part.json --out "$RUNNER_TEMP/reach-map.json" | tee -a "$GITHUB_STEP_SUMMARY"
+        shell: bash
       - uses: actions/upload-artifact@v4
         with:
           name: reach-map
