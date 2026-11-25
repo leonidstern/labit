@@ -22,6 +22,7 @@
     "motion.css": "the styles of motion.ts, which brings them with it",
     "actions.ts": "action buttons: a data-lab-action element on the page opens a comment with its words, the agent acts on it",
     "attach.ts": "the pictures of a comment: the strip above a box that holds some (paste, drop, ✕), the send with their tokens, and a message's thumbnails; its own file (public/_lab/attach.js), loaded when a picture comes or a message has one",
+    "reload.ts": "live reload in place: a saved stylesheet, picture, font or the page's own HTML patched without a reload (scroll, open things and typed text stay); its own file (public/_lab/reload.js), loaded by live.ts on the first save the page hears about",
     "attach.css": "the styles of attach.ts, which brings them with it",
     "pics.ts": "a picture made ready to send (the board's paste and a comment's attachment): kept as it is when small, else drawn smaller and encoded again; its own file (public/_lab/pics.js), loaded the first time a picture is put in",
     "sections.ts": "the section bar: each section with a heading, current one filled, new and updated marked, read kept per person in the lab; its own file (public/_lab/sections.js), loaded when the page may show the bar",
