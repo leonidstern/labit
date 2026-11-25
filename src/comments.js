@@ -1068,7 +1068,9 @@ import { bindKeys } from './widget/keys.ts';
     const appear = now !== S.shown;
     const anim = appear ? ' in' : '';
     let quoted = null;
+    const lost = new Set(); // pins whose spot isn't on the page right now (see watchLost)
     const done = () => {
+      watchLost(lost);
       patchKids(layer, next); // pins still in place stay; the new ones go in, the gone ones come out
       flushPins(); // the rules of the pins the browser holds, now they are on the page (pinhold.ts)
       if ((S.closeFast || (still.matches && S.shown)) && !now && prev) { // reduced motion: a card or sheet fades out (a computer's went at once), no slide
@@ -1135,6 +1137,7 @@ import { bindKeys } from './widget/keys.ts';
       // Done pins with nothing new in them step aside when done ones are hidden (D); an open one stays.
       if (!S.showDone && S.openId !== c.id && (c.resolved || workState(c)[0] === 'done') && !unread(c).length) return;
       const { left, top, moved, zone, clipped, covered, why } = places.get(c.id) || placeOf(c);
+      if (moved || why === 'hidden') lost.add(c.id);
       // A pin whose spot is gone is off the page: the ⋯ menu lists them ("moved · N"); an open one shows, to drop on a
       // new spot (drag) or close. The agent finishing one closes it.
       if (moved) {
@@ -1972,6 +1975,42 @@ import { bindKeys } from './widget/keys.ts';
     onBoard(pin, a); // a board's pin the browser doesn't hold: held to the screen
     return held;
   };
+  // A pin whose spot isn't on the page when the pins are drawn (its element not built yet, words being written again, a
+  // closed tab) is left off, and only a scroll, a resize or new comments drew the pins again: a page that rewrites its
+  // words in place without changing size (a live subtitle) kept such a pin off for good, so hiding and showing the
+  // comments at the wrong moment lost it (Leo, 25 Nov: "some pins don't come back"). While one is lost, each change of
+  // the page (at most every 250 ms) looks for its spot again, and the pins are drawn once one is back. Only finding
+  // counts: a pin on words that come and go isn't taken off again at each change. With every pin on its spot, nothing is
+  // watched.
+  let lostIds = new Set();
+  let lostWatch = null;
+  let lostAt = 0;
+  let lostTimer = /** @type {any} */ (0);
+  const lookAgain = () => {
+    clearTimeout(lostTimer);
+    const wait = lostAt + 250 - Date.now();
+    if (wait > 0) return void (lostTimer = setTimeout(lookAgain, wait));
+    lostAt = Date.now();
+    if (!S.on || S.openId || S.draft || S.grabbing || isTrying()) return;
+    const back = threads().some((c) => {
+      if (!lostIds.has(c.id)) return false;
+      const at = placeOf(c);
+      return !at.moved && at.why !== 'hidden';
+    });
+    if (back) render();
+  };
+  const watchLost = (ids) => {
+    lostIds = ids;
+    if (!ids.size || !document.body) {
+      clearTimeout(lostTimer);
+      lostWatch?.disconnect();
+      lostWatch = null;
+      return;
+    }
+    if (lostWatch) return;
+    lostWatch = new MutationObserver((list) => list.some((m) => m.target !== host) && lookAgain());
+    lostWatch.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['class', 'style', 'hidden', 'open'] });
+  };
   // Scrolling an inner box or the page growing only moves the pins: their places are read together, then written.
   // A full redraw happens only when something is open (a card or a composer follows its pin) or the pins changed.
   // After a scroll, the pins the browser holds are left alone.
@@ -1983,7 +2022,9 @@ import { bindKeys } from './widget/keys.ts';
     viewW = document.documentElement.clientWidth;
     const all = threads().filter((c) => c.anchor?.kind !== 'page');
     const skip = (c) => scrolled && heldPin(pinsById.get(c.id));
-    const places = all.filter((c) => !skip(c)).map((c) => [pinsById.get(c.id), placeOf(c), c]).filter(([, at]) => !at.moved);
+    const read = all.filter((c) => !skip(c)).map((c) => [pinsById.get(c.id), placeOf(c), c]);
+    watchLost(new Set(read.filter(([, at]) => at.moved || at.why === 'hidden').map(([, , c]) => c.id)));
+    const places = read.filter(([, at]) => !at.moved);
     readPins(places.map(([, , c]) => (c.anchor?.kind === 'board' ? frameBox(c.anchor) : findTarget(c.anchor || {}))));
     if (places.length + all.filter(skip).length !== pinsById.size || places.some(([pin]) => !pin)) return render(); // one lost or found its spot
     for (const [pin, { left, top, clipped, covered, zone }, c] of places) {
