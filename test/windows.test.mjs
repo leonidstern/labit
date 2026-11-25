@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import http from 'node:http';
 import { execFileSync } from 'node:child_process';
+import { parseArgs, windowsPagePath } from '../lib/args.ts';
 import { claimPort, tmp, rm, spawnLab, stop, sleep, serverJson, cli, pinPost } from './harness.mjs';
 
 const WIN = process.platform === 'win32';
@@ -206,3 +207,16 @@ function hasGit() {
   }
 }
 
+
+test('a page Git Bash turned into a Windows path is refused, with the way to write it', async () => {
+  const why = (...a) => windowsPagePath(parseArgs(a).opts);
+  assert.match(why('--page', 'C:/Program Files/Git/spot/trade'), /--page spot\/trade\b.*MSYS_NO_PATHCONV=1/);
+  assert.match(why('--pages', '/a,C:\\Program Files\\Git\\usr\\b'), /--pages b\b/);
+  for (const ok of [['--page', '/spot/trade'], ['--page', 'spot/trade'], ['--pages', '/a,/b'], ['--page']]) assert.equal(why(...ok), null, ok.join(' '));
+  // The command stops before it reaches any lab.
+  const dir = tmp('win-msys');
+  const r = await cli(['pin', 'h1', 'hi', '--page', 'C:/Program Files/Git/spot/trade'], { cwd: dir });
+  assert.equal(r.code, 1);
+  assert.match(r.out, /Git Bash/);
+  rm([dir]);
+});

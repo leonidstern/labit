@@ -9,6 +9,19 @@ export function listenPages(opts: Opts, forWait = false): string[] | null {
   if (!raw) return null;
   return String(raw).split(',').map((p) => '/' + p.trim().replace(/^\/+/, '').replace(/\.html?$/i, '')).filter((p) => p !== '/');
 }
+/** A page given as a Windows path (--page C:/Program Files/Git/spot/trade): Git Bash rewrites an argument that starts
+ *  with / into a path under its own folder before labit sees it, so the pin would land on a page that doesn't exist.
+ *  The message to stop with, or null. Page keys never hold a drive letter, so this refuses nothing real. */
+export function windowsPagePath(opts: Opts): string | null {
+  for (const flag of ['page', 'pages']) {
+    if (typeof opts[flag] !== 'string') continue;
+    const bad = opts[flag].split(',').map((p: string) => p.trim()).find((p: string) => /^[A-Za-z]:[\\/]/.test(p));
+    if (!bad) continue;
+    const page = bad.replace(/\\/g, '/').match(/\/Git\/(?:usr\/)?(.+)$/i)?.[1] || '<page>';
+    return `--${flag} got "${bad}", a Windows path: Git Bash turns an argument that starts with / into one. Write the page without its first slash (--${flag} ${page}), or run the command with MSYS_NO_PATHCONV=1.`;
+  }
+  return null;
+}
 // One list of flags for every command: anything else starting with -- is refused, so a typo
 // (`reply abc "Done" --resolv`) stops instead of landing in the reply's text. After a bare --, all is words.
 const SWITCHES = ['--wifi', '--no-wifi', '--no-open', '--resolve', '--wait', '--new', '--all', '--bg', '--dev', '--fast', '--no-fast', '--done', '--on-it', '--question', '--first', '--no-check'];

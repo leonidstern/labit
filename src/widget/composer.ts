@@ -111,7 +111,7 @@ export function composer({ placeholder, onSubmit, autofocus = false, opened = fa
   const as = el('span', {}, 'as');
   // Safari offers "AutoFill Contact" on anything that looks like a name, autocomplete="off" or not; a field whose name
   // says search it leaves alone.
-  const name = el('input', { type: 'text', name: 'search-lab-who', placeholder: 'your name', maxlength: '60', enterkeyhint: 'send', autocomplete: 'off', autocorrect: 'off', autocapitalize: 'words', spellcheck: 'false', writingsuggestions: 'false', 'data-1p-ignore': '', 'data-lpignore': 'true' }) as HTMLInputElement;
+  const name = el('input', { type: 'text', name: 'search-lab-who', placeholder: 'your name', 'aria-label': 'your name', maxlength: '60', enterkeyhint: 'send', autocomplete: 'off', autocorrect: 'off', autocapitalize: 'words', spellcheck: 'false', writingsuggestions: 'false', 'data-1p-ignore': '', 'data-lpignore': 'true' }) as HTMLInputElement;
   name.value = store.get('lab-name');
   // What was typed here last time and never sent. A dev server rebuilding the page used to wipe it.
   if (draftKey && !sending.has(draftKey)) {

@@ -16,7 +16,7 @@ if (process.env.LABIT_LOG_TIMES === '1')
     console[k] = (...a) => say(new Date().toISOString(), ...a);
   }
 import { apiOn, BODY_MAX, callApi, decoderFor, encodingFor, onLan, packBody, sendBody, sendFile, sendPacked } from './lib/dev.ts';
-import { parseArgs, WRITE_SHORT, NEW_VERSION_NEAR } from './lib/args.ts';
+import { parseArgs, windowsPagePath, WRITE_SHORT, NEW_VERSION_NEAR } from './lib/args.ts';
 import { addRule, dropRule, rulesText } from './lib/replies.ts';
 import { AGENTS } from './lib/agents.ts';
 import { watchTree } from './lib/watch.ts';
@@ -96,6 +96,7 @@ const die = (msg) => {
   process.exit(1);
 };
 if (unknownFlags.length) die(`Unknown option ${unknownFlags[0]}. See: ${CMD} --help`);
+if (windowsPagePath(opts)) die(/** @type {string} */ (windowsPagePath(opts)));
 
 // A lab moving onto a newer build starts this one in its place: say it loaded (it parsed, its imports resolved), then
 // wait for that lab to be gone, so its folder and port are free. A build that can't load never says so: the lab stays.
