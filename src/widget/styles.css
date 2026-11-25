@@ -197,6 +197,7 @@ button.pin.ink, button.pin.ink:is(:hover, :active, .open) { margin: 0; backgroun
 .msg.asks > b { display: none; }
 .msg.asks .p { font-weight: 400; } /* the question reads like the rest, not bold (Leo, 20 Nov) */
 .msg.asks .stamp { bottom: auto; top: 3px; right: 0; }
+.msg.asks .stamp-room { float: right; margin: 3px 0 0 10px; } /* its room at the first line's end (chat.ts stamped) */
 .choices { display: grid; gap: 8px; margin: 8px 0 2px; max-width: 85%; } /* as wide as the messages */
 .choices .rows { display: grid; gap: 2px; }
 button.choice { display: flex; align-items: baseline; gap: 4px; width: 100%; margin: 0; padding: 7px 10px; border: 0; border-radius: var(--_r-s);

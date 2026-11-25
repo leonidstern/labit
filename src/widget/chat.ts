@@ -22,8 +22,11 @@ export const stamped = (bubble, stamp) => {
   room.querySelector('.state')?.remove(); // the words go under the bubble: no room for them in it
   bubble.classList.toggle('waits', Boolean(stamp.querySelector('.state')));
   for (const n of room.querySelectorAll('[role]')) n.removeAttribute('role');
-  const last = [...bubble.children].reverse().find((n) => n.classList?.contains('p'));
-  (last || bubble).append(room);
+  const ps = [...bubble.children].filter((n) => n.classList?.contains('p'));
+  // A question with choices wears its time at the top right (its rows fill the bottom): the room goes first in its first
+  // line, floated there, so the question's words wrap before the time instead of running under it.
+  if (bubble.classList.contains('asks') && ps[0]) ps[0].prepend(room);
+  else (ps.at(-1) || bubble).append(room);
   bubble.append(stamp);
 };
 

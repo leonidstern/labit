@@ -393,6 +393,9 @@ for (const eng of engines()) {
     // Placed as every thread card is (Leo, 25 Nov): below its pin, whole in the window; no margin place of its own.
     check(eng, 'a question opens as any card does: below its words, whole in the window', c && !/margin|under/.test(c.cls) && !c.tie && c.top > geo.link.top && c.left >= 0 && c.right <= 1000 && c.bottom <= 700, JSON.stringify([c?.cls, c?.tie, c?.left, c?.top, c?.right, c?.bottom, geo]));
     check(eng, 'a question (V1 plain list): no bubble, plain rows, the page\'s words "· now" ticked, no letters, tags or hint, no Keep (a tap answers)', c && c.rows.length === 4 && c.rows[0] === 'the full guide on the page · now' && c.rows.slice(1).every((t, i) => t === choices[i]) && !c.keys && /rgba\(0, 0, 0, 0\)|transparent/.test(c.bubble) && c.name === 'none' && c.on === 0 && c.keep === undefined && !c.elseRow, JSON.stringify(c));
+    // Its time sits at the top right, and the question's words wrap before it, never under it (Leo, 25 Nov).
+    const stampHits = await sq(() => { const m = r.querySelector('.msg.asks'); const st = m.querySelector('.stamp').getBoundingClientRect(); const w = document.createTreeWalker(m.querySelector('.p'), NodeFilter.SHOW_TEXT); const rs = []; while (w.nextNode()) if (!w.currentNode.parentElement.closest('.stamp-room')) { const g = document.createRange(); g.selectNodeContents(w.currentNode); rs.push(...g.getClientRects()); } return rs.filter((x) => x.width && x.right > st.left + 1 && x.left < st.right - 1 && x.bottom > st.top + 1 && x.top < st.bottom - 1).length; });
+    check(eng, 'a question\'s time never covers its words', stampHits === 0, String(stampHits));
     const pinsBefore = await pinsAt();
     const countBefore = await nodes();
     const belowAt = () => q.evaluate(() => Math.round(document.querySelector('#b').getBoundingClientRect().top + scrollY));
