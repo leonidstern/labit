@@ -10,7 +10,7 @@ let W: any;
 let S: any; // the widget's state (W.S), read once at startup
 // A board in this page (src/board/overlay.ts, loaded when one is opened): its link, the address's #board=<name> (a
 // reload, a forward) or a board pin picked in the list opens it. Closing it lets go of a board pin that was open.
-export const showBoard = (name: string, of = '', push = true) =>
+export const showBoard = (name: string, of = '', push = true) => globalThis.__LAB_CO__ ? undefined :
   W.part('boardview').then((m) => (W.host.setAttribute('data-board', ''), m.show(name, { page: S.page, of, push, onClose: () => {
     W.host.removeAttribute('data-board');
     for (const pin of W.pinsById.values()) if (W.pinData.get(pin)) W.pinData.get(pin).covered = undefined; // opened again, it is looked at anew (a pin said covered stayed shown)
@@ -22,6 +22,7 @@ export const showBoard = (name: string, of = '', push = true) =>
   } })), () => W.say("the board couldn't load"));
 /** A board pin taken back (undo, ⌘Z): its board went with it, so it is no longer one, and its view closes if open. */
 export const pinBoardGone = (id: string) => {
+  if (globalThis.__LAB_CO__) return;
   if (!S.pinBoards?.delete(id)) return;
   void W.part('boardview').then((m) => m.hide(`pin-${id}`), () => {});
 };
@@ -40,6 +41,7 @@ const loadPinBoards = () =>
   });
 /** "+ New board" in the boards list: a board of this page, named after it, and it opens. */
 export const newBoard = async () => {
+  if (globalThis.__LAB_CO__) return;
   const made = await fetch('/_lab/api/board', { method: 'POST', headers: W.headers(), body: JSON.stringify({ action: 'new', of: S.page }) }).then((r) => (r.ok ? r.json() : null), () => null);
   if (!made?.board) return W.say("the board couldn't be made");
   void loadPinBoards();
@@ -47,6 +49,7 @@ export const newBoard = async () => {
 };
 /** A board pin's card holds its board: the strip of what is on it and Open (the strip a board section had, overlay.ts). */
 export const boardStrip = (c: { id: string }) => {
+  if (globalThis.__LAB_CO__) return null;
   if (!S.pinBoards?.has(c.id)) return null;
   const name = `pin-${c.id}`;
   const host = W.el('div', { class: 'pinboard', name });
