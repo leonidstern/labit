@@ -285,6 +285,7 @@ button.btn.undo { color: var(--_fg); }
 .who span { color: var(--_muted); }
 .who input { flex: 1; min-width: 0; border: 0; background: none; padding: 0; margin: 0; outline: none; color: var(--_muted); text-overflow: ellipsis; }
 .who input:focus { color: var(--_fg); }
+.who input.need::placeholder { color: var(--_red); }
 .box.open:not(.one) .line { display: block; animation: lab-fade var(--_fade); }
 .box.open .who { display: flex; animation: lab-fade var(--_fade); }
 /* One line once your name is known: text, a quiet "as <name>" (still editable) and the arrow, side by side.
