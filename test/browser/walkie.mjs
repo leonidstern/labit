@@ -1,4 +1,4 @@
-// Walkie-talkie (src/widget/walkie.ts): K turns the bar into the pill, words typed by dictation and the pointer's rests go
+// Walkie-talkie (src/widget/walkie.ts): K (the bar's tal(k)) turns the bar into the pill, words typed by dictation and the pointer's rests go
 // to the chat as one message with each part's spot; a click while walking points, it doesn't press; Esc drops the walk.
 // The part loads only when used. Not part of `npm test`. Run: node test/browser/walkie.mjs (NODE_PATH to a playwright).
 import fs from 'node:fs';
@@ -40,7 +40,7 @@ try {
         };
       });
       const s0 = await state();
-      check(eng, 'the bar has walkie-tal(k)ie, and its part is not loaded yet', s0.btnShown && s0.btn === 'walkie-tal(k)ie' && !(await asked()), JSON.stringify(s0));
+      check(eng, 'the bar has tal(k), and its part is not loaded yet', s0.btnShown && s0.btn === 'tal(k)' && !(await asked()), JSON.stringify(s0));
 
       const mid = async (sel) => p.evaluate((sel) => { const r = document.querySelector(sel).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }, sel);
       const say = (words) => p.evaluate((w) => { const root = document.querySelector('[data-lab-comments]').shadowRoot; const ta = root.querySelector('.walkie textarea'); ta.value += (ta.value ? ' ' : '') + w; ta.dispatchEvent(new Event('input')); }, words);
