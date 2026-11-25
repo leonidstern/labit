@@ -57,6 +57,10 @@ Run each `wait` from the agent itself, never in a shell loop (`while true; do â€
 
 **Fewer permission prompts (Claude Code):** copy [examples/claude-settings.json](examples/claude-settings.json) to `.claude/settings.json` in your project (or merge its `permissions` into yours). labit's commands then run without asking; `--wifi` and `invite`, which let another device in, still ask. Claude Code reads a project's allow rules only once you've opened the folder in it and trusted it.
 
+## Comments on your deployed sites (colabit)
+
+A lab for the people you work with, on your own Vercel: one address, a path per person, pins and threads on every page, no agent. One click to deploy and one command per person: [co/README.md](co/README.md).
+
 ## Good to know
 
 - `--wifi` lets your phone comment too (`labit invite` turns it on in a running lab by itself, same address and pins; `labit --no-wifi` turns it off). Each device opens a one-time link from `npx @leonidstern/labit@latest invite`, so being on the same wifi isn't enough. The pages still travel in the clear over the wifi.

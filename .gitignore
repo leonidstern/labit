@@ -20,3 +20,6 @@ public/_lab/bundles.json
 /waste-review.md
 bench/multi/out/
 ci/reach-map.json
+co/.vercel/
+.vercel/
+.env.local

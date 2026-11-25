@@ -165,11 +165,25 @@ import { bindKeys } from './widget/keys.ts';
   const script = /** @type {HTMLScriptElement | null} */ (document.currentScript);
   // In a board's frame the widget draws nothing and binds nothing (src/widget/frame.ts).
   if (inFrame()) return startFrame(script);
+  // colabit (npm run build:co, co/README.md): this widget on a site of your own, as the hosted lab had it (0.6.0), with no
+  // lab and no agent: anyone on the page comments under a name they type. The owner's link (#lab-admin=<token>) leaves the
+  // admin key in this browser: resolve, move and delete anyone's.
+  const CO = globalThis.__LAB_CO__ === true;
+  let coAdmin = '';
+  if (globalThis.__LAB_CO__) { // the build's own constant, so the lab's script leaves all of this out
+    const linked = /[#&]lab-admin=([\w.-]+)/.exec(location.hash)?.[1];
+    try {
+      if (linked) localStorage.setItem('lab-admin', linked);
+      // and the hosted lab's own (0.6.0) kept keys, per slug, so a lab page's admin link carries over
+      coAdmin = localStorage.getItem(`lab-admin:${location.pathname.split('/')[1] || ''}`) || localStorage.getItem('lab-admin:*') || localStorage.getItem('lab-admin') || '';
+    } catch {}
+    if (linked) history.replaceState(history.state, '', location.pathname + location.search + location.hash.replace(/([#&])lab-admin=[^&]*&?/, '$1').replace(/[#&]$/, ''));
+  }
   // Parts loaded only when they are used: each is its own file beside this script (scripts/build-widget.mjs), its
   // styles with it. Asked for once; a module that can't load leaves the rest of the widget as it is.
   const parts = {};
   /** @param {string} name */
-  const part = (name) => (parts[name] ??= import(new URL(`${name}.js`, script?.src || location.href).href));
+  const part = (name) => (parts[name] ??= CO ? Promise.reject(new Error('not in colabit')) : import(new URL(`${name}.js`, script?.src || location.href).href));
   // Shortcuts, action → key: these defaults, with what a project or you changed (labit.json or your settings.json
   // `shortcuts`, passed by the lab as data-keys; docs/settings.md).
   const KEYS = { toggle: 'm', chat: 't', next: 'w', pause: 'p', slow: 's', draw: 'd', done: 'e', reply: 'r', resolve: 'e' };
@@ -201,7 +215,7 @@ import { bindKeys } from './widget/keys.ts';
   if (/** @type {any} */ (window).__labComments) return;
   /** @type {any} */ (window).__labComments = true;
 
-  const API = '/_lab/api/comments';
+  const API = CO ? new URL('co/comments', script?.src || location.href).href : '/_lab/api/comments'; // co.js at <host>/_lab/co.js: its API beside it
   // Behind a dev server the page is the live address (named as the lab names pages, lib/labs.ts keyFor): an app that
   // navigates on its own keeps no first page's marks. A page the lab serves keeps the name it was served under.
   const enc = new TextEncoder();
@@ -261,11 +275,11 @@ import { bindKeys } from './widget/keys.ts';
   };
 
   // The lab hands this computer's browser its admin key; a guest's page has none.
-  const adminToken = script?.dataset.admin || '';
+  const adminToken = CO ? coAdmin : script?.dataset.admin || '';
 
   S.comments = [];
   S.isAdmin = false;
-  S.mac = Boolean(adminToken); // this computer's own browser holds the key: what only it may do (keeping a rule) is shown there alone
+  S.mac = !CO && Boolean(adminToken); // this computer's own browser holds the key: what only it may do (keeping a rule) is shown there alone
   // Off by default: the page looks clean until someone turns comments on (button or c); remembered per browser.
   S.on = store.get('lab-on') ? store.get('lab-on') === '1' : script?.dataset.on === '1';
   // A board page (src/board/): a tap selects a frame; 1 (comment mode) pins the board.
@@ -390,7 +404,8 @@ import { bindKeys } from './widget/keys.ts';
   };
 
   // ---------- data ----------
-  const headers = () => ({ 'content-type': 'application/json', ...(adminToken ? { 'x-lab-admin': adminToken } : {}) });
+  // colabit: which site (data-site on the script tag, so a Vercel preview shares production's comments).
+  const headers = () => ({ 'content-type': 'application/json', ...(adminToken ? { 'x-lab-admin': adminToken } : {}), ...(CO ? { 'x-co-site': script?.dataset.site || location.hostname } : {}) });
 
   S.loaded = false;
   // A box has the cursor (not a pin: a pin now stays the same element across redraws, so in Chrome, where a clicked
@@ -849,7 +864,7 @@ import { bindKeys } from './widget/keys.ts';
     return row;
   }), newBoardBtn];
   function placeBar() {
-    const inMenu = !S.on ? [] : S.menuBoards ? (S.menuRows ??= boardRows()) : [...(labHead ? [labHead, labsBtn] : []), doneBtn, movedBtn, ...(!S.board && self === top ? [newBoardBtn] : []), copyBtn, ...(coarse && mo ? [motionBtn] : []), toggleBtn, ...(versionLine ? [versionLine] : [])];
+    const inMenu = !S.on ? [] : S.menuBoards ? (S.menuRows ??= boardRows()) : [...(labHead ? [labHead, labsBtn] : []), doneBtn, movedBtn, ...(!CO && !S.board && self === top ? [newBoardBtn] : []), ...(CO ? [] : [copyBtn]), ...(coarse && mo ? [motionBtn] : []), toggleBtn, ...(versionLine ? [versionLine] : [])];
     // In this order every time: a part that came back (hide comments, after showing them again) went to the end, below
     // the version line.
     if (S.on && (inMenu.some((b, i) => moreMenu.children[i] !== b) || moreMenu.children.length !== inMenu.length)) moreMenu.replaceChildren(...inMenu);
@@ -1112,7 +1127,7 @@ import { bindKeys } from './widget/keys.ts';
     backCloses();
     S.refit();
     setPinning();
-    copyBtn.hidden = !S.on || !S.isAdmin || list.every((c) => c.resolved);
+    copyBtn.hidden = CO || !S.on || !S.isAdmin || list.every((c) => c.resolved);
     drawList(places);
     drawChat();
     if (!S.on) return done();
@@ -1496,7 +1511,7 @@ import { bindKeys } from './widget/keys.ts';
   // Motion (src/widget/motion.ts: pause and speed from a right-click or ⋯ → motion, a pin's moment) is its own file, loaded
   // once something on the page moves (a video, an animation: looked for a second after the page starts, when one
   // starts, and on a phone each second), when P or S is pressed, or a comment has a moment; mo: the module, once it is.
-  const loadMotion = () => (moAsked ??= part('motion').then((m) => (m.bindMotion(W), (mo = m), placeBar(), m)).catch(() => (moAsked = null))); // placeBar: phones get ⋯ → motion
+  const loadMotion = () => (moAsked ??= CO ? Promise.resolve(null) : part('motion').then((m) => (m.bindMotion(W), (mo = m), placeBar(), m)).catch(() => (moAsked = null))); // placeBar: phones get ⋯ → motion
   const lookForMotion = () => {
     if (!moAsked && (document.querySelector('video') || document.getAnimations().some((a) => !root.contains(/** @type {any} */ (a.effect)?.target)))) void loadMotion();
   };
@@ -1618,7 +1633,7 @@ import { bindKeys } from './widget/keys.ts';
       if (k === 'slow') return void loadMotion().then((m) => m?.setSlow(!S.slow));
       if (k === 'chat') return chatBtn.click();
       if (k === 'next') return stepNew(e.shiftKey ? -1 : 1);
-      if (k === 'draw') return void ((S.dKey = true), (S.drew = false), part('draw')); // held, D draws (draw.ts); ⇧D tapped alone stays the board's
+      if (k === 'draw') return void (CO || ((S.dKey = true), (S.drew = false), part('draw'))); // held, D draws (draw.ts); ⇧D tapped alone stays the board's
       // E (Leo, 21 Nov: "another key its clashing now with draw, move to E"): done threads show or hide; with a thread open it is its resolve (the same key, the thread open first).
       if (k === 'done' && !S.openId) return toggleDone();
       if (k === 'done') return void [.../** @type {NodeListOf<HTMLElement>} */ (root.querySelectorAll('.card .btn'))].find((b) => /^(resolve|reopen)$/.test(b.textContent))?.click();
@@ -2221,7 +2236,7 @@ import { bindKeys } from './widget/keys.ts';
   /** @type {Promise<void> | null} */
   let sectionsAsked = null;
   const maybeSections = () => {
-    if (sectionsAsked || !document.body) return;
+    if (CO || sectionsAsked || !document.body) return;
     if (document.querySelector('style[data-lab="section-bar"]') || (document.querySelector('meta[name="lab-sections"], [data-lab-sections], link[href*="/_lab/lab."]') && document.querySelectorAll('h1, h2, h3').length > 2)) {
       sectionsAsked = part('sections').then((m) => (m.bindSections(W), m.startSections())).catch(() => (sectionsAsked = null));
     }
@@ -2243,11 +2258,11 @@ import { bindKeys } from './widget/keys.ts';
     // A soft green, so the quoted words stay readable in the page's own colour, on light and dark pages.
     const paint = 'background-color: rgba(52, 199, 89, .3); color: inherit;';
     pageStyle.textContent += `html:has([data-lab-pinning]) ::selection { ${paint} } ::highlight(lab-quote) { ${paint} }`;
-    bindActions(W); // data-lab-action buttons leave a pin the agent acts on
+    if (!CO) bindActions(W); // data-lab-action buttons leave a pin the agent acts on
     load();
     maybeSections(); // the section bar: what is new or updated on the page since you read it
-    scanForFramework();
-    if (!S.components) {
+    if (!CO) scanForFramework();
+    if (!CO && !S.components) {
       addEventListener('load', scanForFramework, { once: true });
       addEventListener('pointerover', overFramework, { capture: true, passive: true });
     }
@@ -2256,6 +2271,11 @@ import { bindKeys } from './widget/keys.ts';
   else document.addEventListener('DOMContentLoaded', start);
   bindBoardCam(W);
   startLive();
+  // colabit has no live stream: others' comments come in every 15 s while the page is in view, and when it comes back.
+  if (CO) {
+    setInterval(() => document.hidden || load(), 15000);
+    document.addEventListener('visibilitychange', () => document.hidden || load());
+  }
   // ⌘K / Control-K from anywhere but a field of the page's own (where it may mean "add a link"): the first press loads
   // labs & pages and opens it once it is there.
   if (LABS) document.addEventListener('keydown', (e) => {
