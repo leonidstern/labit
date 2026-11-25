@@ -182,7 +182,8 @@ import { bindKeys } from './widget/keys.ts';
   // styles with it. Asked for once; a module that can't load leaves the rest of the widget as it is.
   const parts = {};
   /** @param {string} name */
-  const part = (name) => (parts[name] ??= CO ? Promise.reject(new Error('not in colabit')) : import(new URL(`${name}.js`, script?.src || location.href).href));
+  // colabit is one script: the parts it has (drawing, motion) are built into it; the rest it does without.
+  const part = (name) => (parts[name] ??= globalThis.__LAB_CO__ ? (name === 'draw' ? import('./widget/draw.ts') : name === 'motion' ? import('./widget/motion.ts') : Promise.reject(new Error('not in colabit'))) : import(new URL(`${name}.js`, script?.src || location.href).href));
   // Shortcuts, action → key: these defaults, with what a project or you changed (labit.json or your settings.json
   // `shortcuts`, passed by the lab as data-keys; docs/settings.md).
   const KEYS = { toggle: 'm', chat: 't', next: 'w', pause: 'p', slow: 's', draw: 'd', done: 'e', reply: 'r', resolve: 'e' };
@@ -1510,8 +1511,7 @@ import { bindKeys } from './widget/keys.ts';
   // Motion (src/widget/motion.ts: pause and speed from a right-click or ⋯ → motion, a pin's moment) is its own file, loaded
   // once something on the page moves (a video, an animation: looked for a second after the page starts, when one
   // starts, and on a phone each second), when P or S is pressed, or a comment has a moment; mo: the module, once it is.
-  // colabit has it in its one script (no parts beside it); the lab loads it as a part.
-  const loadMotion = () => (moAsked ??= (globalThis.__LAB_CO__ ? import('./widget/motion.ts') : part('motion')).then((m) => (m.bindMotion(W), (mo = m), placeBar(), m)).catch(() => (moAsked = null))); // placeBar: phones get ⋯ → motion
+  const loadMotion = () => (moAsked ??= part('motion').then((m) => (m.bindMotion(W), (mo = m), placeBar(), m)).catch(() => (moAsked = null))); // placeBar: phones get ⋯ → motion
   const lookForMotion = () => {
     if (!moAsked && (document.querySelector('video') || document.getAnimations().some((a) => !root.contains(/** @type {any} */ (a.effect)?.target)))) void loadMotion();
   };
@@ -1633,7 +1633,7 @@ import { bindKeys } from './widget/keys.ts';
       if (k === 'slow') return void loadMotion().then((m) => m?.setSlow(!S.slow));
       if (k === 'chat') return chatBtn.click();
       if (k === 'next') return stepNew(e.shiftKey ? -1 : 1);
-      if (k === 'draw') return void (CO || ((S.dKey = true), (S.drew = false), part('draw'))); // held, D draws (draw.ts); ⇧D tapped alone stays the board's
+      if (k === 'draw') return void ((S.dKey = true), (S.drew = false), part('draw')); // held, D draws (draw.ts); ⇧D tapped alone stays the board's
       // E (Leo, 21 Nov: "another key its clashing now with draw, move to E"): done threads show or hide; with a thread open it is its resolve (the same key, the thread open first).
       if (k === 'done' && !S.openId) return toggleDone();
       if (k === 'done') return void [.../** @type {NodeListOf<HTMLElement>} */ (root.querySelectorAll('.card .btn'))].find((b) => /^(resolve|reopen)$/.test(b.textContent))?.click();
