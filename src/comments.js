@@ -185,7 +185,7 @@ import { bindKeys } from './widget/keys.ts';
   const part = (name) => (parts[name] ??= globalThis.__LAB_CO__ ? (name === 'draw' ? import('./widget/draw.ts') : name === 'motion' ? import('./widget/motion.ts') : Promise.reject(new Error('not in colabit'))) : import(new URL(`${name}.js`, script?.src || location.href).href));
   // Shortcuts, action → key: these defaults, with what a project or you changed (labit.json or your settings.json
   // `shortcuts`, passed by the lab as data-keys; docs/settings.md).
-  const KEYS = { toggle: 'm', chat: 't', next: 'w', pause: 'p', slow: 's', draw: 'd', done: 'e', reply: 'r', resolve: 'e', walkie: 'k' };
+  const KEYS = { toggle: 'm', chat: 't', next: 'w', pause: 'p', slow: 's', draw: 'd', done: 'e', reply: 'r', walkie: 'k' };
   try {
     Object.assign(KEYS, JSON.parse(script?.dataset.keys || '{}'));
   } catch {}
@@ -367,7 +367,7 @@ import { bindKeys } from './widget/keys.ts';
   // Walkie-talkie (src/widget/walkie.ts, its own file): talk while you point, with the computer's own dictation (no
   // microphone here); the bar turns into its pill and the walk goes to the chat. Computers only, and not in colabit (no agent).
   const walkieBtn = /** @type {HTMLElement} */ (root.querySelector('.walkie-btn'));
-  walkieBtn.title = "Walkie-talkie: talk while you point. Uses your computer's own dictation, no microphone here. The agent gets what you said and where.";
+  walkieBtn.title = "Talk while you point. Uses your computer's own dictation, no microphone here. The agent gets what you said and where.";
   S.refit = () => {}; // phones: fit the sheets to the keyboard again (below)
   S.chatOpen = false;
 
@@ -831,10 +831,24 @@ import { bindKeys } from './widget/keys.ts';
     });
     return (labs = m);
   }).catch(() => (S.switcher = null))); // couldn't load: nothing opens, and the next ask tries again
+  const MAC = navigator.platform.startsWith('Mac');
+  // The keys you hold rather than press, under a hairline at the menu's foot (Leo, 25 Nov, the menu-shortcuts page, 2b):
+  // grey hints, not buttons. Computers only: a phone has no keys.
+  const heldKeys = (/** @type {[string, string][]} */ rows) => {
+    const box = el('div', { class: 'held', 'aria-hidden': 'true' });
+    for (const [what, key] of rows) {
+      const row = el('div', { class: 'hint-row' }, what);
+      row.append(el('kbd', {}, key));
+      box.append(row);
+    }
+    return box;
+  };
+  const pageHeld = heldKeys([['draw', `hold ${KEYS.draw}`], ['pin on a link', `${MAC ? '⌥' : 'alt'} click`], ['quote words', '⇧ drag']]);
+  const boardHeld = heldKeys([['pin', `${MAC ? '⌥' : 'alt'} click`], ['move around', 'hold space'], ['back to the page', '⇧b']]);
   const labHead = LABS ? el('div', { class: 'lab-head' }, `${script?.dataset.labName || 'lab'} · ${location.port || '80'}`) : null;
   const labsBtn = LABS ? el('button', { type: 'button' }) : null;
   if (labsBtn) {
-    labsBtn.append('labs & pages', el('kbd', { 'aria-hidden': 'true' }, navigator.platform.startsWith('Mac') ? '⌘K' : 'ctrl K'));
+    labsBtn.append('labs & pages', el('kbd', { 'aria-hidden': 'true' }, MAC ? '⌘k' : 'ctrl k'));
     // The menu closes without taking the focus back to ⋯ (its own click handler would, after the box opened, and on a
     // phone that blurred the search and bounced the keyboard).
     labsBtn.addEventListener('click', (e) => {
@@ -866,9 +880,9 @@ import { bindKeys } from './widget/keys.ts';
     row.append(el('span', { class: 'n' }, ` · ${b.frames}`));
     row.addEventListener('click', (e) => (e.stopPropagation(), setMenu(false), void showBoard(b.name)));
     return row;
-  }), newBoardBtn];
+  }), newBoardBtn, ...(coarse ? [] : [boardHeld])];
   function placeBar() {
-    const inMenu = !S.on ? [] : S.menuBoards ? (S.menuRows ??= boardRows()) : [...(labHead ? [labHead, labsBtn] : []), doneBtn, movedBtn, ...(!globalThis.__LAB_CO__ && !S.board && self === top ? [newBoardBtn] : []), ...(globalThis.__LAB_CO__ ? [] : [copyBtn]), ...(coarse && mo ? [motionBtn] : []), toggleBtn, ...(versionLine ? [versionLine] : [])];
+    const inMenu = !S.on ? [] : S.menuBoards ? (S.menuRows ??= boardRows()) : [...(labHead ? [labHead, labsBtn] : []), doneBtn, movedBtn, ...(!globalThis.__LAB_CO__ && !S.board && self === top ? [newBoardBtn] : []), ...(globalThis.__LAB_CO__ ? [] : [copyBtn]), ...(coarse && mo ? [motionBtn] : []), toggleBtn, ...(coarse ? [] : [pageHeld]), ...(versionLine ? [versionLine] : [])];
     // In this order every time: a part that came back (hide comments, after showing them again) went to the end, below
     // the version line.
     if (S.on && (inMenu.some((b, i) => moreMenu.children[i] !== b) || moreMenu.children.length !== inMenu.length)) moreMenu.replaceChildren(...inMenu);
@@ -1122,8 +1136,8 @@ import { bindKeys } from './widget/keys.ts';
     );
     toggleBtn.classList.toggle('secondary', S.on);
     walkieBtn.hidden = !S.on || coarse || Boolean(globalThis.__LAB_CO__);
-    // Its key marked where Leo put it, walkie-tal(k)ie: the last k, not the first.
-    if (!walkieBtn.firstChild) walkieBtn.append('walkie-talkie'.includes(KEYS.walkie) ? keyWord('walkie-talkie'.slice(0, 'walkie-talkie'.lastIndexOf(KEYS.walkie)), KEYS.walkie, 'walkie-talkie'.slice('walkie-talkie'.lastIndexOf(KEYS.walkie) + 1)) : keyLabel('walkie-talkie', KEYS.walkie));
+    // "talk", its key marked in it: tal(k) (Leo, 25 Nov: shorter than walkie-talkie).
+    if (!walkieBtn.firstChild) walkieBtn.append(keyLabel('talk', KEYS.walkie));
     host.toggleAttribute('data-labs', Boolean(!coarse && S.labsOpen)); // the page dims behind labs & pages (the widget's .scrim)
     host.toggleAttribute('data-sheet', Boolean((coarse && (S.labsOpen || S.motionOpen)) || (S.on && (S.draft || S.openId || S.chatOpen)))); // phones: the sheet has the screen's bottom
     if (coarse && appear && now) { // a sheet opening slides in once its first frame is drawn (see data-opening in styles.css)
@@ -1636,9 +1650,9 @@ import { bindKeys } from './widget/keys.ts';
     // The list's keys, with comments shown and nothing typed: L list, T chat, J/K next/previous, R reply, E resolve.
     // By the key's place, not its letter, so the keys work with any layout (Russian, Greek…): the C key is C (keyOf).
     // The keys (Leo, 2026-11-15/16), marked in the bar's words: cha(t) (C was chat until 19 Nov), ne(w) (Shift-W: the one before),
-    // P pause, M hide, D show/hide done. With a thread open: R reply, E resolve.
+    // P pause, M hide, E show/hide done. With a thread open: R reply, E resolve (done's own key).
     // Shift is only for next (Shift-W: the one before); ⇧D, ⇧B and the rest belong to the board.
-    if (S.on && !typing(e) && !inOtherWidget && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat && ['pause', 'slow', 'chat', 'next', 'draw', 'done', 'reply', 'resolve', 'walkie'].includes(act) && (act === 'next' || act === 'draw' || !e.shiftKey)) { // ⇧D draws too: Shift straightens (below)
+    if (S.on && !typing(e) && !inOtherWidget && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat && ['pause', 'slow', 'chat', 'next', 'draw', 'done', 'reply', 'walkie'].includes(act) && (act === 'next' || act === 'draw' || !e.shiftKey)) { // ⇧D draws too: Shift straightens (below)
       const k = act;
       e.preventDefault();
       if (k === 'pause') return void loadMotion().then((m) => m?.setPause(!S.paused));
@@ -1651,7 +1665,6 @@ import { bindKeys } from './widget/keys.ts';
       if (k === 'done' && !S.openId) return toggleDone();
       if (k === 'done') return void [.../** @type {NodeListOf<HTMLElement>} */ (root.querySelectorAll('.card .btn'))].find((b) => /^(resolve|reopen)$/.test(b.textContent))?.click();
       if (k === 'reply' && S.openId) /** @type {HTMLElement | null} */ (root.querySelector('.card textarea'))?.focus({ preventScroll: true });
-      else if (k === 'resolve' && S.openId && S.isAdmin) [.../** @type {NodeListOf<HTMLElement>} */ (root.querySelectorAll('.card .btn'))].find((b) => /^(resolve|reopen)$/.test(b.textContent))?.click();
       return;
     }
     // Escape closes the top one: a thread or new comment first, then the chat, then the list (typed chat text stays).
