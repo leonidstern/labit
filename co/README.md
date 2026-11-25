@@ -42,4 +42,4 @@ The script also works on any site of yours as it is: the same script tag with `d
 
 ## What it leaves out
 
-Everything that works with an agent: the listening pill, agent status and rings, hand-offs, the agent's text, boards, actions, choices to try, the labs switcher, the section bar and update. Drawings, pictures and the motion menu are left out too, which keeps it to one script. There's no live stream: an open page picks up others' comments every 15 seconds and when you come back to the tab.
+Everything that works with an agent: the listening pill, agent status and rings, hand-offs, the agent's text, boards, actions, choices to try, the labs switcher, the section bar and update. Drawings and pictures are left out too. Motion is in: pause and slow-down from a right-click or ⋯ → motion, and a pin on a video or animation keeps its moment. There's no live stream: an open page picks up others' comments every 15 seconds and when you come back to the tab.

@@ -1510,7 +1510,8 @@ import { bindKeys } from './widget/keys.ts';
   // Motion (src/widget/motion.ts: pause and speed from a right-click or ⋯ → motion, a pin's moment) is its own file, loaded
   // once something on the page moves (a video, an animation: looked for a second after the page starts, when one
   // starts, and on a phone each second), when P or S is pressed, or a comment has a moment; mo: the module, once it is.
-  const loadMotion = () => (moAsked ??= CO ? Promise.resolve(null) : part('motion').then((m) => (m.bindMotion(W), (mo = m), placeBar(), m)).catch(() => (moAsked = null))); // placeBar: phones get ⋯ → motion
+  // colabit has it in its one script (no parts beside it); the lab loads it as a part.
+  const loadMotion = () => (moAsked ??= (globalThis.__LAB_CO__ ? import('./widget/motion.ts') : part('motion')).then((m) => (m.bindMotion(W), (mo = m), placeBar(), m)).catch(() => (moAsked = null))); // placeBar: phones get ⋯ → motion
   const lookForMotion = () => {
     if (!moAsked && (document.querySelector('video') || document.getAnimations().some((a) => !root.contains(/** @type {any} */ (a.effect)?.target)))) void loadMotion();
   };
