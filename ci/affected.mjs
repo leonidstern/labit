@@ -68,6 +68,8 @@ const REACH = {
   'src/widget/attach.ts': ['attach'],
   'src/widget/attach.css': ['attach'],
   'public/_lab/attach.js': ['attach'],
+  'src/widget/reload.ts': ['livereload', 'hotrace', 'morphstate', 'reloadstate', 'remount', 'boardreload', 'pagecss'],
+  'public/_lab/reload.js': ['livereload', 'hotrace', 'morphstate', 'reloadstate', 'remount', 'boardreload', 'pagecss'],
   'src/widget/pics.ts': ['attach', 'boardimage'],
   'public/_lab/pics.js': ['attach', 'boardimage'],
   'public/_lab/sections.js': ['boardview', 'edge-draw3', 'sections', 'sections-layout', 'shortcuts'],

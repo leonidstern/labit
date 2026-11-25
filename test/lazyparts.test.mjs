@@ -11,6 +11,7 @@ const read = (f) => fs.readFileSync(path.join(DIR, f), 'utf8');
 const PARTS = {
   'sections.js': ['sb-chip', 'sb-nav', 'lab-sections:', '.sbar{'],
   'motion.js': ['motion-speed', 'motion-menu', 'pick on page', '.moment{'],
+  'reload.js': ['data-lab-swap', 'lab-v=', 'startViewTransition'],
 };
 
 test('the page script carries neither the section bar nor the motion menu', () => {
