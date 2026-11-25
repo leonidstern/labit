@@ -2,7 +2,8 @@
 // check's own line, in the job summary and as an error on the PR's checks page, so an agent reading the PR sees which
 // test and why without opening the raw log.
 //
-//   node ci/browser-run.mjs <name>…     names as in ci/browser-tests.json (test/browser/<name>.mjs); engines from ENGINES
+//   node ci/browser-run.mjs <name>…     names as in ci/browser-tests.json (test/browser/<name>.mjs), or name@i/n for one
+//                                       part of a test CI splits; engines from ENGINES
 //
 // A file that fails runs once more, alone: a busy runner makes a timing check miss now and then. The retry is a
 // warning, so a file that keeps needing it is easy to spot. A file that fails twice fails the job, unless it is in
@@ -25,7 +26,10 @@ const JOBS = Math.max(1, Number(process.env.BROWSER_JOBS) || 1);
 function once(name, live = JOBS === 1) {
   return new Promise((resolve) => {
     const started = Date.now();
-    const child = spawn(process.execPath, [path.join('test/browser', `${name}.mjs`)], { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] });
+    // name@i/n: one part of a test that runs in parts (SPLIT in ci/affected.mjs), passed to it as TEST_PART.
+    const [file, part] = name.split('@');
+    const env = part ? { ...process.env, TEST_PART: part } : process.env;
+    const child = spawn(process.execPath, [path.join('test/browser', `${file}.mjs`)], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';
     const take = (to) => (d) => {
       out += d;
@@ -69,12 +73,13 @@ for (const name of names) {
   }
   console.log(`${name} took ${first.get(name).secs} s: ${result}`);
   if (result === 'failed') {
-    if (flaky[name]) {
+    const file = name.split('@')[0];
+    if (flaky[file]) {
       result = 'failed (quarantined)';
-      say(`::warning file=test/browser/${name}.mjs,title=${name} failed, quarantined::${esc(`${flaky[name]}\n${run.why.join('\n')}`)}`);
+      say(`::warning file=test/browser/${file}.mjs,title=${name} failed, quarantined::${esc(`${flaky[file]}\n${run.why.join('\n')}`)}`);
     } else {
       failed++;
-      say(`::error file=test/browser/${name}.mjs,title=${name} failed::${esc(run.why.join('\n'))}`);
+      say(`::error file=test/browser/${file}.mjs,title=${name} failed::${esc(run.why.join('\n'))}`);
     }
   }
   rows.push({ name, secs: run.secs, result, why: result === 'passed' ? [] : run.why });
