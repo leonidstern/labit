@@ -123,10 +123,9 @@ win over yours, key by key.
 | `pause` | `p` | Pause the page's videos and animations, or play what was paused (each one also has its own menu: right-click it on a computer, ⋯ → motion on a phone) |
 | `slow` | `s` | Play the page's videos and animations at ¼ speed, or back at full speed (the speed row in a thing's own menu, ¼ ½ 1, sets only it); a pin made while paused carries the moment in ms |
 | `draw` | `d` | Held while you drag: draw a comment (a circle, an arrow, an underline…); the agent is told what it reads as |
-| `done` | `e` | Tapped: hide or show done threads (shown, faded, at first). With a thread open it resolves it, as `resolve` does |
+| `done` | `e` | Tapped: hide or show done threads (shown, faded, at first). With a thread open: resolve or reopen it |
 | `reply` | `r` | With a thread open: type a reply |
-| `resolve` | `e` | With a thread open: resolve or reopen it |
-| `walkie` | `k` | Walkie-talkie: talk while you point (your computer's own dictation types the words); ⌘↵ sends the walk to the chat, Esc drops it |
+| `walkie` | `k` | Talk while you point (your computer's own dictation types the words); ⌘↵ sends the walk to the chat, Esc drops it |
 
 Letters follow the key's place on non-Latin layouts (the T key is T in Russian too), and digits work with Shift or
 on AZERTY. The page shows your keys: the chat button reads "chat (x)" when `chat` is `x`.
