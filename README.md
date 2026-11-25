@@ -61,6 +61,8 @@ Run each `wait` from the agent itself, never in a shell loop (`while true; do â€
 
 A lab for the people you work with, on your own Vercel: one address, a path per person, pins and threads on every page, no agent. One click to deploy and one command per person: [co/README.md](co/README.md).
 
+labit and colabit never share a page: a lab on your computer takes colabit's script tag out of the pages it serves (the console says so), and colabit stays off wherever a lab's widget is. Pins stay where they were made; nothing moves between the two.
+
 ## Good to know
 
 - `--wifi` lets your phone comment too (`labit invite` turns it on in a running lab by itself, same address and pins; `labit --no-wifi` turns it off). Each device opens a one-time link from `npx @leonidstern/labit@latest invite`, so being on the same wifi isn't enough. The pages still travel in the clear over the wifi.
