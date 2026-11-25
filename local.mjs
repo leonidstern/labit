@@ -623,6 +623,8 @@ for (const p of archiveOld()) savePage(p);
 let fileIndex = null;
 // Each page's file is remembered (a miss too): a dev server's page is guessed by trying up to ~100 paths, too many
 // to repeat for every page on every comment. With plain files the watcher clears it; behind a dev server it lasts 30 s.
+// A path inside the project as people and agents read it: with / on Windows too (sub/page.html, not sub\page.html).
+const slashed = (rel) => rel.split(path.sep).join('/');
 const fileMemo = new Map();
 let fileMemoAt = Date.now();
 const fileFor = (page) => {
@@ -810,7 +812,7 @@ const agentText = async (page, thread = '') => {
   // Paths inside the project as the project sees them (src/pages/Orders.jsx), not the whole path on this computer.
   const local = text.replaceAll(`${ROOT}/`, '').replace(/^to answer: POST .*$/m, `to answer: ${CMD} reply <id> "what you did" [--resolve], run in ${ROOT}`).replace(/^settle: pin /gm, `settle: ${CMD} pin `);
   const file = fileFor(page);
-  const lines = [file && `file: ${file}`, missingFor(page), errorsFor(page)].filter(Boolean);
+  const lines = [file && `file: ${slashed(file)}`, missingFor(page), errorsFor(page)].filter(Boolean);
   const out = withPageBoards(page, sourceLines(lines.length ? local.replace(/^(page: .*)$/m, `$1\n${lines.join('\n')}`) : local, ROOT)); // a framework's `written at:` line is checked against its file now
   return boardText(page, file ? lineHints(out, file) : out);
 };
@@ -865,13 +867,13 @@ const lineHints = (text, file) => {
   };
   return text.replace(/^(element text|text in area): "([^"\n]*)"$/gm, (all, k, words) => {
     const n = lineOf(words);
-    return n ? `${all}\nin file: ${file}:${n}` : all;
+    return n ? `${all}\nin file: ${slashed(file)}:${n}` : all;
   }).replace(/^((?:arrow|line) from|(?:arrow|line) to|at): (<[^>\n]+> )"([^"\n]*)"(?= in <|$)/gm, (all, k, tag, words) => {
     const n = lineOf(words);
-    return n ? `${all} (${file}:${n})` : all;
+    return n ? `${all} (${slashed(file)}:${n})` : all;
   }).replace(/^(  mark \d+: .*?)(?: on| from| to) (<[^>\n]+> )"([^"\n]*)"/gm, (all, head, tag, words) => {
     const n = lineOf(words); // each mark of a drawing with several: where its element is
-    return n ? `${all} (${file}:${n})` : all;
+    return n ? `${all} (${slashed(file)}:${n})` : all;
   }).replace(/(in file: [^\n]+)\n((?:[^\n]*\n){0,12}?)in file: [^\n]+\n/g, '$1\n$2');
 };
 // On a board: a board's text is its frames then its pins; a scratch frame's has one line saying which frame
@@ -2337,7 +2339,7 @@ const listing = (res, dir, urlPath) => {
   const li = pages
     .map(
       (p) =>
-        `<li><a href="${esc(p.href)}"><span class="lab-page-t">${esc(p.title || p.rel)}</span>` +
+        `<li><a href="${esc(p.href)}"><span class="lab-page-t">${esc(p.title || slashed(p.rel))}</span>` +
         `<span class="lab-page-m">${p.waiting ? `<b class="lab-warn">${p.waiting} waiting</b>` : ''}` +
         `${p.listener ? `<span class="lab-ok">${esc(p.listener)} listening</span>` : p.waiting ? '<span class="lab-warn">nobody listening</span>' : ''}` +
         `<span>${ago(p.mtime)}</span></span></a></li>`,
