@@ -2203,6 +2203,10 @@ import { bindKeys } from './widget/keys.ts';
   // The room a phone's sheet made below the page's end (see goTo) stays after the sheet closes, so the page doesn't jump
   // up at the end of the slide; it shrinks away as you scroll back up.
   pageStyle.textContent += "html.lab-room body::after { content: ''; display: block; height: var(--lab-room, 0px); }";
+  // While a phone's sheet moves the page (scrolled, then held where it was by --lab-shift), the browser must not move it
+  // too: Safari's scroll anchoring took the shift for the page's content moving and scrolled as much again, so a new pin
+  // went off screen (Leo's iPhone, 25 Nov, a page with a tall product picture: scrolled 988 for 494).
+  pageStyle.textContent += 'html.lab-sheet, html.lab-moved, html.lab-room { overflow-anchor: none; }';
   // Phones: the page is scrolled in one step for a new comment's pin and drawn where it was, then let go as the keyboard
   // comes (sheets.ts revealDraft): its own blocks, not what it holds to the screen itself, nor the widget or a board's view.
   pageStyle.textContent += 'html.lab-moved body > :not([data-lab-comments], [data-lab-board-view], [data-lab-still]) { translate: 0 var(--lab-shift, 0px) !important; transition: translate var(--lab-shift-t, 0s) var(--lab-shift-e, ease) !important; }';
