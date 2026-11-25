@@ -188,6 +188,8 @@ const latest = (...d: (string | null | undefined)[]) => d.filter(Boolean).sort()
 // A page's last activity: a comment, reply or close, or someone opening it (Leo 18 Nov: "show last activity, don't show
 // comments count, sort it by last activity"). The rows show it and are ordered by it, newest first.
 const touched = (p: Page) => latest(p.last, p.opened);
+/** Someone opened the page, or it has pins or a board asking for something. */
+const visited = (p: Page) => Boolean(touched(p) || p.open || p.done || p.board);
 
 /** A lab as its topic (labit --name "Lab navigation"), else its folder, "~/projects/site" (Leo 18 Nov: "lab-nav :4481"
  *  confused). A guest, without the path, gets the name. */
@@ -228,7 +230,13 @@ function draw() {
   const live: { lab: Lab; p: Page }[] = [];
   for (const lab of data.labs) {
     const labHit = hit(q, lab.name, String(lab.port), where(lab), lab.root || ''); // the grey label it shows, and its folder
-    for (const p of lab.pages) if (labHit || hit(q, p.title, p.path, p.file)) (p.archived ? shelved : live).push({ lab, p });
+    for (const p of lab.pages) {
+      if (!(labHit || hit(q, p.title, p.path, p.file))) continue;
+      // Only the pages you've been on (Leo, 25 Nov: "should only be labit pages i create"): a page nobody opened and
+      // nobody pinned waits for a search. A lab serving a whole built site (80 pages, 6 ever opened) filled the list.
+      if (!q && !p.archived && !visited(p) && !(lab.here && p.path === d.page)) continue;
+      (p.archived ? shelved : live).push({ lab, p });
+    }
   }
   live.sort((a, b) => touched(b.p).localeCompare(touched(a.p)));
   for (const { lab, p } of live) {
