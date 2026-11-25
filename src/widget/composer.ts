@@ -240,7 +240,13 @@ export function composer({ placeholder, onSubmit, autofocus = false, opened = fa
     if (!said && !pics.length) return text.focus();
     if (!name.value.trim()) {
       box.classList.add('open');
-      return name.focus();
+      // Typing words, Enter: the cursor stays in them and the name field asks, in place (no line added, nothing moves).
+      // It used to jump into the name field, and the words typed next landed there (#544 feedback). With no words of
+      // their own (a guest's implied "go"), the name is all that's left: the cursor goes there.
+      if (root.activeElement !== text || !tidy(text.value)) return name.focus();
+      name.placeholder = 'your name, to send';
+      name.classList.add('need');
+      return;
     }
     store.set('lab-name', name.value.trim());
     rememberMe(name.value.trim()); // so the next lab on this computer knows you already
@@ -319,7 +325,10 @@ export function composer({ placeholder, onSubmit, autofocus = false, opened = fa
     sweeper = new MutationObserver(sweep);
     for (const n of [document.documentElement, d.root]) sweeper.observe(n, { childList: true, subtree: true });
   }
-  name.addEventListener('input', sync);
+  name.addEventListener('input', () => {
+    name.classList.remove('need');
+    sync();
+  });
   name.addEventListener('blur', () => setTimeout(sync, 0));
   text.addEventListener('keydown', onKey);
   name.addEventListener('keydown', onKey);
