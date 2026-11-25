@@ -28,6 +28,8 @@ export function startFrame(script: HTMLScriptElement | null) {
     S, script, host, root, coarse: false, pageStyle: null, pinCursorStyle: null, still: matchMedia('(prefers-reduced-motion: reduce)'), tabTitle: { base: '' },
     chatBtn: root.querySelector('.chat-btn'), listBtn: root.querySelector('.list-btn'),
     drawList: none, reflow: none, relook: none, load: none, loadChanges: none, syncReads: none,
+    // Live reload in place (reload.js) is fetched from beside this script on the first save, as on a page.
+    part: (name: string) => import(new URL(`${name}.js`, script?.src || location.href).href),
   });
   startLive();
   // An entered frame's wheel scrolls its own page and stops at its end: it never runs on into the page behind a board's view.
