@@ -294,6 +294,10 @@ test('one lab per folder: two started at once make one; a dead lock or a silent 
     assert.equal((await loser.done).code, 0);
     assert.match(loser.out, /already running for this folder/);
     assert.equal(JSON.parse(fs.readFileSync(lock, 'utf8')).pid, winner.pid);
+    // The lab doesn't keep the lock open: Windows can't replace a file that is held open, and the lab exited on every
+    // start there (#544). Checked with lsof where there is one.
+    const open = await new Promise((r) => execFile('lsof', ['-p', String(winner.pid)], (e, out) => r(e && !out ? null : out)));
+    if (open !== null) assert.doesNotMatch(open, /\.lab\/lock/, 'the lab holds no handle on its lock');
     winner.kill('SIGHUP');
     await winner.done;
     assert.ok(!fs.existsSync(lock), 'the lock goes with the lab');
