@@ -60,7 +60,7 @@ export function show(name: string, o: Opts) {
   view.setAttribute('aria-label', `board ${name}`);
   const bar = document.createElement('div');
   bar.className = 'bv-bar';
-  bar.setAttribute('data-uncommentable', '');
+  bar.setAttribute('data-lab-off', '');
   const btn = (t: string, label: string, fn: () => void) => {
     const b = Object.assign(document.createElement('button'), { type: 'button', textContent: t });
     b.setAttribute('aria-label', label);

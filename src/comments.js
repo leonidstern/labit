@@ -1692,8 +1692,9 @@ import { bindKeys } from './widget/keys.ts';
       if (n.matches(INTERACTIVE) || getComputedStyle(n).cursor === 'pointer') return true;
     return false;
   };
-  // data-uncommentable: no new pins or areas start inside this part of the page (same attribute as Claude artifacts).
-  const OFF = '[data-uncommentable]';
+  // data-lab-off: labit's own parts (board labels, zoom box, hand layer, overlay bar) where no new pin or area starts.
+  // A page's own data-uncommentable is not honoured: every part of the person's page takes a pin (Leo, 25 Nov).
+  const OFF = '[data-lab-off]';
   // Is this press on a part marked so? Through shadow roots (a board's view has one), where the press's own target is the host.
   const isOff = (e) => e.composedPath().some((n) => n instanceof Element && n.matches(OFF));
   bindDrag(W);
@@ -2172,7 +2173,7 @@ import { bindKeys } from './widget/keys.ts';
       // Holding Shift (drag to quote words): the drawn I-beam with a low ink band at its foot (C3, Leo 18 Nov; text where a cursor image isn't drawn) over the page's content, back to the pin when it's let go.
       `html:has([data-lab-pinning]).lab-shift-cur:not(.lab-dragging) body *${plain}:not(img, svg, video, canvas) { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Crect x='5' y='15.5' width='14' height='5' rx='1.5' fill='%23f0b70a' fill-opacity='.6'/%3E%3Cpath d='M9 4h6M12 4v16M9 20h6' stroke='white' stroke-width='4' stroke-linecap='round' fill='none'/%3E%3Cpath d='M9 4h6M12 4v16M9 20h6' stroke='%23141414' stroke-width='1.5' stroke-linecap='round' fill='none'/%3E%3C/svg%3E") 12 12, text; } ` +
       // The pointer is inherited, so places that aren't commented on name theirs: editable text a text cursor, a part
-      // marked data-uncommentable the plain arrow (a pin pointer there would promise a comment that won't come).
+      // of labit's own (data-lab-off) the plain arrow (a pin pointer there would promise a comment that won't come).
       `html:has([data-lab-pinning]) body :is([contenteditable], [contenteditable] *) { cursor: text; } html:has([data-lab-pinning]) body :is(${OFF}, ${OFF} *) { cursor: auto; } }` +
       // Holding Option (Alt) pins links and controls too: the drawn pin shows over them (the system pointer hides).
       `html.lab-alt body, html.lab-alt body *:not([data-lab-comments], [data-lab-comments] *, ${OFF}, ${OFF} *) { cursor: crosshair !important; }` +
