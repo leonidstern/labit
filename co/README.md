@@ -1,6 +1,6 @@
 # colabit
 
-Your own lab for the people you work with, the way ooze labs run: one lab address, a path per person (`lab.yourstudio.com/anna/…` shows Anna's site), and labit's pins and comment threads on every page. No agent: people pin a comment on a spot under a name they type and reply in its thread; you, and each person on their own pages, resolve or delete.
+Your own lab for the people you work with: one lab address, a path per person (`lab.yourstudio.com/anna/…` shows Anna's site), and labit's pins and comment threads on every page. No agent: people pin a comment on a spot under a name they type and reply in its thread; you, and each person on their own pages, resolve or delete.
 
 ## 1. Deploy your colabit
 
@@ -18,7 +18,7 @@ In your copy of the repository:
 node co/colabit.mjs add anna https://anna-site.vercel.app --lab https://lab.yourstudio.com
 ```
 
-It adds `/anna` to `co/vercel.json` (two rewrites to Anna's site, as ooze labs have them) and prints a prompt for Anna's agent: serve her site under the base path `/anna`, and one script tag in its root layout (`<lab>/_lab/co.js`, `data-site="lab"`).
+It adds `/anna` to `co/vercel.json` (two rewrites to Anna's site) and prints a prompt for Anna's agent: serve her site under the base path `/anna`, and one script tag in its root layout (`<lab>/_lab/co.js`, `data-site="lab"`).
 
 **Fastest:** add `--deploy`. It commits the change and deploys the `co` folder straight from your computer with the Vercel CLI, live in seconds; push to git whenever you like, for history. It stops if anything else in `co/` isn't committed, so what goes live is always a commit, and Vercel lists each deploy with it (roll back from there). `node co/colabit.mjs deploy` deploys as it stands. Without `--deploy`: commit and push, and Vercel deploys from git.
 

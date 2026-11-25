@@ -1,27 +1,17 @@
-// colabit's comments API (co/README.md): the lab's own (lib/comments-api.mjs) for sites of your own, with no agent, as
-// the hosted lab had it (0.6.0): anyone on a page comments under a name they type; the owner's link (#lab-admin=<token>)
-// may resolve, move and delete anyone's. New comments are limited per address and hour (CO_PER_HOUR, default 60).
+// colabit's comments API (co/README.md): the lab's own (lib/comments-api.mjs) for sites of your own, with no agent:
+// anyone on a page comments under a name they type; the owner's link (#lab-admin=<token>) may resolve, move and delete anyone's. New comments are limited per address and hour (CO_PER_HOUR, default 60).
 // Storage: Upstash Redis (Vercel's KV_REST_API_URL + KV_REST_API_TOKEN), one hash per page, as the lab keeps it in memory.
 // Env: LAB_COMMENTS_ADMIN_TOKEN (the owner's key).
-import { createHmac } from 'node:crypto';
 import { GET as list, POST as save, sameKey, useStore } from './_lib/comments-api.mjs';
 
-// The owner's key; on the hosted lab's own pages (site "lab") also the keys it signed for others (0.6.0's
-// <name>.<scope>.<sig>, good under /<scope> or everywhere with *), so the links people have keep working.
-const isOwner = (request, page = '', lab = false) => {
+// The owner's key (LAB_COMMENTS_ADMIN_TOKEN), sent by the owner's browser after their #lab-admin= link.
+const isOwner = (request) => {
   const owner = process.env.LAB_COMMENTS_ADMIN_TOKEN;
   const sent = request.headers.get('x-lab-admin');
-  if (!owner || !sent) return false;
-  if (sameKey(sent, owner)) return true;
-  const [name, scope, sig, extra] = sent.split('.');
-  if (!lab || extra !== undefined || !/^[a-z0-9][a-z0-9-]{0,29}$/.test(name || '') || !/^(\*|[a-z0-9_][a-z0-9_-]*)$/.test(scope || '') || !sig) return false;
-  if (!sameKey(sig, createHmac('sha256', owner).update(`lab-admin:${name}:${scope}`).digest('base64url').slice(0, 24))) return false;
-  if ((process.env.LAB_REVOKED || '').split(',').map((s) => s.trim().toLowerCase()).includes(name)) return false;
-  return scope === '*' || page === `/${scope}` || page.startsWith(`/${scope}/`);
+  return Boolean(owner && sent && sameKey(sent, owner));
 };
-// A site's pages are kept under its name: /co/<site>/<path> (/co: a store shared with hosted labs keeps them apart).
-// data-site on the script tag, else its host (dots as dashes). data-site="lab": the hosted lab's own pages, kept as they
-// are (lab:comments:/<slug>/…), so its pins carry over.
+// data-site="lab": the colabit's own paths (/<name>/…, co/colabit.mjs), kept as they are. Any other data-site (or the
+// site's host, dots as dashes): a site of your own with the script on it, its pages kept under /co/<site>/<path>.
 const site = (request) => (request.headers.get('x-co-site') || '').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 63);
 const under = (s, page) => (typeof page !== 'string' || !page.startsWith('/') ? null : s === 'lab' ? page : `/co/${s}${page === '/' ? '' : page}`);
 
@@ -98,7 +88,7 @@ export async function GET(request) {
   const page = under(site(request), url.searchParams.get('page'));
   if (!site(request) || !page) return json({ error: 'bad page' }, 400);
   url.search = String(new URLSearchParams({ page }));
-  const owner = isOwner(request, page, site(request) === 'lab');
+  const owner = isOwner(request);
   return withCors(await inTurn(() => handle(request, page, '', () => list(inner(new Request(url), owner, { method: 'GET' })))));
 }
 
@@ -112,7 +102,7 @@ export async function POST(request) {
   if (!body || typeof body !== 'object' || body.action === 'progress') return json({ error: 'bad request' }, 400);
   const page = under(site(request), body.page);
   if (!site(request) || !page) return json({ error: 'bad page' }, 400);
-  const owner = isOwner(request, page, site(request) === 'lab');
+  const owner = isOwner(request);
   try {
     if (!owner && !body.action && (await tooMany(request))) return json({ error: 'too many comments, try again later' }, 429);
   } catch (e) {

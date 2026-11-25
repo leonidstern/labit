@@ -1,4 +1,4 @@
-// The people in your colabit, as ooze labs have them: <lab>/<name>/… shows <name>'s site, with comments on it.
+// The people in your colabit: <lab>/<name>/… shows <name>'s site, with comments on it.
 //   node co/colabit.mjs add <name> <site url> [--lab https://lab.example.com] [--deploy]
 //   node co/colabit.mjs remove <name> [--deploy]
 //   node co/colabit.mjs list

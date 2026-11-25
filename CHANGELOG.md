@@ -4,7 +4,7 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 
 ## Unreleased
 
-- **colabit: comments on your deployed sites.** Your own lab for the people you work with, on your own Vercel, the way ooze labs run: one address, a path per person, labit's pins and threads on every page, no agent. One click to deploy (Vercel + Upstash), `node co/colabit.mjs add <name> <site> --deploy` per person (live in seconds), and the widget updates itself from labit's main. See [co/README.md](co/README.md).
+- **colabit: comments on your deployed sites.** Your own lab for the people you work with, on your own Vercel: one address, a path per person, labit's pins and threads on every page, no agent. One click to deploy (Vercel + Upstash), `node co/colabit.mjs add <name> <site> --deploy` per person (live in seconds), and the widget updates itself from labit's main. See [co/README.md](co/README.md).
 
 ## 0.8.1 · 2026-11-24
 

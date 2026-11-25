@@ -1,4 +1,4 @@
-// colabit's comments API (co/api/comments.mjs): as the hosted lab had it, with no agent; sites kept apart.
+// colabit's comments API (co/api/comments.mjs): typed names, the owner's key, no agent; sites kept apart.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { GET, POST, useRedis } from '../co/api/comments.mjs';
@@ -71,16 +71,11 @@ test('new comments are limited per address and hour, the owner never', async () 
   delete process.env.CO_PER_HOUR;
 });
 
-test('data-site "lab": the hosted lab’s pages as they are, and its signed admin keys there only', async () => {
-  const { createHmac } = await import('node:crypto');
-  const signed = (name, scope) => `${name}.${scope}.${createHmac('sha256', OWNER).update(`lab-admin:${name}:${scope}`).digest('base64url').slice(0, 24)}`;
-  const { comment } = await (await post('', { page: '/leo/cooking/abc/for-you', name: 'Anna', text: 'old lab pin', anchor: pin }, 'lab')).json();
-  assert.equal((await (await list('', '/leo/cooking/abc/for-you', 'lab')).json()).comments.length, 1);
-  assert.equal((await (await list('', '/leo/cooking/abc/for-you', 'other')).json()).comments.length, 0);
-  assert.equal((await (await list(signed('mira', 'leo'), '/leo/cooking/abc/for-you', 'lab')).json()).admin, true);
-  assert.equal((await (await list(signed('mira', 'gruev'), '/leo/cooking/abc/for-you', 'lab')).json()).admin, false);
-  assert.equal((await (await list(signed('mira', '*'), '/', 'demo')).json()).admin, false); // a lab key is no key on your sites
-  assert.equal((await post(signed('mira', 'leo'), { page: '/leo/cooking/abc/for-you', action: 'resolve', id: comment.id }, 'lab')).status, 200);
+test(`data-site "lab": the colabit's own paths as they are, kept apart from a site of your own`, async () => {
+  await post('', { page: '/anna/home', name: 'Sam', text: 'on Anna’s page', anchor: pin }, 'lab');
+  assert.equal((await (await list('', '/anna/home', 'lab')).json()).comments.length, 1);
+  assert.equal((await (await list('', '/anna/home', 'anna')).json()).comments.length, 0);
+  assert.equal((await (await list('anna.anna.signedkeysnotkept', '/anna/home', 'lab')).json()).admin, false);
 });
 
 test('co/colabit.mjs adds, lists and removes a person as two rewrites', async () => {

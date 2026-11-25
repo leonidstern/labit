@@ -165,8 +165,8 @@ import { bindKeys } from './widget/keys.ts';
   const script = /** @type {HTMLScriptElement | null} */ (document.currentScript);
   // In a board's frame the widget draws nothing and binds nothing (src/widget/frame.ts).
   if (inFrame()) return startFrame(script);
-  // colabit (npm run build:co, co/README.md): this widget on a site of your own, as the hosted lab had it (0.6.0), with no
-  // lab and no agent: anyone on the page comments under a name they type. The owner's link (#lab-admin=<token>) leaves the
+  // colabit (npm run build:co, co/README.md): this widget on a site of your own, with no lab and no
+  // agent: anyone on the page comments under a name they type. The owner's link (#lab-admin=<token>) leaves the
   // admin key in this browser: resolve, move and delete anyone's.
   const CO = globalThis.__LAB_CO__ === true;
   let coAdmin = '';
@@ -174,8 +174,7 @@ import { bindKeys } from './widget/keys.ts';
     const linked = /[#&]lab-admin=([\w.-]+)/.exec(location.hash)?.[1];
     try {
       if (linked) localStorage.setItem('lab-admin', linked);
-      // and the hosted lab's own (0.6.0) kept keys, per slug, so a lab page's admin link carries over
-      coAdmin = localStorage.getItem(`lab-admin:${location.pathname.split('/')[1] || ''}`) || localStorage.getItem('lab-admin:*') || localStorage.getItem('lab-admin') || '';
+      coAdmin = localStorage.getItem('lab-admin') || '';
     } catch {}
     if (linked) history.replaceState(history.state, '', location.pathname + location.search + location.hash.replace(/([#&])lab-admin=[^&]*&?/, '$1').replace(/[#&]$/, ''));
   }
