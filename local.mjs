@@ -2328,7 +2328,7 @@ const listing = (res, dir, urlPath) => {
       `labit · ${esc(path.basename(dir))}`,
       `<header><h1>${esc(path.basename(dir))}</h1><p class="lede">${pages.length} page${pages.length === 1 ? '' : 's'}${open ? ` · ${open} waiting` : ''} · newest first</p></header>` +
         (many ? `<input class="lab-filter" type="search" placeholder="Filter pages" aria-label="Filter pages" autocomplete="off">` : '') +
-        `<ul class="lab-box lab-rows lab-pages">${li || '<li class="lab-muted" style="padding:8px 10px">No HTML pages here. Running a dev server? Start it, then run labit again.</li>'}</ul>` +
+        `<ul class="lab-box lab-rows lab-pages">${li || '<li class="lab-muted" style="padding:8px 10px">No HTML pages here yet. Add an .html file and it shows up; for an app with its own dev server, start that and run labit again.</li>'}</ul>` +
         `<p class="lab-muted lab-hint lab-keys">On a page, press <kbd>${SET.shortcuts.toggle}</kbd> to show comments, or hold <kbd>⌥</kbd> and click. <kbd>⌘K</kbd> goes to another lab.</p>` +
         // A phone has no keys: what to do there instead (it said "press m", Leo's phone, 18 Nov).
         `<p class="lab-muted lab-hint lab-touch">On a page, hold a spot to comment. ⋯ then "labs &amp; pages" goes to another lab.</p>` +

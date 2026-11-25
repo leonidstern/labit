@@ -14,7 +14,7 @@ In your project:
 npx @leonidstern/labit@latest
 ```
 
-It finds your running dev server (Astro, Next, Vite…) or serves plain HTML, and opens the page with comments on top. Click to comment, drag to mark an area, hold `D` and drag to draw on it (circle, arrow, underline, cross out), Shift-drag to quote words. `M` hides the comments.
+It serves your HTML pages itself, or sits in front of your app's running dev server (Astro, Next, Vite…), and opens the page with comments on top. Click to comment, drag to mark an area, hold `D` and drag to draw on it (circle, arrow, underline, cross out), Shift-drag to quote words. `M` hides the comments.
 
 ## Let your agent answer
 
