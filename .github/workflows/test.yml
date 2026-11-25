@@ -32,6 +32,24 @@ jobs:
         env:
           UNIT_FILES: ${{ needs.plan.outputs.unit }}
 
+  # Windows (#544: 0.8.2 exited on every start there): starting a lab the ways people do, on a Windows runner. Its own
+  # file, test/windows.test.mjs, which also runs with the other unit tests on Linux.
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm run build
+      - run: node --import ./test/setup.mjs --test test/windows.test.mjs
+      # TEMP, removed before merge: every unit test file on Windows once, to see what else differs there.
+      - name: all unit tests (survey)
+        continue-on-error: true
+        shell: bash
+        run: node --import ./test/setup.mjs --test --test-reporter=spec test/*.test.mjs 2>&1 | tee unit-windows.log | tail -400
+
   # Two quick checks in one job:
   # - Dead code: files nothing imports, and exports nothing outside their own file uses. Knip runs from npx,
   #   pinned, so labit keeps zero dependencies; knip.json lists the entry points.
