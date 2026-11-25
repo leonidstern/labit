@@ -2,6 +2,22 @@
 
 Versions follow [semver](https://semver.org). Before 1.0, a minor version can change how things work.
 
+## 0.8.3 · 2026-11-25
+
+Walkie-talkie: talk while you point, and the agent gets what you said and where. Plus keys in the menus, a lighter page script and Windows fixes.
+
+- **Walkie-talkie.** `tal(k)` in the bar, or K: the bar turns into one pill, and your computer's own dictation types into it (no microphone in the page). Point, click, circle, shake or drag over words while you talk; Send (⌘↵) puts the whole walk in the page's chat as one message, each part with the element it was about. Esc drops it.
+- **Menu shortcuts.** The ⋯ and boards menus show their keys, in plain grey; held keys sit under a hairline. The unused resolve key is gone.
+- **Every part of a page takes a pin.** A page's `data-uncommentable` is ignored; only labit's own parts are off.
+- **⌘K lists the pages someone opened or pinned**; search finds the rest.
+- **Pins whose spot was missing come back** once it is on the page.
+- **The section bar is gone.**
+- **A question's card** is placed, turned and closed like every pin card, and its time no longer covers its words.
+- **Lighter page script:** live reload in place loads on the first save (78.8 → 76.2 KB gzip); colabit leaves out what it doesn't use (86 → 75 KB) and has drawings and motion built in.
+- **Windows:** no start crash on `.lab/lock`, paths shown with `/`, Git Bash page paths refused with a hint.
+- **Phones:** a new pin's page move is no longer doubled by Safari.
+- **Enter with no name** keeps the cursor in your words.
+
 ## 0.8.2 · 2026-11-25
 
 colabit, your own lab for the people you work with, plus small fixes to the agent's own pins.
