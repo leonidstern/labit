@@ -1,5 +1,5 @@
-// Part of the comment widget (src/comments.js bundles it). A question's choices tried in the page, and the card placed by
-// its quote. Uses the widget's own parts through W, bound by thread.ts.
+// Part of the comment widget (src/comments.js bundles it). A question's choices tried in the page (its card is placed as
+// every thread card is). Uses the widget's own parts through W, bound by thread.ts.
 import { forgetLetters, markQuote, quoteRangeOf } from './anchoring.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -173,75 +173,6 @@ export function triesInPlace(c) {
   return Boolean(range && blockOf(range.startContainer) === blockOf(range.endContainer));
 }
 
-// F2: on a computer, the card of a question on quoted words opens in the right margin beside its paragraph, with a thin
-// line from the words to it, so it never covers what it asks about. Without room there (or when the words aren't tried
-// in place) it goes under the quote's last line, above its first near the page's end; never over the quoted lines.
-// Phones keep their sheet. Returns whether the card is placed by the quote, so the caller leaves it be.
-const MARGIN_W = 280;
-const GAP = 8;
-/** The card kept inside the window: GAP from its left and right edges always; from the top and bottom only when that
- *  does not put it over the quoted words (rects, client px), else it stays where it is and the page can scroll. */
-function clampToView(card, rects: DOMRect[]) {
-  const w = card.offsetWidth;
-  const h = card.offsetHeight;
-  const view = document.documentElement;
-  // Its left is inline (a margin card) or the browser's, from its pin (a card under the words, which loses that tie
-  // right after): read where it is now and keep it there.
-  const inline = parseFloat(card.style.left);
-  const left = Number.isFinite(inline) ? inline : card.getBoundingClientRect().left + scrollX;
-  const into = Math.max(scrollX + GAP, Math.min(left, scrollX + view.clientWidth - w - GAP));
-  if (!Number.isFinite(inline) || Math.abs(into - left) > 1) card.style.left = `${into}px`;
-  const top = parseFloat(card.style.top);
-  if (!Number.isFinite(top)) return;
-  const to = Math.max(scrollY + GAP, Math.min(top, scrollY + view.clientHeight - h - GAP));
-  const x = into;
-  const over = (y: number) => rects.some((r) => r.bottom + scrollY > y && r.top + scrollY < y + h && (r.right + scrollX > x && r.left + scrollX < x + w));
-  if (to !== top && !over(to)) card.style.top = `${to}px`;
-}
-export function placeAsk(card, c): boolean {
-  if (globalThis.__LAB_CO__) return false;
-  if (W.coarse) return false;
-  const range = quoteRangeOf(c.anchor);
-  const rects = range ? [...range.getClientRects()].filter((r) => r.width) : [];
-  if (!range || !rects.length) return false;
-  const block = blockOf(range.startContainer) as Element;
-  const b = block.getBoundingClientRect();
-  const view = document.documentElement.clientWidth;
-  const left = b.right + 32;
-  if (!triesInPlace(c) || left + MARGIN_W > view - 12) {
-    const under = rects[rects.length - 1].bottom + scrollY + 10;
-    const h = card.offsetHeight;
-    card.classList.add('under');
-    card.style.top = `${under + h > W.contentEnd() ? Math.max(scrollY + 8, rects[0].top + scrollY - 10 - h) : under}px`;
-    clampToView(card, rects);
-    return true;
-  }
-  card.classList.add('margin');
-  const top = rects[0].top + scrollY;
-  card.style.left = `${left + scrollX}px`;
-  card.style.top = `${Math.max(scrollY + 8, Math.min(top, W.contentEnd() - card.offsetHeight - 8))}px`;
-  clampToView(card, rects);
-  card.style.transformOrigin = '0 14px';
-  const tie = W.el('div', { class: 'tie', 'aria-hidden': 'true' });
-  W.layer.append(tie);
-  card.tie = tie; // the layer's redraw keeps it (comments.js puts it in the layer's list beside the card)
-  // Drawn from the paragraph's right edge to the card, at the words' last line (they change length as rows are tried).
-  card.retie = () => {
-    const r = tried?.lit || quoteRangeOf(c.anchor);
-    const ends = r ? [...r.getClientRects()].filter((x) => x.width) : [];
-    const end = ends[ends.length - 1];
-    if (!end || !card.isConnected) return void (tie.style.width = '0');
-    const from = Math.max(end.right, block.getBoundingClientRect().right) + 8 + scrollX;
-    const cardTop = parseFloat(card.style.top);
-    const y = Math.min(Math.max(end.bottom - 5 + scrollY, cardTop + 14), cardTop + card.offsetHeight - 14);
-    tie.style.left = `${from}px`;
-    tie.style.top = `${y}px`;
-    tie.style.width = `${Math.max(0, parseFloat(card.style.left) - from)}px`;
-  };
-  card.retie();
-  return true;
-}
-
 // Phones: the sheet is half the screen, so the quoted line is scrolled into the part above it, on open and after each
 // try. Smooth only when motion is welcome.
 function quoteInView(c, card) {
@@ -269,6 +200,5 @@ export function tryRow(c, ask, n: number, words: string | null, card) {
     holdHeight(c, ask);
     if (!tryWords(c, ask, n, words)) markQuote(c.anchor);
   }
-  card.retie?.();
   quoteInView(c, card);
 }

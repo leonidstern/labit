@@ -192,8 +192,7 @@ button.pin.ink, button.pin.ink:is(:hover, :active, .open) { margin: 0; backgroun
 .card > .foot { flex: none; }
 /* A question with choices (labit reply --choice), V1 "plain list" (Leo, 18 Nov): no bubble, no letters, no tags. The
    question, the versions as a plain list of rows (the page's own words muted, "· now"), a tick on the one shown; a tap
-   answers (no Keep button), with an undo for 5 s. An answered question keeps its rows, the pick ticked in green. On quoted words the card opens in the
-   margin (.margin) and a thin line (.tie) runs from the words to it. */
+   answers (no Keep button), with an undo for 5 s. An answered question keeps its rows, the pick ticked in green. The card is placed as every thread card is. */
 .msg.asks, .msg.asks[data-agent] { max-width: none; align-self: stretch; background: none; padding: 0; border-radius: 0; } /* over the agent's wash */
 .msg.asks > b { display: none; }
 .msg.asks .p { font-weight: 400; } /* the question reads like the rest, not bold (Leo, 20 Nov) */
@@ -217,7 +216,6 @@ button.choice.picked { opacity: 1; }
 .choices .note { color: var(--_muted); min-height: 1.35em; padding-left: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } /* always one line tall: a note never makes the card taller */
 .choices .note.idle { visibility: hidden; }
 .choices .note .btn.undo { margin-left: 1px; }
-.card.margin { width: 280px; }
 /* Tied to its pin (thread.ts tieToPin): the browser keeps it there. A thread's card is laid by the script (thread.ts spot:
    below its pin, above it or beside it, whole in the window) as offsets from the pin, which these rules only start from.
    A new comment's box: where the script puts it, from the pin's corner (--lab-cx / --lab-cy; its other place --lab-ux /
@@ -232,7 +230,6 @@ button.choice.picked { opacity: 1; }
   --lab-up: calc(anchor(top) - var(--lab-ay)); --lab-uleft: max(12px, calc(anchor(left) + var(--lab-ux))); }
 .tied-card { left: max(12px, calc(anchor(left) + var(--lab-cx))); }
 .tied-beside { --lab-min: 8px; margin-block: 0 8px; /* the 8 px under it counts in the browser's check, so it keeps off the bottom edge */ left: calc(anchor(left) + var(--lab-cx)); position-try-fallbacks: --lab-under, --lab-under-above, --lab-fit, --lab-left, --lab-edge-above; /* Chrome tries 5 at most */ }
-.tie { position: absolute; height: 1px; background: var(--_fg); opacity: .3; pointer-events: none; }
 .card.in, .float.in { animation: lab-in var(--_t-base) var(--_ease); }
 .card.out, .float.out, .more-menu.out, .sw-box.out, .hint.out { animation: lab-out var(--_t-quick) var(--_ease-in) forwards; pointer-events: none; } /* one exit (comments.js leave) */
 .row { display: flex; gap: 12px; justify-content: flex-start; align-items: center; margin-top: 8px; }

@@ -390,7 +390,8 @@ for (const eng of engines()) {
     await sleep(700);
     let c = await card();
     const geo = await quoteRects();
-    check(eng, 'a question opens in the margin, clear of the words', c && /margin/.test(c.cls) && c.tie && c.left >= geo.para.right + 28 && c.right <= 1000 - 8 && c.right - c.left === 280 && Math.abs(c.top - geo.para.top) <= 10, JSON.stringify([c?.cls, c?.tie, c?.left, c?.right, c?.top, geo.para]));
+    // Placed as every thread card is (Leo, 25 Nov): below its pin, whole in the window; no margin place of its own.
+    check(eng, 'a question opens as any card does: below its words, whole in the window', c && !/margin|under/.test(c.cls) && !c.tie && c.top > geo.link.top && c.left >= 0 && c.right <= 1000 && c.bottom <= 700, JSON.stringify([c?.cls, c?.tie, c?.left, c?.top, c?.right, c?.bottom, geo]));
     check(eng, 'a question (V1 plain list): no bubble, plain rows, the page\'s words "· now" ticked, no letters, tags or hint, no Keep (a tap answers)', c && c.rows.length === 4 && c.rows[0] === 'the full guide on the page · now' && c.rows.slice(1).every((t, i) => t === choices[i]) && !c.keys && /rgba\(0, 0, 0, 0\)|transparent/.test(c.bubble) && c.name === 'none' && c.on === 0 && c.keep === undefined && !c.elseRow, JSON.stringify(c));
     const pinsBefore = await pinsAt();
     const countBefore = await nodes();
@@ -434,6 +435,7 @@ for (const eng of engines()) {
     await sleep(400);
     check(eng, 'Escape puts the paragraph back exactly, and closes the card', (await html()) === original && (await card()) === null, (await html()).slice(0, 120));
 
+
     // A tap on the page's own words (the "now" row) keeps them as they are.
     await sq(() => { r.querySelector('button.pin').click(); });
     await sleep(600);
@@ -470,7 +472,7 @@ for (const eng of engines()) {
     const got = (await (await fetch(`${B}/_lab/api/comments?page=/ask`)).json()).comments.filter((x) => x.picked);
     c = await card();
     check(eng, 'a tap on B sends the pick', got.length === 1 && got[0].picked.of === asked.id && got[0].picked.n === 1 && got[0].text.startsWith('Picked B: ') && (await html()) === original, JSON.stringify(got.map((x) => [x.picked, x.text])));
-    check(eng, 'after the pick the rows are disabled and the pick is marked', c && c.disabled && c.picked === 1 && c.cls.includes('margin'), JSON.stringify(c && [c.disabled, c.picked, c.cls]));
+    check(eng, 'after the pick the rows are disabled and the pick is marked', c && c.disabled && c.picked === 1, JSON.stringify(c && [c.disabled, c.picked, c.cls]));
     await post({ page: '/ask', action: 'delete', id: got[0].id });
     await q.keyboard.press('Escape');
     await sleep(300);
@@ -484,11 +486,11 @@ for (const eng of engines()) {
     await sleep(1800);
     const after = await q.evaluate(() => ({ text: document.querySelector('#a').textContent, third: document.querySelector('#c').textContent }));
     c = await card();
-    check(eng, 'an HTML save mid-try: patch applied, the row pointed at is tried in the new words', /Third paragraph, edited\./.test(after.third) && /this short guide on the page/.test(after.text) && c && /margin/.test(c.cls) && c.on === 0, JSON.stringify([after, c?.on]));
+    check(eng, 'an HTML save mid-try: patch applied, the row pointed at is tried in the new words', /Third paragraph, edited\./.test(after.third) && /this short guide on the page/.test(after.text) && c && c.on === 0, JSON.stringify([after, c?.on]));
     write('ask.html', body(para.replace('labit puts the <a id="lnk" href="#g">full guide</a> on the page, not in chat.', 'Nothing of it is left.') + fill));
     await sleep(1800);
     c = await card();
-    check(eng, 'words gone after a save: rows only, out of the margin, no "now" row', c && !/margin|under/.test(c.cls) && !c.tie && c.rows.length === 3 && !c.rows[0]?.endsWith('now'), JSON.stringify(c));
+    check(eng, 'words gone after a save: rows only, no "now" row', c && c.rows.length === 3 && !c.rows[0]?.endsWith('now'), JSON.stringify(c));
     await q.keyboard.press('Escape');
     write('ask.html', body(para + fill));
     await sleep(1800);
@@ -508,44 +510,33 @@ for (const eng of engines()) {
     await post({ page: '/ask', action: 'delete', id: (await (await fetch(`${B}/_lab/api/comments?page=/ask`)).json()).comments.find((x) => x.picked)?.id });
     await sleep(800);
 
-    // A short window with the words near its bottom: the card is kept inside it (8 px from the edges), not run off the bottom.
-    await q.setViewportSize({ width: 1000, height: 420 });
-    await sleep(300);
-    await q.evaluate(() => scrollTo(0, document.querySelector('#a').getBoundingClientRect().top + scrollY - 330));
-    await sleep(300);
+    // Its words by the window's bottom: the card turns over above them as any card does, never off the window (Leo,
+    // 25 Nov: "at bottom of screen cant even close it"), and a click on the page closes it. Room above the words lets the
+    // page scroll them down there.
+    await q.evaluate(() => (document.querySelector('main').style.paddingTop = '700px'));
+    await sleep(400);
+    await q.evaluate(() => scrollTo(0, document.querySelector('#lnk').getBoundingClientRect().bottom + scrollY - innerHeight + 40));
+    await sleep(400);
     await sq(() => { r.querySelector('button.pin').click(); });
     await sleep(800);
     c = await card();
-    check(eng, 'a question card near the window\'s bottom is clamped inside it (8 px gap)', c && c.left >= 8 && c.bottom <= 420 - 8 + 1 && c.top >= 8 - 1, JSON.stringify(c && [c.left, c.top, c.bottom]));
-    await q.keyboard.press('Escape');
-    await q.evaluate(() => scrollTo(0, 0));
-    await q.setViewportSize({ width: 1000, height: 700 });
-    await sleep(300);
+    const low = await quoteRects();
+    check(eng, 'a question by the window\'s bottom opens above its words, whole in the window', c && low.link.bottom > 600 && c.top >= 0 && c.bottom <= 700 && c.bottom <= low.link.top + 4, JSON.stringify([c?.top, c?.bottom, low.link]));
+    await q.mouse.click(5, 5);
+    await sleep(500);
+    check(eng, 'a click on the page closes a question\'s card', (await card()) === null && (await html()) === original);
+    await q.evaluate(() => { document.querySelector('main').style.paddingTop = ''; scrollTo(0, 0); });
+    await sleep(400);
 
-    // The window too narrow for the margin: the card goes under the quote's last line, never over the words.
+    // A narrow window: the card stays whole in it, and narrowed with the card open it is placed again.
     await q.setViewportSize({ width: 700, height: 700 });
     await sleep(300);
     await sq(() => { r.querySelector('button.pin').click(); });
     await sleep(800);
     c = await card();
-    const g2 = await quoteRects();
-    check(eng, 'narrow window: card under the quote', c && /under/.test(c.cls) && !/margin/.test(c.cls) && c.top >= g2.link.bottom - 1, JSON.stringify([c?.cls, c?.top, g2.link.bottom]));
+    check(eng, 'narrow window: the card whole in it', c && c.left >= 0 && c.right <= 700 && c.bottom <= 700, JSON.stringify([c?.left, c?.right, c?.bottom]));
     await q.keyboard.press('Escape');
-    // A short, narrow window with the words near its bottom: the card is not pulled up over them (the page can scroll).
-    await q.setViewportSize({ width: 700, height: 300 });
     await sleep(300);
-    await q.evaluate(() => scrollTo(0, document.querySelector('#lnk').getBoundingClientRect().top + scrollY - 200));
-    await sleep(300);
-    await sq(() => { r.querySelector('button.pin').click(); });
-    await sleep(800);
-    c = await card();
-    const g3 = await quoteRects();
-    check(eng, 'short narrow window: the card never covers the quoted words, and stays inside it sideways', c && (c.top >= g3.link.bottom - 1 || c.bottom <= g3.link.top + 1) && c.left >= 8 && c.right <= 700 - 8, JSON.stringify([c?.cls, c?.top, c?.bottom, c?.left, c?.right, g3.link]));
-    await q.keyboard.press('Escape');
-    await q.evaluate(() => scrollTo(0, 0));
-    await q.setViewportSize({ width: 700, height: 700 });
-    await sleep(300);
-    // Wide again with the card open: a card that fits goes back to the margin only when drawn again; the other way round it moves.
     await q.setViewportSize({ width: 1000, height: 700 });
     await sleep(300);
     await sq(() => { r.querySelector('button.pin').click(); });
@@ -553,7 +544,7 @@ for (const eng of engines()) {
     await q.setViewportSize({ width: 700, height: 700 });
     await sleep(900);
     c = await card();
-    check(eng, 'the window narrowed with a margin card open: it is placed again', c && !/margin/.test(c.cls) && c.right <= 700, JSON.stringify([c?.cls, c?.right]));
+    check(eng, 'the window narrowed with a card open: it stays inside', c && c.right <= 700, JSON.stringify([c?.cls, c?.right]));
     await q.keyboard.press('Escape');
     await q.setViewportSize({ width: 1000, height: 700 });
     await q.close();

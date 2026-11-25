@@ -32,7 +32,7 @@ import { afterLeave, backFromReveal, bindSheets, backCloses, fromTap, holdKeyboa
 import { bindList, drawList, goTo, lineOf, lineUp, ord, revealOpen, stepMoved, stepNew, workState } from './widget/list.ts';
 import { bindChat, drawChat, stamped } from './widget/chat.ts';
 import { bindThread, flushPick, grab, openAsk, moveTicked, pickByKey, pickTicked, placeBeside, placeCard, threadCard, tieToPin } from './widget/thread.ts';
-import { isTrying, pauseTry, placeAsk, relight } from './widget/trial.ts';
+import { isTrying, pauseTry, relight } from './widget/trial.ts';
 import { bindLive, startLive, MARK_PATHS } from './widget/live.ts';
 import { inFrame, startFrame } from './widget/frame.ts';
 import { holdWhileOpen } from './widget/hold.ts';
@@ -1312,11 +1312,9 @@ import { bindKeys } from './widget/keys.ts';
         if (bx != null) placeCard(card, bx + 14, under, null, over);
         else placeCard(card, byPin ? left : left + 14, under, nativeTie() && !boardPin ? pin : null, over);
         if (boardPin && !sheetMode.matches) onBoard(card, c.anchor);
-        // A question with choices on quoted words: by its quote, in the margin or under it (thread.ts). Drawn again after
-        // the pick, it stays where it was instead of jumping back under its pin.
-        if (!zone && (openAsk(c) || (!appear && prev?.matches('.margin, .under')))) placeAsk(card, c);
-        if (card.matches('.margin, .under')) tieToPin(card, null, 'card'); // by its words, where the script put it
-        if (card.tie) next.push(card.tie); // its line to the words (trial.ts), kept by the layer's redraw
+        // A question with choices (an agent's pin with --choice, or a reply asking one) is this same card, placed, turned
+        // over and closed as every other (Leo, 25 Nov: "agent pin doesnt act like regular"; its own margin place ran off
+        // the window's bottom).
         // Opens at the newest message, as the chat does (a short thread doesn't scroll), on phones too (they opened at
         // the first message).
         if (!appear && prevScroll != null) {
@@ -1996,13 +1994,13 @@ import { bindKeys } from './widget/keys.ts';
   };
   // An open card with the cursor in its reply box is not drawn again (the box would lose its caret, selection and words):
   // its pin and card are put at the page's new place where they stand. False when that is not a plain pin and card (an
-  // area, a board, a question's margin card, a phone's sheet): they wait for the cursor to leave, as before.
+  // area, a board, a phone's sheet): they wait for the cursor to leave, as before.
   const followOpen = () => {
     const c = threads().find((t) => t.id === S.openId);
     const pin = pinsById.get(S.openId);
     const card = S.openCard;
     const a = c?.anchor || {};
-    if (!c || !pin || !card?.isConnected || sheetMode.matches || card.matches('.margin, .under') || a.kind === 'board' || a.kind === 'page') return false;
+    if (!c || !pin || !card?.isConnected || sheetMode.matches || a.kind === 'board' || a.kind === 'page') return false;
     newPass();
     viewW = document.documentElement.clientWidth;
     const at = /** @type {any} */ (position(a));
@@ -2050,11 +2048,6 @@ import { bindKeys } from './widget/keys.ts';
   };
   addEventListener('resize', reflow);
   addEventListener('resize', () => requestAnimationFrame(() => requestAnimationFrame(revealOpen))); // a turned phone: the open thread's pin stays in sight, above its sheet
-  // A question's card in the margin (thread.ts) that no longer fits a narrower window goes back where cards go.
-  addEventListener('resize', () => {
-    const card = layer.querySelector('.card.margin');
-    if (card && card.getBoundingClientRect().right > document.documentElement.clientWidth - 12) requestAnimationFrame(render);
-  });
   addEventListener('scroll', (e) => e.target !== document && !host.contains(/** @type {Node} */ (e.target)) && reflow(true), { capture: true, passive: true }); // the page's own scroll moves only what is held to the screen
 
   // Client-side navigation (pushState, back/forward, Astro view transitions): comments follow the new page,
