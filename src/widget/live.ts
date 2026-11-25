@@ -80,10 +80,7 @@ export function startLive() {
         sessionStorage.removeItem(key);
         if (kept.open) W.S.openId = kept.open;
         if (kept.chat) W.S.chatOpen = true;
-        // The section bar's room (sections.ts) may not be kept yet on a page that builds itself late: the scroll is
-        // put back without it, and stays right when the room comes (the bar holds what is in view).
-        const pad = () => parseFloat(getComputedStyle(document.documentElement).paddingTop) || 0;
-        const y = () => +(kept.y ?? kept) - (+kept.pad || 0) + pad();
+        const y = () => +(kept.y ?? kept);
         const x = +kept.x || 0;
         let todo = [...(kept.page || []).map(putBack), () => (scrollTo(x, y()), Math.abs(scrollY - y()) < 2 && Math.abs(scrollX - x) < 2)];
         let tries = 0;
@@ -170,7 +167,7 @@ export function startLive() {
         .then((up) => {
           if (!up) return void (reloadTimer ||= setTimeout(() => ((reloadTimer = 0), reload()), 2000));
           try {
-            sessionStorage.setItem(key, JSON.stringify({ y: scrollY, x: scrollX, pad: parseFloat(getComputedStyle(document.documentElement).paddingTop) || 0, open: W.S.openId, chat: W.S.chatOpen, page: pageState() }));
+            sessionStorage.setItem(key, JSON.stringify({ y: scrollY, x: scrollX, open: W.S.openId, chat: W.S.chatOpen, page: pageState() }));
           } catch {}
           location.reload();
         });
@@ -320,7 +317,6 @@ export function startLive() {
     };
     let commentsRev = null; // the lab's comments version this page has (not the read marks, `seen`)
     let readsAt = null;
-    let sectionsAt = null;
     let hotAt = W.script.dataset.hot ? +W.script.dataset.hot : null; // the lab's hot count when this page was served: a save since then is still caught up
     const samePath = (u, paths) => {
       try {
@@ -456,11 +452,6 @@ export function startLive() {
         if (v.reads !== readsAt) {
           readsAt = v.reads;
           W.syncReads();
-        }
-        // a section read on another device with your name
-        if (v.sections !== sectionsAt) {
-          sectionsAt = v.sections;
-          W.S.syncSections?.();
         }
         // listening: a wait is open · working: Claude got comments and is on them · away: nobody will hear a comment now.
         const s = v.session;

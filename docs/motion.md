@@ -37,7 +37,7 @@ have ended; a loop is one still frame. `--_t-hold` is not zeroed: a highlight th
 Apple's guidance is to replace movement with a crossfade, not to snap it: so a second block at the end of `styles.css`
 (after every rule it overrides) gives what appears or goes a fade of `--_t-calm` (`lab-fade` in, `lab-gone` out) and no
 translate or scale: cards, sheets, the new-comment box, a message arriving, the ⋯ menu (a popover on a computer fades in by
-transition and out by the `.out` class), and the bar, the pill and the section line, which fade where they are as a sheet
+transition and out by the `.out` class), and the bar and the pill, which fade where they are as a sheet
 opens instead of sliding under the screen. A card or sheet that closes fades out (`goOut` in `comments.js`, `slideAway`
 in `sheets.ts` on a phone); code reads it as `ms('calm')`. The board view fades in (`overlay.ts`; its opacity is `!important`
 in `:host`, so `--bv-o` is stepped per frame). The half / full toggle is one step. `test/browser/motionreduce.mjs` samples it frame by frame.
@@ -94,7 +94,6 @@ in `:host`, so `--bv-o` is stepped per frame). The half / full toggle is one ste
 | keyboard fit (sheets.ts) | transform | slow | settle | the sheet moving over the keyboard |
 | composer glide (`composer.ts`) | height; the arrow's transform | base | standard | the box growing, the arrow sliding |
 | `.pane` (the dialog's insides) | opacity | quick out; base in after base | out | one pane fading for the other |
-| `.sbar .sb-t` | background-color | quick | out | a section's new / updated wash |
 | shake (`comments.js`) | transform | base | standard | unsent words: the card (⌥W) or the sheet (closing on a phone) won't close; one sideways shake for both |
 | `goToBlock` (anchoring.ts) | outline (`--_green`) | 2 × hold | linear | a block named in a message |
 | quote jump (`chat.ts`) | box-shadow (`--_green`) | hold | linear | the message you jumped to |

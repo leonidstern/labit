@@ -25,8 +25,6 @@
     "reload.ts": "live reload in place: a saved stylesheet, picture, font or the page's own HTML patched without a reload (scroll, open things and typed text stay); its own file (public/_lab/reload.js), loaded by live.ts on the first save the page hears about",
     "attach.css": "the styles of attach.ts, which brings them with it",
     "pics.ts": "a picture made ready to send (the board's paste and a comment's attachment): kept as it is when small, else drawn smaller and encoded again; its own file (public/_lab/pics.js), loaded the first time a picture is put in",
-    "sections.ts": "the section bar: each section with a heading, current one filled, new and updated marked, read kept per person in the lab; its own file (public/_lab/sections.js), loaded when the page may show the bar",
-    "sections.css": "the styles of sections.ts, which brings them with it",
     "sheets.ts": "THE drawer: every sheet on a phone (handle, swipe down, dimmed page, keyboard fit, back closes). Any new panel on a phone uses it.",
     "stick.ts": "a message list that stays at its newest while it shrinks (keyboard up) until you scroll back; used by the chat and a thread",
     "styles.css": "the widget's one stylesheet",

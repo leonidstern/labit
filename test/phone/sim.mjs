@@ -9,7 +9,7 @@
 //   node test/phone/sim.mjs report           all results so far, per browser
 //   node test/phone/sim.mjs go <step>         jumps to a step by name (calibrate first, then e.g. ask-open or board-open)
 //
-// Steps: calibrate, the taps and holds on the page (tap-no-pin .. swipe-no-pin), tap-new (the section bar), ask-open / ask-pick (a
+// Steps: calibrate, the taps and holds on the page (tap-no-pin .. swipe-no-pin), ask-open / ask-pick (a
 // question with choices: a tap answers after 5 s with undo, no Keep), board-open .. board-close (a board over the page).
 // Before the first hold: run the tool's set_keyboard show (after its `text` action too: typing switches the simulator to a hardware
 // keyboard and no keyboard comes up). If a thread's card reads y < 0 or a tap on the dimmed page does nothing, Safari is painted out of step
@@ -262,26 +262,6 @@ if (cmd === 'serve') {
     { name: 'swipe-no-pin', say: () => 'swipe up: touch_path (200,650) → (200,300) over ~0.5 s', expect: (ss, s0) => {
       const end = ss.at(-1);
       return [['scrolling makes no comment box', !ss.some((s) => s.float)], ['the page scrolled', end.sy - s0.sy > 100, `scrollY ${s0.sy} → ${end.sy}`], ['no text got selected', ss.every((s) => !s.sel)]];
-    } },
-    // The section bar: a section is added to the page's file (the lab patches the open page), a chip with "new" comes up in the
-    // bar at the top, a tap on it goes to the section, reads it, and the page does not jump to the top.
-    // The bar needs 3 sections (src/widget/sections.ts, MIN) of one heading level, on a lab page (the page says <meta name="lab-sections"
-    // content="on">): the page has three h2 (Part one to three); a first visit counts them as read, the step adds a fourth, which is
-    // new. Expected: the bar shows (a tap target, 40 pt or more), one "new" chip, a tap on it scrolls to the section and reads it.
-    // Open the page (open_url) before this step so that the first visit has been counted.
-    { name: 'tap-new', say: async () => {
-      const file = path.join(RUN, 'site', 'index.html');
-      fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('</body>', '<section id="v9"><h2>Version nine</h2><p>The agent added this.</p></section></body>'));
-      await sleep(3000); // the patch, then the check
-      const s = snaps().at(-1);
-      return s.chip ? `tap ${fmt(dev(s, s.chip.x + s.chip.w / 2, s.chip.y + s.chip.h / 2))} (the "new" chip in the bar at the top; expect: the page goes to "Version nine", no new chip left)` : 'no chip came up (was the page opened before the edit? the page needs 3 h2 and the lab-sections meta to have a bar)';
-    }, expect: (ss, s0) => {
-      const end = ss.at(-1);
-      return [
-        ['the bar is a tap target', ss.some((s) => s.sbar && s.sbar.h >= 40)],
-        ['the page goes to the section', end.sy > s0.sy, `scrollY ${s0.sy} → ${end.sy}`],
-        ['it is read: no new chip', end.chipsNew === 0, `${end.chipsNew} new`],
-      ];
     } },
     // A question with choices (src/widget/thread.ts, trial.ts) on a phone: a sheet of at most half the screen, 44 pt rows,
     // a tap on a row answers (no Keep button; the card says "Picked A · undo" and the pick goes after 5 s, or when the card closes). `go ask-open` after
