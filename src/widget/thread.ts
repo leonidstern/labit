@@ -290,8 +290,8 @@ export function grab(pin, now) {
 //   replies that arrive in place, so the reply box keeps its focus;
 // - keys: R reply, E resolve, Escape closes, Ctrl-D / W next new, 1 to 6 pick a choice of an open question (comments.js);
 // - phones: the bottom sheet (drag by its handle, swipe down to close: sheets.ts), "new · N ›" to the next one.
-// A question with choices adds its rows in its bubble (choicesEl, below); on quoted words the card opens in the margin
-// (placeAsk) and the rows are tried in the page. Its rows: point to try, tap or 1 to 6 to answer (undo for 5 s).
+// A question with choices adds its rows in its bubble (choicesEl, below); the card is placed, turned over and closed as any
+// other; on quoted words the rows are tried in the page. Its rows: point to try, tap or 1 to 6 to answer (undo for 5 s).
 // The reply box is not focused while a question is open, so the digits are keys; words typed there are an ordinary reply.
 export function threadCard(c, fresh = new Set(), focus = false) {
   const asking = openAsk(c);
