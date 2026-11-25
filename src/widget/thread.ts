@@ -136,7 +136,7 @@ function bindThreadScroll() {
     { capture: true, passive: true },
   );
 }
-export function tieToPin(node: HTMLElement, pin: HTMLElement | null | undefined, kind: 'card' | 'beside', want?: Want) {
+function tieToPin(node: HTMLElement, pin: HTMLElement | null | undefined, kind: 'card' | 'beside', want?: Want) {
   node.classList.remove('tied-card', 'tied-beside');
   node.removeAttribute('data-held'); // set below once the browser carries it with its pin (comments.js: no redraw for it)
   rests.delete(node);
