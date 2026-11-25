@@ -10,7 +10,7 @@ import { writeAtomic } from './board.ts';
 
 // The widget's own table (KEYS in src/comments.js), in its order (of two actions on one key the first keeps it), and
 // the one in docs/settings.md: test/settings.test.mjs holds the three together.
-const SHORTCUTS = { toggle: 'm', chat: 't', next: 'w', pause: 'p', slow: 's', draw: 'd', done: 'e', reply: 'r', resolve: 'e', walkie: 'k' };
+const SHORTCUTS = { toggle: 'm', chat: 't', next: 'w', pause: 'p', slow: 's', draw: 'd', done: 'e', reply: 'r', walkie: 'k' };
 type Kind = 'number' | 'boolean' | 'string';
 // Each setting: its type, its default, and where it may be set (a project can't name you or open your lab to the
 // wifi; your own file can't say which folder or dev server a project uses).
@@ -80,7 +80,7 @@ const check = (key: string, v: unknown, file: string, problems: string[]): unkno
     if (!v || typeof v !== 'object' || Array.isArray(v)) return bad('must be an object of action → key');
     const out: Record<string, string> = {};
     for (const [action, key1] of Object.entries(v)) {
-      if (action === 'pointer' || action === 'comment' || action === 'pin') continue; // the old keys (3, 1, C): pages have no pointer mode any more; a leftover setting is ignored, not said
+      if (action === 'pointer' || action === 'comment' || action === 'pin' || action === 'resolve') continue; // the old keys (3, 1, C, and resolve, which done's E does with a thread open): a leftover setting is ignored, not said
       if (!(action in SHORTCUTS)) bad(`.${action} is not an action (${Object.keys(SHORTCUTS).join(', ')})`);
       else if (typeof key1 !== 'string' || !/^[a-z0-9]$/i.test(key1)) bad(`.${action} must be one letter or digit`);
       else out[action] = key1.toLowerCase();
@@ -144,12 +144,7 @@ export function loadSettings(here: string, flags: Record<string, unknown> = {}, 
     }
     if (s.type === 'shortcuts' && values[key]) {
       values[key] = { ...SHORTCUTS, ...values[key] };
-      // done and resolve share E on purpose (a thread open: E resolves it; else E shows or hides the done ones): not a clash.
-      const shared = (a: string, b: string) => (a === 'done' && b === 'resolve') || (a === 'resolve' && b === 'done');
-      const taken = Object.entries(values[key] as Record<string, string>).filter(([a, k], i, all) => {
-        const first = all.findIndex(([, k2]) => k2 === k);
-        return first !== i && !shared(a, all[first][0]);
-      });
+      const taken = Object.entries(values[key] as Record<string, string>).filter(([, k], i, all) => all.findIndex(([, k2]) => k2 === k) !== i);
       for (const [action, k] of taken) problems.push(`shortcuts: "${k}" is used twice (${action} too); the first action keeps it`);
     }
     if (!(key in values)) {

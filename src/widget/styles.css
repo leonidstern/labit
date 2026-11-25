@@ -502,7 +502,10 @@ kbd, .onb { transition: opacity var(--_t-quick) var(--_ease-out); } /* .onb: wha
 .more-menu button:disabled { color: var(--_muted); cursor: default; }
 /* A pin left by the agent: labit's mark in place of a letter. */
 .pin .agentmark { width: 60%; height: 60%; display: block; }
-.more-menu kbd { margin: 0; }
+.more-menu kbd { margin: 0; font-size: 12px; letter-spacing: .02em; line-height: inherit; opacity: 1; } /* a plain grey key at the row's end, readable (Leo, 25 Nov, 2b) */
+.more-menu kbd::before, .more-menu kbd::after { content: none; }
+.more-menu .held { margin: 4px 0 0; padding-top: 4px; border-top: var(--_hair); }
+.more-menu .hint-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 5px 10px; font-size: 13px; letter-spacing: -.006em; color: var(--_muted); white-space: nowrap; cursor: default; }
 .more-menu .n { color: var(--_muted); } /* a board's frame count in the boards list */
 /* Which labit this is: the menu's last line, small and quiet, selectable to paste into a bug report. */
 .more-menu .labit-version { margin: 4px 10px 2px; padding-top: 6px; border-top: var(--_hair); font-size: 11px;
