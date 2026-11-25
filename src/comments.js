@@ -31,7 +31,7 @@ import { bindMessages, foldRow, foldStatus, isStatus, stampOf } from './widget/m
 import { afterLeave, backFromReveal, bindSheets, backCloses, fromTap, holdKeyboard, leave, letGo, liftedDraft, revealDraft, roomFor, slideAway, startSheets, swipeDown } from './widget/sheets.ts';
 import { bindList, drawList, goTo, lineOf, lineUp, ord, revealOpen, stepMoved, stepNew, workState } from './widget/list.ts';
 import { bindChat, drawChat, stamped } from './widget/chat.ts';
-import { bindThread, flushPick, grab, openAsk, moveTicked, pickByKey, pickTicked, placeBeside, placeCard, threadCard, tieToPin } from './widget/thread.ts';
+import { bindThread, flushPick, grab, openAsk, moveTicked, pickByKey, pickTicked, placeBeside, placeCard, threadCard } from './widget/thread.ts';
 import { isTrying, pauseTry, relight } from './widget/trial.ts';
 import { bindLive, startLive, MARK_PATHS } from './widget/live.ts';
 import { inFrame, startFrame } from './widget/frame.ts';
