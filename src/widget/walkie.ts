@@ -29,6 +29,7 @@ let gestures = [];
 let moves = [];
 let quotes = [];
 let trail = [];
+let drawn = []; // what the ink shows: the trail as moved, not cut when a gesture counts
 let drag = null;
 let cur = null;
 let curCell = null;
@@ -38,7 +39,6 @@ let lastY = -1;
 let timer = 0;
 let scrollIdle = 0;
 let quietUntil = 0;
-let shown = null;
 let keptQuote = null;
 let pill: HTMLElement;
 let ta: HTMLTextAreaElement;
@@ -211,6 +211,8 @@ function gesture(x, y) {
   const t = performance.now(), last = trail[trail.length - 1];
   if (last && Math.hypot(x - last.x, y - last.y) < 3) return;
   trail.push({ x, y, t });
+  drawn.push({ x, y, t });
+  while (drawn.length && t - drawn[0].t > 600) drawn.shift();
   while (trail.length && t - trail[0].t > 4500) trail.shift(); // slow, careful circles take a few seconds
   if (t < quietUntil) return;
   const g = shake(t) || circle();
@@ -234,7 +236,6 @@ function commit(g, when) {
   let el = g.kind === 'circle' ? inside(g.box) : target(at(g.x, g.y));
   if (el && tooBig(el)) el = null;
   gestures.push({ t: when, kind: g.kind, el });
-  shown = { pts: g.pts, until: performance.now() + 900 };
 }
 // A deliberate shake: 5+ quick reversals of 32 px or more along one line (sideways, up-down or slanted), within 0.9 s,
 // staying close to that line (a small wiggle while resting is not one).
@@ -307,7 +308,8 @@ function inside(box) {
   while (c && !hit.every((el) => c.contains(el))) c = c.parentElement;
   return c && c !== document.body ? c : hit.length === 1 ? hit[0] : null;
 }
-// The pointer's trail, faint, and a gesture's line for a moment once it counts: one smooth stroke, not dots.
+// The pointer's trail, faint: one smooth stroke, not dots. A gesture that counts doesn't change it (Leo, 25 Nov: no flash);
+// the message says so.
 function inkLoop() {
   const dpr = devicePixelRatio || 1, cx = ink.getContext('2d');
   if (!cx) return;
@@ -317,7 +319,7 @@ function inkLoop() {
   const t = performance.now();
   cx.lineCap = cx.lineJoin = 'round';
   cx.strokeStyle = getComputedStyle(W.host).getPropertyValue('--_green-fg').trim() || 'green';
-  const pts = trail.filter((p) => t - p.t < 600);
+  const pts = drawn.filter((p) => t - p.t < 600);
   if (pts.length > 2) {
     cx.globalAlpha = 0.35;
     cx.lineWidth = 2;
@@ -327,15 +329,8 @@ function inkLoop() {
     cx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
     cx.stroke();
   }
-  if (shown && t < shown.until) {
-    cx.globalAlpha = Math.min(1, (shown.until - t) / 400);
-    cx.lineWidth = 3;
-    cx.beginPath();
-    shown.pts.forEach((p, j) => (j ? cx.lineTo(p.x, p.y) : cx.moveTo(p.x, p.y)));
-    cx.stroke();
-  }
   cx.globalAlpha = 1;
-  if (on || (shown && t < shown.until)) requestAnimationFrame(inkLoop);
+  if (on) requestAnimationFrame(inkLoop);
   else cx.clearRect(0, 0, innerWidth, innerHeight);
 }
 function onDown(e) {
@@ -421,6 +416,7 @@ function start() {
   scrolls = [];
   gestures = [];
   trail = [];
+  drawn = [];
   moves = [];
   quotes = [];
   drag = null;
