@@ -32,11 +32,14 @@
     "switcher.css": "the styles of switcher.ts, which brings them with it",
     "thread.ts": "a pin's thread card",
     "trial.ts": "a question's choices tried in the sentence: the differing words swapped in place, the block's height held, the page put back exactly",
-    "types.d.ts": "types shared by the modules"
+    "types.d.ts": "types shared by the modules",
+    "walkie.ts": "Walkie-talkie: talk while you point, with the computer's own dictation (no microphone); the pointer, clicks, circles, shakes and selected words are matched to the words and sent to the chat as one message; its own file (public/_lab/walkie.js), loaded on the bar's walkie-talkie or K",
+    "walkie.css": "the styles of walkie.ts, which brings them with it"
   },
   "classes": {
     "pinboard": "the host of a board pin's strip in its card (boardcam.ts); the board's part draws the strip inside it, so no rule of the widget's styles it",
     "copy-all": "the copy-link button: a row of the ⋯ menu (its rules), or hidden in the corner when comments are off; comments.js looks it up",
+    "walkie-btn": "the bar's walkie-talkie part (comments.js looks it up, walkie.ts takes over); a bar segment like the others, no rule of its own",
     "boards-btn": "the page's \"boards · N\" part of the bar (comments.js looks it up, list.ts fills it); a bar segment like the others, no rule of its own",
     "pv": "a board picture's preview, over the picture (mount.ts sets its src and shows it); styled by the board's img rules",
     "moved-btn": "the 'moved' button in the bar; comments.js looks it up and the browser tests click it",

@@ -126,6 +126,7 @@ win over yours, key by key.
 | `done` | `e` | Tapped: hide or show done threads (shown, faded, at first). With a thread open it resolves it, as `resolve` does |
 | `reply` | `r` | With a thread open: type a reply |
 | `resolve` | `e` | With a thread open: resolve or reopen it |
+| `walkie` | `k` | Walkie-talkie: talk while you point (your computer's own dictation types the words); ⌘↵ sends the walk to the chat, Esc drops it |
 
 Letters follow the key's place on non-Latin layouts (the T key is T in Russian too), and digits work with Shift or
 on AZERTY. The page shows your keys: the chat button reads "chat (x)" when `chat` is `x`.
