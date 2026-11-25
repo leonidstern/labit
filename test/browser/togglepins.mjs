@@ -3,7 +3,8 @@
 // pinhold.ts), and one on a word of a live subtitle that is written again every 330 ms without the page changing size:
 // drawn while its word was gone, it was left off until the next scroll or resize. Shown and hidden many times, fast and
 // slow, with the button and the key; each time every pin is back within a turn of the subtitle, and the subtitle's pin,
-// once back, isn't taken off again by the next change.
+// once back, isn't taken off again by the next change. The subtitle's pin is done, as on Leo's /walk: hiding and showing
+// done pins (E) brings it back too (Leo: "few on/off done showed them or sometimes not").
 // Not part of `npm test`; CI runs it in the `browser` job.
 // Run: node test/browser/togglepins.mjs (needs playwright; NODE_PATH can point at a node_modules that has it).
 import fs from 'node:fs';
@@ -30,9 +31,12 @@ fs.writeFileSync(path.join(DIR, 'index.html'), `<!doctype html><meta charset="ut
 fs.writeFileSync(path.join(DIR, 'labit.json'), JSON.stringify({ port: PORT }));
 const server = startLab(DIR, labEnv(), { stdio: 'ignore' });
 await labUp(B);
-const post = async (body) => (await (await fetch(B + '/_lab/api/comments', { method: 'POST', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ page: '/index', name: 'Sam', ...body }) })).json()).comment;
+const post = async (body) => await (await fetch(B + '/_lab/api/comments', { method: 'POST', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ page: '/index', name: 'Sam', ...body }) })).json();
 const SPOTS = [['#bar', 'header'], ['#a', 'p'], ['#b', 'p'], ['#shift', 'div class="card"'], ['#bob', 'div class="card"'], ['#c', 'p'], ['#d', 'p'], ['#sub > span:nth-child(3)', 'span']];
-for (const [i, [sel, tag]] of SPOTS.entries()) await post({ text: `pin ${i + 1}`, anchor: { kind: 'element', selector: sel, x: 0.3, y: 0.5, element: tag === 'span' ? '<span>' : `<${tag.split(' ')[0]} id="${sel.slice(1)}"${tag.includes(' ') ? ' ' + tag.split(' ').slice(1).join(' ') : ''}>` } });
+const made = [];
+for (const [i, [sel, tag]] of SPOTS.entries()) made[i] = await post({ text: `pin ${i + 1}`, anchor: { kind: 'element', selector: sel, x: 0.3, y: 0.5, element: tag === 'span' ? '<span>' : `<${tag.split(' ')[0]} id="${sel.slice(1)}"${tag.includes(' ') ? ' ' + tag.split(' ').slice(1).join(' ') : ''}>` } });
+const sub = made.at(-1);
+await post({ action: 'resolve', id: sub.comment.id, edit: sub.edit });
 
 // The pins seen on the page: drawn, not hidden, and the topmost thing at their middle.
 const seen = (p) =>
@@ -87,6 +91,14 @@ try {
       await p.mouse.wheel(0, -60);
       await sleep(100);
       check(eng, 'every pin comes back after hiding with the key and scrolling', await allBack(p), `${await seen(p)}`);
+      const doneLost = [];
+      for (let round = 0; round < 10; round++) {
+        await p.keyboard.press('e');
+        await sleep(round * 45);
+        await p.keyboard.press('e');
+        if (!(await allBack(p))) doneLost.push(`round ${round}: ${await seen(p)}`);
+      }
+      check(eng, 'the done pin on the subtitle comes back after hiding and showing done pins', !doneLost.length, doneLost.join(', '));
     } finally {
       await browser.close();
     }
