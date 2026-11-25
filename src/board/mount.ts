@@ -413,7 +413,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       box.append(inner);
       const tag = text('div', '', box);
       tag.className = 't';
-      tag.setAttribute('data-uncommentable', ''); // the label opens its frame: no pin there
+      tag.setAttribute('data-lab-off', ''); // the label opens its frame: no pin there
       world.append(box);
       return c;
     });
@@ -520,7 +520,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   // The zoom, quiet in the top-right corner (the widget has both bottom ones) (Leo, 19 Nov: "show zoom somewhere"); a tap offers fit · 50% · 100%.
   const zoomBox = document.createElement('div');
   zoomBox.className = 'zm';
-  zoomBox.setAttribute('data-uncommentable', '');
+  zoomBox.setAttribute('data-lab-off', '');
   const zoomBtn = Object.assign(document.createElement('button'), { type: 'button', className: 'zo', textContent: '100%' });
   zoomBtn.setAttribute('aria-label', 'zoom');
   zoomBtn.addEventListener('click', () => zoomBox.classList.toggle('open'));
@@ -576,7 +576,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       measure();
       handLayer = document.createElement('div');
       handLayer.id = 'lab-hand';
-      handLayer.setAttribute('data-uncommentable', '');
+      handLayer.setAttribute('data-lab-off', '');
       Object.assign(handLayer.style, { left: `${ox}px`, top: `${oy}px`, width: `${view.w}px`, height: `${view.h}px` });
       (scope instanceof ShadowRoot ? scope : document.documentElement).append(handLayer);
     } else if (!space && handLayer && !down?.hand) {
@@ -661,7 +661,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   }, true);
   // The box over the canvas (in the box's own px) while one is drawn.
   const marq = Object.assign(document.createElement('div'), { className: 'marq', hidden: true });
-  marq.setAttribute('data-uncommentable', '');
+  marq.setAttribute('data-lab-off', '');
   root.append(marq);
   // A press that is no pan, gone 4 px: on a frame it moves the picked frames (that frame becomes the pick first, with Shift one
   // more), on the canvas it draws a box and the frames it touches are the pick (Shift: besides those picked already).

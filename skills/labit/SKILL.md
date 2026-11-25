@@ -62,7 +62,7 @@ When the person says "use lab", "in lab" or "show it in lab", show the page in l
 
 1. Write the page as an `.html` file with a `<title>` (or a folder with an `index.html`, for a page with images).
    - Images on a lab page cannot be zoomed: no lightbox, no click or tap to enlarge, no `cursor: zoom-in`/`zoom-out`, no `touch-action: pinch-zoom` overlay, and no viewport meta that changes pinch-zoom (leave `user-scalable` and `maximum-scale` out). A picture is shown at the size the page lays it out, and a click or tap on it does nothing; to show more detail, make the picture itself larger or crop it.
-   - Every part of a lab page takes a pin: never mark anything `data-uncommentable` (or `data-comment-target`), not even the page's own buttons or demos. Commenting is what the page is for; the person presses `m` or holds Option to pin, and clicks work as usual otherwise.
+   - Every part of a lab page takes a pin. labit ignores `data-uncommentable`, so don't add it; commenting is what the page is for. The person presses `m` or holds Option to pin, and clicks work as usual otherwise.
    - Link `/_lab/lab.css` and put the content under three or more `<h2 id>` headings: the page then gets the lab's light and dark look and the section bar, which marks new and updated sections.
    - Part of a project's site: put it next to the project's pages and use the lab `LAB list` shows for that folder (start one only if none runs).
    - Anything else: `LAB publish <page.html> --name "<topic>"`. It goes into the person's one pages lab (the `pagesFolder` setting, `~/lab-pages`), which starts if it isn't running, and prints the page's link and the line to listen with. Publish again after a change: same link. Never start a lab of its own for it.
