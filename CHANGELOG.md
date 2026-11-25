@@ -2,9 +2,15 @@
 
 Versions follow [semver](https://semver.org). Before 1.0, a minor version can change how things work.
 
-## Unreleased
+## 0.8.2 · 2026-11-25
+
+colabit, your own lab for the people you work with, plus small fixes to the agent's own pins.
 
 - **colabit: comments on your deployed sites.** Your own lab for the people you work with, on your own Vercel: one address, a path per person, labit's pins and threads on every page, no agent. One click to deploy (Vercel + Upstash), `node co/colabit.mjs add <name> <site> --deploy` per person (live in seconds), and the widget updates itself from labit's main. See [co/README.md](co/README.md).
+- **An agent's pin hides the unsure outline** while its ring shows.
+- **Agent pins for questions on a spot and for review findings** are in the skill.
+- **Pages: an agent's own unanswered pin no longer counts as waiting.**
+- **A pin's `--hint` on a `--choice` is kept**, and `hints` work in `--file`.
 
 ## 0.8.1 · 2026-11-24
 
