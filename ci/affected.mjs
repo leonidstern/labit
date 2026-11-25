@@ -45,6 +45,8 @@ const REACH = {
   'src/widget/keys.ts': ['shiftkeys', 'selection'],
   'src/widget/boardcam.ts': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardmode', 'boardpins', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard', 'boardsection', 'boardpin'],
   'src/widget/actions.ts': ['actions'],
+  'src/widget/walkie.ts': ['walkie'],
+  'src/widget/walkie.css': ['walkie'],
   'src/widget/chat.ts': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'boardclose', 'connection', 'fluid', 'native', 'progress', 'shortcuts', 'update', 'updbadge', 'zoom'],
   'src/widget/draw.ts': ['draw', 'edge-draw1', 'edge-draw2', 'edge-draw3', 'edge-draw4', 'native', 'nativepins', 'shiftkeys'],
   'src/widget/fluid.ts': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'fluid', 'nativepins', 'select', 'selection', 'shortcuts'],

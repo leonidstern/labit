@@ -10,7 +10,7 @@ import { writeAtomic } from './board.ts';
 
 // The widget's own table (KEYS in src/comments.js), in its order (of two actions on one key the first keeps it), and
 // the one in docs/settings.md: test/settings.test.mjs holds the three together.
-const SHORTCUTS = { toggle: 'm', chat: 't', next: 'w', pause: 'p', slow: 's', draw: 'd', done: 'e', reply: 'r', resolve: 'e' };
+const SHORTCUTS = { toggle: 'm', chat: 't', next: 'w', pause: 'p', slow: 's', draw: 'd', done: 'e', reply: 'r', resolve: 'e', walkie: 'k' };
 type Kind = 'number' | 'boolean' | 'string';
 // Each setting: its type, its default, and where it may be set (a project can't name you or open your lab to the
 // wifi; your own file can't say which folder or dev server a project uses).

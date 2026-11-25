@@ -185,7 +185,7 @@ import { bindKeys } from './widget/keys.ts';
   const part = (name) => (parts[name] ??= globalThis.__LAB_CO__ ? (name === 'draw' ? import('./widget/draw.ts') : name === 'motion' ? import('./widget/motion.ts') : Promise.reject(new Error('not in colabit'))) : import(new URL(`${name}.js`, script?.src || location.href).href));
   // Shortcuts, action → key: these defaults, with what a project or you changed (labit.json or your settings.json
   // `shortcuts`, passed by the lab as data-keys; docs/settings.md).
-  const KEYS = { toggle: 'm', chat: 't', next: 'w', pause: 'p', slow: 's', draw: 'd', done: 'e', reply: 'r', resolve: 'e' };
+  const KEYS = { toggle: 'm', chat: 't', next: 'w', pause: 'p', slow: 's', draw: 'd', done: 'e', reply: 'r', resolve: 'e', walkie: 'k' };
   try {
     Object.assign(KEYS, JSON.parse(script?.dataset.keys || '{}'));
   } catch {}
@@ -317,6 +317,7 @@ import { bindKeys } from './widget/keys.ts';
     <div class="left"><button class="secondary copy-all" type="button" hidden>copy link</button></div>
     <div class="bar" hidden>
       <button class="secondary chat-btn" type="button" hidden>chat</button>
+      <button class="secondary walkie-btn" type="button" hidden></button>
       <button class="secondary list-btn" type="button" hidden>list</button>
       <button class="secondary boards-btn" type="button" hidden aria-expanded="false" aria-controls="lab-more" title="this page's boards"></button>
       <button class="secondary done-btn" type="button" hidden title="show or hide done pins on the page"></button>
@@ -363,6 +364,10 @@ import { bindKeys } from './widget/keys.ts';
   const chatEl = $('.chatwin');
   const chatBtn = /** @type {HTMLElement} */ (root.querySelector('.chat-btn'));
   chatBtn.title = `chat (${KEYS.chat.toUpperCase()})`;
+  // Walkie-talkie (src/widget/walkie.ts, its own file): talk while you point, with the computer's own dictation (no
+  // microphone here); the bar turns into its pill and the walk goes to the chat. Computers only, and not in colabit (no agent).
+  const walkieBtn = /** @type {HTMLElement} */ (root.querySelector('.walkie-btn'));
+  walkieBtn.title = "Walkie-talkie: talk while you point. Uses your computer's own dictation, no microphone here. The agent gets what you said and where.";
   S.refit = () => {}; // phones: fit the sheets to the keyboard again (below)
   S.chatOpen = false;
 
@@ -1116,6 +1121,9 @@ import { bindKeys } from './widget/keys.ts';
       el('kbd', { 'aria-hidden': 'true' }, KEYS.toggle),
     );
     toggleBtn.classList.toggle('secondary', S.on);
+    walkieBtn.hidden = !S.on || coarse || Boolean(globalThis.__LAB_CO__);
+    // Its key marked where Leo put it, walkie-tal(k)ie: the last k, not the first.
+    if (!walkieBtn.firstChild) walkieBtn.append('walkie-talkie'.includes(KEYS.walkie) ? keyWord('walkie-talkie'.slice(0, 'walkie-talkie'.lastIndexOf(KEYS.walkie)), KEYS.walkie, 'walkie-talkie'.slice('walkie-talkie'.lastIndexOf(KEYS.walkie) + 1)) : keyLabel('walkie-talkie', KEYS.walkie));
     host.toggleAttribute('data-labs', Boolean(!coarse && S.labsOpen)); // the page dims behind labs & pages (the widget's .scrim)
     host.toggleAttribute('data-sheet', Boolean((coarse && (S.labsOpen || S.motionOpen)) || (S.on && (S.draft || S.openId || S.chatOpen)))); // phones: the sheet has the screen's bottom
     if (coarse && appear && now) { // a sheet opening slides in once its first frame is drawn (see data-opening in styles.css)
@@ -1545,6 +1553,11 @@ import { bindKeys } from './widget/keys.ts';
     setTimeout(() => goToBlock(target), coarse ? 60 : 0); // after the sheet has started closing
   });
   listBtn.addEventListener('click', () => stepNew(1));
+  walkieBtn.addEventListener('click', () => {
+    closeOthers();
+    render();
+    void part('walkie').then((m) => m.toggle(W));
+  });
   chatBtn.addEventListener('click', () => {
     S.chatOpen = !S.chatOpen;
     if (S.chatOpen) closeOthers(true);
@@ -1625,12 +1638,13 @@ import { bindKeys } from './widget/keys.ts';
     // The keys (Leo, 2026-11-15/16), marked in the bar's words: cha(t) (C was chat until 19 Nov), ne(w) (Shift-W: the one before),
     // P pause, M hide, D show/hide done. With a thread open: R reply, E resolve.
     // Shift is only for next (Shift-W: the one before); ⇧D, ⇧B and the rest belong to the board.
-    if (S.on && !typing(e) && !inOtherWidget && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat && ['pause', 'slow', 'chat', 'next', 'draw', 'done', 'reply', 'resolve'].includes(act) && (act === 'next' || act === 'draw' || !e.shiftKey)) { // ⇧D draws too: Shift straightens (below)
+    if (S.on && !typing(e) && !inOtherWidget && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat && ['pause', 'slow', 'chat', 'next', 'draw', 'done', 'reply', 'resolve', 'walkie'].includes(act) && (act === 'next' || act === 'draw' || !e.shiftKey)) { // ⇧D draws too: Shift straightens (below)
       const k = act;
       e.preventDefault();
       if (k === 'pause') return void loadMotion().then((m) => m?.setPause(!S.paused));
       if (k === 'slow') return void loadMotion().then((m) => m?.setSlow(!S.slow));
       if (k === 'chat') return chatBtn.click();
+      if (k === 'walkie') return walkieBtn.hidden || S.openId || S.draft || walkieBtn.click(); // not over an open card: its keys stay its own
       if (k === 'next') return stepNew(e.shiftKey ? -1 : 1);
       if (k === 'draw') return void ((S.dKey = true), (S.drew = false), part('draw')); // held, D draws (draw.ts); ⇧D tapped alone stays the board's
       // E (Leo, 21 Nov: "another key its clashing now with draw, move to E"): done threads show or hide; with a thread open it is its resolve (the same key, the thread open first).

@@ -125,7 +125,7 @@ try {
         await p.waitForFunction(() => document.querySelector('[data-lab-comments]')?.shadowRoot?.querySelector('.bar'), null, { timeout: 5000 }).catch(() => {});
         const band = await p.evaluate(async () => {
           const before = document.documentElement.querySelectorAll('i').length;
-          dispatchEvent(new CustomEvent('lab-goto', { detail: document.getElementById('t') }));
+          dispatchEvent(new CustomEvent('lab-goto', { detail: 't' }));
           await new Promise((done) => setTimeout(done, 300)); // the band is drawn a tick after the event
           const root = document.querySelector('[data-lab-comments]').shadowRoot;
           return { light: document.documentElement.querySelectorAll('i').length - before, shadow: [...root.querySelectorAll('i')].filter((n) => !n.classList.contains('fit')).length };
