@@ -1,6 +1,5 @@
-// The section bar and the motion menu are their own files (public/_lab/sections.js, motion.js), fetched only when the
-// page uses them. A page with no sections and nothing that moves asks for neither; headings, a looping animation or a
-// video bring the one each needs; P or S bring motion on a still page, ⌥ no longer does; a pin with a moment brings it too.
+// The motion menu is its own file (public/_lab/motion.js), fetched only when the page uses it. A page with nothing that
+// moves never asks for it, headings or no; a looping animation or a video bring it; P or S bring motion on a still page, ⌥ no longer does; a pin with a moment brings it too.
 // Not part of `npm test`. Run: node test/browser/lazyparts.mjs (NODE_PATH to a playwright). ENGINES picks the engines.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -21,7 +20,6 @@ write('sections.html', page(`<h1>Plan</h1>${sec('Speed')}${sec('Cost')}${sec('Ri
 write('moving.html', page('<h1>Plan</h1><div id="spin" style="width:40px;height:40px;background:#333;animation:spin 1s linear infinite"></div>'));
 write('video.html', page('<h1>Plan</h1><video muted loop autoplay playsinline width="120"></video>'));
 write('script.html', page('<h1>Plan</h1><div id="box" style="margin:60px;width:60px;height:60px;background:#333"></div>').replace('</body>', '<script>setTimeout(() => document.getElementById("box").animate([{ translate: "0" }, { translate: "40px" }], { duration: 900, iterations: Infinity }), 2000)</script></body>'));
-write('late.html', page('<h1>Plan</h1><p>Only words.</p>').replace('</body>', '<script>setTimeout(() => document.body.insertAdjacentHTML("beforeend", "<h2>A</h2><h2>B</h2><h2>C</h2>"), 1500)</script></body>'));
 const server = startLab(DIR, labEnv(), { port: PORT });
 await labUp(B);
 
@@ -43,11 +41,10 @@ try {
       const is = (name, got, want) => check(eng, name, got === want, got);
 
       const still = await asked('still.html');
-      is('a page with no sections and nothing moving asks for neither file', still.got, 'none');
-      is('a page with 3 sections asks for the section bar only', (await asked('sections.html')).got, 'sections');
+      is('a page with nothing moving asks for nothing', still.got, 'none');
+      is('a page with 3 sections asks for nothing', (await asked('sections.html')).got, 'none');
       is('a page with a looping animation asks for motion only', (await asked('moving.html')).got, 'motion');
       is('a page with a video asks for motion only', (await asked('video.html')).got, 'motion');
-      is('headings drawn late bring the section bar', (await asked('late.html', 3600)).got, 'sections');
 
       // Still page: ⌥ is for commenting only (Leo, 23 Nov: the motion menu is a right-click), so it asks for nothing.
       await still.p.bringToFront();

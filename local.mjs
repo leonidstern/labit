@@ -688,7 +688,7 @@ const fidOf = (rel) => {
 };
 function rehome() {
   let byFid = null;
-  for (const page of PROXY ? [] : new Set([...pages(), ...Object.values(sections).flatMap(Object.keys)])) {
+  for (const page of PROXY ? [] : pages()) {
     const [was, fid] = homes.get(page) || [];
     const rel = fileIndex.get(page);
     if (rel) {
@@ -710,12 +710,6 @@ function rehome() {
     homes.delete(page);
     homes.set(to, [fileIndex.get(to), fid]);
     moves.push([page, to]);
-    for (const mine of Object.values(sections)) {
-      if (!mine[page]) continue;
-      mine[to] ||= mine[page];
-      delete mine[page];
-      saveSections();
-    }
     console.log(`[lab] ${was} is now ${fileIndex.get(to)}: its comments went with it`);
     for (const p of [page, to]) persist(p).catch((e) => console.error('[lab] could not save comments:', e.message));
     broadcast();
@@ -1395,28 +1389,6 @@ let readsBroadcast = 0;
 let readsRev = 0;
 const plainName = (n) => String(n || '').replace(/\s+/g, ' ').trim().toLowerCase().slice(0, 80);
 const saveReads = saveState;
-let lookedIndexed = 0;
-// Sections read, per person (the section bar): state.json's sections, as { name: { page: { section id: text hash } } }. A
-// section whose id is not there is new; one whose hash differs from the page's now is updated; one that matches is read.
-// Kept apart from the looks above, so it never shows up as a person in the agent's text. No entry for a page: a first visit.
-const SEC = { ids: 400, id: 200, hash: 24, names: 200, pages: 500 };
-const sections = (() => {
-  const out = Object.create(null);
-  for (const [name, pagesOf] of Object.entries(isObj(labState.sections) ? labState.sections : {})) {
-    if (!isObj(pagesOf)) continue;
-    out[name] = bare(pagesOf);
-    for (const [page, marks] of Object.entries(out[name])) out[name][page] = marks && typeof marks === 'object' && !Array.isArray(marks) ? bare(marks) : bare({});
-  }
-  return out;
-})();
-let sectionsRev = 0;
-/** @type {any} */
-let sectionsBroadcast = 0;
-stateParts.sections = () => sections;
-const saveSections = saveState;
-// A page of this lab: it has comments or a file. A page saved a moment ago may not be in the file list yet (the watcher
-// is a beat behind): look again, at most every 2 s.
-const isLabPage = (page) => db.has(`lab:comments:${page}`) || fileFor(page) || (Date.now() - lookedIndexed > 2000 && ((lookedIndexed = Date.now()), (fileIndex = null), fileMemo.clear(), fileFor(page)));
 // The hand-off marks (see handoff, above): the file's own win over what old comment files still said, and the marks of
 // comments that are gone (deleted, archived) go as it is saved.
 stateParts.handed = () => {
@@ -1427,7 +1399,7 @@ stateParts.handed = () => {
 const saveHanded = saveState;
 if (Object.keys(handoff).length) saveHanded();
 for (const [id, mark] of Object.entries(isObj(labState.handed) ? labState.handed : {})) if (Array.isArray(mark)) handoff[id] = mark;
-const state = (local) => JSON.stringify({ ...version, labit: VERSION, reads: readsRev, sections: sectionsRev, mode, heard: heard(), silent: silentNow(), session: session && (local ? session : { name: session.name, agent: session.agent, model: session.model }) });
+const state = (local) => JSON.stringify({ ...version, labit: VERSION, reads: readsRev, mode, heard: heard(), silent: silentNow(), session: session && (local ? session : { name: session.name, agent: session.agent, model: session.model }) });
 const broadcast = () => {
   for (const c of clients) c.res.write(`data: ${state(c.local)}\n\n`);
 };
@@ -2235,24 +2207,6 @@ const withIcon = (html) => {
   if (/<link\b[^>]*\brel=["']?(?:[^"'>]*\s)?icon[\s"'>/]/i.test(html) || fs.existsSync(path.join(ROOT, 'favicon.ico'))) return html;
   const at = /<head(\s[^>]*)?>/i.exec(html) || /<!doctype[^>]*>/i.exec(html);
   return at ? html.slice(0, at.index + at[0].length) + LAB_ICON + html.slice(at.index + at[0].length) : LAB_ICON + html;
-};
-// The section bar keeps its own room at the top of the page, so it never covers the page's first lines.
-// Kept here, from the first paint, when the page has sections: kept by the widget
-// alone, it came a frame or two after the page had painted, and the page jumped down. 38 px, 44 on a phone, as the bar
-// (src/widget/styles.css .sbar); not with comments hidden (lab-on). The widget takes it over (src/widget/sections.ts).
-// Only on a lab page (links /_lab/lab.css, not switched off by <meta name="lab-sections"> or data-lab-sections) with 3 or
-// more headings of one level: elsewhere the bar floats and keeps no room. Screens only (no strip in a print), and with
-// scroll-padding, so a #link in the address lands below the bar from the first paint.
-const ROOM = '<style data-lab="section-bar">@media screen { html { padding-top: 38px !important; scroll-padding-top: 46px; } } @media screen and (pointer: coarse) and (max-width: 560px), screen and (pointer: coarse) and (max-height: 500px) { html { padding-top: 44px !important; scroll-padding-top: 52px; } }</style>' +
-  `<script data-lab="section-bar">try{localStorage.getItem('lab-on')==='0'&&document.currentScript.previousElementSibling.remove()}catch{}</script>`;
-const withRoom = (html) => {
-  const body = html.replace(/<(script|style|template|svg)\b[\s\S]*?<\/\1>/gi, '');
-  const said = (/<meta\b(?=[^>]*\bname=["']?lab-sections\b)[^>]*\bcontent=["']?\s*(on|off)\b/i.exec(html) || /<(?:html|body)\b[^>]*\bdata-lab-sections=["']?\s*(on|off)\b/i.exec(html) || [])[1]?.toLowerCase();
-  if (said === 'off' || !/<link\b[^>]*\bhref=["']?\/_lab\/lab\.css\b/i.test(html)) return html;
-  const n = (t) => (body.replace(/<(nav|aside|dialog|footer)\b[\s\S]*?<\/\1>/gi, '').match(new RegExp(`<${t}[\\s>]`, 'gi')) || []).length;
-  if (n('h2') < 3 && n('h3') < 3 && n('h1') < 3) return html;
-  const at = /<head(\s[^>]*)?>/i.exec(html) || /<!doctype[^>]*>/i.exec(html);
-  return at ? html.slice(0, at.index + at[0].length) + ROOM + html.slice(at.index + at[0].length) : ROOM + html;
 };
 // A dev server reloads the page as soon as a file changes — under you, mid-sentence. The widget cannot stop it from
 // where it sits: Chrome's location.reload is its own, and cannot be replaced, and by the time the widget loads the
@@ -3132,44 +3086,6 @@ const handler = async (req, res) => {
       const ids = (name && reads[name]?.[url.searchParams.get('page') || '']) || [];
       return answer(res, { ids });
     }
-    // Sections read, by name and page (see sections, above): GET ?name=&page= gives { sections: { id: hash } }, or {} when
-    // that person has none for the page yet (a first visit); POST { name, page, sections: { id: hash } } sets those
-    // sections as read at that text. Open to any device the lab lets in, as the read marks are.
-    if (pathname === '/_lab/api/sections') {
-      if (req.method === 'POST') {
-        const b = await sent(req);
-        const name = plainName(b.name);
-        const page = String(b.page || '').slice(0, 500);
-        const given = b.sections && typeof b.sections === 'object' && !Array.isArray(b.sections) ? Object.entries(b.sections) : null;
-        if (!name || !page.startsWith('/') || !given) return plain(res, 400, 'name, page and sections needed');
-        if (given.length > SEC.ids) return plain(res, 413, 'too many sections');
-        if (!isLabPage(page)) return plain(res, 400, 'a page of this lab needed');
-        const rel = fileFor(page);
-        if (rel && !homes.has(page)) homes.set(page, [rel, fidOf(rel)]); // so a renamed page takes its marks along
-        if (!(name in sections) && Object.keys(sections).length >= SEC.names) return plain(res, 429, 'too many names');
-        const mine = (sections[name] ||= bare({}));
-        if (!(page in mine) && Object.keys(mine).length >= SEC.pages) return plain(res, 429, 'too many pages');
-        const marks = (mine[page] ||= bare({}));
-        let changed = false;
-        for (const [id, hash] of given) {
-          const k = String(id).slice(0, SEC.id);
-          const h = String(hash).slice(0, SEC.hash);
-          if (marks[k] === h) continue;
-          delete marks[k]; // set again at the end: the oldest go first when a page is past its room
-          marks[k] = h;
-          changed = true;
-        }
-        for (const k of Object.keys(marks).slice(0, Math.max(0, Object.keys(marks).length - SEC.ids))) delete marks[k];
-        if (changed) {
-          sectionsRev++;
-          saveSections();
-          if (!sectionsBroadcast) sectionsBroadcast = setTimeout(() => ((sectionsBroadcast = 0), broadcast()), 100);
-        }
-        return res.writeHead(204).end();
-      }
-      const marks = sections[plainName(url.searchParams.get('name'))]?.[url.searchParams.get('page') || ''];
-      return answer(res, marks ? { sections: marks } : {});
-    }
     if (pathname === '/_lab/api/comments') {
       const agent = isAgent(req);
       // The widget's list (GET ?page=/x and nothing else) is sent as kept while that page hasn't changed. Kept apart for
@@ -3302,7 +3218,7 @@ const handler = async (req, res) => {
     }
     if (!lab && /\.html?$/i.test(file)) {
       return sendBody(req, res, 200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
-        inject((inFrame(req) ? withIcon : (h) => withRoom(withIcon(h)))(htmlOf(file)), widget(keyFor(path.relative(ROOT, file)), isLoopback(req), nameFor(req), inFrame(req), req)));
+        inject(withIcon(htmlOf(file)), widget(keyFor(path.relative(ROOT, file)), isLoopback(req), nameFor(req), inFrame(req), req)));
     }
     sendFile(req, res, file);
   } catch (e) {

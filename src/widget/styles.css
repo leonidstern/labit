@@ -759,7 +759,7 @@ kbd::before { content: '('; } kbd::after { content: ')'; } /* read as a hint: ch
   .more-menu[popover], .more-menu[popover]:popover-open { translate: none; scale: none; transition: opacity var(--_t-calm) var(--_ease-out); }
   @starting-style { .more-menu[popover]:popover-open { opacity: 0; translate: none; scale: none; } }
   .more-menu[popover].out:not(:popover-open) { display: grid; opacity: 1; } /* closing: kept shown for its fade (comments.js, beforetoggle) */
-  /* The bar and the pill stay where they are and fade as a sheet opens (they slid under or off the screen); the section line does the same (sections.css, loaded later). */
+  /* The bar and the pill stay where they are and fade as a sheet opens (they slid under or off the screen). */
   :host([data-sheet]) :is(.bar, .listener, .left) { transform: none; transition: opacity var(--_t-calm) var(--_ease-out); }
   :is(.bar, .listener, .left) { transition: opacity var(--_t-calm) var(--_ease-out); }
 }

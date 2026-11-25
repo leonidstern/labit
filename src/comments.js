@@ -1408,7 +1408,6 @@ import { bindKeys } from './widget/keys.ts';
     if (!S.on) ptr.classList.remove('show'); // comments hidden: the system pointer is back at once
     else recheck();
     store.set('lab-on', S.on ? '1' : '0');
-    S.checkSections?.(); // hidden comments: no section bar (the file loads if there is one to show)
     S.draft = S.on ? keptDraft() : null; // hidden, a new comment lets go of the screen; its words wait, and come back when comments do
     S.openId = null;
     render();
@@ -1533,7 +1532,7 @@ import { bindKeys } from './widget/keys.ts';
   // A #block link in a message: go to that block on the page. A phone's sheet covers the page, so it closes first.
   addEventListener('lab-goto', (e) => {
     const to = /** @type {CustomEvent} */ (e).detail;
-    const target = typeof to === 'string' ? document.getElementById(to) : to; // an id, or the element itself (the section bar's)
+    const target = document.getElementById(to);
     if (!target) return;
     if (coarse) {
       S.openId = null;
@@ -2064,7 +2063,6 @@ import { bindKeys } from './widget/keys.ts';
     if (!pinCursorStyle.isConnected) document.head.append(pinCursorStyle);
     const was = S.page;
     S.page = pageNow();
-    S.routed?.(); // the section bar (sections.ts)
     if (S.page === was) return;
     S.seen = readSeen();
     pass = null;
@@ -2074,7 +2072,6 @@ import { bindKeys } from './widget/keys.ts';
     S.openId = null;
     render();
     load();
-    setTimeout(() => S.checkSections?.(), 400);
   };
   // The Navigation API says when the current entry changed (pushState, replaceState, back and forward alike), so the
   // page's own history is left as it is.
@@ -2226,25 +2223,6 @@ import { bindKeys } from './widget/keys.ts';
   // in (lab-lit, as on a computer) and never while a finger is down.
   pageStyle.textContent += `@media (pointer: coarse) { html:has([data-lab-pinning]):not(.lab-lit) body > :not([data-lab-comments]), html:has([data-lab-pinning]).lab-press body > :not([data-lab-comments]) { -webkit-user-select: none; user-select: none; } html:has([data-lab-pinning]) body > :not([data-lab-comments]), html:has([data-lab-pinning]) body > :not([data-lab-comments]) * { -webkit-user-drag: none; } }`;
 
-  // The section bar (src/widget/sections.ts) is its own file, loaded when the page may show one: the lab kept its room
-  // (the file clears that again), or a lab page (or one that says so) has 3 or more headings. Asked again when a route
-  // or a reload changes the page, a read comes from another device, comments come back, or headings are drawn late;
-  // those call these until the file is there and takes its own place.
-  /** @type {Promise<void> | null} */
-  let sectionsAsked = null;
-  const maybeSections = () => {
-    if (globalThis.__LAB_CO__ || sectionsAsked || !document.body) return;
-    if (document.querySelector('style[data-lab="section-bar"]') || (document.querySelector('meta[name="lab-sections"], [data-lab-sections], link[href*="/_lab/lab."]') && document.querySelectorAll('h1, h2, h3').length > 2)) {
-      sectionsAsked = part('sections').then((m) => (m.bindSections(W), m.startSections())).catch(() => (sectionsAsked = null));
-    }
-  };
-  S.checkSections = S.syncSections = S.routed = maybeSections;
-  /** @param {any} n */
-  const heady = (n) => n?.nodeType === 1 && (n.matches('h1, h2, h3') || n.querySelector('h1, h2, h3'));
-  new MutationObserver((list, o) => {
-    if (sectionsAsked) return o.disconnect();
-    if (list.some((/** @type {{ target: any, addedNodes: NodeList }} */ m) => heady((m.target.nodeType === 3 ? m.target.parentElement : m.target)?.closest('h1, h2, h3')) || [...m.addedNodes].some(heady))) maybeSections();
-  }).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
   const start = () => {
     document.head.append(pageStyle, pinCursorStyle);
     refreshPinCursor();
@@ -2257,7 +2235,6 @@ import { bindKeys } from './widget/keys.ts';
     pageStyle.textContent += `html:has([data-lab-pinning]) ::selection { ${paint} } ::highlight(lab-quote) { ${paint} }`;
     if (!globalThis.__LAB_CO__) bindActions(W); // data-lab-action buttons leave a pin the agent acts on
     load();
-    maybeSections(); // the section bar: what is new or updated on the page since you read it
     if (!globalThis.__LAB_CO__) scanForFramework();
     if (!globalThis.__LAB_CO__ && !S.components) {
       addEventListener('load', scanForFramework, { once: true });

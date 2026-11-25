@@ -256,7 +256,7 @@ export function reloader({ W, reload, loaded, samePath, idOf, selDirty, board, s
           W.drawList();
         }
         const mine = ownStyles();
-        // The lab's own (data-lab: the section bar's room, sections.ts) are the widget's, not the page's.
+        // The lab's own (data-lab) are the widget's, not the page's.
         const olds = [...document.head.querySelectorAll('style:not([data-lab])')].filter((x) => !mine.has(x));
         const news = [...doc.head.querySelectorAll('style:not([data-lab])')];
         news.forEach((n, i) => (olds[i] ? olds[i].textContent !== n.textContent && (olds[i].textContent = n.textContent) : document.head.append(document.importNode(n, true))));
@@ -279,7 +279,6 @@ export function reloader({ W, reload, loaded, samePath, idOf, selDirty, board, s
         }
         W.reflow();
         W.relook();
-        W.S.checkSections?.(); // the section bar follows the new page
       };
       // An error inside the cross-fade would go unseen: any failure falls back to a reload.
       const safe = () => {

@@ -126,7 +126,6 @@ export const describe = (op) =>
 // ---------- a real browser as the device ----------
 const LAB_BITS = [
   '<link rel="icon" href="/_lab/favicon.svg">',
-  /<style data-lab="section-bar">[\s\S]*?<\/style><script data-lab="section-bar">[\s\S]*?<\/script>/,
   /<script src="\/_lab\/comments\.js"[^>]*><\/script>\n/,
 ];
 /** A page as the lab served it, without what the lab put into it: the file's own text. */

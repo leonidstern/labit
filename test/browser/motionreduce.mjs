@@ -151,7 +151,7 @@ for (const eng of engines()) {
         const host = scope === 'board' ? document.querySelector('[data-lab-board-view]') : document.querySelector('[data-lab-comments]');
         const root = host.shadowRoot;
         const out = [];
-        const sel = scope === 'board' ? '.bv-bar button' : 'button:not(.pin), .sb-chip';
+        const sel = scope === 'board' ? '.bv-bar button' : 'button:not(.pin)';
         for (const b of root.querySelectorAll(sel)) {
           const r = b.getBoundingClientRect();
           if (r.width < 1 || r.height < 1 || getComputedStyle(b).visibility === 'hidden' || r.bottom < 0 || r.top > innerHeight) continue;
@@ -166,7 +166,7 @@ for (const eng of engines()) {
       const verdict = (what, list) => {
         for (const m of list) check(eng, `targets, ${what}: ${m.name} is 44 x 44 to hit`, m.hw >= 43.5 && m.hh >= 43.5, `drawn ${m.w}x${m.h}, hit ${m.hw}x${m.hh}`);
       };
-      verdict('the pill and the section bar', await measure('widget'));
+      verdict('the pill', await measure('widget'));
       // the chat sheet
       await rootClick(p, '.chat-btn');
       await sleep(900);

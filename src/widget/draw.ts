@@ -247,8 +247,7 @@ export function readInk(strokes: P[][], say: (e: Element | null) => string | und
       Object.assign(out, { mark: 'arrow', from: s[0], to: s[s.length - 1] });
     }
   }
-  // What is under a point on the page itself: labit's own bars and layers (data-lab-comments) are skipped (sims, 20 Nov:
-  // an arrow's start read as the section bar).
+  // What is under a point on the page itself: labit's own bars and layers (data-lab-comments) are skipped.
   // Over a board: the board's own frame there (its view keeps its frames in a shadow root, so the page's lookup stops at the
   // view's box: an arrow on a board named "board pin-…" at both ends; Leo's drawings, 21 Nov).
   // On a board's own page the board says which frame is there (the page's lookup found the board's dialog: each mark of a

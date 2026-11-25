@@ -1460,8 +1460,8 @@ export const nameLine = (name) => el('b', {}, String(name || '').replace(/\s*·\
 export function goToBlock(e: Element) {
   const r = e.getBoundingClientRect();
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  scrollTo({ top: Math.max(0, r.top + scrollY - 24 - (parseFloat(host.style.getPropertyValue('--lab-sbb')) || 0)), behavior: still ? 'auto' : 'smooth' });
-  // A heading wears the half ink of words for a moment, as the bar's names do, not a box (Leo, 19 Nov: "green ink on
+  scrollTo({ top: Math.max(0, r.top + scrollY - 24), behavior: still ? 'auto' : 'smooth' });
+  // A heading wears the half ink of words for a moment, not a box (Leo, 19 Nov: "green ink on
   // header not green box after click"): a band under the lower 44 % of each line of its words, green at 30 % (45 % on
   // dark), corners 3 px. In the page's own coordinates, so it scrolls with the heading; gone when it has faded.
   if (/^H[1-6]$/.test(e.tagName)) {
