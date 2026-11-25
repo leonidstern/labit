@@ -344,7 +344,14 @@ const alreadyHere = async (running) => {
 const LOCK = path.join(LAB, 'lock');
 const takeLock = () => {
   try {
-    fs.writeSync(fs.openSync(LOCK, 'wx', 0o600), JSON.stringify({ pid: process.pid, at: Date.now() }));
+    // Closed right away: Windows won't let the lock be replaced (by the rewrite once the lab listens) while this lab
+    // still holds it open, and the lab exited with EPERM on every start there (#544).
+    const fd = fs.openSync(LOCK, 'wx', 0o600);
+    try {
+      fs.writeSync(fd, JSON.stringify({ pid: process.pid, at: Date.now() }));
+    } finally {
+      fs.closeSync(fd);
+    }
     return true;
   } catch (e) {
     if (/** @type {NodeJS.ErrnoException} */ (e).code !== 'EEXIST') throw e;
@@ -405,10 +412,24 @@ const TOKEN = (() => {
 const AGENT_KEY = randomBytes(16).toString('hex');
 process.env.LAB_COMMENTS_ADMIN_TOKEN = TOKEN;
 
+// On Windows a rename over a file that something else has open for a moment (a virus scanner, the search indexer, an
+// editor reading it) fails with EPERM, EACCES or EBUSY; it goes through once that lets go, so it is tried again for up
+// to about a second there (#544). Elsewhere it is one rename.
+const renameOver = (from, to) => {
+  for (let i = 0; ; i++) {
+    try {
+      return fs.renameSync(from, to);
+    } catch (e) {
+      const code = /** @type {NodeJS.ErrnoException} */ (e).code;
+      if (process.platform !== 'win32' || i >= 10 || !['EPERM', 'EACCES', 'EBUSY'].includes(code || '')) throw e;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20 * (i + 1));
+    }
+  }
+};
 const writeAtomic = (file, text, mode) => {
   const write = () => {
     fs.writeFileSync(file + '.tmp', text, mode ? { mode } : undefined);
-    fs.renameSync(file + '.tmp', file);
+    renameOver(file + '.tmp', file);
   };
   try {
     try {
