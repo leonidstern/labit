@@ -5,6 +5,7 @@ import { forgetLetters, markQuote, quoteRangeOf } from './anchoring.ts';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let W: any;
 export function bindTrial(w: unknown) {
+  if (globalThis.__LAB_CO__) return;
   W = w;
 }
 
@@ -18,11 +19,12 @@ let tried: Tried | null = null;
 /** The last try in place, kept over a redraw of the same card (live updates redraw it) so it can be put back. */
 let keepTry: { thread: string; ask: string; n: number } | null = null;
 /** Whether the page's words are swapped right now (comments.js holds its re-placing of pins meanwhile). */
-export const isTrying = () => Boolean(tried);
+export const isTrying = () => !globalThis.__LAB_CO__ && Boolean(tried);
 /** The tried words wear the quote's green again (after another pin's hover showed its own words). */
 export const relight = () => void (tried?.lit && typeof Highlight === 'function' && CSS.highlights?.set('lab-quote', new Highlight(tried.lit)));
 /** Put the page's words back. keep: the same card is being drawn again, and tries the same row again. */
 export function untry(keep = false) {
+  if (globalThis.__LAB_CO__) return;
   const t = tried;
   tried = null;
   if (!keep) keepTry = null;
@@ -64,6 +66,7 @@ function holdHeight(c, ask) {
 }
 /** Before every redraw (comments.js render): words back, and the try forgotten unless its thread stays open. */
 export function pauseTry(openId) {
+  if (globalThis.__LAB_CO__) return;
   untry(Boolean(keepTry && keepTry.thread === openId));
 }
 /** The open question's rows trying their row again (set by choicesEl), after the page's words changed under a try. */
@@ -72,6 +75,7 @@ let reshow: (() => void) | null = null;
  *  first, so the patch meets the words it knows and a word it writes is never undone after; then the row is tried again
  *  in the new words, if they still have the quote. */
 export function aroundMorph(change: () => void) {
+  if (globalThis.__LAB_CO__) return change();
   const had = Boolean(tried);
   untry(true);
   try {
@@ -164,6 +168,7 @@ const blockOf = (n: Node) => {
   return e?.closest(BLOCKS) || e;
 };
 export function triesInPlace(c) {
+  if (globalThis.__LAB_CO__) return false;
   const range = c.anchor?.quote?.exact && !c.anchor.quote.line ? quoteRangeOf(c.anchor) : null;
   return Boolean(range && blockOf(range.startContainer) === blockOf(range.endContainer));
 }
@@ -194,6 +199,7 @@ function clampToView(card, rects: DOMRect[]) {
   if (to !== top && !over(to)) card.style.top = `${to}px`;
 }
 export function placeAsk(card, c): boolean {
+  if (globalThis.__LAB_CO__) return false;
   if (W.coarse) return false;
   const range = quoteRangeOf(c.anchor);
   const rects = range ? [...range.getClientRects()].filter((r) => r.width) : [];
@@ -249,11 +255,12 @@ function quoteInView(c, card) {
 }
 
 /** The row of this question that was tried when its card was last drawn (kept over a redraw), or null. */
-export const keptRow = (ask) => (keepTry && keepTry.ask === ask.id ? keepTry.n : null);
+export const keptRow = (ask) => globalThis.__LAB_CO__ ? null : (keepTry && keepTry.ask === ask.id ? keepTry.n : null);
 /** What the open question does after the page's words changed under it or came back from the back-forward cache. */
 export const onReshow = (fn: () => void) => void (reshow = fn);
 /** Show a row in the page: n < 0 or words === null is the page's own words; else its words in the quoted words' place. */
 export function tryRow(c, ask, n: number, words: string | null, card) {
+  if (globalThis.__LAB_CO__) return;
   if (words === null) {
     untry(true);
     keepTry = { thread: c.id, ask: ask.id, n };

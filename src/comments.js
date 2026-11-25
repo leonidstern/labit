@@ -164,11 +164,10 @@ import { bindKeys } from './widget/keys.ts';
   bindSheets(W);
   const script = /** @type {HTMLScriptElement | null} */ (document.currentScript);
   // In a board's frame the widget draws nothing and binds nothing (src/widget/frame.ts).
-  if (inFrame()) return startFrame(script);
+  if (!globalThis.__LAB_CO__ && inFrame()) return startFrame(script); // colabit has no boards
   // colabit (npm run build:co, co/README.md): this widget on a site of your own, with no lab and no
   // agent: anyone on the page comments under a name they type. The owner's link (#lab-admin=<token>) leaves the
   // admin key in this browser: resolve, move and delete anyone's.
-  const CO = globalThis.__LAB_CO__ === true;
   let coAdmin = '';
   if (globalThis.__LAB_CO__) { // the build's own constant, so the lab's script leaves all of this out
     const linked = /[#&]lab-admin=([\w.-]+)/.exec(location.hash)?.[1];
@@ -215,7 +214,7 @@ import { bindKeys } from './widget/keys.ts';
   if (/** @type {any} */ (window).__labComments) return;
   /** @type {any} */ (window).__labComments = true;
 
-  const API = CO ? new URL('co/comments', script?.src || location.href).href : '/_lab/api/comments'; // co.js at <host>/_lab/co.js: its API beside it
+  const API = globalThis.__LAB_CO__ ? new URL('co/comments', script?.src || location.href).href : '/_lab/api/comments'; // co.js at <host>/_lab/co.js: its API beside it
   // Behind a dev server the page is the live address (named as the lab names pages, lib/labs.ts keyFor): an app that
   // navigates on its own keeps no first page's marks. A page the lab serves keeps the name it was served under.
   const enc = new TextEncoder();
@@ -275,11 +274,11 @@ import { bindKeys } from './widget/keys.ts';
   };
 
   // The lab hands this computer's browser its admin key; a guest's page has none.
-  const adminToken = CO ? coAdmin : script?.dataset.admin || '';
+  const adminToken = globalThis.__LAB_CO__ ? coAdmin : script?.dataset.admin || '';
 
   S.comments = [];
   S.isAdmin = false;
-  S.mac = !CO && Boolean(adminToken); // this computer's own browser holds the key: what only it may do (keeping a rule) is shown there alone
+  S.mac = !globalThis.__LAB_CO__ && Boolean(adminToken); // this computer's own browser holds the key: what only it may do (keeping a rule) is shown there alone
   // Off by default: the page looks clean until someone turns comments on (button or c); remembered per browser.
   S.on = store.get('lab-on') ? store.get('lab-on') === '1' : script?.dataset.on === '1';
   // A board page (src/board/): a tap selects a frame; 1 (comment mode) pins the board.
@@ -405,7 +404,7 @@ import { bindKeys } from './widget/keys.ts';
 
   // ---------- data ----------
   // colabit: which site (data-site on the script tag, so a Vercel preview shares production's comments).
-  const headers = () => ({ 'content-type': 'application/json', ...(adminToken ? { 'x-lab-admin': adminToken } : {}), ...(CO ? { 'x-co-site': script?.dataset.site || location.hostname } : {}) });
+  const headers = () => ({ 'content-type': 'application/json', ...(adminToken ? { 'x-lab-admin': adminToken } : {}), ...(globalThis.__LAB_CO__ ? { 'x-co-site': script?.dataset.site || location.hostname } : {}) });
 
   S.loaded = false;
   // A box has the cursor (not a pin: a pin now stays the same element across redraws, so in Chrome, where a clicked
@@ -864,7 +863,7 @@ import { bindKeys } from './widget/keys.ts';
     return row;
   }), newBoardBtn];
   function placeBar() {
-    const inMenu = !S.on ? [] : S.menuBoards ? (S.menuRows ??= boardRows()) : [...(labHead ? [labHead, labsBtn] : []), doneBtn, movedBtn, ...(!CO && !S.board && self === top ? [newBoardBtn] : []), ...(CO ? [] : [copyBtn]), ...(coarse && mo ? [motionBtn] : []), toggleBtn, ...(versionLine ? [versionLine] : [])];
+    const inMenu = !S.on ? [] : S.menuBoards ? (S.menuRows ??= boardRows()) : [...(labHead ? [labHead, labsBtn] : []), doneBtn, movedBtn, ...(!globalThis.__LAB_CO__ && !S.board && self === top ? [newBoardBtn] : []), ...(globalThis.__LAB_CO__ ? [] : [copyBtn]), ...(coarse && mo ? [motionBtn] : []), toggleBtn, ...(versionLine ? [versionLine] : [])];
     // In this order every time: a part that came back (hide comments, after showing them again) went to the end, below
     // the version line.
     if (S.on && (inMenu.some((b, i) => moreMenu.children[i] !== b) || moreMenu.children.length !== inMenu.length)) moreMenu.replaceChildren(...inMenu);
@@ -1127,7 +1126,7 @@ import { bindKeys } from './widget/keys.ts';
     backCloses();
     S.refit();
     setPinning();
-    copyBtn.hidden = CO || !S.on || !S.isAdmin || list.every((c) => c.resolved);
+    copyBtn.hidden = globalThis.__LAB_CO__ || !S.on || !S.isAdmin || list.every((c) => c.resolved);
     drawList(places);
     drawChat();
     if (!S.on) return done();
@@ -2240,7 +2239,7 @@ import { bindKeys } from './widget/keys.ts';
   /** @type {Promise<void> | null} */
   let sectionsAsked = null;
   const maybeSections = () => {
-    if (CO || sectionsAsked || !document.body) return;
+    if (globalThis.__LAB_CO__ || sectionsAsked || !document.body) return;
     if (document.querySelector('style[data-lab="section-bar"]') || (document.querySelector('meta[name="lab-sections"], [data-lab-sections], link[href*="/_lab/lab."]') && document.querySelectorAll('h1, h2, h3').length > 2)) {
       sectionsAsked = part('sections').then((m) => (m.bindSections(W), m.startSections())).catch(() => (sectionsAsked = null));
     }
@@ -2262,21 +2261,22 @@ import { bindKeys } from './widget/keys.ts';
     // A soft green, so the quoted words stay readable in the page's own colour, on light and dark pages.
     const paint = 'background-color: rgba(52, 199, 89, .3); color: inherit;';
     pageStyle.textContent += `html:has([data-lab-pinning]) ::selection { ${paint} } ::highlight(lab-quote) { ${paint} }`;
-    if (!CO) bindActions(W); // data-lab-action buttons leave a pin the agent acts on
+    if (!globalThis.__LAB_CO__) bindActions(W); // data-lab-action buttons leave a pin the agent acts on
     load();
     maybeSections(); // the section bar: what is new or updated on the page since you read it
-    if (!CO) scanForFramework();
-    if (!CO && !S.components) {
+    if (!globalThis.__LAB_CO__) scanForFramework();
+    if (!globalThis.__LAB_CO__ && !S.components) {
       addEventListener('load', scanForFramework, { once: true });
       addEventListener('pointerover', overFramework, { capture: true, passive: true });
     }
   };
   if (document.body) start();
   else document.addEventListener('DOMContentLoaded', start);
-  bindBoardCam(W);
-  startLive();
+  // colabit has no boards and no live stream: the build leaves both out (globalThis.__LAB_CO__ is its constant).
+  if (!globalThis.__LAB_CO__) bindBoardCam(W);
+  if (!globalThis.__LAB_CO__) startLive();
   // colabit has no live stream: others' comments come in every 15 s while the page is in view, and when it comes back.
-  if (CO) {
+  if (globalThis.__LAB_CO__) {
     setInterval(() => document.hidden || load(), 15000);
     document.addEventListener('visibilitychange', () => document.hidden || load());
   }
