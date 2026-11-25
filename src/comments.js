@@ -843,7 +843,7 @@ import { bindKeys } from './widget/keys.ts';
     }
     return box;
   };
-  const pageHeld = heldKeys([['draw', `hold ${KEYS.draw}`], ['pin on a link', `${MAC ? '⌥' : 'alt'} click`], ['quote words', '⇧ drag']]);
+  const pageHeld = heldKeys([['draw', `hold ${KEYS.draw}`], ['pin on a link', `${MAC ? '⌥' : 'alt'} click`], ['quote words', '⇧ drag'], ['resolve the open pin', KEYS.done]]);
   const boardHeld = heldKeys([['pin', `${MAC ? '⌥' : 'alt'} click`], ['move around', 'hold space'], ['back to the page', '⇧b']]);
   const labHead = LABS ? el('div', { class: 'lab-head' }, `${script?.dataset.labName || 'lab'} · ${location.port || '80'}`) : null;
   const labsBtn = LABS ? el('button', { type: 'button' }) : null;
