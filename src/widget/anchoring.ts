@@ -1158,7 +1158,7 @@ export function pageBottom() {
   const vh = winH();
   return r && r.top > 40 && r.top < vh - 1 ? r.top : vh;
 }
-/** A page's pins are under its board's view while one is open: it fills the window (no half view since #422). */
+/** A page's pins are under its board's view while one is open: it fills the window (no half view since PR 422). */
 const coveredAt = () => Boolean((window as unknown as { __labBoard?: { covers?: boolean } }).__labBoard?.covers);
 // A pin whose spot a box with overflow cut off (panned or scrolled out of a canvas, a carousel, a scroll box) hides
 // until its spot is back in view, instead of floating over the page outside that box.
