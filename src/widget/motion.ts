@@ -233,6 +233,7 @@ let box: HTMLElement;
 let open = false;
 let target = null; // what it is about; none: the whole page (a phone's first sheet)
 let spot = null; // where it was opened or picked: a comment from it goes there
+let custom = null; // a pin's or a drawing's own rows (comments.js): [words, run, key?]
 let under = null; // a computer's right-click: what was under the pointer (motion.ts's own menu: nothing moves there)
 let moment; // the target's moment as the menu opened: its first line and its comment's
 const words = (m) => momentText({ ...m, playing: undefined });
@@ -278,7 +279,8 @@ const hereRows = (rows: HTMLElement[]) => {
 };
 const fill = () => {
   const rows: HTMLElement[] = W.coarse ? [W.el('div', { class: 'handle' })] : [];
-  if (under && !target) hereRows(rows);
+  if (custom) rows.push(...custom.map(([l, run, key]) => item(l, run, false, key)));
+  else if (under && !target) hereRows(rows);
   else if (!target) {
     rows.push(W.el('div', { class: 'lab-head' }, 'motion'), item('pick on page', startPick, false), item(S.paused ? 'play all' : 'pause all', () => setPause(!S.paused)), speedRow(pageRate, (v) => setRate(null, v)));
   } else {
@@ -291,7 +293,7 @@ const fill = () => {
     if (said && !under) rows.push(said);
     if (!W.coarse) rows.push(W.el('hr', {}), item(S.paused ? 'play all motion' : 'pause all motion', () => setPause(!S.paused)));
   }
-  if (under) { // the browser's own menu is a key away
+  if (under && !custom) { // the browser's own menu is a key away
     const hint = W.el('div', { class: 'hint-row' }, 'browser menu');
     hint.append(W.el('kbd', {}, `${W.MAC ? '⌥' : 'alt'} right-click`));
     rows.push(W.el('hr', {}), hint);
@@ -306,10 +308,11 @@ const comment = () => {
   closeMotion();
   W.begin({ ...W.anchorAt(at.x, at.y), ...(m ? { moment: m } : {}) }); // the moment as the menu opened, not as the comment starts
 };
-const openFor = (el, at, t = null) => {
+const openFor = (el, at, t = null, list = null) => {
   target = el;
   spot = at;
   under = t;
+  custom = list;
   moment = el ? momentOf(el) : undefined;
   fill();
   open = true;
@@ -327,6 +330,8 @@ const openFor = (el, at, t = null) => {
 };
 /** Computers: the right-click menu at a point (comments.js): what moves there, else the page there. */
 export const menuAt = (x: number, y: number, t: Element) => openFor(thingAt(x, y), { x, y }, t);
+/** Computers: a pin's or a drawing's menu, its rows given (comments.js). */
+export const menuWith = (x: number, y: number, list) => openFor(null, { x, y }, null, list);
 /** Phones: ⋯ → motion, the sheet for the whole page. */
 export const openMotion = () => openFor(null, null);
 /** The open sheet (phones), for the widget's own sheet handling. */

@@ -1332,13 +1332,28 @@ import { bindKeys } from './widget/keys.ts';
           if (isTrying()) relight(); // a tried choice: its green back
           else markQuote(S.quoted);
         });
-        // A right-click on a pin on a video takes the video back to its frame and pauses it, as a click does (Leo, 24 Nov).
+        // A right-click on a pin or a drawing: its own menu (Leo, 26 Nov: "on pins also should work and on drawings"):
+        // open or close it, resolve it or open it again, and a pin on a video takes the video back to its frame (Leo,
+        // 24 Nov). ⇧ or ⌥ right-click: the browser's. Phones hold a pin to move it, as before.
         pin.addEventListener('contextmenu', (e) => {
-          const m = pinData.get(pin).c.anchor?.moment;
-          if (m?.kind !== 'video' || e.shiftKey) return;
+          if (coarse || e.shiftKey || e.altKey) return;
           e.preventDefault();
           e.stopPropagation();
-          void (mo ? Promise.resolve(mo) : loadMotion()).then((x) => x?.showMoment(m));
+          const c = pinData.get(pin).c;
+          const m = c.anchor?.moment;
+          const open = () => S.openId === c.id || pin.click();
+          const rows = [[S.openId === c.id ? 'close' : 'open', () => pin.click()],
+            ['reply', () => (open(), setTimeout(() => /** @type {HTMLElement | null} */ (root.querySelector('.card textarea'))?.focus({ preventScroll: true }), 60)), KEYS.reply]];
+          if (mayResolve(c)) rows.push([c.resolved ? 'open again' : 'resolve', () => toggleResolved(c), KEYS.done]);
+          if (m?.kind === 'video') rows.push(['show its frame', () => mo?.showMoment(m)]);
+          // This computer (the lab's admin) can take a thread away, as ⌘Z does for the last one placed.
+          if (S.isAdmin) rows.push(['delete', () => void send({ action: 'delete', id: c.id }).then(() => {
+            S.comments = S.comments.filter((x) => x.id !== c.id && x.parent !== c.id);
+            if (S.openId === c.id) S.openId = null;
+            pinBoardGone(c.id);
+            render();
+          }, () => say("couldn't delete that, try again"))]);
+          void loadMotion().then((x) => x?.menuWith(e.clientX, e.clientY, rows));
         });
         pin.addEventListener('click', (e) => {
           e.stopPropagation();
