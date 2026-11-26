@@ -1066,6 +1066,43 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     const share = (v: number) => Math.min(1, Math.max(0, v));
     return { file: f.file, nw: f.iw, nh: f.ih, imgX: share((x - (f.w - dw) / 2) / dw), imgY: share((y - (f.h - dh) / 2) / dh) };
   };
+  // A pin on a page's frame keeps what it is on in that page (its element, words, section: what a page's own pin keeps), and
+  // the frame's page finds it again (frame.ts, with the same code as a page's pins). Its px in the frame stay, for a frame
+  // that is asleep or loading, or whose page no longer has it.
+  type Spotter = Window & { __labSpot?: { anchor?: (x: number, y: number) => Record<string, unknown>; spot?: (a: object) => { left: number; top: number } | null } };
+  const spotter = (c?: Card) => {
+    try {
+      const w = c?.frame?.dataset.ready ? (c.frame.contentWindow as Spotter | null) : null;
+      return w?.__labSpot?.spot && w.innerWidth ? w : null;
+    } catch {
+      return null; // (another origin's page)
+    }
+  };
+  // What a page's pin says of its element, taken onto a board pin (not its kind, its picture or its area: the board's own).
+  const ON_PAGE = ['selector', 'x', 'y', 'docX', 'docY', 'width', 'height', 'element', 'eh', 'text', 'fp', 'quote', 'word', 'inside', 'section', 'block', 'shadow', 'component', 'source', 'looks', 'rules', 'box', 'chosen', 'state', 'cssText', 'gapAbove', 'gapBelow', 'sx', 'scheme', 'background', 'build'];
+  const onPage = (c: Card | undefined, wx: number, wy: number) => {
+    const w = spotter(c);
+    if (!w || !c) return {};
+    const k = w.innerWidth / c.f.w; // the page's px per world px (1, unless the frame is drawn at another width)
+    let a: Record<string, unknown> | undefined;
+    try {
+      a = w.__labSpot!.anchor?.((wx - c.f.x) * k, (wy - c.f.y) * k);
+    } catch {}
+    return a?.selector ? Object.fromEntries(ON_PAGE.filter((n) => a![n] !== undefined).map((n) => [n, a![n]])) : {};
+  };
+  // Where a frame's pin is now in the frame as stored (fx, fy): on its element when the frame's page has it, else as put.
+  type FramePin = { frame?: string; fx?: number; fy?: number; selector?: string; zw?: number };
+  const inFrame = (c: Card | undefined, a: FramePin): [number, number] | null => {
+    if (!c || a.fx === undefined) return null;
+    const w = a.selector && !a.zw ? spotter(c) : null;
+    let s: { left: number; top: number } | null | undefined = null;
+    try {
+      s = w?.__labSpot!.spot!(a);
+    } catch {}
+    if (!s) return [a.fx, a.fy || 0];
+    const k = c.f.w / w!.innerWidth;
+    return [s.left * k * kx(c.f), s.top * k * ky(c.f)];
+  };
   const boardApi = {
     name,
     /** When the newest move or take-off ⌘Z would put back was made (0: none): one ⌘Z undoes only the newest thing, the board's or a pin's. */
@@ -1089,25 +1126,33 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
      * in, it was still below the screen on a busy machine, and an ⌥-click on the board went to the page. */
     contains: (x: number, y: number) => (measure(), inBox(x, y)),
     // Where a point on the screen is on the board: the frame under it (else the nearest), by px from its top left, and the point.
-    anchor: (sx: number, sy: number) => {
+    anchor: (sx: number, sy: number, page = false) => {
       measure();
       const [wx, wy] = [Math.round((sx - ox) / cam.z - cam.x), Math.round((sy - oy) / cam.z - cam.y)];
       const gap = (c: Card) => Math.hypot(Math.max(c.f.x - wx, 0, wx - c.f.x - c.f.w), Math.max(c.f.y - wy, 0, wy - c.f.y - c.f.h));
-      const f = [...cards].reverse().sort((a, b) => gap(a) - gap(b))[0]?.f; // (a picture over other frames is on top: the newer one wins a tie)
+      const near = [...cards].reverse().sort((a, b) => gap(a) - gap(b))[0]; // (a picture over other frames is on top: the newer one wins a tie)
+      const f = near?.f;
       // A point on a frame is its px of the frame as stored (the same on every device); a phone draws it at 390 wide, so it is scaled up
       // from there, and says it was laid out so (lay).
-      return { kind: 'board', board: name, ...(f && { frame: f.id, fx: Math.round((wx - f.x) * kx(f)), fy: Math.round((wy - f.y) * ky(f)), ...(f.ow && { lay: f.w }) }), ...(f?.kind === 'image' && onPicture(f, wx - f.x, wy - f.y)), bx: wx, by: wy, selector: '', x: 0, y: 0, docX: 0, docY: 0, width: view.w, height: view.h };
+      // A pin (not an area's corners) on a page's frame: what it is on in the page too.
+      const on: Record<string, unknown> = page && f?.kind !== 'image' && near && !gap(near) ? onPage(near, (sx - ox) / cam.z - cam.x, (sy - oy) / cam.z - cam.y) : {};
+      return { ...on, kind: 'board', board: name, ...(f && { frame: f.id, fx: Math.round((wx - f.x) * kx(f)), fy: Math.round((wy - f.y) * ky(f)), ...(f.ow && { lay: f.w }) }), ...(f?.kind === 'image' && onPicture(f, wx - f.x, wy - f.y)), bx: wx, by: wy, ...(!on.selector && { selector: '', x: 0, y: 0, docX: 0, docY: 0, width: view.w, height: view.h }) };
     },
     // Where a board pin is, in page px (the pins' layer is the page's): with its frame, else at the point it was put.
-    spot: (a: { frame?: string; fx?: number; fy?: number; bx?: number; by?: number; zw?: number; zh?: number; docW?: number; docH?: number; pinX?: number; pinY?: number }): Spot => {
+    /** Where a pin on a frame is now, in the frame's px as stored: on its element in the frame's page, else where it was put. */
+    at: (a: FramePin) => inFrame(find(a.frame || ''), a),
+    /** The page in a frame changed (frame.ts): its pins are found again. */
+    changed: () => dispatchEvent(new Event('lab-board-moved')),
+    spot: (a: FramePin & { bx?: number; by?: number; zh?: number; docW?: number; docH?: number; pinX?: number; pinY?: number }): Spot => {
       const c = find(a.frame || '');
       const f = c?.f;
-      const [wx, wy] = f && a.fx !== undefined ? [f.x + a.fx / kx(f), f.y + (a.fy || 0) / ky(f)] : [a.bx || 0, a.by || 0];
+      const p = inFrame(c, a);
+      const [wx, wy] = f && p ? [f.x + p[0] / kx(f), f.y + p[1] / ky(f)] : [a.bx || 0, a.by || 0];
       const [sx, sy] = [ox + (wx + cam.x) * cam.z, oy + (wy + cam.y) * cam.z];
       // An area or a drawing on a frame: its box is its shares of the frame (as drawn, whatever the device), from its corner, and its
       // pin where the drag ended.
       // One on the board itself (not within one frame): its size is in the board's px.
-      const zone = f && a.fx !== undefined && a.zw ? { left: sx + scrollX, top: sy + scrollY, width: a.zw * f.w * cam.z, height: (a.zh || 0) * c!.s.h * cam.z }
+      const zone = f && p && a.zw ? { left: sx + scrollX, top: sy + scrollY, width: a.zw * f.w * cam.z, height: (a.zh || 0) * c!.s.h * cam.z }
         : !a.frame && a.zw && a.docW ? { left: sx + scrollX, top: sy + scrollY, width: a.docW * cam.z, height: (a.docH || 0) * cam.z } : null;
       return { left: sx + scrollX + (zone && a.pinX ? zone.width : 0), top: sy + scrollY + (zone && a.pinY ? zone.height : 0), zone, ...((!inBox(sx, sy) || !shown) && { clipped: true }) };
     },

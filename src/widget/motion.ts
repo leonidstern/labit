@@ -52,7 +52,7 @@ const setItem = (el, stop) => {
 const ownMotion = (anchor) => {
   let at = null;
   try {
-    at = anchor?.selector ? document.querySelector(anchor.selector) : null;
+    at = anchor?.selector && anchor.kind !== 'board' ? document.querySelector(anchor.selector) : null; // (a board pin's is in its frame's page)
   } catch {}
   if (at === document.body || at === document.documentElement || (at && W.root.contains(at))) at = null;
   const things = [...new Set([...held, ...document.querySelectorAll('video'), ...pageAnims().map(targetOf)])].filter((el) => el?.isConnected && !W.root.contains(el));

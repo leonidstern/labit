@@ -3,6 +3,7 @@
 // What it keeps: the page's live updates (a save patches or reloads this frame, never the board), reading the lab's
 // state from the board's stream and not opening its own, and a way to pass keys on to the board.
 import { bindLive, startLive } from './live.ts';
+import { anchorAt, bindAnchoring, position } from './anchoring.ts';
 
 /** True in a board's frame: the name the board gave it, and a board on top (the name alone could be anyone's frame). */
 export const inFrame = (): boolean => {
@@ -51,8 +52,30 @@ export function startFrame(script: HTMLScriptElement | null) {
     pan = { x: e.screenX, y: e.screenY };
   }, true);
   for (const t of ['pointerup', 'pointercancel', 'mouseup']) addEventListener(t, (e) => ((pan = null), document.documentElement.style.removeProperty('cursor'), (e as MouseEvent).button > 2 && e.preventDefault()), true);
-  // What the board may ask of this page (the rest of the bridge comes with the pins).
-  Object.assign(window, { __labSpot: { clear: () => getSelection()?.removeAllRanges() } });
+  // What the board may ask of this page: a pin on this frame is on an element of the page, found again the way a page's
+  // own pins are (anchoring.ts, here, on this page): when the page changes (a frame showing only its section, an edit), the
+  // pin goes with its element, not left at the px it was put at (Leo, 26 Nov: "points on boards doesnt find their location
+  // after changes"). Each spot is kept until the page changes (a pan asks every pin again, many times a second).
+  bindAnchoring({ host, layer: host, el: (tag) => document.createElement(tag) });
+  let gen = 0;
+  let told = 0;
+  const spots = new WeakMap<object, { gen: number; at: { left: number; top: number } | null }>();
+  new MutationObserver((list) => {
+    gen++;
+    // Its words or elements changed (not a style that moves on its own): the board draws its pins again, once it settles.
+    if (!told && list.some((m) => m.type !== 'attributes')) told = window.setTimeout(() => ((told = 0), board()?.changed?.()), 150);
+  }).observe(document, { subtree: true, childList: true, characterData: true, attributes: true });
+  addEventListener('resize', () => gen++);
+  const spot = (a: Record<string, unknown>) => {
+    const had = spots.get(a);
+    if (had?.gen === gen) return had.at;
+    // A board pin keeps the page's anchor flat on itself; its kind on the page is text when it quoted words.
+    const s = position({ ...a, kind: a.quote ? 'text' : 'element' });
+    const at = s.moved || s.hidden ? null : { left: s.left, top: s.top };
+    spots.set(a, { gen, at });
+    return at;
+  };
+  Object.assign(window, { __labSpot: { clear: () => getSelection()?.removeAllRanges(), anchor: (x: number, y: number) => anchorAt(x, y), spot } });
   // A key heard here goes to the board unless the page used it or is typing in it: the board's keys work in a focused frame.
   addEventListener('keydown', (e) => {
     const t = e.target as HTMLElement | null;
