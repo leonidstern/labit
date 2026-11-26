@@ -1141,15 +1141,21 @@ export function position(anchor) {
 // left of the page, puts the pin at that edge instead. A page that scrolls sideways keeps it where its element is.
 function reachable(left: number) {
   const h = document.documentElement;
-  if (left >= 4 && left <= h.clientWidth - 4) return left;
+  if (left >= 4 && left <= winW() - 4) return left;
   const cut = [h, document.body].some((n) => n && /hidden|clip/.test(getComputedStyle(n).overflowX));
-  return Math.min(Math.max(left, 4), (cut ? h.clientWidth : Math.max(h.scrollWidth, h.clientWidth)) - 4);
+  return Math.min(Math.max(left, 4), (cut ? winW() : Math.max(h.scrollWidth, winW())) - 4);
 }
+/** The window's size without its scrollbars. A page with no doctype (quirks mode) reports the whole page's height as
+ * html's clientHeight and the window's as body's (Leo, 26 Nov: next new from a doctype-less page stopped 8,600 px short of
+ * its pin, so the card opened off screen). */
+const view = () => (document.compatMode === 'BackCompat' && document.body) || document.documentElement;
+export const winW = () => view().clientWidth;
+export const winH = () => view().clientHeight;
 /** Where the page ends on the screen for a card: the top of a half board view over it, else the window's bottom (Leo, 21 Nov:
  * "pin outside board should not go to board when opened": a page pin's card stays in what the view leaves free). */
 export function pageBottom() {
   const r = document.querySelector('[data-lab-board-view]')?.getBoundingClientRect();
-  const vh = document.documentElement.clientHeight;
+  const vh = winH();
   return r && r.top > 40 && r.top < vh - 1 ? r.top : vh;
 }
 /** A pin whose tip is at this screen point is under a page's board view: its tip, or its far corner (a pin with its tip
@@ -1189,7 +1195,7 @@ function onWords(range, anchor, rect) {
 // Pin point (the zone's top-left corner for area comments) and, for areas, the zone box, in page coordinates.
 // A pin in the margin beside its element's line: that many px out from it, kept on the page (a window too narrow for a
 // margin puts it at the page's edge instead of off it).
-const sideLeft = (left: number, anchor): number => (anchor.sx ? Math.min(Math.max(left + anchor.sx, 4), document.documentElement.clientWidth - 4) : left);
+const sideLeft = (left: number, anchor): number => (anchor.sx ? Math.min(Math.max(left + anchor.sx, 4), winW() - 4) : left);
 function spotOf(anchor): Spot {
   if (anchor.kind === 'board') {
     // A board pin on a page shows only while that board is open in it (overlay.ts); the list still has it.
