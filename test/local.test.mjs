@@ -141,6 +141,11 @@ test('a comment about the page as a whole has no spot in the agent text', async 
   const text = await (await fetch(B + '/_lab/agent/index')).text();
   const block = text.split('\n## ').find((b) => b.includes('too airy'));
   assert.match(block, /^on: the page as a whole \(no spot\)$/m);
+  // Sent from the chat with a board open: the board is named (Leo, 26 Nov).
+  await post({ page: '/index', name: 'Leo', text: 'these variants all look alike', anchor: { kind: 'page', width: 1440, height: 900, board: 'strong-sides' } });
+  const onBoard = (await (await fetch(B + '/_lab/agent/index')).text()).split('\n## ').find((b) => b.includes('look alike'));
+  assert.match(onBoard, /^on: the board strong-sides over this page as a whole \(sent from the chat with it open; no spot\)$/m);
+  assert.doesNotMatch(onBoard, /^on: the page/m);
   assert.doesNotMatch(block, /^(where on element|selector \(at comment time\)):/m);
   // A link in a comment reaches the agent as written, and the text's own links are the lab's. (Every "http://localhost"
   // in the text used to be replaced with the lab's address, so :3000 below came out as :<lab port>:3000.)
