@@ -18,6 +18,21 @@ const PAUSE = 1.0; // s between words that cuts a piece
 const CLICK_LAG = 0.6; // s: words that land this soon after a click were said before it
 const LAG = 0.3; // s from saying a word to its first guess showing up
 const WORD_S = 0.35; // s a spoken word takes, to guess when a phrase started
+const JOIN = 4; // s of pause a move or a sweep can still carry on over, while the hand travels
+// "move this … there", and "all these … rows": what to move or which many, then where to or what they are
+const MOVE = /\b(move|put|drag|place|shift)\b[^.]*\b(there|here|next to|below|above|under|before|after|into|between|to the (left|right|top|bottom))\b/;
+const MOVE_VERB = /\b(move|put|drag|place|shift)\b/;
+const MOVE_ON = /^(and |then )?(over |right |down |up )?(there|here|next to|below|above|under|before|after|into|between|to the (left|right|top|bottom))\b/;
+const MANY = /\b(all (of )?(these|those|the)|these|those|every|each)\b/;
+const THING = /\b(rows?|cards?|items?|buttons?|links?|columns?|lines?|ones|all|them|fields?|chips?|tabs?|icons?)\b/;
+const THING_ON = /^(rows?|cards?|items?|buttons?|links?|columns?|lines?|ones|fields?|chips?|tabs?|icons?)\b/;
+// The next piece finishes the sentence the pause cut: only when it starts with the missing half and no full stop was said.
+function carries(a, b) {
+  if (b.first - a.end > JOIN || /[.!?]$/.test(a.words[a.words.length - 1])) return false;
+  const one = a.words.join(' ').toLowerCase(), next = b.words.join(' ').toLowerCase();
+  if (MOVE_VERB.test(one) && !MOVE.test(one) && MOVE_ON.test(next)) return true;
+  return MANY.test(one) && !THING.test(one.replace(MANY, '')) && THING_ON.test(next);
+}
 
 let on = false;
 let t0 = 0;
@@ -495,6 +510,14 @@ function cut() {
     piece.end = w.t;
     last = w.t;
   }
+  for (let i = out.length - 1; i > 0; i--) {
+    const [a, b] = [out[i - 1], out[i]];
+    if (!carries(a, b)) continue;
+    a.words.push(...b.words);
+    a.said.push(...b.said);
+    a.end = b.end;
+    out.splice(i, 1);
+  }
   const log = [...hovers, ...scrolls].sort((a, b) => a.t - b.t);
   let prevEnd = 0;
   for (const p of out) {
@@ -708,7 +731,7 @@ function cut() {
   for (const q of fin) {
     const talk = (q.words || []).join(' ').toLowerCase();
     // a move word and a place in the same talk ("there are too many buttons" is no move); "swap" counts on its own
-    if (!/\b(move|put|drag|place|shift)\b[^.]*\b(there|here|next to|below|above|under|before|after|into|between|to the (left|right|top|bottom))\b/.test(talk) && !/\bswap\b/.test(talk)) continue;
+    if (!MOVE.test(talk) && !/\bswap\b/.test(talk)) continue;
     const d = dashes.find((x) => mostlyIn(x.t, x.end, q)), seen = seenIn(q);
     q.move = d ? [d.a, d.b] : seen.length >= 2 ? seen.slice(0, 2) : null;
     if (!q.move) continue;
@@ -721,7 +744,7 @@ function cut() {
   // things side by side, each held a moment: the spot is the group that holds them.
   for (const q of fin) {
     const talk = (q.words || []).join(' ').toLowerCase();
-    if (!/\b(all (of )?(these|those|the)|these|those|every|each)\b/.test(talk) || !/\b(rows?|cards?|items?|buttons?|links?|columns?|lines?|ones|all|them|fields?|chips?|tabs?|icons?)\b/.test(talk)) continue;
+    if (!MANY.test(talk) || !THING.test(talk)) continue;
     const seen = [];
     hovers.forEach((h, i) => {
       const dur = (hovers[i + 1] ? hovers[i + 1].t : now()) - h.t;

@@ -72,6 +72,21 @@ try {
       const s2 = await state();
       check(eng, 'after sending, the bar is back and pins work again', !s2.pill && s2.bar && !s2.off, JSON.stringify(s2));
 
+      // a pause in the middle of a move, while the pointer travels: still one part, from and to
+      await p.keyboard.press('k');
+      await sleep(300);
+      await p.mouse.move(a.x, a.y, { steps: 8 });
+      await sleep(600);
+      await speak('move this');
+      await p.mouse.move(b.x, b.y, { steps: 8 });
+      await sleep(1500);
+      await speak('next to there');
+      await sleep(400);
+      await p.keyboard.press(process.platform === 'darwin' ? 'Meta+Enter' : 'Control+Enter');
+      await sleep(1200);
+      const mv = posted.filter((m) => /^Walkie-talkie, /.test(m.text || '')).pop()?.text || '';
+      check(eng, 'a pause inside "move this … next to there" keeps one part, from and to', /^Walkie-talkie, 1 part /.test(mv) && /move from "Export" \(#a\) to "New order" \(#b\)/.test(mv), mv);
+
       const before = posted.length;
       await p.keyboard.press('k');
       await sleep(300);
