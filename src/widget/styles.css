@@ -472,7 +472,7 @@ kbd, .onb { transition: opacity var(--_t-quick) var(--_ease-out); } /* .onb: wha
 /* Folding (comments.js sayFold): the bar's first segment, a chevron the size of the bar's words; folded, only it and the
    rabbit stay, the chevron turned to point back out. */
 .bar > .fold { padding: 8px 9px; }
-.bar > .fold svg { width: 10px; height: 10px; display: block; transition: transform var(--_t-quick) var(--_ease-out); }
+.bar > .fold svg { width: 10px; height: 10px; display: block; } /* turned at once: a flip that animated went through nothing (Leo, 26 Nov: "flickering") */
 .bar > .fold path { fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
 :host([data-folded]) .bar > .fold svg { transform: scaleX(-1); }
 :host([data-folded]) .bar > :not(.fold, .listener) { display: none !important; }

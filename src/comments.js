@@ -103,6 +103,7 @@ import { bindKeys } from './widget/keys.ts';
     get control() { return control; },
     get commenting() { return commenting; },
     get pinsControls() { return pinsControls; },
+    get using() { return using; },
     get sayMode() { return sayMode; },
     get doneBtn() { return doneBtn; },
     get movedBtn() { return movedBtn; },
@@ -334,7 +335,7 @@ import { bindKeys } from './widget/keys.ts';
       <button class="secondary boards-btn" type="button" hidden aria-expanded="false" aria-controls="lab-more" title="this page's boards"></button>
       <button class="secondary done-btn" type="button" hidden title="show or hide done pins on the page"></button>
       <button class="secondary moved-btn" type="button" hidden title="pins whose spot is gone from the page: open one to drop it on a new spot, or close it"></button>
-      <span class="mode" hidden><button type="button" data-m="comment" data-t="comment on links and buttons too"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="body" d="M8 1.5a5 5 0 0 1 5 5c0 3.6-5 8-5 8s-5-4.4-5-8a5 5 0 0 1 5-5z"/><path class="plus" d="M8 4.5v4M6 6.5h4"/></svg></button><button type="button" data-m="use" data-t="use links and buttons"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="body" d="M4 2l8.5 7H8.3l2.4 4.6-1.6.8-2.4-4.6L4 12.6z"/></svg></button></span>
+      <span class="mode" hidden><button type="button" data-m="comment" data-t="comment, links and buttons too (⌥ click uses them)"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="body" d="M8 1.5a5 5 0 0 1 5 5c0 3.6-5 8-5 8s-5-4.4-5-8a5 5 0 0 1 5-5z"/><path class="plus" d="M8 4.5v4M6 6.5h4"/></svg></button><button type="button" data-m="use" data-t="use the page (⌥ click comments)"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="body" d="M4 2l8.5 7H8.3l2.4 4.6-1.6.8-2.4-4.6L4 12.6z"/></svg></button></span>
       <button class="toggle" type="button"></button>
       <button class="secondary more" type="button" hidden aria-label="more options" aria-expanded="false" aria-controls="lab-more">⋯</button>
     </div>
@@ -536,7 +537,7 @@ import { bindKeys } from './widget/keys.ts';
   // Whether a click on the page would place something: comments on, and not while you are
   // writing one — mid-sentence the page's own pointer is what you want, not a second pin waiting to be dropped.
   const setPinning = () => {
-    const placing = S.on && !anyWriting() && !S.draft; // an open new comment, empty or not, gives the page its own pointer (Leo, 18 Nov)
+    const placing = S.on && !anyWriting() && !S.draft && !using(); // an open new comment, empty or not, gives the page its own pointer (Leo, 18 Nov); so does the arrow (Leo, 26 Nov)
     host.toggleAttribute('data-lab-pinning', placing); // not a class on <html>: a framework that hydrates the page (Next) reports it
     sayMode();
     recheck();
@@ -1503,6 +1504,9 @@ import { bindKeys } from './widget/keys.ts';
   const commenting = () => Boolean(S.on) && !coarse && modeNow() === 'comment';
   // Whether this press pins on a control: commenting unless ⌥ is held, using only while it is.
   const pinsControls = (e) => (commenting() ? !e.altKey : e.altKey);
+  // The arrow: the page is the page, its own pointers and clicks everywhere; ⌥ click pins (Leo, 26 Nov: the pointer
+  // didn't change when the arrow was picked).
+  const using = () => Boolean(S.on) && !coarse && modeNow() === 'use';
   function sayMode() {
     const de = document.documentElement;
     const c = commenting();
@@ -1544,8 +1548,8 @@ import { bindKeys } from './widget/keys.ts';
   });
   function setMode(m) {
     store.set(modeKey(), m === 'use' ? 'use' : 'comment');
-    sayMode();
-    recheck();
+    setPinning(); // says the mode, and the pointer at once
+
   }
   // The ⋯ menu is a disclosure: the button says whether it's open; opening puts focus on its first item, and Escape
   // or a pick gives focus back to the button.
@@ -2074,7 +2078,7 @@ import { bindKeys } from './widget/keys.ts';
       render();
       return;
     }
-    if (commenting() && e.altKey) return; // ⌥ click while commenting: the page's own
+    if (commenting() ? e.altKey : using() && !e.altKey) return; // the other pointer's click (⌥ held or not): the page's own
     if ((!S.on && !e.altKey) || e.button !== 0 || e.metaKey || e.ctrlKey || (e.shiftKey && !S.shiftUp)) return;
     if (S.lastTouch && Date.now() - S.lastTouch < 800) return; // phones: a tap scrolls and reads; holding pins (below)
     if (e.altKey || taken) e.preventDefault();
