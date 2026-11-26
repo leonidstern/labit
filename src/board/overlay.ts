@@ -39,9 +39,6 @@ const moved = () => dispatchEvent(new Event('lab-board-moved')); // the widget d
 // The view came to rest after a slide (the board read its box again, board.resized): every pin on the board is placed
 // again where its frame now is, as after a camera move (a plain redraw kept a pin where it was put mid-slide, off the screen).
 const rested = () => dispatchEvent(new CustomEvent('lab-board-moved', { detail: { camera: true, box: true } }));
-// The page scrolled under a half view: the board's pins are held to the screen, the page's own scroll with it, so the
-// widget only hides or shows those the view's edge crossed (no redraw per scroll step: the pins flickered; Leo, 19 Nov).
-const scrolled = () => dispatchEvent(new CustomEvent('lab-board-moved', { detail: { scroll: true } }));
 
 /** The board called name in a view over this page. */
 export function show(name: string, o: Opts) {
@@ -87,11 +84,6 @@ export function show(name: string, o: Opts) {
   document.body.append(view);
   const k = view.shadowRoot!.appendChild(Object.assign(document.createElement('i'), { style: 'position:absolute;width:100px;height:0;visibility:hidden' })).getBoundingClientRect().width / 100;
   if (k > 0 && Math.abs(k - 1) > 0.001) view.style.setProperty('--bv-z', String(Math.min(10, Math.max(0.1, 1 / k))));
-  // Where the view is, kept (it is asked for every pin of the page as the page scrolls under a half view). Watched
-  // before the board watches its own box, so the board's word of a new size finds this one already right.
-  let at = view.getBoundingClientRect();
-  const ro = new ResizeObserver(() => (at = view.getBoundingClientRect()));
-  ro.observe(view);
   // A phone's keyboard: iOS pans what the screen shows up by its height (visualViewport.offsetTop) and scrolls the page
   // under the fixed view, so the view slid up with it and came back down once the comment was sent (Leo, 21 Nov: "placing
   // pin shifts canvas when opening keyboard", "canvas still shifts after i drop comment"). The view goes down by the pan
@@ -133,7 +125,6 @@ export function show(name: string, o: Opts) {
       const host = document.querySelector<HTMLElement>('[data-lab-comments]');
       host?.style.setProperty('--lab-pan', `${pan}px`); // the board's pins and its draft move down with the view (styles.css)
       host?.toggleAttribute('data-pan', pan > 0);
-      at = view.getBoundingClientRect();
       quiet = 0;
       changed = true;
     }
@@ -185,15 +176,13 @@ export function show(name: string, o: Opts) {
     location.assign(`${of.split('#')[0]}#board=${name}`);
   };
   const board = mountBoard(root, name, o.own ? { of: o.of, back: o.of ? () => backTo(o.of || '') : undefined, hash: true } : { of: o.of, back: () => close(), home, keep: `lab-board-cam:${o.page}:${name}` });
-  const covers = (x: number, y: number) => x >= at.left && x <= at.right && y >= at.top && y <= at.bottom;
-  Object.assign(window, { __labBoard: { ...board.api, covers } });
-  // The page scrolls under a half view: its pins and the board's are drawn again.
-  addEventListener('scroll', scrolled, { passive: true });
+  // covers: the view fills the window, so the page's own pins are all under it (anchoring.ts coveredAt).
+  Object.assign(window, { __labBoard: { ...board.api, covers: true } });
   // Reduced motion: it fades in (started once the board is mounted: that blocks the page for a while) (Apple: a crossfade, not a pop of the whole window). Its opacity is !important in :host (all: initial),
   // which an animation or a transition can't beat, so --bv-o is stepped here, one frame at a time.
   // It comes up from the bottom, as the comment drawer does (not the board's own address: that is the whole page).
-  // Where it is (at) and its pins are read again once it rests: a move is no resize, so the watch below misses it.
-  if (!o.own && !matchMedia('(prefers-reduced-motion: reduce)').matches) setTimeout(() => cur?.view === view && ((at = view.getBoundingClientRect()), board.resized(), rested()), slide(view, true) + 20);
+  // Its pins are read again once it rests: a move is no resize, so the board's own watch misses it.
+  if (!o.own && !matchMedia('(prefers-reduced-motion: reduce)').matches) setTimeout(() => cur?.view === view && (board.resized(), rested()), slide(view, true) + 20);
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
     const d = token('calm');
     let t0 = 0;
@@ -207,7 +196,7 @@ export function show(name: string, o: Opts) {
     view.style.setProperty('--bv-o', '0');
     requestAnimationFrame(fade);
   }
-  cur = { name, view, destroy: () => (ro.disconnect(), removeEventListener('focusin', focused), vv?.removeEventListener('resize', watch), vv?.removeEventListener('scroll', watch), cancelAnimationFrame(loop), board.destroy()), onClose: o.onClose, restoration, pushed };
+  cur = { name, view, destroy: () => (removeEventListener('focusin', focused), vv?.removeEventListener('resize', watch), vv?.removeEventListener('scroll', watch), cancelAnimationFrame(loop), board.destroy()), onClose: o.onClose, restoration, pushed };
   moved();
 }
 
@@ -215,7 +204,6 @@ function teardown() {
   const c = cur;
   if (!c) return;
   cur = null;
-  removeEventListener('scroll', scrolled);
   c.destroy();
   c.view.remove();
   document.querySelector('[data-lab-comments]')?.removeAttribute('data-board-slide');
