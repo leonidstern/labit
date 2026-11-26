@@ -36,17 +36,22 @@ const minifiedCss = {
     });
   },
 };
-// Each built file has its local names given again by terser, and nothing else (no rewriting of the code, the same
-// escapes for letters outside ASCII, the licence comment kept). esbuild numbers a nested function's names after its
-// parents', so deep code gets two-letter names; terser gives each function the shortest names it does not itself
-// use, the same few letters over and over, which gzip packs about 4% smaller (the page script: 3 KB).
+// Each built file has its local names given again by terser (the same escapes for letters outside ASCII, the licence
+// comment kept). esbuild numbers a nested function's names after its parents', so deep code gets two-letter names;
+// terser gives each function the shortest names it does not itself use, the same few letters over and over, which gzip
+// packs about 4% smaller (the page script: 3 KB). terser's compress runs too, in two passes, as for the command line
+// (scripts/build-cli.mjs): it folds what esbuild leaves, 0.4 KB of the package's brotli (26 Nov). It writes some
+// constants out where they are used, which brotli takes in its stride and gzip doesn't (the page script's gzip, a
+// gzip grows 1.2 KB; every current browser takes brotli and is sent the .br bytes as they are). pure_getters off: a property read
+// is never taken for free, so a read that only makes the browser lay out (el.offsetHeight) stays. ecma 2020: the source
+// already uses newer syntax, so what terser writes is no newer than what it is given.
 const shortNames = {
   name: 'short-names',
   setup(build) {
     const { format } = build.initialOptions;
     build.onEnd(async (result) => {
       for (const file of result.outputFiles || []) {
-        const { code } = await terser.minify(file.text, { compress: false, mangle: true, module: format === 'esm', format: { comments: /^!/, ascii_only: true } });
+        const { code } = await terser.minify(file.text, { ecma: 2020, compress: { passes: 2, pure_getters: false }, mangle: true, module: format === 'esm', format: { comments: /^!/, ascii_only: true } });
         await fs.promises.mkdir(path.dirname(file.path), { recursive: true });
         await fs.promises.writeFile(file.path, code + '\n');
       }
