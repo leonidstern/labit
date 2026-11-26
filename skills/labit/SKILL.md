@@ -58,6 +58,17 @@ Leave your own pins with `LAB pin <selector> "<point>" [--page /path]` when what
 - "ticked: 2 of your 5 pins" in a wait: nothing to do. "<name> said: do it" (their "Do it" tap on your pin): do what it proposes, then `reply <id> --done`.
 - Fixed what your pin points at: `LAB reply <id> --done "<what changed>"`.
 
+## How a page you write looks
+
+Lab pages share one plain look, so the person reads the content, not a new design each time. This holds for every page and board frame you write, unless the person asks for a look or the page is a design of their own app (then the app's look wins).
+- Link `/_lab/lab.css` and take every colour, corner and font from its `--lab-*` tokens, so light and dark both work. No fonts of your own (no Google Fonts), no palette of your own, no hero, no animation unless motion is the subject.
+- Highlight little. At most one thing per section stands out, and words do it first: a plain label ("Recommended", "Breaks on phone") or bold. Colour only for state: `lab-ok` green for good, `lab-warn` amber for a problem, never as decoration. No accent bars or stripes, coloured chips, dots, emoji markers, glows, or big-number tiles (unless the numbers are the page's point).
+- A box (`lab-box`) sets one thing apart from what is around it. Not a box around every block, and not a box in a box.
+- Numbers (1, 2, 3) only for a real order, such as steps. Headings say what the section holds, in plain words.
+- Real content only: the person's own words, data and screens. Never invented names, figures, rows or lorem ipsum to fill a page; where data is missing, say in one line what goes there.
+- Works at 390 px wide with no sideways scroll: rows wrap to one column, and a wide table or code block scrolls in its own box.
+- Write the way the person talks about the thing, in short sentences, naming things as people see them, not as the code calls them.
+
 ## Instead of an Artifact ("use lab")
 
 When the person says "use lab", "in lab" or "show it in lab", show the page in labit, not as an Artifact. It lives on this computer, and their comments come back as pins.
