@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 const dir = path.join(os.tmpdir(), 'labit-test-ports');
 fs.mkdirSync(dir, { recursive: true });
@@ -13,6 +14,13 @@ const mine = [];
 process.on('exit', () => {
   for (const f of mine) try { fs.unlinkSync(f); } catch {}
 });
+
+// Whether another program answers on the port (an app on this computer may listen inside a test's range: a lab then
+// starts on another port and the test talks to that app). Asked in a process of its own: claimPort is not async.
+const PROBE = `const net = require('node:net'); let left = 2;
+for (const host of ['127.0.0.1', '::1']) net.connect(Number(process.argv[1]), host).on('connect', () => process.exit(1)).on('error', () => --left || process.exit(0));
+setTimeout(() => process.exit(0), 500);`;
+const held = (port) => spawnSync(process.execPath, ['-e', PROBE, String(port)]).status === 1;
 
 /** A free port in [base, base + span), as a number. */
 export function claimPort(base, span) {
@@ -26,7 +34,7 @@ export function claimPort(base, span) {
     try {
       fs.closeSync(fs.openSync(f, 'wx'));
       mine.push(f);
-      return port;
+      if (!held(port)) return port;
     } catch {}
   }
   throw new Error(`no free test port in ${base}-${base + span - 1}`);
