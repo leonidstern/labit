@@ -865,6 +865,38 @@ import { bindKeys } from './widget/keys.ts';
       void switcher().then((m) => m?.openSwitcher());
     });
   }
+  // Experiments (FLAGS in lib/settings.ts; Leo, 26 Nov): what you are trying, flag -> on, under a hairline in the ⋯
+  // menu, one row a flag that switches it, on or off in grey at the row's end. Saved in your own settings through the
+  // lab (POST /_lab/flags), so it holds in every lab you run; a guest's page switches nothing. Computers only: talk,
+  // the one there now, is.
+  const FLAGS = JSON.parse(script?.dataset.flags || '{}');
+  const flag = (name) => FLAGS[name] === true;
+  // (A phone: coarse, which is set further down.)
+  const expRows = matchMedia('(pointer: coarse)').matches ? [] : Object.keys(FLAGS).map((name) => {
+    const b = el('button', { type: 'button', role: 'switch', 'data-flag': name });
+    b.disabled = !adminToken;
+    b.addEventListener('click', (e) => {
+      e.stopPropagation(); // the menu stays open
+      fetch(script.dataset.live.replace(/live$/, 'flags'), { method: 'POST', headers: headers(), body: JSON.stringify({ flag: name, on: !flag(name) }) })
+        .then((r) => r.json())
+        .then((r) => S.syncFlags(r.flags), () => say("couldn't switch it: is the lab running?"));
+    });
+    return b;
+  });
+  const expBox = expRows.length ? el('div', { class: 'held' }) : null;
+  expBox?.append(el('div', { class: 'hint-row' }, 'experiments'), ...expRows);
+  // The lab's word on which flags are on (the live stream, or the answer to a switch here). Only a change redraws:
+  // the live stream says which are on with every message.
+  S.syncFlags = (/** @type {string[]} */ on, first = false) => {
+    if (!first && Object.keys(FLAGS).every((n) => FLAGS[n] === on.includes(n))) return;
+    for (const n in FLAGS) FLAGS[n] = on.includes(n);
+    for (const b of expRows) {
+      b.setAttribute('aria-checked', String(flag(b.dataset.flag)));
+      b.replaceChildren(b.dataset.flag, el('kbd', { 'aria-hidden': 'true' }, flag(b.dataset.flag) ? 'on' : 'off'));
+    }
+    if (!first) render();
+  };
+  S.syncFlags(Object.keys(FLAGS).filter(flag), true);
   // The motion part (src/widget/motion.ts, loaded below), once it is: declared here, as the bar reads it.
   /** @type {any} */
   let mo = null;
@@ -890,7 +922,7 @@ import { bindKeys } from './widget/keys.ts';
     return row;
   }), newBoardBtn, ...(coarse ? [] : [boardHeld])];
   function placeBar() {
-    const inMenu = !S.on ? [] : S.menuBoards ? (S.menuRows ??= boardRows()) : [...(labHead ? [labHead, labsBtn] : []), doneBtn, movedBtn, ...(!globalThis.__LAB_CO__ && !S.board && self === top ? [newBoardBtn] : []), ...(globalThis.__LAB_CO__ ? [] : [copyBtn]), ...(coarse && mo ? [motionBtn] : []), toggleBtn, ...(coarse ? [] : [pageHeld]), ...(versionLine ? [versionLine] : [])];
+    const inMenu = !S.on ? [] : S.menuBoards ? (S.menuRows ??= boardRows()) : [...(labHead ? [labHead, labsBtn] : []), doneBtn, movedBtn, ...(!globalThis.__LAB_CO__ && !S.board && self === top ? [newBoardBtn] : []), ...(globalThis.__LAB_CO__ ? [] : [copyBtn]), ...(coarse && mo ? [motionBtn] : []), toggleBtn, ...(expBox ? [expBox] : []), ...(coarse ? [] : [pageHeld]), ...(versionLine ? [versionLine] : [])];
     // In this order every time: a part that came back (hide comments, after showing them again) went to the end, below
     // the version line.
     if (S.on && (inMenu.some((b, i) => moreMenu.children[i] !== b) || moreMenu.children.length !== inMenu.length)) moreMenu.replaceChildren(...inMenu);
@@ -1143,7 +1175,7 @@ import { bindKeys } from './widget/keys.ts';
       el('kbd', { 'aria-hidden': 'true' }, KEYS.toggle),
     );
     toggleBtn.classList.toggle('secondary', S.on);
-    walkieBtn.hidden = !S.on || coarse || Boolean(globalThis.__LAB_CO__);
+    walkieBtn.hidden = !S.on || coarse || Boolean(globalThis.__LAB_CO__) || !flag('talk'); // an experiment: off unless turned on (⋯ → experiments)
     // "talk", its key marked in it: tal(k) (Leo, 25 Nov: shorter than walkie-talkie).
     if (!walkieBtn.firstChild) walkieBtn.append(keyLabel('talk', KEYS.walkie));
     host.toggleAttribute('data-labs', Boolean(!coarse && S.labsOpen)); // the page dims behind labs & pages (the widget's .scrim)

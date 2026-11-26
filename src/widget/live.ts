@@ -453,6 +453,8 @@ export function startLive() {
           readsAt = v.reads;
           W.syncReads();
         }
+        // Experiments switched on or off (the ⋯ menu here or in another tab). An older lab sends no flags.
+        if (Array.isArray(v.flags)) W.S.syncFlags?.(v.flags);
         // listening: a wait is open · working: Claude got comments and is on them · away: nobody will hear a comment now.
         const s = v.session;
         // A lab with listeners can still have none for this page (a wait with --page for another one): this page says

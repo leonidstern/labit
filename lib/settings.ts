@@ -14,7 +14,7 @@ const SHORTCUTS = { toggle: 'm', chat: 't', next: 'w', pause: 'p', slow: 's', dr
 type Kind = 'number' | 'boolean' | 'string';
 // Each setting: its type, its default, and where it may be set (a project can't name you or open your lab to the
 // wifi; your own file can't say which folder or dev server a project uses).
-const SPEC: Record<string, { type: Kind | 'shortcuts' | 'actions'; def: unknown; only?: 'project' | 'personal'; min?: number }> = {
+const SPEC: Record<string, { type: Kind | 'shortcuts' | 'flags' | 'actions'; def: unknown; only?: 'project' | 'personal'; min?: number }> = {
   port: { type: 'number', def: 4400, min: 1 },
   proxy: { type: 'string', def: '', only: 'project' },
   folder: { type: 'string', def: '.', only: 'project' },
@@ -33,7 +33,12 @@ const SPEC: Record<string, { type: Kind | 'shortcuts' | 'actions'; def: unknown;
   shortcuts: { type: 'shortcuts', def: SHORTCUTS },
   // The one list of actions (lib/actions.ts): the comment box's chips, in this order. The project's list wins over yours.
   actions: { type: 'actions', def: SEED },
+  // What you are trying (FLAGS): the ones on, { "talk": true }. Set in your file or by the ⋯ menu's experiments.
+  flags: { type: 'flags', def: {}, only: 'personal' },
 };
+// Things being tried: off unless you turn one on, then kept (the flag goes) or dropped (the code goes). Kept or dropped
+// before: sinceLooked, sectionBar, board, agentPins, liveUrl, native, select, inkOnText. talk (K): from 26 Nov.
+export const FLAGS = ['talk'];
 // The environment variables that set a setting (as before), and how their values read.
 const ENV: Record<string, [string, (v: string) => unknown]> = {
   port: ['PORT', Number],
@@ -87,6 +92,8 @@ const check = (key: string, v: unknown, file: string, problems: string[]): unkno
     }
     return out;
   }
+  // Only the known ones that are on: a name kept or dropped since stays in somebody's file, skipped without a word.
+  if (s.type === 'flags') return v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).filter(([f, on]) => FLAGS.includes(f) && on === true)) : bad('must be an object of flag → true or false');
   if (s.type === 'actions') {
     if (!Array.isArray(v)) return bad('must be a list of { "name": "…", "prompt": "…" }');
     return actionItems(v, bad);
@@ -107,10 +114,10 @@ export function loadSettings(here: string, flags: Record<string, unknown> = {}, 
   ];
   const values: Record<string, any> = {};
   const from: Record<string, string> = {};
-  // `flags` is the old experiments switch (gone 20 Nov) and `boards` the boards switch (gone 24 Nov, Leo: "remove from
-  // flag it": boards are always on): they stay in somebody's file, and are skipped without a word.
+  // `boards` is the boards switch (gone 24 Nov, Leo: "remove from flag it": boards are always on): it stays in
+  // somebody's file, and is skipped without a word.
   for (const [file, data] of layers)
-    for (const key of Object.keys(data)) if (!(key in SPEC) && key !== '$schema' && key !== 'flags' && key !== 'boards') problems.push(`${file}: ${key} is not a setting; ignored`);
+    for (const key of Object.keys(data)) if (!(key in SPEC) && key !== '$schema' && key !== 'boards') problems.push(`${file}: ${key} is not a setting; ignored`);
   for (const key of Object.keys(SPEC)) {
     const s = SPEC[key];
     if (flags[key] !== undefined) {

@@ -257,10 +257,8 @@ test('a settings.json of broken types: each one is said and skipped, and the lab
   const said = lab.out().split('\n').filter((l) => l.startsWith('[labit] ') && /ignored/.test(l));
   // (port, open, folder, batchSeconds and updateCheck are set by this start's own flags and variables, which win: the file's are not looked at)
   // (actions that are not a list are the form of before: a start writes today's list in their place, by design)
-  // (flags is the old experiments key: still in somebody's file, skipped without a word)
-  const given = ['port', 'open', 'folder', 'batchSeconds', 'updateCheck', 'actions', 'flags'];
+  const given = ['port', 'open', 'folder', 'batchSeconds', 'updateCheck', 'actions'];
   for (const key of Object.keys(BROKEN_TYPES).filter((k) => !given.includes(k))) assert.ok(said.some((l) => l.includes(`: ${key} `)), `${key} is said:\n${said.join('\n')}`);
-  assert.ok(!said.some((l) => l.includes(': flags ')), `flags is not said:\n${said.join('\n')}`);
   assert.match((await raw(port, '/')).text, /<h1>index<\/h1>/);
   assert.equal((await raw(port, '/_lab/pages')).json.wifi, false);
   assert.equal((await raw(port, '/', { to: '127.0.0.1' })).status, 200);
@@ -275,7 +273,7 @@ test('a settings.json of broken types: each one is said and skipped, and the lab
   const shown = await run(dir, ['settings'], { XDG_CONFIG_HOME: cfg, LAB_SETTLE_MS: '', LABIT_NO_UPDATE_CHECK: '' });
   assert.equal(shown.code, 1, 'labit settings fails on a problem');
   assert.equal(trace(shown.out), '');
-  for (const key of Object.keys(BROKEN_TYPES).filter((k) => k !== 'actions' && k !== 'name' && k !== 'flags')) assert.match(shown.out, new RegExp(`^\\[labit\\] .*settings\\.json: ${key} .*ignored$`, 'm'), key);
+  for (const key of Object.keys(BROKEN_TYPES).filter((k) => k !== 'actions' && k !== 'name')) assert.match(shown.out, new RegExp(`^\\[labit\\] .*settings\\.json: ${key} .*ignored$`, 'm'), key);
   assert.match(shown.out, /^port\s+4400\s+default$/m);
   assert.match(shown.out, /^name\s+Leo\s+your settings$/m, 'the name given on the page is the one in force');
   assert.match(shown.out, /^batchSeconds\s+2\s+default$/m);
@@ -311,7 +309,7 @@ test('a settings.json that is no settings at all (cut short, empty, a list, null
   assert.deepEqual(bad, []);
 });
 
-test('a labit.json with unknown settings, wrong types, the old flags and settings that are not a project\'s to give: said, skipped, and the lab runs', async () => {
+test('a labit.json with unknown settings, wrong types and settings that are not a project\'s to give (flags among them): said, skipped, and the lab runs', async () => {
   const dir = folder('labitjson');
   fs.writeFileSync(path.join(dir, 'labit.json'), JSON.stringify({ $schema: 'x', zoom: 2, nope: { deep: [1] }, port: 'x', proxy: 5, folder: 7, open: 'no', wifi: true, name: 'Mallory', model: 'evil-model', pagesFolder: '/tmp/x',
     flags: { nope: true, inkOnText: true }, shortcuts: { toggle: 'mm', nope: 'x', next: 5, chat: 'q' }, batchSeconds: '2' }));
@@ -321,13 +319,13 @@ test('a labit.json with unknown settings, wrong types, the old flags and setting
   assert.equal(trace(lab.out()), '');
   const said = lab.out().split('\n').filter((l) => l.startsWith('[labit] '));
   for (const key of ['zoom', 'nope', 'proxy']) assert.ok(said.some((l) => l.includes(`labit.json: ${key} `) && /ignored/.test(l)), `${key}:\n${said.join('\n')}`);
-  for (const key of ['wifi', 'name', 'model', 'pagesFolder']) assert.ok(said.some((l) => l.includes(`labit.json: ${key} can only be set in your own settings`)), `${key} is yours alone:\n${said.join('\n')}`);
-  assert.ok(!said.some((l) => /flags/.test(l)), `the old flags are skipped without a word:\n${said.join('\n')}`);
+  for (const key of ['wifi', 'name', 'model', 'pagesFolder', 'flags']) assert.ok(said.some((l) => l.includes(`labit.json: ${key} can only be set in your own settings`)), `${key} is yours alone:\n${said.join('\n')}`);
   for (const part of ['shortcuts .toggle must be one letter or digit', 'shortcuts .nope is not an action', 'shortcuts .next must be one letter or digit']) assert.ok(said.some((l) => l.includes(part)), `${part}:\n${said.join('\n')}`);
   const info = (await raw(port, '/_lab/pages')).json;
   assert.deepEqual([info.wifi, info.port, info.proxy], [false, port, null]);
   const html = (await raw(port, '/')).text;
   assert.doesNotMatch(html, /Mallory|evil/);
+  assert.match(html, /data-flags='\{"talk":false\}'/, "the project can't turn on your experiments");
   await lab.stop();
   // A labit.json that is not an object of settings, or not JSON, or a folder: said, and the lab runs.
   for (const [what, content] of [['cut short', '{"port": 44'], ['a list', '[]'], ['null', 'null'], ['empty', ''], ['a folder', null]]) {
