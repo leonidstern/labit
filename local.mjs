@@ -2834,6 +2834,19 @@ const handler = async (req, res) => {
       // A session that isn't answering doesn't end an answering session's wait (a loop left running re-arms every few
       // seconds): the two stay open, and pins go to the answering one first.
       const quietOne = silent.has(by);
+      // One session listens on every page; another names its own (Leo, 26 Nov: two plain waits on one lab split the
+      // person's pins between two sessions, each ending the other's wait). While one session's wait on every page is
+      // open, another session's is turned away, not the open one. A wait that ended (its session gone, or working
+      // between two waits) holds nothing, and a session that stopped answering (silent) is taken over as before.
+      const holder = !want && waiters.find((w) => w.key === '*' && w.who !== by && !silent.has(w.who));
+      if (holder) {
+        console.log(`[lab] a second session asked for every page while ${holder.label} listens on them: told to name its pages`);
+        const mine = pages().filter((p) => !p.startsWith('/_') && commentsOf(p).some((c) => c.session && whoOf(c.session) === by));
+        return res.writeHead(412, { 'content-type': 'text/plain; charset=utf-8' }).end(
+          `${holder.label} already listens on every page of this lab, so this wait did not start: two sessions on every page take turns at the person's pins.\n` +
+            `Listen on the pages you work on instead: wait --bg --pages ${mine.length ? mine.join(',') : '<your pages, e.g. /my-page>'}. Pins on those pages then come to you; the rest stay with ${holder.label}.`,
+        );
+      }
       if (quietOne) silent.get(by).at = Date.now();
       for (const old of waiters.filter((w) => w.key === key && !(quietOne && w.who !== by && !silent.has(w.who)))) {
         waiters = waiters.filter((w) => w !== old); // before its close handler runs, so it doesn't mark Claude as away
