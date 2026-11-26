@@ -10,6 +10,7 @@ import { mySession } from './agents.ts';
 import { askPages, keyFor, runningLabs, type Lab } from './labs.ts';
 import { findLab, labAck, labCall, setWifi, WAIT_SAID } from './labcall.ts';
 import { read as readBoard } from './board.ts';
+import { dashed } from './boardact.ts';
 import { numberOf, UNMATCHED } from './schema.mjs';
 import { loadSettings } from './settings.ts';
 
@@ -62,7 +63,7 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
     const root = fs.realpathSync(home);
     const dir = fs.statSync(src).isDirectory();
     const topic = typeof opts.name === 'string' ? opts.name : path.basename(src).replace(/\.html?$/i, '');
-    const slug = topic.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'page';
+    const slug = dashed(topic) || 'page';
     if (!dir && !/\.html?$/i.test(src)) die(`${src}: give an .html file, or a folder of pages`);
     const dest = path.join(root, dir ? slug : `${slug}.html`);
     // The page's old copy is removed first, so the source must not be that copy, in it or around it: a folder

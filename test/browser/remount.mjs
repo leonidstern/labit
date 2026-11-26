@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { claimPort } from './port.mjs';
-import { playwright, engines, tmp, labEnv, startLab, labUp, sleep, check, finish, withAlt } from './harness.mjs';
+import { playwright, engines, tmp, labEnv, startLab, labUp, sleep, check, finish } from './harness.mjs';
 
 const pw = playwright();
 
@@ -50,7 +50,7 @@ try {
         const t0 = await target('p8');
         // an unsent comment on paragraph 3
         const r3 = await target('p3');
-        await withAlt(p, () => p.mouse.click(r3.x + 80, r3.y + r3.h / 2));
+        await p.mouse.click(r3.x + 80, r3.y + r3.h / 2); // with the pin a plain click pins, on a control too
         await p.waitForFunction(() => Boolean([...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim'))?.shadowRoot.querySelector('textarea')), null, { timeout: 4000 }).catch(() => {});
         await p.keyboard.type('half written');
         await sleep(300);

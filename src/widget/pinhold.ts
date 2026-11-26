@@ -50,7 +50,8 @@ const moves = (node: Element) => {
   }
   return false;
 };
-const px = (n: number) => `${Math.round(n * 100) / 100}px`;
+/** A length for a style, to a hundredth of a pixel (thread.ts ties cards with it too). */
+export const px = (n: number) => `${Math.round(n * 100) / 100}px`;
 const inTopLayer = (node: Element) => {
   try {
     return Boolean(node.closest('dialog[open], :popover-open, :fullscreen'));

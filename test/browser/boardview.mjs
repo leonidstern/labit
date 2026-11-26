@@ -43,7 +43,7 @@ try {
       const y0 = await p.evaluate(() => scrollY);
       const url0 = p.url();
       // A click on the page's own link follows it (the page is in comment mode, but a link keeps its click).
-      await p.click('#go');
+      await p.click('#go', { modifiers: ['Alt'] }) /* with the pin a plain click comments; ⌥ follows the link */;
       await p.waitForFunction(() => document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board .f[data-id="b"]'), null, { timeout: 6000 });
       await sleep(800);
       const st = await p.evaluate(() => ({ path: location.pathname, hash: location.hash, view: Boolean(document.querySelector('[data-lab-board-view]')), pills: [...document.querySelectorAll('*')].filter((n) => n.shadowRoot?.querySelector('.scrim')).length }));
@@ -71,7 +71,7 @@ try {
       await p.evaluate(() => document.getElementById('go').scrollIntoView({ block: 'center' }));
       await sleep(200);
       const y2 = await p.evaluate(() => scrollY);
-      await p.click('#go');
+      await p.click('#go', { modifiers: ['Alt'] }) /* with the pin a plain click comments; ⌥ follows the link */;
       await p.waitForFunction(() => document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board'), null, { timeout: 6000 });
       await sleep(500);
       await p.mouse.wheel(0, 600); // over the board: pans it, never the page
@@ -81,7 +81,7 @@ try {
       await sleep(500);
       const after = await p.evaluate(() => ({ y: scrollY, view: Boolean(document.querySelector('[data-lab-board-view]')), hash: location.hash }));
       check(eng, 'Esc closes it and the page is where it was scrolled', !after.view && !after.hash && Math.abs(after.y - y2) < 2 && p.url() === url0, JSON.stringify({ ...after, y2, y1, y0 }));
-      await p.click('#go');
+      await p.click('#go', { modifiers: ['Alt'] }) /* with the pin a plain click comments; ⌥ follows the link */;
       await p.waitForFunction(() => document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board'), null, { timeout: 6000 });
       await sleep(600);
       const camBack = await p.evaluate(() => window.__labBoard.camera());

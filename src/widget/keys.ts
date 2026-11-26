@@ -28,7 +28,13 @@ const shiftKey = (e) => {
   if (e.shiftKey) document.documentElement.classList.add('lab-shift');
   else S.shiftOff = setTimeout(() => (document.documentElement.classList.remove('lab-shift'), W.recheck()), 400);
 };
-const setAlt = (down) => document.documentElement.classList.toggle('lab-alt', Boolean(down));
+// ⌥ held: what a click on a link or a button does flips (comments.js sayMode says it on the page and in the bar).
+const setAlt = (down, key = false) => {
+  if (S.altHeld === Boolean(down)) return;
+  if (key) S.ptrHold = S.stickyCursor; // a still mouse: Safari keeps the old system pointer until it moves (comments.js)
+  S.altHeld = Boolean(down);
+  W.sayMode();
+};
 export function bindKeys(w: unknown) {
   W = w;
   S = W.S;
@@ -61,8 +67,8 @@ export function bindKeys(w: unknown) {
     const t = (e.target instanceof Element ? e.target : (e.target as Node)?.parentElement ?? null) as Element | null;
     if (W.host.hasAttribute('data-lab-pinning') && !de.classList.contains('lab-shift') && !t?.closest('input, textarea, select, [contenteditable], [data-lab-comments]')) e.preventDefault();
   }, true);
-  addEventListener('keydown', (e) => e.key === 'Alt' && setAlt(true), true);
-  addEventListener('keyup', (e) => e.key === 'Alt' && setAlt(false), true);
+  addEventListener('keydown', (e) => e.key === 'Alt' && setAlt(true, true), true);
+  addEventListener('keyup', (e) => e.key === 'Alt' && setAlt(false, true), true);
   addEventListener('pointermove', (e) => setAlt(e.altKey), { capture: true, passive: true }); // Option pressed while another window had focus
   addEventListener('blur', () => setAlt(false));
 }

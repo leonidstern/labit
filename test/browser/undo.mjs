@@ -84,11 +84,11 @@ for (const [n, eng] of engines('chromium').entries()) {
     check(eng, 'a click elsewhere within the 3 s starts the next comment, the sent pin stays', await until(() => shadow(() => { return Boolean(r.querySelector('.float textarea')); }), 1500) && (await L.comments()).map((c) => c.text).includes('stays sent'));
     await p.keyboard.press('Escape');
     await sleep(300);
-    // A link clicked within the 3 s still acts (only a new pin is held back).
+    // A link clicked within the 3 s still acts (only a new pin is held back); with the pin, ⌥ click is the link's.
     await write('before link');
     await until(() => shadow(() => { return Boolean(r.querySelector('.pin:not(.draft)')); }), 2000);
     await p.evaluate(() => { const l = document.createElement('a'); l.id = 'lk'; l.href = '#went'; l.textContent = 'a link'; document.body.prepend(l); });
-    await p.click('#lk');
+    await p.click('#lk', { modifiers: ['Alt'] });
     await sleep(300);
     check(eng, 'within the 3 s a link still acts and no box opens', (await p.evaluate(() => location.hash)) === '#went' && (await shadow(() => { return !r.querySelector('.float textarea'); })));
     await p.evaluate(() => { document.getElementById('lk').remove(); history.replaceState(null, '', location.pathname); });

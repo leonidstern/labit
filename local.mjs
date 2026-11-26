@@ -26,7 +26,7 @@ import { alive, setWifi } from './lib/labcall.ts';
 import { CLAIM_LIFE_MS, DO_IT, PROGRESS_MS, RENEWAL, REQUESTS, UNMATCHED, numberOf, slim, upgrade, VERSION as SCHEMA } from './lib/schema.mjs';
 import { LEAN_SKIP, pagePath, sameKey } from './lib/comments-api.mjs';
 import { cut } from './lib/cut.mjs';
-import { sourceLines } from './lib/source-line.mjs';
+import { flatText, sourceLines } from './lib/source-line.mjs';
 import { isNavigation } from './lib/pageload.ts';
 import { loadSettings, changedShortcuts, seedActions, savePersonal, FLAGS } from './lib/settings.ts';
 import { runCommand } from './lib/commands.ts';
@@ -227,6 +227,14 @@ const runningServer = async () => {
 const alreadyRunning = Boolean(await runningServer());
 
 // A folder that a running lab already serves (the lab's own folder or one inside it): use that lab, don't start another.
+// A short fingerprint of some text: 12 hex digits of its SHA-1.
+function sum12(text) {
+  return createHash('sha1').update(text).digest('hex').slice(0, 12);
+}
+// The page in the person's browser, unless --no-open.
+function openInBrowser(url) {
+  if (!opts['no-open']) spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [url], { stdio: 'ignore', detached: true }).on('error', () => {}).unref();
+}
 // Two labs on one project split its comments, and each one is another server running.
 if (!alreadyRunning && !opts.new && !['wait', 'reply', 'resolve', 'thread', 'pin', 'board'].includes(pos[0])) {
   const home = runningLabs().find((lab) => ROOT.startsWith(lab.root + path.sep));
@@ -234,7 +242,7 @@ if (!alreadyRunning && !opts.new && !['wait', 'reply', 'resolve', 'thread', 'pin
     const url = `http://localhost:${home.port}/${path.relative(home.root, ROOT).split(path.sep).map(encodeURIComponent).join('/')}/`;
     console.log(`[lab] ${ROOT} is already served by the lab for ${home.root}: ${url}`);
     console.log('[lab] Comment there. To run a separate lab for this folder anyway, add --new.');
-    if (!opts['no-open']) spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [url], { stdio: 'ignore', detached: true }).on('error', () => {}).unref();
+    openInBrowser(url);
     process.exit(0);
   }
   const inside = runningLabs().filter((lab) => lab.root.startsWith(ROOT + path.sep));
@@ -535,7 +543,7 @@ const LAB_NAME = givenName || path.basename(ROOT);
 // apart on a disk that ignores case. A very long key is cut short and ends with a hash of the whole.
 const storeName = (page) => {
   const safe = [...Buffer.from(page.replace(/^\//, ''))].map((b) => (/[a-z0-9-]/.test(String.fromCharCode(b)) ? String.fromCharCode(b) : `_${b.toString(16).padStart(2, '0')}`)).join('') || '_';
-  return (safe.length > 180 ? `${safe.slice(0, 140)}~${createHash('sha1').update(page).digest('hex').slice(0, 12)}` : safe) + '.json';
+  return (safe.length > 180 ? `${safe.slice(0, 140)}~${sum12(page)}` : safe) + '.json';
 };
 // A page's file, made from the comments as they are held: each one is already a JSON string, so nothing is parsed again.
 // A page left with no comments has no file. v is the file's shape (lib/schema.mjs); a file without one is 0.
@@ -872,8 +880,7 @@ const lineHints = (text, file) => {
   } catch {
     return text;
   }
-  const flat = (t) => t.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
-  const rows = src.split('\n').map(flat);
+  const rows = src.split('\n').map(flatText);
   const lineOf = (words) => {
     const w = words.replace(/\s+/g, ' ').trim().slice(0, 40).trim();
     if (w.length < 4) return 0;
@@ -1794,6 +1801,16 @@ const openTabs = () => {
 };
 let closedSince = Date.now(); // null while a page is open
 let waitEnded = 0;
+// Every open wait ends now, with this status and words.
+const endWaits = (status, words) => {
+  const all = waiters;
+  waiters = [];
+  waitEnded = Date.now();
+  for (const w of all) {
+    clearTimeout(w.timer);
+    w.res.writeHead(status).end(words);
+  }
+};
 let closedTimer = null;
 const pagesChanged = () => {
   if (openTabs()) closedSince = null;
@@ -1802,13 +1819,7 @@ const pagesChanged = () => {
   if (closedSince === null || !waiters.length) return;
   closedTimer = setTimeout(() => {
     if (openTabs() || !waiters.length) return;
-    const all = waiters;
-    waiters = [];
-    waitEnded = Date.now();
-    for (const w of all) {
-      clearTimeout(w.timer);
-      w.res.writeHead(410).end('the page was closed');
-    }
+    endWaits(410, 'the page was closed');
     setMode('away');
   }, Math.max(0, closedSince + CLOSE_GRACE - Date.now()));
 };
@@ -2194,7 +2205,7 @@ const widget = (page, admin, me = '', framed = false, req = null) => {
 // The tag carries a short sum of the page as its file has it (data-sum): after a lab restart the widget fetches the page
 // again and, when the sum is the same, leaves a page with its own scripts alone instead of reloading it (#428).
 const inject = (html, tag) => {
-  tag = tag.replace('<script ', `<script data-sum="${createHash('sha1').update(html).digest('hex').slice(0, 12)}" `);
+  tag = tag.replace('<script ', `<script data-sum="${sum12(html)}" `);
   // A page made for a colabit loses its tag here too (lib/colabit.ts): one comment layer, the lab's.
   html = stripTags(html);
   const lower = html.toLowerCase();
@@ -2209,8 +2220,7 @@ const inject = (html, tag) => {
 const LAB_ICON = '<link rel="icon" href="/_lab/favicon.svg">';
 const withIcon = (html) => {
   if (/<link\b[^>]*\brel=["']?(?:[^"'>]*\s)?icon[\s"'>/]/i.test(html) || fs.existsSync(path.join(ROOT, 'favicon.ico'))) return html;
-  const at = /<head(\s[^>]*)?>/i.exec(html) || /<!doctype[^>]*>/i.exec(html);
-  return at ? html.slice(0, at.index + at[0].length) + LAB_ICON + html.slice(at.index + at[0].length) : LAB_ICON + html;
+  return act.atTop(html, LAB_ICON);
 };
 // A dev server reloads the page as soon as a file changes — under you, mid-sentence. The widget cannot stop it from
 // where it sits: Chrome's location.reload is its own, and cannot be replaced, and by the time the widget loads the
@@ -2228,10 +2238,7 @@ return ws;}});})()</script>`;
 // Right after <head> (or at the top): it has to run before the dev server's own client script.
 const holdFirst = (html) => {
   if (!PROXY || /__lab=\{writing/.test(html)) return html; // only a dev server reloads pages; never twice
-  const head = /<head(\s[^>]*)?>/i.exec(html);
-  if (head) return html.slice(0, head.index + head[0].length) + HOLD + html.slice(head.index + head[0].length);
-  const doc = /<!doctype[^>]*>/i.exec(html);
-  return doc ? html.slice(0, doc.index + doc[0].length) + HOLD + html.slice(doc.index + doc[0].length) : HOLD + html;
+  return act.atTop(html, HOLD);
 };
 // Every page under a folder, as paths relative to it: the shallowest index pages first, then by path.
 const pagesUnder = (top) => {
@@ -2572,13 +2579,7 @@ const isOwner = (req) => isMac(req) || isDevice(req);
 // Archiving a lab from the switcher (and the API's "stop"): every open wait ends with 423, which tells the agent the person stopped it (it
 // shouldn't wait again until asked). Pins stay where they are.
 const stopListening = () => {
-  const all = waiters;
-  waiters = [];
-  waitEnded = Date.now();
-  for (const w of all) {
-    clearTimeout(w.timer);
-    w.res.writeHead(423).end('stopped from the page');
-  }
+  endWaits(423, 'stopped from the page');
   recent = [];
   console.log('[lab] listening stopped from the page');
   setMode('away');
@@ -2788,7 +2789,7 @@ const handler = async (req, res) => {
         quiet,
         fresh: ids.length,
         pages: [...new Set(fresh.map(({ page }) => page))],
-        key: createHash('sha1').update(ids.join(',')).digest('hex').slice(0, 12),
+        key: sum12(ids.join(',')),
         // Asked for a session: whether that session has a wait open (another session's wait on other pages hears none of its pins).
         listening: asker ? waiters.some((w) => w.sid === asker) : waiters.length > 0,
         last: session?.id || '',
@@ -3310,7 +3311,7 @@ server.on('listening', async () => {
   // Started a folder too high, or in the wrong one: the page says so, but nobody has opened it yet.
   else if (!PROXY && !pagesUnder(ROOT).length)
     console.log(`[lab] no HTML pages in ${ROOT} — nothing to comment on yet. Name the folder that has them (${CMD} dist), or start your dev server and run this again.`);
-  if (!opts['no-open']) spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [origin + start], { stdio: 'ignore', detached: true }).on('error', () => {}).unref();
+  openInBrowser(origin + start);
 });
 // Parked: a record of how it was started (in ~/.labit/parked), so the switcher (⌘K) in another lab, or labit run in
 // its folder again, starts it the same way.
