@@ -73,7 +73,6 @@ Your `~/.config/labit/settings.json`:
 | `remindAfterMinutes` | `3` | `LAB_REMIND_MS` | A pin handed to your agent with no answer after this long is handed to it again. | both |
 | `archiveAfterDays` | `30` | | Done threads with nothing new for this long move to `.lab/archive/` when the lab starts. | both |
 | `updateCheck` | `true` | `LABIT_NO_UPDATE_CHECK=1` | Say when a newer labit is out (checked at most once a day). | both |
-| `boards` | `false` | `LABIT_BOARDS=1` | Boards: pictures and pages side by side, the `+board` chip, board sections in a page and the board drawer. Off for now; boards already made stay in `.lab/boards/`. | both |
 | `name` | none | | Your name on pins. The page asks once and keeps it here. | yours |
 | `model` | none | `--model`, `LAB_MODEL` | The model your agent runs on, shown on the page: "talking to Claude · Sonnet 5.5". | yours |
 | `pagesFolder` | `~/lab-pages` | | The one lab for pages that belong to no project (tries, demos, options). Agents add a page there, in a folder named for its topic, instead of starting a new lab. | yours |
@@ -121,12 +120,12 @@ win over yours, key by key.
 | `toggle` | `m` | Show or hide comments |
 | `chat` | `t` | Open the chat |
 | `next` | `w` | The next new comment (with Shift: the one before) |
-| `pause` | `p` | Pause the page's videos and animations, or play what was paused (each one also has its own control: hold ⌥ over it on a computer, in its corner on a phone) |
-| `slow` | `s` | Play the page's videos and animations at ¼ speed, or back at full speed (the ¼ in a thing's own control slows only it); a pin made while paused carries the moment in ms |
+| `pause` | `p` | Pause the page's videos and animations, or play what was paused (each one also has its own menu: right-click it on a computer, ⋯ → motion on a phone) |
+| `slow` | `s` | Play the page's videos and animations at ¼ speed, or back at full speed (the speed row in a thing's own menu, ¼ ½ 1, sets only it); a pin made while paused carries the moment in ms |
 | `draw` | `d` | Held while you drag: draw a comment (a circle, an arrow, an underline…); the agent is told what it reads as |
-| `done` | `e` | Tapped: hide or show done threads (shown, faded, at first). With a thread open it resolves it, as `resolve` does |
+| `done` | `e` | Tapped: hide or show done threads (shown, faded, at first). With a thread open: resolve or reopen it |
 | `reply` | `r` | With a thread open: type a reply |
-| `resolve` | `e` | With a thread open: resolve or reopen it |
+| `walkie` | `k` | Talk while you point (your computer's own dictation types the words); ⌘↵ sends the walk to the chat, Esc drops it |
 
 Letters follow the key's place on non-Latin layouts (the T key is T in Russian too), and digits work with Shift or
 on AZERTY. The page shows your keys: the chat button reads "chat (x)" when `chat` is `x`.

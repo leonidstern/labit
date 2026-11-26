@@ -11,10 +11,16 @@
 // starts the moment the current one ends), so a long build never leaves pins sitting. Only a pin that is still
 // unheard on two looks in a row is queued then, so an agent about to run `wait` itself isn't woken for nothing.
 //
+// Routing and retries (#420): each look says this session, so the lab answers with this session's pins alone (two
+// sessions listening on two pages each get woken for their own). One wake at a time: while the turn a wake started is
+// running, more pins queue nothing (that turn ends by listening again, which hears them; if it doesn't, the next idle
+// look wakes it). A wake that never started a turn is sent again, TRIES in all for one set of pins, then left to `wait`.
+//
 // Progress: a pin somebody claimed (the agent said `reply --progress` or `--on-it` on it) keeps its status line alive while
-// this session itself runs tools: "session activity", at most one renewal per pin a minute. The lab counts a status line
-// as a sign only for 3 minutes (PROGRESS_MS), so a session that moved on to something else lets it lapse and the pin goes
-// grey. A helper's tool calls never renew it, and a pin nobody claimed gets no line.
+// this session itself runs tools, at most one renewal per pin a minute. A renewal moves only the line's time: the agent's
+// own words stay on the pin ("session activity" only where it wrote none). The lab counts a status line as a sign only for
+// 3 minutes (PROGRESS_MS), so a session that moved on to something else lets it lapse and the pin goes grey, and it lists
+// a pin for renewal only for 10 minutes after the agent itself last said something on it (CLAIM_LIFE_MS, #425). A helper's tool calls never renew it, and a pin nobody claimed gets no line.
 //
 // Labs: the one in the session's folder (.lab/server.json, or above), and every lab whose registry file
 // (~/.labit/servers/<port>.json, what `labit list` reads) names this session as its listener, so it also works when the
@@ -24,7 +30,7 @@ import type { Register } from 'claude-code';
 const EVERY_MS = 4000;
 const MAX_LABS = 4; // labs one look asks, at most
 const MAX_FILES = 40; // registry files one look reads, at most
-type Pending = { working?: { page: string; id: string }[]; fresh: number; pages: string[]; key: string; listening: boolean; last: string; dir: string; cmd: string; url: string };
+type Pending = { working?: { page: string; id: string }[]; quiet?: { id: string; at: string }[]; fresh: number; pages: string[]; key: string; listening: boolean; last: string; for?: string; dir: string; cmd: string; url: string };
 type Lab = { port: number; key: string };
 
 let busy = false; // a main-loop turn is running
@@ -34,6 +40,12 @@ let timer: { cancel: () => void } | null = null;
 const PROGRESS_MS = 60000; // a pin's progress line is renewed once a minute at most
 const WORKING_MS = 15000; // how long the list of pins being worked on is kept before it is asked for again
 let working: { lab: Lab; page: string; id: string }[] = [];
+// Mid-turn word (#497): pins that came while this session works on something else, said with a tool's result so it can
+// say it has them now, not when its turn ends. Pins handed to its wait with no word back for QUIET_MS, or pins no wait
+// has taken while it isn't listening. Once per set of pins; the next look after WORKING_MS sees new ones.
+const QUIET_MS = 30000;
+let mid: { lab: Lab; quiet: { id: string; at: string }[]; fresh: number; listening: boolean; cmd: string; dir: string }[] = [];
+const midTold = new Set<string>();
 let workingAt = -Infinity;
 const noted = new Map<string, number>(); // lab port + pin id -> when its line was last written
 // When the last wake was submitted, until its turn starts. A wake the person cancels (Escape takes it out of the
@@ -42,6 +54,19 @@ const noted = new Map<string, number>(); // lab port + pin id -> when its line w
 let submittedAt = 0;
 let queued = false;
 const SUBMIT_MS = 15000;
+const TRIES = 3; // wakes for one set of pins, at most
+const tries = new Map<string, number>(); // port:key -> wakes sent for it
+let woke = false; // the running turn is one a wake started
+// Claude Code refuses a submit after the person stopped the session (Escape) until they send something: the submit
+// resolves with { drop: why } (it doesn't reject). A refused wake was never a try: it doesn't count, and no wake is sent until a turn starts again (the person's), which ends by
+// waking the session for the pins still unheard.
+let refused = false;
+// The lab answers for this session (`for`); a lab from before #420 doesn't, and then only the one that listened last counts.
+const mine = (p: Pending | null, me: string) => Boolean(p) && (p!.for ? p!.for === me : p!.last === me);
+const ask = ($: any, lab: Lab, me: string) =>
+  $.http.fetch(`http://127.0.0.1:${lab.port}/_lab/pending?for=${encodeURIComponent(me)}`, {
+    headers: { host: `localhost:${lab.port}`, 'x-lab-admin': lab.key, 'x-lab-agent': '1' },
+  });
 
 // The lab's address and the agent's key, from .lab/server.json in a folder or one above it.
 async function labAt($: any, dir: string, port?: number): Promise<Lab | null> {
@@ -96,14 +121,18 @@ async function note($: any, line: string): Promise<void> {
     workingAt = now;
     const me = await $.session.id();
     const list: typeof working = [];
+    const seen: typeof mid = [];
     for (const lab of await labsFor($, me)) {
       try {
-        const res = await $.http.fetch(`http://127.0.0.1:${lab.port}/_lab/pending`, { headers: { host: `localhost:${lab.port}`, 'x-lab-admin': lab.key, 'x-lab-agent': '1' } });
+        const res = await ask($, lab, me);
         const p: Pending = res.ok ? JSON.parse(res.text) : null;
-        if (p?.last === me) for (const w of p.working || []) list.push({ lab, ...w });
+        if (!mine(p, me)) continue;
+        for (const w of p.working || []) list.push({ lab, ...w });
+        seen.push({ lab, quiet: p.quiet || [], fresh: p.fresh, listening: p.listening, cmd: p.cmd, dir: p.dir });
       } catch {}
     }
     working = list;
+    mid = seen;
   }
   for (const w of working) {
     const key = `${w.lab.port}:${w.id}`;
@@ -113,15 +142,43 @@ async function note($: any, line: string): Promise<void> {
       .fetch(`http://127.0.0.1:${w.lab.port}/_lab/api/comments`, {
         method: 'POST',
         headers: { host: `localhost:${w.lab.port}`, 'x-lab-admin': w.lab.key, 'x-lab-agent': '1', 'content-type': 'application/json' },
-        body: JSON.stringify({ page: w.page, action: 'progress', id: w.id, text: line }),
+        body: JSON.stringify({ page: w.page, action: 'progress', id: w.id, text: line, renew: true }), // renew: only its time moves, the agent's words stay
       })
       .catch(() => {});
   }
 }
 
+// What to tell the session with this tool's result: the pins waiting on it while it works on something else, once each.
+async function midWord(): Promise<string> {
+  const now = Date.now(); // wall time, as the lab's handedAt is
+  const out: string[] = [];
+  for (const m of mid) {
+    const quiet = m.quiet.filter((q) => now - Date.parse(q.at) > QUIET_MS && !midTold.has(`${m.lab.port}:${q.id}:${q.at}`));
+    const fresh = !m.listening && m.fresh && !midTold.has(`${m.lab.port}:fresh:${m.fresh}`) ? m.fresh : 0;
+    if (!quiet.length && !fresh) continue;
+    for (const q of quiet) midTold.add(`${m.lab.port}:${q.id}:${q.at}`);
+    if (fresh) midTold.add(`${m.lab.port}:fresh:${m.fresh}`);
+    const n = (k: number) => (k === 1 ? 'a pin' : `${k} pins`);
+    out.push(
+      `labit: ${[quiet.length && `${n(quiet.length)} handed to you with no word back yet (${quiet.map((q) => q.id).join(', ')})`, fresh && `${n(fresh)} nobody has taken (run \`${m.cmd} wait --timeout 5\` in ${m.dir})`].filter(Boolean).join(', and ')}. ` +
+        `A person is waiting on ${quiet.length + fresh === 1 ? 'it' : 'them'} while you work on something else. Before your next step, answer what is quick; on the rest send \`${m.cmd} reply <id> --progress "after <what you're on now>"\` so the page says you have it. Then carry on.`,
+    );
+  }
+  return out.join('\n');
+}
+
 // Only the session's own tool calls count: a helper it started (agentId set) works on whatever it was given.
 async function progress($: any, e: any): Promise<void> {
   if (e?.tool && e.agentId === undefined) await note($, LINE);
+}
+
+// A wake that never got in: the try is taken back, and nothing more is sent until a turn starts (the person's).
+function undelivered(key: string, port: number): void {
+  tries.set(key, Math.max(0, (tries.get(key) || 1) - 1));
+  told.delete(port);
+  submittedAt = 0;
+  queued = false;
+  refused = true;
 }
 
 async function look($: any): Promise<void> {
@@ -130,21 +187,23 @@ async function look($: any): Promise<void> {
     submittedAt = 0;
     told.clear();
   }
+  if (refused) return; // the session was stopped: nothing gets in until the person writes
   if (queued) return; // already in the queue behind the running turn; its end starts the clock
+  if (busy && woke) return; // the wake's own turn is running: it listens again at its end
   const me = await $.session.id();
   for (const lab of await labsFor($, me)) {
     let p: Pending;
     try {
-      const res = await $.http.fetch(`http://127.0.0.1:${lab.port}/_lab/pending`, {
-        headers: { host: `localhost:${lab.port}`, 'x-lab-admin': lab.key, 'x-lab-agent': '1' },
-      });
+      const res = await ask($, lab, me);
       if (!res.ok) continue;
       p = JSON.parse(res.text);
     } catch {
       continue; // no lab running there
     }
     if (!p.fresh || p.listening || p.key === told.get(lab.port) || submittedAt || queued) continue;
-    if (!p.last || p.last !== me) continue; // another session's lab, or one this session never listened on
+    if (!mine(p, me)) continue; // another session's pins, or a lab this session never listened on
+    const sent = tries.get(`${lab.port}:${p.key}`) || 0;
+    if (sent >= TRIES) continue; // woken that often for these pins and never came: `wait` hands them over when it listens
     if (busy) {
       const now = `${lab.port}:${p.key}`;
       if (heard !== now) {
@@ -153,17 +212,22 @@ async function look($: any): Promise<void> {
       }
     }
     told.set(lab.port, p.key);
+    tries.set(`${lab.port}:${p.key}`, sent + 1);
     if (busy) queued = true;
     else submittedAt = await $.clock.now(); // its turn starts once the session is idle; don't submit twice meanwhile
     const n = p.fresh === 1 ? 'A new pin' : `${p.fresh} new pins`;
     // No page names here: this text is a turn of its own, and a page's path is whatever a comment was posted to (a
     // guest on the wifi can post one). `wait` names the pages, in text marked as the lab's.
-    void $.prompt.submit({
+    const key = `${lab.port}:${p.key}`;
+    void Promise.resolve($.prompt.submit({
       text:
         `labit: ${n} (${p.url}) while you weren't listening${busy ? ' (queued while you were busy)' : ''}. ` +
         `Run \`${p.cmd} wait --timeout 5\` in ${p.dir} to read them (nothing new means you already have them), ` +
         `read each thread whole (the page or section is not the question), answer each on its pin with reply, then listen again in the background as before (\`wait --bg\`).`,
-    });
+    })).then(
+      (r: any) => { if (r?.drop !== undefined) undelivered(key, lab.port); }, // { drop: why }: refused, or taken out of the queue
+      () => undelivered(key, lab.port),
+    );
     return;
   }
   heard = ''; // nothing waiting: the next pin starts its count again
@@ -171,13 +235,19 @@ async function look($: any): Promise<void> {
 
 export const register: Register = (on) => {
   // A tool call by this session or a helper of it: the pins being worked on show it. Never delays the call.
-  on('tool.call', ($, e, next) => {
+  // Its own calls also bring the word about pins waiting on it (midWord), read with the result, never in place of it.
+  on('tool.call', async ($, e, next) => {
     void progress($, e).catch(() => {});
-    return next(e);
+    const out = await next(e);
+    if (e.agentId !== undefined || out.deny !== undefined || out.isError) return out;
+    const word = await midWord().catch(() => '');
+    return word ? { ...out, context: [...(out.context || []), word] } : out;
   });
   on('turn.start', ($, e, next) => {
     if (e.agentId === undefined) {
       busy = true;
+      refused = false;
+      woke = Boolean(submittedAt || queued); // the wake's turn (a queued one starts right after the turn it waited for)
       submittedAt = 0;
       queued = false;
     }
@@ -186,6 +256,7 @@ export const register: Register = (on) => {
   on('turn.complete', async ($, e, next) => {
     if (e.agentId === undefined) {
       busy = false;
+      woke = false;
       if (queued) {
         queued = false;
         submittedAt = await $.clock.now(); // the queued wake's turn should start now; if it doesn't, it counts as lost

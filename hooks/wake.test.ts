@@ -2,11 +2,12 @@ import { expect, mock, test } from 'claude-code/testing';
 
 // A lab at /p/.lab/server.json; the session is /p/sub; /_lab/pending answers what each test sets.
 // `more` changes the world: another folder for the session (`cwd`), more files (`files`: path -> text), `pending` per port.
-const world = (on: any, pending: Record<string, unknown>, me = 'S1', more: { cwd?: string; files?: Record<string, string>; byPort?: Record<number, Record<string, unknown>> } = {}) => {
+const world = (on: any, pending: Record<string, unknown>, me = 'S1', more: { submit?: (e: any) => any; cwd?: string; files?: Record<string, string>; byPort?: Record<number, Record<string, unknown>> } = {}) => {
   const sent: string[] = [];
   const asked: number[] = [];
   const looked = { n: 0 };
   const posts: any[] = [];
+  const heads: string[] = []; // the urls looked at
   const files: Record<string, string> = { '/p/.lab/server.json': JSON.stringify({ port: 4400, agent: 'k' }), ...more.files };
   on('session.start', (_: any, e: any) => ({ cwd: e.cwd }));
   on('session.cwd', () => ({ value: more.cwd || '/p/sub' }));
@@ -26,17 +27,20 @@ const world = (on: any, pending: Record<string, unknown>, me = 'S1', more: { cwd
       return { value: { status: 204, ok: true, headers: {}, text: '' } };
     }
     looked.n++;
+    heads.push(typeof e === 'string' ? e : e.url);
     const port = Number(/:(\d+)\//.exec(typeof e === 'string' ? e : e.url)?.[1]);
     asked.push(port);
     return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ fresh: 0, pages: [], key: '', listening: false, last: 'S1', dir: '/p', cmd: 'labit', url: `http://localhost:${port}`, ...pending, ...more.byPort?.[port] }) } };
   });
   on('prompt.submit', (_: any, e: any) => {
+    const r = more.submit?.(e);
+    if (r) return r;
     sent.push(e.text);
     return { text: e.text };
   });
   on('turn.start', (_: any, e: any) => ({ turnId: e.turnId }));
   on('turn.complete', (_: any, e: any) => ({ text: e.answer }));
-  return { sent, looked, asked, posts };
+  return { sent, looked, asked, posts, heads };
 };
 const turnStart = ($: any, turnId = 't1') => $.turn.start({ text: 'go', turnId });
 const turnEnd = ($: any, turnId = 't1') => $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId, reason: 'answer' });
@@ -192,7 +196,7 @@ test('the session\'s own tool calls renew the status line of the claimed pins, o
   await $.tool.call({ tool: 'Edit', file_path: '/p/src/comments.js', old_string: 'a', new_string: 'b' } as any);
   await clock.advance(1000);
   expect(w.posts.length).toBe(1);
-  expect(w.posts[0]).toEqual({ page: '/a', action: 'progress', id: 'c1', text: 'session activity' }); // not the tool call, not an answer
+  expect(w.posts[0]).toEqual({ page: '/a', action: 'progress', id: 'c1', text: 'session activity', renew: true }); // not the tool call, not an answer; a renewal keeps the agent's words
   await $.tool.call({ tool: 'Bash', command: 'npm test' } as any).catch(() => {});
   await clock.advance(1000);
   expect(w.posts.length).toBe(1); // within the minute: no second line
@@ -201,6 +205,27 @@ test('the session\'s own tool calls renew the status line of the claimed pins, o
   await clock.advance(1000);
   expect(w.posts.length).toBe(2);
   expect(w.posts[1].text).toBe('session activity');
+});
+
+test('pins waiting on a busy session come with its own tool results, once each', async ($, on) => {
+  const clock = mock.clock(on);
+  const handed = new Date(Date.now() - 60000).toISOString();
+  world(on, { quiet: [{ id: 'c1', at: handed }], fresh: 2, key: 'k1', listening: false, last: 'S1' });
+  on('tool.call', () => ({ result: {} }));
+  await $.session.start({ cwd: '/p/sub', surface: 'terminal', isInteractive: true } as any);
+  await turnStart($);
+  await $.tool.call({ tool: 'Bash', command: 'npm run build' } as any); // the look runs beside the call, never holding it up
+  await clock.advance(1000);
+  const first: any = await $.tool.call({ tool: 'Bash', command: 'npm run build' } as any);
+  expect(first.context?.length).toBe(1);
+  expect(first.context[0]).toContain('a pin handed to you with no word back yet (c1)');
+  expect(first.context[0]).toContain('2 pins nobody has taken');
+  expect(first.context[0]).toContain('--progress');
+  await clock.advance(20000);
+  const again: any = await $.tool.call({ tool: 'Bash', command: 'npm test' } as any);
+  expect(again.context?.length || 0).toBe(0); // said once
+  const helper: any = await $.tool.call({ tool: 'Bash', command: 'ls', agentId: 'h1' } as any);
+  expect(helper.context?.length || 0).toBe(0); // a helper's results carry nothing
 });
 
 test('a helper\'s tool calls renew nothing, and a helper running while the session itself is idle does not keep the line alive', async ($, on) => {
@@ -219,4 +244,97 @@ test('a helper\'s tool calls renew nothing, and a helper running while the sessi
   await clock.advance(200000); // no tool call of its own: nothing renews, the line lapses at the lab
   expect(w.posts.length).toBe(1);
   await turnEnd($);
+});
+
+test('each look says the session, and the lab\'s answer for it is what counts (#420)', async ($, on) => {
+  const clock = mock.clock(on);
+  const w = world(on, { fresh: 1, pages: ['/pricing'], key: 'k1', last: 'S2', for: 'S1' });
+  await $.session.start({ cwd: '/p/sub', surface: 'terminal', isInteractive: true } as any);
+  await clock.advance(4000);
+  expect(w.heads[0]).toContain('/_lab/pending?for=S1');
+  expect(w.sent.length).toBe(1); // another session listened later, on another page: this one is still woken for its own
+});
+
+test('an answer for another session never wakes this one', async ($, on) => {
+  const clock = mock.clock(on);
+  const w = world(on, { fresh: 1, pages: ['/a'], key: 'k1', last: 'S1', for: 'S2' });
+  await $.session.start({ cwd: '/p/sub', surface: 'terminal', isInteractive: true } as any);
+  await clock.advance(12000);
+  expect(w.sent.length).toBe(0);
+});
+
+test('a wake that keeps getting lost is sent three times for one set of pins, then left to wait', async ($, on) => {
+  const clock = mock.clock(on);
+  const state: Record<string, unknown> = { fresh: 1, pages: ['/a'], key: 'k1' };
+  const w = world(on, state);
+  await $.session.start({ cwd: '/p/sub', surface: 'terminal', isInteractive: true } as any);
+  await clock.advance(120000); // no turn ever starts
+  expect(w.sent.length).toBe(3);
+  state.key = 'k2'; // a new pin: a new set
+  state.fresh = 2;
+  await clock.advance(10000);
+  expect(w.sent.length).toBe(4);
+  expect(w.sent[3]).toContain('2 new pins');
+});
+
+test('while the turn a wake started runs, more pins queue nothing; once it ends without listening, one wake', async ($, on) => {
+  const clock = mock.clock(on);
+  const state: Record<string, unknown> = { fresh: 1, pages: ['/a'], key: 'k1' };
+  const w = world(on, state);
+  await $.session.start({ cwd: '/p/sub', surface: 'terminal', isInteractive: true } as any);
+  await clock.advance(4000);
+  expect(w.sent.length).toBe(1);
+  await turnStart($, 'wake'); // the wake's turn
+  state.key = 'k2'; // a pin more while it answers the first
+  await clock.advance(30000);
+  expect(w.sent.length).toBe(1); // no second turn queued behind it
+  await turnEnd($, 'wake');
+  await clock.advance(4000);
+  expect(w.sent.length).toBe(2); // it didn't listen again: the idle look wakes it once
+});
+
+test('a turn the person started still gets pins queued behind it', async ($, on) => {
+  const clock = mock.clock(on);
+  const w = world(on, { fresh: 1, pages: ['/a'], key: 'k1' });
+  await $.session.start({ cwd: '/p/sub', surface: 'terminal', isInteractive: true } as any);
+  await turnStart($); // no wake before it: the person's own message
+  await clock.advance(8000);
+  expect(w.sent.length).toBe(1);
+  expect(w.sent[0]).toContain('queued while you were busy');
+});
+
+test('a wake Claude Code refuses (the session was stopped) is no try: the next turn the person starts brings it', async ($, on) => {
+  const clock = mock.clock(on);
+  let refuse = true;
+  let refusedN = 0;
+  const w = world(on, { fresh: 1, pages: ['/a'], key: 'k1' }, 'S1', {
+    submit: () => (refuse ? (refusedN++, { drop: 'the session was stopped and nobody has sent input since' }) : null), // as Claude Code answers it
+  });
+  await $.session.start({ cwd: '/p/sub', surface: 'terminal', isInteractive: true } as any);
+  await clock.advance(4000);
+  expect(refusedN).toBe(1);
+  await clock.advance(120000); // refused: no more submits while nobody writes
+  expect(refusedN).toBe(1);
+  refuse = false;
+  await turnStart($); // the person writes
+  await clock.advance(8000); // two looks while busy: queued behind their turn
+  expect(w.sent.length).toBe(1);
+  expect(w.sent[0]).toContain('queued while you were busy');
+});
+
+test('after a refused wake, a short turn of the person (over before two looks) is followed by the wake', async ($, on) => {
+  const clock = mock.clock(on);
+  let refuse = true;
+  const w = world(on, { fresh: 1, pages: ['/a'], key: 'k1' }, 'S1', {
+    submit: () => (refuse ? { drop: 'the session was stopped and nobody has sent input since' } : null),
+  });
+  await $.session.start({ cwd: '/p/sub', surface: 'terminal', isInteractive: true } as any);
+  await clock.advance(60000);
+  refuse = false;
+  await turnStart($);
+  await clock.advance(1000);
+  await turnEnd($);
+  await clock.advance(4000);
+  expect(w.sent.length).toBe(1);
+  expect(w.sent[0]).not.toContain('queued while you were busy');
 });

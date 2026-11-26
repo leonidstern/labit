@@ -131,7 +131,10 @@ test('a subfolder removed under its page\'s comments, then made again: the lab s
   assert.match((await raw(PORT, '/sub/deep/page')).text, /deep, back/);
   const page = (await raw(PORT, '/_lab/pages')).json.pages.find((p) => p.path === '/sub/deep/page');
   assert.equal(page?.open, 1, 'the page is listed again, with its comment');
-  assert.match((await raw(PORT, '/_lab/agent/sub/deep/page')).text, /^file: sub\/deep\/page\.html$/m);
+  // The lab hears of the new folder from its watcher, which can take longer than the pause above on a busy computer.
+  let text = '';
+  for (let i = 0; i < 50 && !/^file: sub\/deep\/page\.html$/m.test((text = (await raw(PORT, '/_lab/agent/sub/deep/page')).text)); i++) await sleep(100);
+  assert.match(text, /^file: sub\/deep\/page\.html$/m);
 });
 
 test('a 10 MB page: served whole with the comment layer once, compressed too, without holding up the rest for long', async () => {

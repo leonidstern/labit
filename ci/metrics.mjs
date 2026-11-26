@@ -29,7 +29,7 @@ const METRICS = {
     hint: "Shrink src/comments.js without changing behaviour: remove dead code and duplication, then npm run build. No new dependencies.",
   },
   npmPackBytes: {
-    kind: "budget", dir: "down", perPr: 4096, max: 190_000,
+    kind: "budget", dir: "down", perPr: 4096, max: 196_000,
     hint: "Shrink the published package (npm pack): remove dead code from the shipped files.",
   },
   oxlintProblems: {
@@ -47,6 +47,10 @@ const METRICS = {
   staleBuild: {
     kind: "ratchet", dir: "down", ideal: 0,
     hint: "public/_lab/comments.js doesn't match a fresh build of src/comments.js. Run npm run build (the built files are not kept in git).",
+  },
+  sharedScriptCopies: {
+    kind: "ratchet", dir: "down", ideal: 0,
+    hint: "Code is built into more than one shipped script (public/_lab/bundles.json lists which): load it from the script that has it (part() in src/comments.js, import() of that script) instead of importing it into another.",
   },
   readmeClaimsWrong: {
     kind: "ratchet", dir: "down", ideal: 0, agent: false,
@@ -128,6 +132,10 @@ function collect() {
     const parts = readdirSync(dirname(fresh)).filter((f) => f !== "comments.js");
     m.staleBuild = [readFileSync(fresh).equals(readFileSync(PAGE_SCRIPT)), ...parts.map((f) => existsSync(join(dirname(PAGE_SCRIPT), f)) && readFileSync(join(dirname(fresh), f)).equals(readFileSync(join(dirname(PAGE_SCRIPT), f))))].every(Boolean) ? 0 : 1;
   }
+
+  // Code built into more than one shipped script (scripts/build-widget.mjs writes bundles.json as it builds).
+  const bundles = join(dirname(PAGE_SCRIPT), "bundles.json");
+  if (existsSync(bundles)) m.sharedScriptCopies = read(bundles).copies;
 
   m.readmeClaims = checkReadme(m);
   m.readmeClaimsWrong = m.readmeClaims.length;

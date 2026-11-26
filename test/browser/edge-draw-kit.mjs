@@ -8,6 +8,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { claimPort } from './port.mjs';
 
 const require = createRequire(import.meta.url);
 export const pw = (() => {
@@ -41,7 +42,7 @@ export const done = () => {
 // One lab: pages is { name: html }, settings go into labit.json beside the port.
 export async function lab(pages, settings = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'labit-edraw-'));
-  const port = 8600 + Math.floor(Math.random() * 300);
+  const port = claimPort(8600, 300); // claimed, not random: CI runs several browser tests on one Mac at once
   for (const [n, html] of Object.entries(pages)) fs.writeFileSync(path.join(dir, `${n}.html`), html);
   fs.writeFileSync(path.join(dir, 'labit.json'), JSON.stringify({ port, ...settings }));
   const env = { ...process.env, PORT: '', XDG_CONFIG_HOME: fs.mkdtempSync(path.join(os.tmpdir(), 'labit-cfg-')), LABIT_HOME: fs.mkdtempSync(path.join(os.tmpdir(), 'labit-home-')), LABIT_NO_UPDATE_CHECK: '1', LABIT_EXIT_WITH_PARENT: '1' };
@@ -63,7 +64,7 @@ export async function lab(pages, settings = {}) {
     // The agent's text for a page, and the page's comments as the store holds them.
     agent: async (page) => (await fetch(`${B}/_lab/agent/${page}`)).text(),
     comments: async (page) => (await (await fetch(`${B}/_lab/api/comments?page=/${page}`)).json()).comments,
-    stop: () => (server.kill(), fs.rmSync(dir, { recursive: true, force: true })),
+    stop: () => (server.kill(), fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5 })),
   };
 }
 

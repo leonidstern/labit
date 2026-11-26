@@ -9,9 +9,9 @@
 import { clamp, fitAll, fitFrame, panBy, zoomAt } from './camera.ts';
 import type { Cam, Box } from './camera.ts';
 
-type Frame = { id: string; src: string; auto?: boolean; ow?: number; oh?: number; kind?: string; file?: string; iw?: number; ih?: number; guest?: boolean; w: number; h: number; x: number; y: number; label?: string; state?: string; variantOf?: string };
+type Frame = { id: string; src: string; auto?: boolean; ow?: number; oh?: number; kind?: string; file?: string; iw?: number; ih?: number; pv?: number[]; guest?: boolean; w: number; h: number; x: number; y: number; label?: string; state?: string; variantOf?: string };
 type Board = { rev: number; frames: Frame[]; of?: string } & Record<string, unknown>;
-type Card = { f: Frame; box: HTMLElement; inner: HTMLElement; frame?: HTMLIFrameElement; seen: number };
+type Card = { f: Frame; box: HTMLElement; inner: HTMLElement; frame?: HTMLIFrameElement; seen: number; pv?: HTMLImageElement; at?: number };
 type Spot = { left: number; top: number; zone: { left: number; top: number; width: number; height: number } | null; clipped?: boolean };
 
 type MountOpts = {
@@ -41,12 +41,13 @@ const css = `
 #lab-board .b{position:absolute;inset:0;background:#fff;contain:layout paint}
 #lab-board .f.off{content-visibility:hidden}
 @media (hover:hover){#lab-board:not(.alt,.grab) .f:hover{outline:calc(1px*var(--iz)) solid #1f7a4d}} /* what a click picks (Leo, 21 Nov: "cursor should have selection") */
-#lab-board .f.sel,#lab-board .f.pick{outline:calc(2px*var(--iz)) solid #1f7a4d;outline-offset:calc(1px*var(--iz))}
+#lab-board .f.sel,#lab-board .f.pick{outline:calc(1px*var(--iz)) solid #1f7a4d} /* picked or open: the same line as hover (Leo, 23 Nov: "just same as hover") */
 #lab-board:not(.alt,.grab) .f.pick .b{cursor:move} /* a selected frame is dragged, with the others selected */
 #lab-board .marq{position:absolute;z-index:4;box-sizing:border-box;border:1px solid #1f7a4d;background:color-mix(in srgb,#1f7a4d 8%,transparent);pointer-events:none}
 #lab-board iframe,#lab-board img{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff;pointer-events:none}
 #lab-board .f.in iframe{pointer-events:auto}
 #lab-board .t{position:absolute;left:0;bottom:100%;white-space:nowrap;max-width:calc(100% / var(--iz));overflow:hidden;text-overflow:ellipsis;transform-origin:0 100%;transform:scale(var(--iz));padding-bottom:4px;opacity:.75}
+#lab-board .f:not(.sel,.pick,.down) .t{visibility:hidden} /* a frame's name only once it is pressed or picked (Leo, 23 Nov: "dont show picture names files always", "these names too") */
 #lab-board .c{position:absolute;inset:0;box-sizing:border-box;padding:calc(20px*var(--iz));font-size:calc(14px*var(--iz));line-height:1.5;color:#1d1d1b;background:#f6f5f1}
 #lab-board .c b{display:block;font-size:calc(22px*var(--iz));font-weight:600;margin-bottom:calc(6px*var(--iz))}
 #lab-board .none{position:absolute;inset:0;display:grid;place-items:center;opacity:.7}
@@ -60,6 +61,7 @@ const css = `
 #lab-board .zm:not(.open) .zc{display:none}
 @media (prefers-color-scheme:dark){#lab-board .zm button:hover,#lab-board .zm.open button{background:rgba(255,255,255,.08)}}
 #lab-board img{object-fit:contain}
+#lab-board .b:has(> img){background:none}#lab-board .b img{background:none;will-change:transform} /* each picture its own layer, the picture itself its texture (Safari does that only for a bare one, no background): a zoom scales it, never paints it again (Leo, 23 Nov: fine lines sparkled while zooming). No white card under it: at a half pixel its edge showed through as a light line while moving (Leo, 23 Nov: "some artifacts appears sometimes when moving images") */
 #lab-board.drop{outline:2px solid #1f7a4d;outline-offset:-2px}
 #lab-board .ghost{position:absolute;width:200px;height:120px;margin:-60px 0 0 -100px;display:grid;place-items:center;border:calc(1px*var(--iz,1)) dashed currentColor;background:rgba(127,127,127,.12);font-size:calc(14px*var(--iz,1));opacity:.8;pointer-events:none}
 #lab-board .note{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);z-index:6;max-width:calc(100% - 32px);padding:8px 12px;border-radius:var(--_r-s,6px);background:#1d1d1b;color:#fff;pointer-events:none}
@@ -115,7 +117,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   };
   measure();
   let latest: Board | null = null; // the board as last read: its rev and frames, for a change written back (a picture taken off)
-  type Undo = { items: { id: string; x?: number; y?: number }[]; archived: boolean };
+  type Undo = { items: { id: string; x?: number; y?: number }[]; archived: boolean; at?: number };
   const taken: Undo[] = []; // what this browser took off or moved, newest last: ⌘Z puts the last one back
   let moved = false; // the person moved the camera: a resize no longer fits everything again
   let heldCam: Cam | null = null; // the camera when the hold began
@@ -168,6 +170,58 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     return el;
   };
 
+  // A picture drawn small shows its preview instead (Leo, 23 Nov: fine lines sparkled far out; as open whiteboards do it):
+  // previews of 1024, 512, 256 and 128 px, made once by the board's page and kept by the lab beside the picture. The one
+  // shown is the smallest that is drawn at most 1.4× its size. A smaller one comes at once (zooming out); a bigger one
+  // only once the camera rests, so nothing changes mid-zoom. The preview lies over the picture, which stays under it.
+  const previewOf = (c: Card, settled: boolean) => {
+    const sizes = c.f.pv;
+    if (!sizes?.length || !c.pv) return;
+    const need = Math.max(c.f.w, c.f.h) * cam.z * devicePixelRatio;
+    let at = 0; // the picture itself
+    for (const s of sizes) if (s * 1.4 >= need && (!at || s < at)) at = s;
+    const was = c.at || 0;
+    if (at === was || (!settled && (at === 0 || (was && at > was)))) return;
+    c.at = at;
+    if (at) c.pv.src = `${c.f.src}-p${at}`;
+    c.pv.style.visibility = at ? '' : 'hidden';
+  };
+  // Pictures with no previews yet get them, one at a time once the board rests, from this page (one that may add to the
+  // board: the lab refuses the rest, and then none is tried again).
+  const makingFor = new Set<string>();
+  let previews: Promise<void> = Promise.resolve(); // one picture at a time
+  let mayMake = true;
+  const makePreviews = async (c: Card, img: HTMLImageElement) => {
+    const long = Math.max(img.naturalWidth, img.naturalHeight);
+    const want = [1024, 512, 256, 128].filter((s) => s < long && !c.f.pv?.includes(s));
+    if (!mayMake || !want.length || makingFor.has(c.f.id) || c.f.src.indexOf('/_lab/board/') !== 0) return;
+    makingFor.add(c.f.id);
+    let from: CanvasImageSource = img;
+    let [w, h] = [img.naturalWidth, img.naturalHeight];
+    for (const s of want) {
+      while (Math.max(w, h) / 2 >= s) {
+        // halved step by step, each from the last: one big step skips most of the picture and comes out jagged
+        const cv = Object.assign(document.createElement('canvas'), { width: Math.round(w / 2), height: Math.round(h / 2) });
+        const x = cv.getContext('2d');
+        if (!x) return;
+        x.imageSmoothingQuality = 'high';
+        x.drawImage(from, 0, 0, cv.width, cv.height);
+        [from, w, h] = [cv, cv.width, cv.height];
+      }
+      const k = s / Math.max(w, h);
+      const cv = Object.assign(document.createElement('canvas'), { width: Math.round(w * k), height: Math.round(h * k) });
+      const x = cv.getContext('2d');
+      if (!x) return;
+      x.imageSmoothingQuality = 'high';
+      x.drawImage(from, 0, 0, cv.width, cv.height);
+      const blob = await new Promise<Blob | null>((ok) => cv.toBlob(ok, 'image/webp', 0.9));
+      if (!blob || signal.aborted) return;
+      const admin = document.querySelector<HTMLScriptElement>('script[data-admin]')?.dataset.admin;
+      const res = await fetch(`/_lab/api/image?board=${encodeURIComponent(name)}&preview=${c.f.id}`, { method: 'POST', headers: { 'content-type': blob.type, ...(admin && { 'x-lab-admin': admin }) }, body: blob, signal }).catch(() => null);
+      if (!res?.ok) return void (mayMake = res?.status !== 403 && res?.status !== 401);
+    }
+  };
+
   // One camera write per frame: a trackpad sends two or three wheel events a frame, each was a transform, a --iz restyle
   // of every label and a pin redraw (Leo, 19 Nov: "lags a lot"). Nothing here reads the page's layout, and the labels
   // are sized again only when the zoom changed (a pan restyles nothing).
@@ -190,6 +244,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       dots.style.backgroundSize = `${step}px ${step}px`;
       dots.style.opacity = String(Math.max(0, Math.min(1, (cam.z - 0.2) / 0.15))); // all there from 35 %, gone at 20 %
       world.style.setProperty('--iz', String(1 / cam.z));
+      for (const c of cards) previewOf(c, false);
       const pc = `${Math.round(cam.z * 100)}%`;
       if (zoomBtn.textContent !== pc) zoomBtn.textContent = pc;
     }
@@ -219,6 +274,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       if (!held) return go(moved || kept ? cam : fitAll(boxes(), view), false); // (which rests again, and lets the layer go then)
     }
     layered = false;
+    for (const c of cards) previewOf(c, true);
     world.style.willChange = '';
     wake();
     keepCam();
@@ -247,7 +303,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   let home: number | null = null; // where the camera was before that glide (api.nudgeBack takes it there again)
   let holdOff: ReturnType<typeof setTimeout> | undefined;
   const go = (next: Cam, user = true, pan = false, camOnly = false) => {
-    const c = camOnly ? next : clamp(next, boxes(), view); // a glide's steps are its own (api.nudge): held to the edges, each would jump to them
+    const c = camOnly ? next : clamp(next, boxes(), view, cam); // a glide's steps are its own (api.nudge): held to the edges, each would jump to them
     if (user) moved = true;
     if (user) [home, heldCam] = [null, null]; // moved by hand while a keyboard holds the board: it stays where the hand left it
     if (user && (!pan || Math.abs(c.z - cam.z) > 1e-6)) focus = false;
@@ -347,11 +403,17 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       inner.className = 'b';
       const c: Card = { f, box, inner, seen: 0 };
       box.dataset.id = f.id;
-      inner.appendChild(f.kind === 'image' ? Object.assign(document.createElement('img'), { src: f.src, alt: f.label || '', draggable: false, decoding: 'async', loading: 'lazy' }) : card(c));
+      if (f.kind === 'image') {
+        const img = Object.assign(document.createElement('img'), { src: f.src, alt: f.label || '', draggable: false, loading: 'lazy' });
+        c.pv = Object.assign(document.createElement('img'), { alt: '', draggable: false, className: 'pv' });
+        c.pv.style.visibility = 'hidden';
+        img.addEventListener('load', () => (previews = previews.then(() => (signal.aborted ? undefined : makePreviews(c, img))).catch((e) => console.warn('[lab] preview', e))), { once: true, signal });
+        inner.append(img, c.pv);
+      } else inner.appendChild(card(c));
       box.append(inner);
       const tag = text('div', '', box);
       tag.className = 't';
-      tag.setAttribute('data-uncommentable', ''); // the label opens its frame: no pin there
+      tag.setAttribute('data-lab-off', ''); // the label opens its frame: no pin there
       world.append(box);
       return c;
     });
@@ -360,6 +422,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       const f = c.f;
       Object.assign(c.box.style, { left: `${f.x}px`, top: `${f.y}px`, width: `${f.w}px`, height: `${f.h}px` });
       paint(c);
+      previewOf(c, true);
     }
     if (selected && !cards.some((c) => c.f.id === selected)) selected = entered = '';
     pickFrames(picks);
@@ -457,7 +520,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   // The zoom, quiet in the top-right corner (the widget has both bottom ones) (Leo, 19 Nov: "show zoom somewhere"); a tap offers fit · 50% · 100%.
   const zoomBox = document.createElement('div');
   zoomBox.className = 'zm';
-  zoomBox.setAttribute('data-uncommentable', '');
+  zoomBox.setAttribute('data-lab-off', '');
   const zoomBtn = Object.assign(document.createElement('button'), { type: 'button', className: 'zo', textContent: '100%' });
   zoomBtn.setAttribute('aria-label', 'zoom');
   zoomBtn.addEventListener('click', () => zoomBox.classList.toggle('open'));
@@ -513,7 +576,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       measure();
       handLayer = document.createElement('div');
       handLayer.id = 'lab-hand';
-      handLayer.setAttribute('data-uncommentable', '');
+      handLayer.setAttribute('data-lab-off', '');
       Object.assign(handLayer.style, { left: `${ox}px`, top: `${oy}px`, width: `${view.w}px`, height: `${view.h}px` });
       (scope instanceof ShadowRoot ? scope : document.documentElement).append(handLayer);
     } else if (!space && handLayer && !down?.hand) {
@@ -561,6 +624,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       down = { x: e.clientX, y: e.clientY, id: at(e), far: false, at: performance.now(), t: e.timeStamp, hand: !plain, mid: e.pointerType !== 'touch' && e.button === 1, shift: e.shiftKey };
       hand();
       clearTimeout(holdTimer);
+      if (plain && down.id) find(down.id)?.box.classList.add('down'); // a picture's name shows as the press starts, not on the lift (Leo, 23 Nov: "it appears with delay?")
       if (e.pointerType === 'touch') {
         const d = down;
         holdTimer = window.setTimeout(() => {
@@ -597,7 +661,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   }, true);
   // The box over the canvas (in the box's own px) while one is drawn.
   const marq = Object.assign(document.createElement('div'), { className: 'marq', hidden: true });
-  marq.setAttribute('data-uncommentable', '');
+  marq.setAttribute('data-lab-off', '');
   root.append(marq);
   // A press that is no pan, gone 4 px: on a frame it moves the picked frames (that frame becomes the pick first, with Shift one
   // more), on the canvas it draws a box and the frames it touches are the pick (Shift: besides those picked already).
@@ -654,6 +718,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     clearTimeout(holdTimer);
     if (pts.size || !d) return;
     down = null;
+    for (const c of cards) c.box.classList.remove('down');
     hand();
     // Right after the page loads, the live frames keep the page busy: the finger's lift can be handled before the 400 ms
     // timer runs, and the first hold was taken for a tap (Leo, 19 Nov). The touch's own times decide it then.
@@ -679,6 +744,9 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     // An open comment or the chat: this tap only closes it, as a click outside one does on a page (Leo, 19 Nov: "clicking
     // outside comment should work here same as on page", "same with chat"). A drag (a pan) is no tap and closes nothing.
     if (widget?.dismiss?.()) return;
+    // A click on the canvas or on another frame closes the open one, as Esc does: the board's keys, paste and drag work again
+    // (Leo, 23 Nov: a double-click opened a frame and the board took nothing until a reload).
+    if (entered && d.id !== entered) leave();
     // A click picks the frame under it alone (none: lets go of all); with Shift it adds that frame or takes it off, and on the canvas leaves the rest.
     if (!d.hand) pickFrames(d.id ? (d.shift ? (picks.has(d.id) ? [...picks].filter((id) => id !== d.id) : [...picks, d.id]) : [d.id]) : d.shift ? picks : []);
     // A double tap opens the frame under it to use it.
@@ -712,6 +780,9 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     if (!mine(e) && !overPin(e)) return;
     e.preventDefault();
     e.stopImmediatePropagation();
+    // Holding D, the board holds still: a drawing's strokes are where they were drawn on the screen, and a pan between two
+    // of them put them apart from the frames they were on (issue 423).
+    if (boardWidget()?.drawing?.()) return;
     if (e.timeStamp - wheelAt > 250) measure(); // where the box is, read once as a gesture starts, never per event
     wheelAt = e.timeStamp;
     const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? view.h : 1; // lines (a mouse in Firefox), pages, px
@@ -753,7 +824,14 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     else if (e.key === 'Tab' && !entered && cards.length) step(e.shiftKey ? -1 : 1);
     else if (e.key === 'Escape') {
       // Heard in the frame, which keeps an Esc its page used (a menu closing) to itself: this one is ours.
-      if (entered) leave();
+      // Mid-drag it cancels the drag: moved frames go back unsaved, a box being drawn goes and the pick is as before it.
+      if (down?.mode) {
+        const d = down;
+        down = null;
+        if (d.mode === 'marq') pickFrames([...d.base!]);
+        drop(d, true);
+        hand();
+      } else if (entered) leave();
       else if (picks.size) pickFrames([]);
       else if (opts.back && !coarse) back(); // an empty board's Esc goes back to the page, as ⇧B does
       else return false;
@@ -801,7 +879,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     });
     const res = await fetch(api(), { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...latest, frames }) }).catch(() => null);
     if (res?.ok) {
-      if (undo) taken.push(undo);
+      if (undo) taken.push({ ...undo, at: Date.now() });
       await load();
     } else {
       note(res?.status === 409 ? 'The board changed meanwhile: look, then try again.' : "Only the board's owner can do that.");
@@ -817,8 +895,10 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   if (!coarse) {
     on('keydown', (e: KeyboardEvent) => {
       if (typing(e) || entered) return;
+      // Backspace on the board is never the browser's "back" (WebKit's can be): with nothing picked it does nothing at all.
+      if (e.key === 'Backspace' && !e.metaKey && !e.ctrlKey && !e.altKey) e.preventDefault();
       const gone = (e.key === 'Backspace' || e.key === 'Delete') && !e.metaKey && !e.ctrlKey && !e.altKey && picks.size > 0;
-      const back = (e.metaKey || e.ctrlKey) && !e.shiftKey && e.code === 'KeyZ' && taken.length > 0;
+      const back = (e.metaKey || e.ctrlKey) && !e.shiftKey && e.code === 'KeyZ' && taken.length > 0 && !e.defaultPrevented; // prevented: the widget took this ⌘Z for a newer pin or drawing
       if (!gone && !back) return;
       e.preventDefault();
       if (gone) {
@@ -837,44 +917,46 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       } else void write(placed(last.items));
     });
   }
-  // One picture to the board at a world point, a ghost there while it goes; the board is read again as soon as it is there.
-  const put = async (file: Blob, wx: number, wy: number, pin = false) => {
+  // One picture to the board at a world point (its centre; corner: its top left), a ghost there while it goes; the board is
+  // read again as soon as it is there. Gives the frame as placed, or null.
+  const put = async (file: Blob, wx: number, wy: number, pin = false, corner = false) => {
     const ghost = text('div', 'adding image…', world);
-    Object.assign(ghost.style, { left: `${wx}px`, top: `${wy}px` });
+    Object.assign(ghost.style, { left: `${wx}px`, top: `${wy}px` }, corner ? { margin: '0' } : {});
     ghost.className = 'ghost';
     try {
-      const out = await (await import(new URL('pics.js', import.meta.url).href) as typeof import('../widget/pics.ts')).send<{ frame: { id: string } }>(`?board=${encodeURIComponent(name)}${of ? `&page=${encodeURIComponent(of)}` : ''}&x=${Math.round(wx)}&y=${Math.round(wy)}`, file, 25 * 1024 * 1024, 2400);
+      const out = await (await import(new URL('pics.js', import.meta.url).href) as typeof import('../widget/pics.ts')).send<{ frame: Frame }>(`?board=${encodeURIComponent(name)}${of ? `&page=${encodeURIComponent(of)}` : ''}&x=${Math.round(wx)}&y=${Math.round(wy)}${corner ? '&corner=1' : ''}`, file, 25 * 1024 * 1024, 2400);
       await load();
       const c = find(out.frame.id);
       const r = pin && c?.box.getBoundingClientRect();
       if (r) boardWidget()?.place(r.left + r.width / 2, r.top + r.height / 2);
+      return out.frame;
     } catch (err) {
       note((err as Error).message);
-      return false;
+      return null;
     } finally {
       ghost.remove();
     }
-    return true;
   };
-  // Pictures one after another; each after the first 40 px down and right of the one before. The first error stops it.
+  // Pictures one after another, the first centred where asked and each next one beside the one before, in the order given,
+  // tops in line (Leo, 23 Nov: pasted pictures "pile up"). The first error stops it.
   const putAll = async (files: Blob[], at?: { x: number; y: number }, pin = false) => {
     measure();
-    let [wx, wy] = at ? [(at.x - ox) / cam.z - cam.x, (at.y - oy) / cam.z - cam.y] : [view.w / 2 / cam.z - cam.x, view.h / 2 / cam.z - cam.y];
-    for (const f of files.slice(0, 6)) {
-      if (!(await put(f, wx, wy, pin && f === files[0]))) break;
-      wx += 40;
-      wy += 40;
+    const [wx, wy] = at ? [(at.x - ox) / cam.z - cam.x, (at.y - oy) / cam.z - cam.y] : [view.w / 2 / cam.z - cam.x, view.h / 2 / cam.z - cam.y];
+    let prev = await put(files[0], wx, wy, pin);
+    for (const f of files.slice(1, 6)) {
+      if (!prev) break;
+      prev = await put(f, prev.x + prev.w + 80, prev.y, false, true);
     }
   };
   const pictures = (dt: DataTransfer | null) => [...(dt?.files || [])].filter((f) => f.type.startsWith('image/'));
   on('paste', (e: ClipboardEvent) => {
     if (typing(e, false) || entered) return; // a text box, or an open frame (its page gets it), has its own paste
-    const [file] = pictures(e.clipboardData);
-    if (!file) return; // a text paste stays untouched
+    const got = pictures(e.clipboardData);
+    if (!got.length) return; // a text paste stays untouched
     measure();
     if (!last && !(view.w >= innerWidth - 2 && view.h >= innerHeight - 2)) return; // a half view: the pointer is off the board, the paste is the page's
     eat(e);
-    void putAll([file], last || undefined, alt);
+    void putAll(got, last || undefined, alt); // every picture pasted, not only the first (Leo, 23 Nov)
   }, true);
   const files = (e: DragEvent) => e.dataTransfer?.types.includes('Files');
   on('dragover', (e: DragEvent) => {
@@ -911,6 +993,8 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   };
   const boardApi = {
     name,
+    /** When the newest move or take-off ⌘Z would put back was made (0: none): one ⌘Z undoes only the newest thing, the board's or a pin's. */
+    undoAt: () => taken.at(-1)?.at || 0,
     back,
     busy: () => performance.now() - lastDown < 1500,
     key: (k: Parameters<typeof press>[0]) => press(k, true),
@@ -932,13 +1016,15 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       return { kind: 'board', board: name, ...(f && { frame: f.id, fx: Math.round((wx - f.x) * kx(f)), fy: Math.round((wy - f.y) * ky(f)), ...(f.ow && { lay: f.w }) }), ...(f?.kind === 'image' && onPicture(f, wx - f.x, wy - f.y)), bx: wx, by: wy, selector: '', x: 0, y: 0, docX: 0, docY: 0, width: view.w, height: view.h };
     },
     // Where a board pin is, in page px (the pins' layer is the page's): with its frame, else at the point it was put.
-    spot: (a: { frame?: string; fx?: number; fy?: number; bx?: number; by?: number; zw?: number; zh?: number; pinX?: number; pinY?: number }): Spot => {
+    spot: (a: { frame?: string; fx?: number; fy?: number; bx?: number; by?: number; zw?: number; zh?: number; docW?: number; docH?: number; pinX?: number; pinY?: number }): Spot => {
       const f = cards.find((c) => c.f.id === a.frame)?.f;
       const [wx, wy] = f && a.fx !== undefined ? [f.x + a.fx / kx(f), f.y + (a.fy || 0) / ky(f)] : [a.bx || 0, a.by || 0];
       const [sx, sy] = [ox + (wx + cam.x) * cam.z, oy + (wy + cam.y) * cam.z];
       // An area or a drawing on a frame: its box is its shares of the frame (as drawn, whatever the device), from its corner, and its
       // pin where the drag ended.
-      const zone = f && a.fx !== undefined && a.zw ? { left: sx + scrollX, top: sy + scrollY, width: a.zw * f.w * cam.z, height: (a.zh || 0) * f.h * cam.z } : null;
+      // One on the board itself (not within one frame): its size is in the board's px.
+      const zone = f && a.fx !== undefined && a.zw ? { left: sx + scrollX, top: sy + scrollY, width: a.zw * f.w * cam.z, height: (a.zh || 0) * f.h * cam.z }
+        : !a.frame && a.zw && a.docW ? { left: sx + scrollX, top: sy + scrollY, width: a.docW * cam.z, height: (a.docH || 0) * cam.z } : null;
       return { left: sx + scrollX + (zone && a.pinX ? zone.width : 0), top: sy + scrollY + (zone && a.pinY ? zone.height : 0), zone, ...(((opts.clip && !inBox(sx, sy)) || !shown) && { clipped: true }) };
     },
     camera: () => ({ ...cam }),

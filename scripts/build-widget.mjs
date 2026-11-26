@@ -5,7 +5,9 @@
 //
 // labit has no dependencies: package.json runs this through `npx -p esbuild@<pinned> -p terser@<pinned> node …`, which
 // puts both on PATH for this process only, and their APIs are found next to those commands.
-//   node scripts/build-widget.mjs --outfile=<file> [--watch]
+//   node scripts/build-widget.mjs --outfile=<file> [--watch] [--map] [--co]
+// --co: colabit's one script (co/README.md): the page script alone, with no lab or agent parts, no parts and no lab.css.
+// --map: not minified, with an inline source map, for ci/reach.mjs (which lines of src/ each browser test runs).
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
@@ -13,6 +15,8 @@ import zlib from 'node:zlib';
 const arg = (name) => process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
 const outfile = arg('outfile') || 'public/_lab/comments.js';
 const watch = process.argv.includes('--watch');
+const mapped = process.argv.includes('--map');
+const co = process.argv.includes('--co');
 
 import { tool } from './npx-tools.mjs';
 
@@ -49,24 +53,38 @@ const shortNames = {
     });
   },
 };
+// --map: each file written as esbuild made it, its source map inside.
+const asBuilt = {
+  name: 'as-built',
+  setup(build) {
+    build.onEnd(async (result) => {
+      for (const file of result.outputFiles || []) {
+        await fs.promises.mkdir(path.dirname(file.path), { recursive: true });
+        await fs.promises.writeFile(file.path, file.text);
+      }
+    });
+  },
+};
 const options = {
   entryPoints: ['src/comments.js'],
   bundle: true,
   format: 'iife',
   legalComments: 'inline',
-  minify: true,
+  minify: !mapped,
+  ...(mapped ? { sourcemap: 'inline', sourcesContent: false } : {}),
   logLevel: 'warning',
   outfile,
   write: false, // shortNames writes each file
-  plugins: [minifiedCss, shortNames],
-  define: { 'globalThis.__LAB_DEBUG__': 'false' },
+  plugins: [minifiedCss, mapped ? asBuilt : shortNames],
+  define: { 'globalThis.__LAB_DEBUG__': 'false', 'globalThis.__LAB_CO__': String(co) },
+  metafile: true, // what each script is made of: code built into two of them is counted (bundles.json, below)
 };
 // Parts the page script loads only when they are used (part(name) in src/comments.js): each one an ES module beside
 // it, <name>.js, with its own styles in it. The lab serves them with the script (public/_lab/*.js), and its widget
 // version covers them (widgetRev in local.mjs), so a change to one reloads open pages too.
 // boardview is the one board: a view over the page that links it, and the board's own page (/_lab/board/<name>) loads
 // the same file.
-const PARTS = { components: 'src/widget/components.ts', switcher: 'src/widget/switcher.ts', draw: 'src/widget/draw.ts', sections: 'src/widget/sections.ts', motion: 'src/widget/motion.ts', boardview: 'src/board/overlay.ts', pics: 'src/widget/pics.ts', attach: 'src/widget/attach.ts' };
+const PARTS = { components: 'src/widget/components.ts', switcher: 'src/widget/switcher.ts', draw: 'src/widget/draw.ts', motion: 'src/widget/motion.ts', boardview: 'src/board/overlay.ts', pics: 'src/widget/pics.ts', attach: 'src/widget/attach.ts', reload: 'src/widget/reload.ts', walkie: 'src/widget/walkie.ts' };
 const builds = [
   options,
   ...Object.entries(PARTS).map(([name, entry]) => ({ ...options, entryPoints: [entry], format: 'esm', outfile: path.join(path.dirname(outfile), `${name}.js`) })),
@@ -78,12 +96,41 @@ const labCss = async () => {
   await fs.promises.mkdir(path.dirname(outfile), { recursive: true });
   await fs.promises.writeFile(path.join(path.dirname(outfile), 'lab.css'), tighten(code.trim()) + '\n');
 };
+if (co) {
+  await esbuild.build(options);
+  // The colabit's API takes the lab's own (lib/comments-api.mjs and what it reads) from a copy beside it, so the co
+  // folder deploys on its own: nothing outside it is uploaded.
+  const lib = path.join(path.dirname(outfile), 'api/_lib');
+  fs.mkdirSync(lib, { recursive: true });
+  for (const f of ['comments-api', 'schema', 'images', 'moment', 'cut', 'status']) fs.copyFileSync(`lib/${f}.mjs`, path.join(lib, `${f}.mjs`));
+  process.exit(0);
+}
 await labCss();
 if (watch) {
   for (const o of builds) await (await esbuild.context(o)).watch();
   fs.watch('src/lab.css', () => void labCss());
 } else {
-  await Promise.all(builds.map((o) => esbuild.build(o)));
+  const results = await Promise.all(builds.map((o) => esbuild.build(o)));
+  // Code shipped twice (Leo, 23 Nov: "add check so this wont happen again when you duplicating things"): a module built
+  // into the page script and a part, or into two parts, is downloaded twice. bundles.json lists each such module with
+  // the scripts that carry it, and sharedBytes, the minified bytes of every copy after the first; ci/metrics.mjs gates it.
+  const inScripts = new Map();
+  results.forEach((r, i) => {
+    for (const out of Object.values(r.metafile.outputs)) {
+      for (const [file, { bytesInOutput }] of Object.entries(out.inputs)) {
+        if (!bytesInOutput) continue;
+        const e = inScripts.get(file) || { scripts: [], bytes: [] };
+        e.scripts.push(path.basename(builds[i].outfile));
+        e.bytes.push(bytesInOutput);
+        inScripts.set(file, e);
+      }
+    }
+  });
+  const shared = [...inScripts].filter(([, e]) => e.scripts.length > 1).sort(([a], [b]) => a.localeCompare(b));
+  const sharedBytes = shared.reduce((n, [, e]) => n + e.bytes.reduce((s, b) => s + b, 0) - Math.max(...e.bytes), 0);
+  // The gate counts copies, not bytes: the bytes of the same module move by a few as the minifier renames around it.
+  const copies = shared.reduce((n, [, e]) => n + e.scripts.length - 1, 0);
+  fs.writeFileSync(path.join(path.dirname(outfile), 'bundles.json'), JSON.stringify({ copies, sharedBytes, shared: Object.fromEntries(shared.map(([f, e]) => [f, e.scripts])) }, null, 2) + '\n');
   // The npm package carries each script brotli-packed (<name>.js.br, package.json "files"): npm's gzip leaves 8 KB more in
   // it. The lab sends the packed bytes as they are to a browser that takes brotli and unpacks them for one that doesn't
   // (sendPacked in lib/dev.ts); a checkout serves the plain .js beside them. Same bytes in, same bytes out, so a repeat

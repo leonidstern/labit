@@ -33,7 +33,6 @@
       ae: desc(ae), inner: inner ? desc(inner) + (inner.closest?.('.float') ? '@float' : inner.closest?.('.card') ? '@card' : inner.closest?.('.chatwin') ? '@chat' : '') : null,
       sel: String(getSelection?.() || '').slice(0, 40),
       pins: visible('.pin').map((p) => ({ ...r(p), c: p.className, fixed: p.style.position === 'fixed' })), // fixed: a pin of a board's frame (held to the screen)
-      sbar: r(visible('.sbar')[0]), chip: r(visible('.sb-chip[data-st="new"]')[0]), chipsNew: visible('.sb-chip[data-st="new"]').length, // the section bar, and a section in it that is new
       float: r(visible('.float')[0]), card: r(visible('.card')[0]), chat: r(visible('.chatwin')[0]),
       rows: visible('.choice').map(r), keep: r(visible('.keep')[0]), // a question's choices; a Keep button must not exist any more (a tap answers)
       hash: location.hash, bv: bv(), // a board opened over the page (src/board/overlay.ts): the view, its buttons, its frames

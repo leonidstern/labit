@@ -59,8 +59,9 @@ function followPin(node: HTMLElement, tie: Tie) {
 // Where a card goes, in the window's own px: want's cx / cy are its corner below its pin, ay its bottom above it. In
 // this order: below, above, beside (right, then left) a pin that is a point; the first that has the card whole in the
 // window (12 px in from the sides, 8 from the top and bottom, the reply box with it). The side it was on goes first,
-// so the card stays where it is while it still fits and a small change never turns it over. Where none fits, below
-// it, held inside the window while its pin is in sight.
+// so the card stays where it is while it still fits and a small change never turns it over. Beside counts only while
+// the card is level with its pin. Where none fits, below or above (the side with more room), held inside the window
+// while its pin is in sight.
 type Side = 'below' | 'above' | 'right' | 'left';
 let kept: [unknown, Side] | null = null;
 function spot(want: Want, w: number, h: number, bottom?: number): [number, number, Side] {
@@ -74,10 +75,14 @@ function spot(want: Want, w: number, h: number, bottom?: number): [number, numbe
   const was = kept?.[0] === id && W.S.shown === id ? kept[1] : null; // a thread opened afresh starts from the order
   const whole = (s: Side | null) => {
     const p = s && at[s];
-    return Boolean(p && p[0] >= 11.5 && p[0] + w <= vw - 11.5 && p[1] >= 7.5 && p[1] + h <= vh - 7.5);
+    // Beside, the card has to stay level with its pin (its top no lower than the pin's, its bottom no higher than the
+    // pin's): held inside the window with the pin past its edge, it floated mid-page with nothing tying it (#467).
+    const level = s === 'right' || s === 'left' ? Boolean(p && p[1] <= cy - 45.5 && p[1] + h >= cy - 22) : true;
+    return Boolean(p && level && p[0] >= 11.5 && p[0] + w <= vw - 11.5 && p[1] >= 7.5 && p[1] + h <= vh - 7.5);
   };
   const fits = [was, 'below', 'above', 'right', 'left'].find((s) => whole(s as Side | null)) as Side | undefined;
-  const side = fits || was || 'below';
+  // None fits: never beside (that floats off its pin), but below or above, whichever has more room (#467).
+  const side = fits || (was === 'below' || was === 'above' ? was : vh - cy >= ay ? 'below' : 'above');
   if (id) kept = [id, side];
   const [l, t] = at[side] || at.below!;
   return [l, fits || cy < 0 || cy > vh ? t : Math.max(8, Math.min(t, vh - 8 - h)), side];
@@ -131,7 +136,7 @@ function bindThreadScroll() {
     { capture: true, passive: true },
   );
 }
-export function tieToPin(node: HTMLElement, pin: HTMLElement | null | undefined, kind: 'card' | 'beside', want?: Want) {
+function tieToPin(node: HTMLElement, pin: HTMLElement | null | undefined, kind: 'card' | 'beside', want?: Want) {
   node.classList.remove('tied-card', 'tied-beside');
   node.removeAttribute('data-held'); // set below once the browser carries it with its pin (comments.js: no redraw for it)
   rests.delete(node);
@@ -285,8 +290,8 @@ export function grab(pin, now) {
 //   replies that arrive in place, so the reply box keeps its focus;
 // - keys: R reply, E resolve, Escape closes, Ctrl-D / W next new, 1 to 6 pick a choice of an open question (comments.js);
 // - phones: the bottom sheet (drag by its handle, swipe down to close: sheets.ts), "new · N ›" to the next one.
-// A question with choices adds its rows in its bubble (choicesEl, below); on quoted words the card opens in the margin
-// (placeAsk) and the rows are tried in the page. Its rows: point to try, tap or 1 to 6 to answer (undo for 5 s).
+// A question with choices adds its rows in its bubble (choicesEl, below); the card is placed, turned over and closed as any
+// other; on quoted words the rows are tried in the page. Its rows: point to try, tap or 1 to 6 to answer (undo for 5 s).
 // The reply box is not focused while a question is open, so the digits are keys; words typed there are an ordinary reply.
 export function threadCard(c, fresh = new Set(), focus = false) {
   const asking = openAsk(c);
@@ -295,11 +300,11 @@ export function threadCard(c, fresh = new Set(), focus = false) {
   const body = W.el('div', { class: 'body' });
   const foot = W.el('div', { class: 'foot' });
   card.append(W.el('div', { class: 'handle' }), body, foot);
-  // Written on a paused video: the moment, as a chip; clicked, the page pauses there again (comments.js).
-  const chip = c.anchor?.moment && W.S.momentChip?.(c.anchor.moment, true);
-  if (chip) card.insertBefore(chip, body);
+  // A board pin (+board): its board, as a strip with Open, above its messages (boardcam.ts).
+  const board = W.boardStrip(c);
+  if (board) card.insertBefore(board, body);
   // Why its pin is not plainly on its spot, in one line.
-  const why = { lost: 'its spot is gone', hidden: 'hidden right now: its spot is not shown', unsure: 'unsure: it may not be the spot it was made on', changed: 'its words changed: check it still fits' }[W.position(c.anchor || {}).why as string];
+  const why = { lost: 'its spot is gone', hidden: 'hidden right now: its spot is not shown', unsure: 'unsure: it may not be the spot it was made on', changed: 'its words changed: check it still fits' }[W.placeOf(c).why as string];
   if (why && !c.resolved) card.insertBefore(W.el('div', { class: 'spotnote' }, why), body);
   card.addEventListener('click', (e) => e.stopPropagation());
   // Messages as in the chat: bubbles (yours on the right), the time and ✓ ✓✓ in the corner, ✅ on a done answer, and
@@ -359,12 +364,16 @@ export function threadCard(c, fresh = new Set(), focus = false) {
       box.append(q);
     }
     box.append(...W.readable(item.text));
-    if (item.images) W.part('attach').then((m) => m.show(box.appendChild(W.el('div')), item)); // thumbnails, in the attach part (it builds the names from the id, never reads a path)
+    if (item.images) W.part('attach').then((m) => m.show(box.appendChild(W.el('div')), item)); // "1 image attached" (a tap shows them), in the attach part (it builds the names from the id, never reads a path)
     if (item.session && Array.isArray(item.choices) && item.choices.length) {
       box.classList.add('asks');
       box.append(choicesEl(c, item, card));
     }
     if (item.session && /kept|undone/.test(item.suggest?.state)) box.append(ruleLine(item));
+    // The moment the pin was written on (Leo, 23 Nov, 4c): a quiet line under its first message, its time beside it;
+    // clicked, the page pauses there again (motion.ts).
+    const moment = item === c && c.anchor?.moment && W.S.momentLine?.(c.anchor.moment, true);
+    if (moment) box.append(W.el('span', { class: 'p when' }, moment));
     const stamp = W.stampOf(item, c, item === c && !c.resolved ? `#${W.numberOf(c)} · ` : '');
     // The offer sits in your message's corner in place of the time and tick, so the bubble keeps its size (Leo, 17 Nov:
     // 57 + 60, then "it makes bigger row"). Kept or gone, the time comes back.

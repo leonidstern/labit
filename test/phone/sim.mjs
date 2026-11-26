@@ -9,7 +9,7 @@
 //   node test/phone/sim.mjs report           all results so far, per browser
 //   node test/phone/sim.mjs go <step>         jumps to a step by name (calibrate first, then e.g. ask-open or board-open)
 //
-// Steps: calibrate, the taps and holds on the page (tap-no-pin .. swipe-no-pin), tap-new (the section bar), ask-open / ask-pick (a
+// Steps: calibrate, the taps and holds on the page (tap-no-pin .. swipe-no-pin), ask-open / ask-pick (a
 // question with choices: a tap answers after 5 s with undo, no Keep), board-open .. board-close (a board over the page).
 // Before the first hold: run the tool's set_keyboard show (after its `text` action too: typing switches the simulator to a hardware
 // keyboard and no keyboard comes up). If a thread's card reads y < 0 or a tap on the dimmed page does nothing, Safari is painted out of step
@@ -128,7 +128,7 @@ if (cmd === 'serve') {
     ];
   };
   // The dimmed page above the box or thread, clear of its grab zone (the handle reaches ~60 px above a thread's top, 100 above a box's); the card sits at the top of a tall page, so no floor of 70.
-  // A page's own pin must not show over a board view that covers it (boardhalf.mjs hides it): any pin of the page (not fixed) whose middle is inside the view.
+  // A page's own pin must not show over a board view that covers it (boardview.mjs hides it): any pin of the page (not fixed) whose middle is inside the view.
   const pageDecoy = (end) => { const v = end.bv, hit = v && end.pins.filter((p) => !p.fixed && p.x + p.w / 2 >= v.x && p.x + p.w / 2 <= v.x + v.w && p.y + p.h / 2 >= v.y && p.y + p.h / 2 <= v.y + v.h); return ['no pin of the page shows over the board view', !hit?.length, JSON.stringify(hit?.map((p) => [p.x, p.y, p.c]))]; };
   const top = (s) => dev(s, s.iw / 2, Math.max(8, s.float ? s.float.y - 110 : (s.card?.y ?? 200) - 80));
 
@@ -263,26 +263,6 @@ if (cmd === 'serve') {
       const end = ss.at(-1);
       return [['scrolling makes no comment box', !ss.some((s) => s.float)], ['the page scrolled', end.sy - s0.sy > 100, `scrollY ${s0.sy} → ${end.sy}`], ['no text got selected', ss.every((s) => !s.sel)]];
     } },
-    // The section bar: a section is added to the page's file (the lab patches the open page), a chip with "new" comes up in the
-    // bar at the top, a tap on it goes to the section, reads it, and the page does not jump to the top.
-    // The bar needs 3 sections (src/widget/sections.ts, MIN) of one heading level, on a lab page (the page says <meta name="lab-sections"
-    // content="on">): the page has three h2 (Part one to three); a first visit counts them as read, the step adds a fourth, which is
-    // new. Expected: the bar shows (a tap target, 40 pt or more), one "new" chip, a tap on it scrolls to the section and reads it.
-    // Open the page (open_url) before this step so that the first visit has been counted.
-    { name: 'tap-new', say: async () => {
-      const file = path.join(RUN, 'site', 'index.html');
-      fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('</body>', '<section id="v9"><h2>Version nine</h2><p>The agent added this.</p></section></body>'));
-      await sleep(3000); // the patch, then the check
-      const s = snaps().at(-1);
-      return s.chip ? `tap ${fmt(dev(s, s.chip.x + s.chip.w / 2, s.chip.y + s.chip.h / 2))} (the "new" chip in the bar at the top; expect: the page goes to "Version nine", no new chip left)` : 'no chip came up (was the page opened before the edit? the page needs 3 h2 and the lab-sections meta to have a bar)';
-    }, expect: (ss, s0) => {
-      const end = ss.at(-1);
-      return [
-        ['the bar is a tap target', ss.some((s) => s.sbar && s.sbar.h >= 40)],
-        ['the page goes to the section', end.sy > s0.sy, `scrollY ${s0.sy} → ${end.sy}`],
-        ['it is read: no new chip', end.chipsNew === 0, `${end.chipsNew} new`],
-      ];
-    } },
     // A question with choices (src/widget/thread.ts, trial.ts) on a phone: a sheet of at most half the screen, 44 pt rows,
     // a tap on a row answers (no Keep button; the card says "Picked A · undo" and the pick goes after 5 s, or when the card closes). `go ask-open` after
     // calibrate. The question sits on words in paragraph p20; the page is scrolled so they are in the lower part of the
@@ -324,10 +304,9 @@ if (cmd === 'serve') {
       return [['the thread closes', !end.card], ['no new box from that tap', !end.float]];
     } },
     // A board opened from a link on the page (src/board/overlay.ts): it comes over the same page (no navigation, #board=pricing),
-    // full window with a bar: ‹ close, the name, half / full. Made here with the lab's board API (as test/browser/boardview.mjs).
+    // full window with a bar: ‹ back and the name (no half: Leo, 23 Nov, #422). Made here with the lab's board API (as test/browser/boardview.mjs).
     { name: 'board-open', setup: async () => {
       await ensureBoard();
-      await inPage(`(Object.keys(localStorage).filter((k) => k.startsWith('lab-board-size:')).forEach((k) => localStorage.removeItem(k)), 'size forgotten')`); // the view keeps its size per page: start full
       await inPage(`(document.querySelector('#boardlink').scrollIntoView({ block: 'center' }), 'scrolled')`);
       await sleep(1500);
     }, say: (s) => { st.beforeBoard = s.sy; const r = s.t.boardlink; return r ? `tap ${fmt(pt(s, 'boardlink', 0.5))} (the link "open the pricing board"; the page is scrolled so it is mid-screen)` : 'no link on screen'; }, expect: (ss, s0) => {
@@ -336,23 +315,13 @@ if (cmd === 'serve') {
       return [
         ['the board view opens over the same page (#board=pricing, no navigation)', end.hash === '#board=pricing' && end.href === s0.href && end.load === s0.load, `${end.href}${end.hash}`],
         ['the view fills the window', Boolean(end.bv) && end.bv.h >= end.vh - 4 && end.bv.w >= end.iw - 2, JSON.stringify(end.bv && [end.bv.y, end.bv.h, end.vh])],
-        ['the bar has ‹ close and half, each at least 36 pt tall to tap (Apple asks 44)', Boolean(end.bv?.close && end.bv.size) && end.bv.close.h >= 36 && end.bv.size.h >= 36, JSON.stringify(end.bv && [end.bv.close, end.bv.size])],
-        ['the button reads "half" and the board has its two frames', end.bv?.sizeText === 'half' && end.bv.frames.length === 2, JSON.stringify([end.bv?.sizeText, end.bv?.frames.length])],
+        ['the bar has ‹ back, at least 36 pt tall to tap (Apple asks 44), and no half', Boolean(end.bv?.close) && end.bv.close.h >= 36 && !end.bv.size, JSON.stringify(end.bv && [end.bv.close, end.bv.size])],
+        ['the board has its two frames', end.bv?.frames.length === 2, String(end.bv?.frames.length)],
         ['no comment box from that tap', !ss.some((s) => s.float)],
       ];
     } },
-    // The view ignores the half toggle in its first second: wait before the tap (this step's own `next` comes later than that).
-    { name: 'board-half', say: async (s) => { await sleep(1500); const b = lastLine().bv?.size; return b ? `tap ${fmt(dev(s, b.x + b.w / 2, b.y + b.h / 2))} (the "half" button in the board's bar)` : 'no board view on screen: go board-open'; }, expect: (ss) => {
-      const end = ss.at(-1);
-      return [
-        ['the view is half the window', Boolean(end.bv) && Math.abs(end.bv.h - end.vh / 2) <= 8, JSON.stringify(end.bv && [end.bv.h, end.vh])],
-        ['the page shows above it', Boolean(end.bv) && end.bv.y >= end.vh / 2 - 8, JSON.stringify(end.bv?.y)],
-        ['the button now reads "full"', end.bv?.sizeText === 'full', end.bv?.sizeText],
-        ['the page did not scroll', Math.abs(end.sy - st.beforeBoard) <= 2, `scrollY ${st.beforeBoard} → ${end.sy}`],
-      ];
-    } },
-    // A hold on a frame is a comment, as on a page: a box, the keyboard. The view is half, so the frames sit low on the screen.
-    { name: 'board-hold-frame', say: (s) => { const p = framePoint(s, 0.5); return p ? `hold 0.8 s on ${fmt(p)} (inside frame ${p.id}, low on the screen)` : 'no frame on screen (go board-open, board-half)'; }, expect: (ss, s0) => {
+    // A hold on a frame is a comment, as on a page: a box, the keyboard.
+    { name: 'board-hold-frame', say: (s) => { const p = framePoint(s, 0.5); return p ? `hold 0.8 s on ${fmt(p)} (inside frame ${p.id})` : 'no frame on screen (go board-open)'; }, expect: (ss, s0) => {
       const end = ss.at(-1);
       return [
         ['a comment box opens', ss.some((s) => s.float)],
@@ -373,10 +342,6 @@ if (cmd === 'serve') {
         ['the board stays open', Boolean(end.bv) && end.hash === '#board=pricing'],
         ['nothing was saved', (await comments()).filter((c) => c.anchor?.kind === 'board').length === 0],
       ];
-    } },
-    { name: 'board-full', say: (s) => { const b = s.bv?.size; return b ? `tap ${fmt(dev(s, b.x + b.w / 2, b.y + b.h / 2))} (the "full" button)` : 'no board view on screen'; }, expect: (ss) => {
-      const end = ss.at(-1);
-      return [['the view is the whole window again', Boolean(end.bv) && end.bv.h >= end.vh - 4, JSON.stringify(end.bv && [end.bv.h, end.vh])], ['the button reads "half"', end.bv?.sizeText === 'half', end.bv?.sizeText]];
     } },
     // The same near the bottom of a full view: the box must come up whole inside the window, above the keyboard (test/browser/boxfits.mjs).
     { name: 'board-hold-low', say: (s) => { const p = framePoint(s, 0.72); return p ? `hold 0.8 s on ${fmt(p)} (inside frame ${p.id}, at 72% of the window height)` : 'no frame on screen'; }, expect: (ss) => {

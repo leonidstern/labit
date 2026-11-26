@@ -28,7 +28,7 @@ async function lab(n) {
   const server = startLab(dir, env, { root: '.', port });
   await labUp(B);
   const comments = (page = '/index') => fetch(B + `/_lab/api/comments?page=${page}`).then((r) => r.json()).then((j) => j.comments || []);
-  return { B, comments, stop: () => (server.kill(), fs.rmSync(dir, { recursive: true, force: true }), fs.rmSync(home, { recursive: true, force: true })) };
+  return { B, comments, stop: () => (server.kill(), fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5 }), fs.rmSync(home, { recursive: true, force: true, maxRetries: 5 })) };
 }
 
 for (const [n, eng] of engines('chromium').entries()) {

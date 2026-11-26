@@ -27,7 +27,7 @@ const pack = async (files, name) => {
   fs.cpSync(path.join(REPO, 'lib'), path.join(pkg, 'lib'), { recursive: true });
   fs.cpSync(path.join(REPO, 'package.json'), path.join(pkg, 'package.json'));
   fs.mkdirSync(path.join(pkg, 'public/_lab'), { recursive: true });
-  fs.cpSync(path.join(REPO, 'public/_lab/favicon.svg'), path.join(pkg, 'public/_lab/favicon.svg'));
+  for (const f of ['favicon.svg', 'lab.css']) fs.cpSync(path.join(REPO, 'public/_lab', f), path.join(pkg, 'public/_lab', f)); // the lab reads both as it starts
   for (const [f, bytes] of Object.entries(files)) fs.writeFileSync(path.join(pkg, 'public/_lab', f), bytes);
   const dir = tmp(`${name}-site`);
   fs.writeFileSync(path.join(dir, 'index.html'), '<!doctype html><title>t</title><h1>hi</h1>');

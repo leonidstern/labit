@@ -48,8 +48,9 @@ export const stampOf = (m: any, root: any, prefix = ''): HTMLElement => {
     // 20 Nov: "its jumping and moving things"). The line is always there while it waits, so only its words change.
     // With no agent listening there is nothing to say yet, and no line.
     if (!answered && latest && root && (sg || !d.S.unheard)) {
-      const got = root.handedAt && root.handedAt >= m.createdAt;
-      const words = { now: 'on it', stale: 'quiet for a while', wait: `waiting · ${ord(sg?.n ?? 0)} in line`, missed: 'not answered' }[sg?.s as string] || (got ? 'picked up' : 'sent');
+      // Short, and only what the ticks don't say: sent and picked up are ✓ and ✓✓ (Leo, 23 Nov: "make it super short and
+      // remove unnecessary"). The line is kept, empty, so the bubble doesn't move when words come.
+      const words = { now: 'on it', stale: 'quiet', wait: `${ord(sg?.n ?? 0)} in line`, missed: 'no answer' }[sg?.s as string] || '';
       stamp.append(el('span', { class: 'state' }, words));
     }
   }

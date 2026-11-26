@@ -4,9 +4,8 @@
 // first time it is asked for (⌘K, or as the ⋯ menu opens). Leo, 18 Nov (the lab-navigation page, option B).
 import css from './switcher.css';
 
-type Page = { url: string; title: string; file: string; path: string; open: number; done?: number; last?: string | null; edited?: string | null; first?: string | null; replies?: number; agent?: number; people?: string[]; opened?: string | null; archived?: string | null };
-type Board = { name: string; url: string; frames: number; of?: string | null; at?: string | null };
-type Lab = { name: string; port: number; here: boolean; mode: string; listening: string | null; pages: Page[]; boards?: Board[]; root?: string; unreachable?: boolean; started?: string; created?: string | null };
+type Page = { url: string; title: string; file: string; path: string; open: number; done?: number; last?: string | null; edited?: string | null; first?: string | null; replies?: number; agent?: number; people?: string[]; opened?: string | null; archived?: string | null; board?: string };
+type Lab = { name: string; port: number; here: boolean; mode: string; listening: string | null; pages: Page[]; root?: string; unreachable?: boolean; started?: string; created?: string | null };
 type Parked = { name: string; port: number; root: string; archived?: boolean; at?: string };
 type Deps = {
   root: ShadowRoot;
@@ -189,6 +188,8 @@ const latest = (...d: (string | null | undefined)[]) => d.filter(Boolean).sort()
 // A page's last activity: a comment, reply or close, or someone opening it (Leo 18 Nov: "show last activity, don't show
 // comments count, sort it by last activity"). The rows show it and are ordered by it, newest first.
 const touched = (p: Page) => latest(p.last, p.opened);
+/** Someone opened the page, or it has pins or a board asking for something. */
+const visited = (p: Page) => Boolean(touched(p) || p.open || p.done || p.board);
 
 /** A lab as its topic (labit --name "Lab navigation"), else its folder, "~/projects/site" (Leo 18 Nov: "lab-nav :4481"
  *  confused). A guest, without the path, gets the name. */
@@ -229,7 +230,13 @@ function draw() {
   const live: { lab: Lab; p: Page }[] = [];
   for (const lab of data.labs) {
     const labHit = hit(q, lab.name, String(lab.port), where(lab), lab.root || ''); // the grey label it shows, and its folder
-    for (const p of lab.pages) if (labHit || hit(q, p.title, p.path, p.file)) (p.archived ? shelved : live).push({ lab, p });
+    for (const p of lab.pages) {
+      if (!(labHit || hit(q, p.title, p.path, p.file))) continue;
+      // Only the pages you've been on (Leo, 25 Nov: "should only be labit pages i create"): a page nobody opened and
+      // nobody pinned waits for a search. A lab serving a whole built site (80 pages, 6 ever opened) filled the list.
+      if (!q && !p.archived && !visited(p) && !(lab.here && p.path === d.page)) continue;
+      (p.archived ? shelved : live).push({ lab, p });
+    }
   }
   live.sort((a, b) => touched(b.p).localeCompare(touched(a.p)));
   for (const { lab, p } of live) {
@@ -238,7 +245,11 @@ function draw() {
     const row = el('button', { type: 'button', class: `sw-row${here ? ' cur' : ''}${armed === key ? ' armed' : ''}`, role: 'option', 'data-port': String(lab.port), 'data-kind': 'page', 'data-page': p.path });
     // The page's last activity, "5m ago", after its lab's name (Leo 18 Nov: "show last activity, don't show comments count").
     const when = since(touched(p));
-    const meta = el('span', { class: 'sw-m' }, armed === key ? `${where(lab)}: archive the whole lab? ⇧⌥A again` : [where(lab), when].filter(Boolean).join(' · '));
+    const meta = el('span', { class: 'sw-m' }, armed === key ? `${where(lab)}: archive the whole lab? ⇧⌥A again` : where(lab));
+    // What needs you on the page's board, in words, between its lab and its time (Leo, 23 Nov, #422: boards are part of
+    // their page and have no rows of their own).
+    if (armed !== key && p.board) meta.append(' · ', el('b', {}, p.board === 'needs your reply' ? 'board needs your reply' : 'agent working on its board'));
+    if (armed !== key && when) meta.append(` · ${when}`);
     meta.title = [`${lab.root || lab.name} · localhost:${lab.port}`, p.opened ? `opened ${new Date(p.opened).toLocaleString()}` : 'never opened', p.last ? `last comment ${new Date(p.last).toLocaleString()}` : ''].filter(Boolean).join('\n');
     // The title, and the page's path beside it (Leo 18 Nov: "Getting around your labs" didn't say it was /lab-navigation).
     const t = el('span', { class: 'sw-t' }, short(lab, p));
@@ -246,20 +257,6 @@ function draw() {
     row.append(t, meta);
     goes(row, lab, p);
     out.push(row);
-  }
-  // Boards: a row each after the pages, "board checkout" with its lab, its frames and when it was saved. No comment count.
-  for (const lab of data.labs) {
-    for (const b of lab.boards || []) {
-      if (!(hit(q, b.name, b.of || '', 'board') || hit(q, lab.name, where(lab)))) continue;
-      const row = el('button', { type: 'button', class: 'sw-row', role: 'option', 'data-port': String(lab.port), 'data-kind': 'board' });
-      row.append(el('span', { class: 'sw-t' }, `board ${b.name}`), el('span', { class: 'sw-m' }, [where(lab), `${b.frames} frame${b.frames === 1 ? '' : 's'}`, since(b.at)].filter(Boolean).join(' · ')));
-      row.addEventListener('click', (e: MouseEvent) => {
-        const url = lab.here ? new URL(b.url, location.href).pathname : b.url;
-        if (e.metaKey || e.ctrlKey) window.open(lab.here ? location.origin + url : url, '_blank');
-        else location.href = url;
-      });
-      out.push(row);
-    }
   }
   // A phone: the labs it can't open (not on the wifi, or an older labit), named so none seems missing (Leo 18 Nov).
   const away = (data.local || []).filter((l) => hit(q, l.name, String(l.port)));

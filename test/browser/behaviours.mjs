@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { claimPort } from './port.mjs';
-import { playwright, LAB, tmp, labEnv, startLab, sleep, check, finish } from './harness.mjs';
+import { playwright, engines, LAB, tmp, labEnv, startLab, sleep, check, finish } from './harness.mjs';
 
 const pw = playwright({ ciFails: true });
 
@@ -23,6 +23,8 @@ write('s.css', 'h1{color:rgb(255,0,0)} body{margin:30px}');
 write('pic.svg', '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="42"><rect width="320" height="42" fill="#cde"/></svg>');
 write('notes.md', '# notes');
 write('data.json', '{"a":1}');
+// A page with a script of its own (it builds its words): a lab restart must not reload it when its file is unchanged (#428).
+const SCRIPTED = '<!doctype html><title>S</title><p id="s">x</p><script>document.getElementById("s").textContent = "built"</script>';
 
 let server;
 const start = () => (server = startLab(DIR, env, { root: '.', port: PORT }));
@@ -43,16 +45,23 @@ async function untilApi(pred, ms) {
   for (const end = Date.now() + ms; Date.now() < end; await sleep(40)) if ((await (await fetch(B + '/_lab/api/comments?page=/index')).json()).comments.some(pred)) return;
 }
 
+// Three parts, three files, so they run side by side: this one is the page's own behaviours and saves;
+// behaviours-choices.mjs (BEHAVIOURS_PART=choices) a question with choices tried in the sentence (thread.ts, trial.ts);
+// behaviours-questions.mjs (=questions) words that look like HTML, a quote over two blocks, hints, touches, the chat.
+const PART = process.env.BEHAVIOURS_PART || 'page';
 start();
 await up();
-for (const eng of ['webkit', 'chromium']) {
+for (const eng of engines()) {
   write('index.html', PAGE);
   write('s.css', 'h1{color:rgb(255,0,0)} body{margin:30px}');
+  write('scripted.html', SCRIPTED);
   const browser = await pw[eng].launch();
   const ctx = await browser.newContext({ viewport: { width: 1000, height: 700 } });
   // Done pins show by default: a resolved pin stays on the page, so the go check below needs no reload
   // (a reload would land in the counts the save checks at the end make).
   await ctx.addInitScript(() => localStorage.setItem('lab-name', 'leo'));
+  // The question parts start with labit on, as the page part leaves it.
+  if (PART !== 'page') await ctx.addInitScript(() => localStorage.setItem('lab-on', '1'));
   await ctx.addInitScript(() => addEventListener('load', () => fetch('/data.json').catch(() => {}))); // the page uses data.json: a save of it reloads the page
   const p = await ctx.newPage();
   let loads = 0;
@@ -63,6 +72,10 @@ for (const eng of ['webkit', 'chromium']) {
   await p.goto(B + '/');
   await until(p, () => [...document.querySelectorAll('*')].some((n) => n.shadowRoot), null, 1200);
 
+  const admin = JSON.parse(fs.readFileSync(path.join(DIR, '.lab/server.json'), 'utf8')).agent;
+  const post = (body) =>
+    fetch(`${B}/_lab/api/comments`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-lab-admin': admin, 'x-lab-agent': '1' }, body: JSON.stringify(body) }).then((r) => r.json());
+  if (PART === 'page') {
   // Saved files
   await p.fill('#i', 'kept text');
   await p.evaluate(() => (document.querySelector('#d').open = true));
@@ -227,9 +240,6 @@ for (const eng of ['webkit', 'chromium']) {
   await sleep(300);
 
   // A "go" comment is a pin like any other: your initial, and the tick once resolved.
-  const admin = JSON.parse(fs.readFileSync(path.join(DIR, '.lab/server.json'), 'utf8')).agent;
-  const post = (body) =>
-    fetch(`${B}/_lab/api/comments`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-lab-admin': admin, 'x-lab-agent': '1' }, body: JSON.stringify(body) }).then((r) => r.json());
   const page = await p.evaluate(() => document.querySelector('script[src*="comments.js"]').dataset.page);
   const placed = await post({ page, name: 'leo', text: 'go', anchor: { kind: 'element', selector: '#p3', x: 0.5, y: 0.5, docX: 0.5, docY: 200, width: 1000, element: '<p id="p3">', text: 'paragraph 3 with some words', section: '' } });
   const ticks = () => shadow(() => { return [...r.querySelectorAll('.pin')].filter((n) => n.textContent.trim() === '✓').length; });
@@ -334,8 +344,11 @@ for (const eng of ['webkit', 'chromium']) {
     }
   }
   await post({ page, action: 'delete', id: work.comment.id });
+  }
+  if (PART !== 'page') {
   // Every comment on a page of ours goes, so each engine starts from nothing.
   const wipe = async (pg) => { for (const c of (await (await fetch(`${B}/_lab/api/comments?page=${pg}`)).json()).comments.filter((x) => !x.parent)) await post({ page: pg, action: 'delete', id: c.id }); };
+  if (PART === 'choices') {
   // A question with choices, tried in the sentence (src/widget/thread.ts, trial.ts): a page of its own, so the checks above
   // and the reload below keep their counts.
   {
@@ -347,13 +360,14 @@ for (const eng of ['webkit', 'chromium']) {
     write('ask.html', body(para + fill));
     await wipe('/ask');
     const q = await ctx.newPage();
-    await q.goto(B + '/ask');
-    await sleep(1200);
     const sq = (fn, arg) => q.evaluate(([f, a]) => new Function('r', 'a', f)([...document.querySelectorAll('*')].find((n) => n.shadowRoot).shadowRoot, a), [fn.toString().replace(/^[^{]*{|}$/g, ''), arg]);
     const anchor = { kind: 'text', selector: '#a', x: 0.3, y: 0.2, docX: 0.3, docY: 80, width: 1000, element: '<p id="a">', text: '…labit puts [the full guide on the page], not in chat…', quote };
     const root = (await post({ page: '/ask', name: 'leo', text: 'which reads best?', anchor })).comment;
     const asked = (await post({ page: '/ask', name: 'Claude', text: 'Which reads best?', parent: root.id, choices, recommend: 0 })).comment;
-    await sleep(1200);
+    // Opened once the question is there (it reaches an open page too, but that is the live connection's test).
+    await q.goto(B + '/ask');
+    await until(q, () => [...document.querySelectorAll('*')].find((n) => n.shadowRoot)?.shadowRoot.querySelector('button.pin'), null, 8000);
+    await sleep(300);
     const html = () => q.evaluate(() => document.querySelector('#a').innerHTML);
     const nodes = () => q.evaluate(() => { let n = 0; for (const w = document.createTreeWalker(document.querySelector('#a'), NodeFilter.SHOW_ALL); w.nextNode(); ) n++; return n; });
     const quoteRects = () => q.evaluate(() => {
@@ -376,8 +390,12 @@ for (const eng of ['webkit', 'chromium']) {
     await sleep(700);
     let c = await card();
     const geo = await quoteRects();
-    check(eng, 'a question opens in the margin, clear of the words', c && /margin/.test(c.cls) && c.tie && c.left >= geo.para.right + 28 && c.right <= 1000 - 8 && c.right - c.left === 280 && Math.abs(c.top - geo.para.top) <= 10, JSON.stringify([c?.cls, c?.tie, c?.left, c?.right, c?.top, geo.para]));
+    // Placed as every thread card is (Leo, 25 Nov): below its pin, whole in the window; no margin place of its own.
+    check(eng, 'a question opens as any card does: below its words, whole in the window', c && !/margin|under/.test(c.cls) && !c.tie && c.top > geo.link.top && c.left >= 0 && c.right <= 1000 && c.bottom <= 700, JSON.stringify([c?.cls, c?.tie, c?.left, c?.top, c?.right, c?.bottom, geo]));
     check(eng, 'a question (V1 plain list): no bubble, plain rows, the page\'s words "· now" ticked, no letters, tags or hint, no Keep (a tap answers)', c && c.rows.length === 4 && c.rows[0] === 'the full guide on the page · now' && c.rows.slice(1).every((t, i) => t === choices[i]) && !c.keys && /rgba\(0, 0, 0, 0\)|transparent/.test(c.bubble) && c.name === 'none' && c.on === 0 && c.keep === undefined && !c.elseRow, JSON.stringify(c));
+    // Its time sits at the top right, and the question's words wrap before it, never under it (Leo, 25 Nov).
+    const stampHits = await sq(() => { const m = r.querySelector('.msg.asks'); const st = m.querySelector('.stamp').getBoundingClientRect(); const w = document.createTreeWalker(m.querySelector('.p'), NodeFilter.SHOW_TEXT); const rs = []; while (w.nextNode()) if (!w.currentNode.parentElement.closest('.stamp-room')) { const g = document.createRange(); g.selectNodeContents(w.currentNode); rs.push(...g.getClientRects()); } return rs.filter((x) => x.width && x.right > st.left + 1 && x.left < st.right - 1 && x.bottom > st.top + 1 && x.top < st.bottom - 1).length; });
+    check(eng, 'a question\'s time never covers its words', stampHits === 0, String(stampHits));
     const pinsBefore = await pinsAt();
     const countBefore = await nodes();
     const belowAt = () => q.evaluate(() => Math.round(document.querySelector('#b').getBoundingClientRect().top + scrollY));
@@ -420,6 +438,7 @@ for (const eng of ['webkit', 'chromium']) {
     await sleep(400);
     check(eng, 'Escape puts the paragraph back exactly, and closes the card', (await html()) === original && (await card()) === null, (await html()).slice(0, 120));
 
+
     // A tap on the page's own words (the "now" row) keeps them as they are.
     await sq(() => { r.querySelector('button.pin').click(); });
     await sleep(600);
@@ -456,7 +475,7 @@ for (const eng of ['webkit', 'chromium']) {
     const got = (await (await fetch(`${B}/_lab/api/comments?page=/ask`)).json()).comments.filter((x) => x.picked);
     c = await card();
     check(eng, 'a tap on B sends the pick', got.length === 1 && got[0].picked.of === asked.id && got[0].picked.n === 1 && got[0].text.startsWith('Picked B: ') && (await html()) === original, JSON.stringify(got.map((x) => [x.picked, x.text])));
-    check(eng, 'after the pick the rows are disabled and the pick is marked', c && c.disabled && c.picked === 1 && c.cls.includes('margin'), JSON.stringify(c && [c.disabled, c.picked, c.cls]));
+    check(eng, 'after the pick the rows are disabled and the pick is marked', c && c.disabled && c.picked === 1, JSON.stringify(c && [c.disabled, c.picked, c.cls]));
     await post({ page: '/ask', action: 'delete', id: got[0].id });
     await q.keyboard.press('Escape');
     await sleep(300);
@@ -470,11 +489,11 @@ for (const eng of ['webkit', 'chromium']) {
     await sleep(1800);
     const after = await q.evaluate(() => ({ text: document.querySelector('#a').textContent, third: document.querySelector('#c').textContent }));
     c = await card();
-    check(eng, 'an HTML save mid-try: patch applied, the row pointed at is tried in the new words', /Third paragraph, edited\./.test(after.third) && /this short guide on the page/.test(after.text) && c && /margin/.test(c.cls) && c.on === 0, JSON.stringify([after, c?.on]));
+    check(eng, 'an HTML save mid-try: patch applied, the row pointed at is tried in the new words', /Third paragraph, edited\./.test(after.third) && /this short guide on the page/.test(after.text) && c && c.on === 0, JSON.stringify([after, c?.on]));
     write('ask.html', body(para.replace('labit puts the <a id="lnk" href="#g">full guide</a> on the page, not in chat.', 'Nothing of it is left.') + fill));
     await sleep(1800);
     c = await card();
-    check(eng, 'words gone after a save: rows only, out of the margin, no "now" row', c && !/margin|under/.test(c.cls) && !c.tie && c.rows.length === 3 && !c.rows[0]?.endsWith('now'), JSON.stringify(c));
+    check(eng, 'words gone after a save: rows only, no "now" row', c && c.rows.length === 3 && !c.rows[0]?.endsWith('now'), JSON.stringify(c));
     await q.keyboard.press('Escape');
     write('ask.html', body(para + fill));
     await sleep(1800);
@@ -494,44 +513,33 @@ for (const eng of ['webkit', 'chromium']) {
     await post({ page: '/ask', action: 'delete', id: (await (await fetch(`${B}/_lab/api/comments?page=/ask`)).json()).comments.find((x) => x.picked)?.id });
     await sleep(800);
 
-    // A short window with the words near its bottom: the card is kept inside it (8 px from the edges), not run off the bottom.
-    await q.setViewportSize({ width: 1000, height: 420 });
-    await sleep(300);
-    await q.evaluate(() => scrollTo(0, document.querySelector('#a').getBoundingClientRect().top + scrollY - 330));
-    await sleep(300);
+    // Its words by the window's bottom: the card turns over above them as any card does, never off the window (Leo,
+    // 25 Nov: "at bottom of screen cant even close it"), and a click on the page closes it. Room above the words lets the
+    // page scroll them down there.
+    await q.evaluate(() => (document.querySelector('main').style.paddingTop = '700px'));
+    await sleep(400);
+    await q.evaluate(() => scrollTo(0, document.querySelector('#lnk').getBoundingClientRect().bottom + scrollY - innerHeight + 40));
+    await sleep(400);
     await sq(() => { r.querySelector('button.pin').click(); });
     await sleep(800);
     c = await card();
-    check(eng, 'a question card near the window\'s bottom is clamped inside it (8 px gap)', c && c.left >= 8 && c.bottom <= 420 - 8 + 1 && c.top >= 8 - 1, JSON.stringify(c && [c.left, c.top, c.bottom]));
-    await q.keyboard.press('Escape');
-    await q.evaluate(() => scrollTo(0, 0));
-    await q.setViewportSize({ width: 1000, height: 700 });
-    await sleep(300);
+    const low = await quoteRects();
+    check(eng, 'a question by the window\'s bottom opens above its words, whole in the window', c && low.link.bottom > 600 && c.top >= 0 && c.bottom <= 700 && c.bottom <= low.link.top + 4, JSON.stringify([c?.top, c?.bottom, low.link]));
+    await q.mouse.click(5, 5);
+    await sleep(500);
+    check(eng, 'a click on the page closes a question\'s card', (await card()) === null && (await html()) === original);
+    await q.evaluate(() => { document.querySelector('main').style.paddingTop = ''; scrollTo(0, 0); });
+    await sleep(400);
 
-    // The window too narrow for the margin: the card goes under the quote's last line, never over the words.
+    // A narrow window: the card stays whole in it, and narrowed with the card open it is placed again.
     await q.setViewportSize({ width: 700, height: 700 });
     await sleep(300);
     await sq(() => { r.querySelector('button.pin').click(); });
     await sleep(800);
     c = await card();
-    const g2 = await quoteRects();
-    check(eng, 'narrow window: card under the quote', c && /under/.test(c.cls) && !/margin/.test(c.cls) && c.top >= g2.link.bottom - 1, JSON.stringify([c?.cls, c?.top, g2.link.bottom]));
+    check(eng, 'narrow window: the card whole in it', c && c.left >= 0 && c.right <= 700 && c.bottom <= 700, JSON.stringify([c?.left, c?.right, c?.bottom]));
     await q.keyboard.press('Escape');
-    // A short, narrow window with the words near its bottom: the card is not pulled up over them (the page can scroll).
-    await q.setViewportSize({ width: 700, height: 300 });
     await sleep(300);
-    await q.evaluate(() => scrollTo(0, document.querySelector('#lnk').getBoundingClientRect().top + scrollY - 200));
-    await sleep(300);
-    await sq(() => { r.querySelector('button.pin').click(); });
-    await sleep(800);
-    c = await card();
-    const g3 = await quoteRects();
-    check(eng, 'short narrow window: the card never covers the quoted words, and stays inside it sideways', c && (c.top >= g3.link.bottom - 1 || c.bottom <= g3.link.top + 1) && c.left >= 8 && c.right <= 700 - 8, JSON.stringify([c?.cls, c?.top, c?.bottom, c?.left, c?.right, g3.link]));
-    await q.keyboard.press('Escape');
-    await q.evaluate(() => scrollTo(0, 0));
-    await q.setViewportSize({ width: 700, height: 700 });
-    await sleep(300);
-    // Wide again with the card open: a card that fits goes back to the margin only when drawn again; the other way round it moves.
     await q.setViewportSize({ width: 1000, height: 700 });
     await sleep(300);
     await sq(() => { r.querySelector('button.pin').click(); });
@@ -539,24 +547,27 @@ for (const eng of ['webkit', 'chromium']) {
     await q.setViewportSize({ width: 700, height: 700 });
     await sleep(900);
     c = await card();
-    check(eng, 'the window narrowed with a margin card open: it is placed again', c && !/margin/.test(c.cls) && c.right <= 700, JSON.stringify([c?.cls, c?.right]));
+    check(eng, 'the window narrowed with a card open: it stays inside', c && c.right <= 700, JSON.stringify([c?.cls, c?.right]));
     await q.keyboard.press('Escape');
     await q.setViewportSize({ width: 1000, height: 700 });
     await q.close();
   }
 
+  }
+  if (PART === 'questions') {
   // Words that look like HTML are text; a quote across two paragraphs shows rows only.
   {
     const body = (a) => `<!doctype html><meta charset="utf-8"><title>Ask2</title><style>body{margin:30px;font:18px/1.6 serif}main{max-width:520px}</style><main>${a}</main>`;
     write('ask2.html', body('<p id="a">One sentence ends here.</p><p id="b">The next one starts here and goes on.</p><p id="c">Alone <b>bold</b> words here.</p>' + Array.from({ length: 10 }, (_, i) => `<p>Filler ${i}.</p>`).join('')));
     await wipe('/ask2');
     const q = await ctx.newPage();
-    await q.goto(B + '/ask2');
-    await sleep(1200);
     const sq = (fn, arg) => q.evaluate(([f, a]) => new Function('r', 'a', f)([...document.querySelectorAll('*')].find((n) => n.shadowRoot).shadowRoot, a), [fn.toString().replace(/^[^{]*{|}$/g, ''), arg]);
     const across = (await post({ page: '/ask2', name: 'leo', text: 'across', anchor: { kind: 'text', selector: 'body', x: 0.3, y: 0.2, docX: 0.3, docY: 80, width: 1000, element: '<body>', text: '…One [sentence ends here. The next one] starts here…', quote: { exact: 'sentence ends here. The next one', prefix: 'One ', suffix: ' starts here' } } })).comment;
     await post({ page: '/ask2', name: 'Claude', text: 'Which?', parent: across.id, choices: ['sentence ends here. The next one', 'sentence stops. The next two'], recommend: 1 });
-    await sleep(1200);
+    // Opened once the question is there (it reaches an open page too, but that is the live connection's test).
+    await q.goto(B + '/ask2');
+    await until(q, () => [...document.querySelectorAll('*')].find((n) => n.shadowRoot)?.shadowRoot.querySelector('button.pin'), null, 8000);
+    await sleep(300);
     const mine = () => q.evaluate(() => document.querySelector('#a').innerHTML + document.querySelector('#b').innerHTML);
     const before = await mine();
     await sq(() => { r.querySelector('button.pin').click(); });
@@ -587,13 +598,13 @@ for (const eng of ['webkit', 'chromium']) {
     write('ask3.html', body('<p id="a">A heading-ish line of words.</p>' + Array.from({ length: 8 }, (_, i) => `<p>Filler ${i}.</p>`).join('')));
     await wipe('/ask3');
     const q = await ctx.newPage();
-    await q.goto(B + '/ask3');
-    await sleep(1200);
     const sq = (fn, arg) => q.evaluate(([f, a]) => new Function('r', 'a', f)([...document.querySelectorAll('*')].find((n) => n.shadowRoot).shadowRoot, a), [fn.toString().replace(/^[^{]*{|}$/g, ''), arg]);
     const picks = async () => (await (await fetch(`${B}/_lab/api/comments?page=/ask3`)).json()).comments.filter((x) => x.picked);
     const pin = (await post({ page: '/ask3', name: 'leo', text: 'which layout?', anchor: { kind: 'element', selector: '#a', x: 0.5, y: 0.5, docX: 0.3, docY: 80, width: 1000, element: '<p id="a">' } })).comment;
     const ask = (await post({ page: '/ask3', name: 'Claude', text: 'Which layout?', parent: pin.id, choices: ['Tabs', 'List', 'Grid'], hints: ['less scrolling', '', 'denser, harder to scan'], recommend: 0 })).comment;
-    await sleep(1200);
+    await q.goto(B + '/ask3'); // opened once the question is there, as above
+    await until(q, () => [...document.querySelectorAll('*')].find((n) => n.shadowRoot)?.shadowRoot.querySelector('button.pin'), null, 8000);
+    await sleep(300);
     await sq(() => { r.querySelector('button.pin').click(); });
     await sleep(700);
     const info = () => sq(() => {
@@ -681,6 +692,9 @@ for (const eng of ['webkit', 'chromium']) {
     await q.close();
   }
 
+  }
+  }
+  if (PART === 'page') {
   // A save the page has nothing to do with leaves it alone; one it may fetch reloads it; a lab restart doesn't.
   // (A page with its own <script> is not used here: such a page never patches in place, it reloads on every HTML
   // save, which is what the checks above cover. Whether a page uses a saved script is tested in hot.test.mjs.)
@@ -702,6 +716,10 @@ for (const eng of ['webkit', 'chromium']) {
   await p.keyboard.press('Escape');
   for (const end = Date.now() + 3000; Date.now() < end && loads < 2; ) await sleep(50);
   check(eng, 'a save it may fetch reloads the page', loads === 2, `loads ${loads}`);
+  const s = await ctx.newPage();
+  let sLoads = 0;
+  s.on('load', () => sLoads++);
+  await s.goto(B + '/scripted');
   await sleep(800);
   server.kill();
   await sleep(600);
@@ -709,8 +727,18 @@ for (const eng of ['webkit', 'chromium']) {
   await up();
   await sleep(5000);
   check(eng, 'a lab restart does not reload the page', loads === 2, `loads ${loads}`);
+  check(eng, 'nor a page with its own script whose file did not change (#428)', sLoads === 1 && (await s.textContent('#s')) === 'built', `loads ${sLoads}`);
+  // Its file saved while the lab was down: the page catches up by reloading once the lab is back.
+  server.kill();
+  await sleep(600);
+  write('scripted.html', SCRIPTED.replace('<title>S', '<title>S2'));
+  start();
+  await up();
+  for (const end = Date.now() + 6000; Date.now() < end && sLoads < 2; ) await sleep(50);
+  check(eng, 'a page with its own script whose file was saved while the lab was down reloads when it is back', sLoads === 2 && (await s.title()) === 'S2', `loads ${sLoads}`);
+  }
   await browser.close();
 }
 server.kill();
-fs.rmSync(DIR, { recursive: true, force: true });
+fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 }); // the lab may still be writing as it ends
 finish();

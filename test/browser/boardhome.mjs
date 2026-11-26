@@ -36,8 +36,8 @@ try {
       await p.goto(B + '/_lab/board/shop');
       await p.waitForFunction(() => document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board .f[data-id="a"]'), null, { timeout: 8000 });
       await sleep(1000);
-      const at = await p.evaluate(() => ({ path: location.pathname, hash: location.hash, own: document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('.bv-grip') !== null }));
-      check(eng, 'the old address ends on the page with the board open over it (#board=shop, the half-view bar)', at.path === '/pricing' && at.hash === '#board=shop' && at.own, JSON.stringify(at));
+      const at = await p.evaluate(() => ({ path: location.pathname, hash: location.hash, own: Boolean(document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('.bv-close')) }));
+      check(eng, 'the old address ends on the page with the board open over it (#board=shop, with its back button)', at.path === '/pricing' && at.hash === '#board=shop' && at.own, JSON.stringify(at));
       check(eng, 'the pin left on the old address is drawn there (it is the page\'s now)', (await stored('/pricing')).some((c) => c.id === 'old1') && (await pins(p)) === 1, String(await pins(p)));
       // A tap on frame a makes a pin: the page's comment, not the old address's.
       const a = await p.evaluate(() => { const r = document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board .f[data-id="a"]').getBoundingClientRect(); return { x: r.x, y: r.y }; });
@@ -77,6 +77,6 @@ try {
   }
 } finally {
   server.kill();
-  fs.rmSync(DIR, { recursive: true, force: true });
+  fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
 }
 finish();

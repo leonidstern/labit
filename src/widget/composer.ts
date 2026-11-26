@@ -101,6 +101,7 @@ export function composer({ placeholder, onSubmit, autofocus = false, opened = fa
   draftKey?: string;
 }): HTMLElement {
   const { el, store, root, refreshPinCursor, syncReads, rememberMe } = d;
+  attach &&= !globalThis.__LAB_CO__; // colabit keeps no pictures
   const wrap = el('div', { class: 'composer' });
   const pics = (kept[draftKey] ||= []);
   const box = el('div', { class: 'box' });
@@ -110,7 +111,7 @@ export function composer({ placeholder, onSubmit, autofocus = false, opened = fa
   const as = el('span', {}, 'as');
   // Safari offers "AutoFill Contact" on anything that looks like a name, autocomplete="off" or not; a field whose name
   // says search it leaves alone.
-  const name = el('input', { type: 'text', name: 'search-lab-who', placeholder: 'your name', maxlength: '60', enterkeyhint: 'send', autocomplete: 'off', autocorrect: 'off', autocapitalize: 'words', spellcheck: 'false', writingsuggestions: 'false', 'data-1p-ignore': '', 'data-lpignore': 'true' }) as HTMLInputElement;
+  const name = el('input', { type: 'text', name: 'search-lab-who', placeholder: 'your name', 'aria-label': 'your name', maxlength: '60', enterkeyhint: 'send', autocomplete: 'off', autocorrect: 'off', autocapitalize: 'words', spellcheck: 'false', writingsuggestions: 'false', 'data-1p-ignore': '', 'data-lpignore': 'true' }) as HTMLInputElement;
   name.value = store.get('lab-name');
   // What was typed here last time and never sent. A dev server rebuilding the page used to wipe it.
   if (draftKey && !sending.has(draftKey)) {
@@ -144,8 +145,12 @@ export function composer({ placeholder, onSubmit, autofocus = false, opened = fa
   box.append(text, el('div', { class: 'line' }), who, tail);
   wrap.append(box, error);
   // The box is taller than its one line of text: a tap anywhere on it (not the name or send) puts the cursor in, at the end.
+  // Only a press that started there too: a drag selecting words in the text that ends beside them (by "+" or send)
+  // clicks the box as well, and moving the cursor to the end lost the selection (#467, Leo: "near + it cancels my select").
+  let pressed: EventTarget | null = null;
+  box.addEventListener('pointerdown', (e) => (pressed = e.target), true);
   box.addEventListener('click', (e) => {
-    if (e.target !== box && !(e.target as Element).classList?.contains('line')) return;
+    if (pressed !== e.target || (e.target !== box && !(e.target as Element).classList?.contains('line'))) return;
     text.focus({ preventScroll: true });
     text.setSelectionRange(text.value.length, text.value.length);
   });
@@ -195,8 +200,21 @@ export function composer({ placeholder, onSubmit, autofocus = false, opened = fa
     const long = Boolean(ph) && (box.dataset.long === ph || (!box.classList.contains('tall') && wide(ph, text)));
     if (long) box.dataset.long = ph;
     else delete box.dataset.long;
-    const tall = one && (long || text.scrollHeight > cap || (box.classList.contains('tall') && text.scrollHeight > cap - 40));
-    if (tall !== box.classList.contains('tall')) box.classList.toggle('tall', tall);
+    // Measured in the one-line layout, whichever the box is in: the words are wider without the name beside them, so in the
+    // wide layout they came out shorter than the limit, the name came back, and the box swapped layouts on every key near
+    // its tallest (Leo, 24 Nov, iPhone: the sheet jumped while typing). Swapped back before anything is drawn.
+    const wasTall = box.classList.contains('tall');
+    if (wasTall) box.classList.remove('tall');
+    const inline = text.scrollHeight;
+    const tall = one && (long || inline > cap || (wasTall && inline > cap - 40));
+    const before = !wasTall && tall && !long && box.getBoundingClientRect().height;
+    box.classList.toggle('tall', tall);
+    // Going wide never makes the box shorter (its words take fewer lines there): the sheet's top would drop for a frame.
+    if (!tall) text.style.minHeight = '';
+    else if (before) {
+      const short = before - box.getBoundingClientRect().height;
+      if (short > 0) text.style.minHeight = `${text.getBoundingClientRect().height + short}px`;
+    }
     const over = text.scrollHeight > cap + 1;
     text.style.overflowY = over ? 'auto' : 'hidden'; // a scrollbar only once the box is at its tallest
     // Words added at the end (typing, a long paste) keep the cursor in view: Safari left the box scrolled to the top.
@@ -210,21 +228,30 @@ export function composer({ placeholder, onSubmit, autofocus = false, opened = fa
     }
   };
   let busy = false;
+  // Pictures pasted, dropped or picked but not in the list yet (the part still loading): a send waits for them. Enter right
+  // after a paste sent the comment without its picture, which then showed up in the box (Leo, 23 Nov: "image stuck there").
+  let adding: Promise<unknown> = Promise.resolve();
   const go = async () => {
     if (busy) return;
+    busy = true;
+    await adding;
+    busy = false;
     const said = tidy(text.value) || empty;
     if (!said && !pics.length) return text.focus();
     if (!name.value.trim()) {
       box.classList.add('open');
-      return name.focus();
+      // Typing words, Enter: the cursor stays in them and the name field asks, in place (no line added, nothing moves).
+      // It used to jump into the name field, and the words typed next landed there (#544 feedback). With no words of
+      // their own (a guest's implied "go"), the name is all that's left: the cursor goes there.
+      if (root.activeElement !== text || !tidy(text.value)) return name.focus();
+      name.placeholder = 'your name, to send';
+      name.classList.add('need');
+      return;
     }
     store.set('lab-name', name.value.trim());
     rememberMe(name.value.trim()); // so the next lab on this computer knows you already
     refreshPinCursor(); // the pointer shows your initial
     syncReads();
-    sendBtn.classList.remove('sent');
-    void sendBtn.offsetWidth; // restart the arrow's flight on a quick second send
-    sendBtn.classList.add('sent');
     busy = true;
     // The words are in flight: a box rebuilt while they are on their way leaves them alone, instead of reading
     // them back in as if they had never been sent.
@@ -282,7 +309,7 @@ export function composer({ placeholder, onSubmit, autofocus = false, opened = fa
       file.value = ''; // (the same file can be picked again)
       if (dt?.types.includes('Files')) e.preventDefault(); // a file dropped here is ours, never the browser's (it would leave the page for it)
       const words = e.clipboardData?.getData('text'); // read now: the clipboard is closed once this event is over (the part loads later)
-      if (e.type !== 'dragover' && files.length) void d.part('attach').then((m) => m.add(wrap, pics, files, words));
+      if (e.type !== 'dragover' && files.length) adding = Promise.all([adding, d.part('attach').then((m) => m.add(wrap, pics, files, words))]).catch(() => {});
     };
     wrap.addEventListener('paste', pic as EventListener); // the name field too
     for (const t of ['dragover', 'drop', 'change']) wrap.addEventListener(t, pic as EventListener); // anywhere on the card of the box, the strip too; change: the picker's
@@ -298,7 +325,10 @@ export function composer({ placeholder, onSubmit, autofocus = false, opened = fa
     sweeper = new MutationObserver(sweep);
     for (const n of [document.documentElement, d.root]) sweeper.observe(n, { childList: true, subtree: true });
   }
-  name.addEventListener('input', sync);
+  name.addEventListener('input', () => {
+    name.classList.remove('need');
+    sync();
+  });
   name.addEventListener('blur', () => setTimeout(sync, 0));
   text.addEventListener('keydown', onKey);
   name.addEventListener('keydown', onKey);

@@ -263,3 +263,24 @@ test('13: --file takes its pins from the file: flags that belong to one pin are 
     assert.match(r.out, new RegExp(`${flag[0]}.* go(es)? on a single pin`));
   }
 });
+
+test('14: --hint on a pin\'s --choice is kept, as on a reply; in --file it is "hints", one per choice', async () => {
+  const c = await pin('#t', 'Which heading?', '--choice', 'Plans', '--hint', 'shorter', '--choice', 'Pricing', '--recommend', 'A', '--page', '/index');
+  assert.equal(c.code, 0, c.out);
+  const one = (await all()).find((x) => x.id === idOf(c.out));
+  assert.deepEqual([one.choices, one.hints, one.recommend], [['Plans', 'Pricing'], ['shorter', ''], 0]);
+
+  const file = path.join(DIR, 'points3.json');
+  fs.writeFileSync(file, JSON.stringify([{ selector: '#plans', text: 'Keep the list?', choices: ['Keep', 'Cut'], hints: ['', 'less to read'] }]));
+  const f = await pin('--file', file, '--page', '/index');
+  assert.equal(f.code, 0, f.out);
+  const id = [...f.out.matchAll(/Pinned (\w+)/g)][0][1];
+  assert.deepEqual((await all()).find((x) => x.id === id).hints, ['', 'less to read']);
+
+  fs.writeFileSync(file, JSON.stringify([{ selector: '#plans', text: 'Keep the list?', choices: ['Keep', 'Cut'], hints: ['why'] }]));
+  const bad = await pin('--file', file, '--page', '/index');
+  assert.equal(bad.code, 1, bad.out);
+  assert.match(bad.out, /one for each choice/);
+  const flag = await pin('--file', file, '--page', '/index', '--hint', 'x');
+  assert.match(flag.out, /--hint.* go(es)? on a single pin/);
+});

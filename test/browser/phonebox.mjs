@@ -35,6 +35,30 @@ for (const eng of engines('chromium')) {
       }, null, { timeout: 5000 })
       .then((h) => h.jsonValue());
     check(eng, `${width} px phone: the empty box is one line tall (36 px), so the placeholder didn't wrap`, t.h <= 40, JSON.stringify(t));
+    // A long comment typed key by key: the box only ever grows, and once "as <name>" and send move under the words they
+    // stay there. They used to swap back and forth on every key near the box's tallest: the words, wider without the name
+    // beside them, fell under the limit and the name came back, then went again (Leo, 24 Nov, iPhone: "jumping").
+    await p.evaluate(() => [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim')).shadowRoot.querySelector('.float textarea').focus());
+    // The sheet done settling first (its slide in, the keyboard's room on a slow runner): only the typing is measured.
+    for (let last = -1, same = 0; same < 4; await sleep(100)) {
+      const top = await p.evaluate(() => Math.round([...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim')).shadowRoot.querySelector('.float').getBoundingClientRect().top));
+      same = top === last ? same + 1 : 0;
+      last = top;
+    }
+    const seen = [];
+    for (const ch of 'The sheet should hold still while I type a long comment, line after line, until it scrolls inside. '.repeat(4)) {
+      await p.keyboard.type(ch);
+      seen.push(await p.evaluate(() => {
+        const r = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim')).shadowRoot;
+        const box = r.querySelector('.float .box');
+        return { tall: box.classList.contains('tall'), h: Math.round(box.getBoundingClientRect().height), top: Math.round(r.querySelector('.float').getBoundingClientRect().top) };
+      }));
+    }
+    const flips = seen.filter((s, i) => i && s.tall !== seen[i - 1].tall).length;
+    const shrinks = seen.filter((s, i) => i && s.h < seen[i - 1].h - 1).length;
+    const drops = seen.filter((s, i) => i && s.top > seen[i - 1].top + 1).length;
+    check(eng, `${width} px phone: typing a long comment, the name and send move under the words once and stay`, flips === 1 && seen.at(-1).tall, `flips ${flips}`);
+    check(eng, `${width} px phone: typing a long comment, the box never shrinks and the sheet's top never drops`, !shrinks && !drops, `shrinks ${shrinks}, drops ${drops}: ${JSON.stringify(seen.filter((s, i) => i && (s.h < seen[i - 1].h - 1 || s.top > seen[i - 1].top + 1)).map((s) => [seen.indexOf(s), seen[seen.indexOf(s) - 1], s]))}`);
     await ctx.close();
   }
   await browser.close();

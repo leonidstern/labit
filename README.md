@@ -14,7 +14,7 @@ In your project:
 npx @leonidstern/labit@latest
 ```
 
-It finds your running dev server (Astro, Next, Vite…) or serves plain HTML, and opens the page with comments on top. Click to comment, drag to mark an area, hold `D` and drag to draw on it (circle, arrow, underline, cross out), Shift-drag to quote words. `M` hides the comments.
+It serves your HTML pages itself, or sits in front of your app's running dev server (Astro, Next, Vite…), and opens the page with comments on top. Click to comment, drag to mark an area, hold `D` and drag to draw on it (circle, arrow, underline, cross out), Shift-drag to quote words. `M` hides the comments.
 
 ## Let your agent answer
 
@@ -35,13 +35,13 @@ codex plugin marketplace add leonidstern/labit
 
 **Cursor:** install labit from the repository as a plugin (it carries the skill and the hooks).
 
-**opencode:** one file, in your project (or `~/.config/opencode/plugins/` for every project), and the skill from the CLI:
+**opencode** (2.x): one file, in your project (or `~/.config/opencode/plugins/` for every project), and the skill from the CLI:
 
 ```sh
 mkdir -p .opencode/plugins && curl -fsSL https://raw.githubusercontent.com/leonidstern/labit/main/hooks/agent.mjs -o .opencode/plugins/labit.js
 ```
 
-Each gives your agent the skill and two hooks, with no MCP: while the session works, the pins it claimed show a live "session activity" line, and a pin that lands after it stopped listening comes in as its next turn (Codex and Cursor when the turn ends, opencode when the session goes idle). Without the hooks the agent still answers with `wait` and `reply`, as below.
+Each gives your agent the skill and two hooks, with no MCP: while the session works, the pins it claimed show a live "session activity" line, and a pin that lands after it stopped listening comes in as its next turn (Cursor when the turn ends, opencode when the session goes idle, Codex when the turn ends or with your next message, since Codex can't be woken while idle). Without the hooks the agent still answers with `wait` and `reply`, as below.
 
 **Any other agent:** tell it to run these in your project.
 
@@ -57,14 +57,20 @@ Run each `wait` from the agent itself, never in a shell loop (`while true; do �
 
 **Fewer permission prompts (Claude Code):** copy [examples/claude-settings.json](examples/claude-settings.json) to `.claude/settings.json` in your project (or merge its `permissions` into yours). labit's commands then run without asking; `--wifi` and `invite`, which let another device in, still ask. Claude Code reads a project's allow rules only once you've opened the folder in it and trusted it.
 
+## Comments on your deployed sites (colabit)
+
+A lab for the people you work with, on your own Vercel: one address, a path per person, pins and threads on every page, no agent. One click to deploy and one command per person: [co/README.md](co/README.md).
+
 ## Good to know
 
 - `--wifi` lets your phone comment too (`labit invite` turns it on in a running lab by itself, same address and pins; `labit --no-wifi` turns it off). Each device opens a one-time link from `npx @leonidstern/labit@latest invite`, so being on the same wifi isn't enough. The pages still travel in the clear over the wifi.
 - Agents learn how you like answers: reply as usual, and when you say an answer was too long or unclear, your message shows **rule?**. Tap it and the rule goes to `~/.config/labit/replies.md`, handed to every agent with your pins.
 - You name yourself once. The name is kept for this computer in `~/.config/labit/settings.json`, so every later lab starts out knowing you — browsers keep it per port, labs don't. `labit invite [name]` carries a name to a phone the same way. `--page /path` makes the link open that page. Opening a used or old link again on a phone that's already in just takes you there, and a phone that keeps using the lab stays in.
 - Settings (port, your dev server, keys, the quick-action buttons of the comment box, how long the lab waits…): `labit.json` in the project and `~/.config/labit/settings.json` for you (the `actions` list is set only there, not on the page). `labit settings` shows them all; [docs/settings.md](docs/settings.md) explains each.
+- Signing in through the lab: an app whose sign-in sends you back to an allowed address (OAuth, "Sign in with…") only knows the dev server's port, so the round trip from the lab's port fails. Sign in on the dev server's own address first (`localhost:3000`): browsers share cookies across ports on `localhost`, so the lab's page is signed in too. Or add the lab's address (`http://localhost:4400/…`) to the app's allowed callback URLs.
+- Git Bash on Windows turns `--page /spot/trade` into `C:/Program Files/Git/spot/trade`; labit stops and says so. Write the page without its first slash (`--page spot/trade`), or set `MSYS_NO_PATHCONV=1`.
 - A pin on a React, Vue, Next or Astro dev page also says which component drew it (`component:`) and where (`written at:`): React 18 file and line; Vue the file, no line; Next none (its built chunks are not source); Astro the file and line of what its compiler wrote. The agent never gets a guessed one.
-- Comments stay in `.lab/` in your project. Add it to `.gitignore`.
+- Comments stay in `.lab/` in your project. Add it to `.gitignore`. `labit gc` lists every lab folder you have used, its `.lab` size and what could go; it only reports.
 - A click on the page pins a comment; the page's own links and buttons keep their clicks. Hold ⌥ to pin on anything, controls included.
 - No dependencies, Node 22+. `--help` lists everything else.
 

@@ -31,15 +31,15 @@ import { bindMessages, foldRow, foldStatus, isStatus, stampOf } from './widget/m
 import { afterLeave, backFromReveal, bindSheets, backCloses, fromTap, holdKeyboard, leave, letGo, liftedDraft, revealDraft, roomFor, slideAway, startSheets, swipeDown } from './widget/sheets.ts';
 import { bindList, drawList, goTo, lineOf, lineUp, ord, revealOpen, stepMoved, stepNew, workState } from './widget/list.ts';
 import { bindChat, drawChat, stamped } from './widget/chat.ts';
-import { bindThread, flushPick, grab, openAsk, moveTicked, pickByKey, pickTicked, placeBeside, placeCard, threadCard, tieToPin } from './widget/thread.ts';
-import { isTrying, pauseTry, placeAsk, relight } from './widget/trial.ts';
+import { bindThread, flushPick, grab, openAsk, moveTicked, pickByKey, pickTicked, placeBeside, placeCard, threadCard } from './widget/thread.ts';
+import { isTrying, pauseTry, relight } from './widget/trial.ts';
 import { bindLive, startLive, MARK_PATHS } from './widget/live.ts';
 import { inFrame, startFrame } from './widget/frame.ts';
 import { holdWhileOpen } from './widget/hold.ts';
 import { inkSvg } from './widget/ink.ts';
 import { bindActions } from './widget/actions.ts';
 import { bindDrag, draftHasText, endDrag, inkSaid, offerSelection, startDrag } from './widget/drag.ts';
-import { addBoard, bindBoardCam, showBoard } from './widget/boardcam.ts';
+import { boardStrip, bindBoardCam, newBoard, pinBoardGone, showBoard } from './widget/boardcam.ts';
 import { bindFramework, overFramework, scanForFramework } from './widget/framework.ts';
 import { bindKeys } from './widget/keys.ts';
 
@@ -82,7 +82,7 @@ import { bindKeys } from './widget/keys.ts';
     get agentOf() { return agentOf; },
     get anchorAt() { return anchorAt; },
     get begin() { return begin; },
-    get boards() { return BOARDS; },
+    get boardStrip() { return boardStrip; },
     get sendDrawing() { return sendDrawing; },
     get addComment() { return addComment; },
     get bar() { return bar; },
@@ -95,6 +95,7 @@ import { bindKeys } from './widget/keys.ts';
     get control() { return control; },
     get doneBtn() { return doneBtn; },
     get movedBtn() { return movedBtn; },
+    get boardsBtn() { return boardsBtn; },
     get drawList() { return drawList; },
     get el() { return el; },
     get pageStyle() { return pageStyle; },
@@ -113,7 +114,6 @@ import { bindKeys } from './widget/keys.ts';
     get markSeen() { return markSeen; },
     get ms() { return ms; },
     get mine() { return mine; },
-    get motions() { return motions; },
     get nameLine() { return nameLine; },
     get numberOf() { return numberOf; },
     get openSheet() { return openSheet; },
@@ -124,9 +124,11 @@ import { bindKeys } from './widget/keys.ts';
     get pinCursorStyle() { return pinCursorStyle; },
     get placeBar() { return placeBar; },
     get position() { return position; },
+    get placeOf() { return placeOf; },
     get readable() { return readable; },
     get recheck() { return recheck; },
     get reflow() { return reflow; },
+    get followOpen() { return followOpen; },
     get relook() { return relook; },
     letPin,
     get render() { return render; },
@@ -142,6 +144,7 @@ import { bindKeys } from './widget/keys.ts';
     get foldStatus() { return foldStatus; },
     get isStatus() { return isStatus; },
     get stamped() { return stamped; },
+    get swipeDown() { return swipeDown; },
     get still() { return still; },
     get store() { return store; },
     get syncReads() { return syncReads; },
@@ -161,17 +164,28 @@ import { bindKeys } from './widget/keys.ts';
   bindSheets(W);
   const script = /** @type {HTMLScriptElement | null} */ (document.currentScript);
   // In a board's frame the widget draws nothing and binds nothing (src/widget/frame.ts).
-  if (inFrame()) return startFrame(script);
+  if (!globalThis.__LAB_CO__ && inFrame()) return startFrame(script); // colabit has no boards
+  // colabit (npm run build:co, co/README.md): this widget on a site of your own, with no lab and no
+  // agent: anyone on the page comments under a name they type. The owner's link (#lab-admin=<token>) leaves the
+  // admin key in this browser: resolve, move and delete anyone's.
+  let coAdmin = '';
+  if (globalThis.__LAB_CO__) { // the build's own constant, so the lab's script leaves all of this out
+    const linked = /[#&]lab-admin=([\w.-]+)/.exec(location.hash)?.[1];
+    try {
+      if (linked) localStorage.setItem('lab-admin', linked);
+      coAdmin = localStorage.getItem('lab-admin') || '';
+    } catch {}
+    if (linked) history.replaceState(history.state, '', location.pathname + location.search + location.hash.replace(/([#&])lab-admin=[^&]*&?/, '$1').replace(/[#&]$/, ''));
+  }
   // Parts loaded only when they are used: each is its own file beside this script (scripts/build-widget.mjs), its
   // styles with it. Asked for once; a module that can't load leaves the rest of the widget as it is.
   const parts = {};
   /** @param {string} name */
-  const part = (name) => (parts[name] ??= import(new URL(`${name}.js`, script?.src || location.href).href));
+  // colabit is one script: the parts it has (drawing, motion) are built into it; the rest it does without.
+  const part = (name) => (parts[name] ??= globalThis.__LAB_CO__ ? (name === 'draw' ? import('./widget/draw.ts') : name === 'motion' ? import('./widget/motion.ts') : Promise.reject(new Error('not in colabit'))) : import(new URL(`${name}.js`, script?.src || location.href).href));
   // Shortcuts, action → key: these defaults, with what a project or you changed (labit.json or your settings.json
   // `shortcuts`, passed by the lab as data-keys; docs/settings.md).
-  // Boards are off unless the lab says so (setting `boards`, passed as data-boards): no +board, no sections, no board drawer.
-  const BOARDS = script?.dataset.boards === '1';
-  const KEYS = { toggle: 'm', chat: 't', next: 'w', pause: 'p', slow: 's', draw: 'd', done: 'e', reply: 'r', resolve: 'e' };
+  const KEYS = { toggle: 'm', chat: 't', next: 'w', pause: 'p', slow: 's', draw: 'd', done: 'e', reply: 'r', walkie: 'k' };
   try {
     Object.assign(KEYS, JSON.parse(script?.dataset.keys || '{}'));
   } catch {}
@@ -200,7 +214,7 @@ import { bindKeys } from './widget/keys.ts';
   if (/** @type {any} */ (window).__labComments) return;
   /** @type {any} */ (window).__labComments = true;
 
-  const API = '/_lab/api/comments';
+  const API = globalThis.__LAB_CO__ ? new URL('co/comments', script?.src || location.href).href : '/_lab/api/comments'; // co.js at <host>/_lab/co.js: its API beside it
   // Behind a dev server the page is the live address (named as the lab names pages, lib/labs.ts keyFor): an app that
   // navigates on its own keeps no first page's marks. A page the lab serves keeps the name it was served under.
   const enc = new TextEncoder();
@@ -260,11 +274,11 @@ import { bindKeys } from './widget/keys.ts';
   };
 
   // The lab hands this computer's browser its admin key; a guest's page has none.
-  const adminToken = script?.dataset.admin || '';
+  const adminToken = globalThis.__LAB_CO__ ? coAdmin : script?.dataset.admin || '';
 
   S.comments = [];
   S.isAdmin = false;
-  S.mac = Boolean(adminToken); // this computer's own browser holds the key: what only it may do (keeping a rule) is shown there alone
+  S.mac = !globalThis.__LAB_CO__ && Boolean(adminToken); // this computer's own browser holds the key: what only it may do (keeping a rule) is shown there alone
   // Off by default: the page looks clean until someone turns comments on (button or c); remembered per browser.
   S.on = store.get('lab-on') ? store.get('lab-on') === '1' : script?.dataset.on === '1';
   // A board page (src/board/): a tap selects a frame; 1 (comment mode) pins the board.
@@ -298,13 +312,14 @@ import { bindKeys } from './widget/keys.ts';
     <div class="scrim"></div>
     <i class="fit" aria-hidden="true"></i>
     <div class="layer"></div>
-    <div class="motions"></div>
     <div class="ui"><div class="hint" role="status" hidden></div>
     <div class="list chatwin" hidden><div class="tabs"></div><div class="msgs"></div><div class="chat"></div></div>
     <div class="left"><button class="secondary copy-all" type="button" hidden>copy link</button></div>
     <div class="bar" hidden>
       <button class="secondary chat-btn" type="button" hidden>chat</button>
+      <button class="secondary walkie-btn" type="button" hidden></button>
       <button class="secondary list-btn" type="button" hidden>list</button>
+      <button class="secondary boards-btn" type="button" hidden aria-expanded="false" aria-controls="lab-more" title="this page's boards"></button>
       <button class="secondary done-btn" type="button" hidden title="show or hide done pins on the page"></button>
       <button class="secondary moved-btn" type="button" hidden title="pins whose spot is gone from the page: open one to drop it on a new spot, or close it"></button>
       <button class="toggle" type="button"></button>
@@ -337,7 +352,6 @@ import { bindKeys } from './widget/keys.ts';
   // The bar's "new" pill: J/K step through the new comments, R replies, E resolves.
   const listBtn = /** @type {HTMLButtonElement} */ ($('.list-btn'));
   const doneBtn = /** @type {HTMLButtonElement} */ ($('.done-btn'));
-  const motions = $('.motions');
   const movedBtn = /** @type {HTMLButtonElement} */ ($('.moved-btn'));
   const tabTitle = { base: '' };
   // Done pins show unless hidden (Leo, 17 Nov): closed ones are faded on the page, and D hides them.
@@ -350,6 +364,10 @@ import { bindKeys } from './widget/keys.ts';
   const chatEl = $('.chatwin');
   const chatBtn = /** @type {HTMLElement} */ (root.querySelector('.chat-btn'));
   chatBtn.title = `chat (${KEYS.chat.toUpperCase()})`;
+  // Walkie-talkie (src/widget/walkie.ts, its own file): talk while you point, with the computer's own dictation (no
+  // microphone here); the bar turns into its pill and the walk goes to the chat. Computers only, and not in colabit (no agent).
+  const walkieBtn = /** @type {HTMLElement} */ (root.querySelector('.walkie-btn'));
+  walkieBtn.title = "Talk while you point. Uses your computer's own dictation, no microphone here. The agent gets what you said and where.";
   S.refit = () => {}; // phones: fit the sheets to the keyboard again (below)
   S.chatOpen = false;
 
@@ -390,7 +408,8 @@ import { bindKeys } from './widget/keys.ts';
   };
 
   // ---------- data ----------
-  const headers = () => ({ 'content-type': 'application/json', ...(adminToken ? { 'x-lab-admin': adminToken } : {}) });
+  // colabit: which site (data-site on the script tag, so a Vercel preview shares production's comments).
+  const headers = () => ({ 'content-type': 'application/json', ...(adminToken ? { 'x-lab-admin': adminToken } : {}), ...(globalThis.__LAB_CO__ ? { 'x-co-site': script?.dataset.site || location.hostname } : {}) });
 
   S.loaded = false;
   // A box has the cursor (not a pin: a pin now stays the same element across redraws, so in Chrome, where a clicked
@@ -541,13 +560,23 @@ import { bindKeys } from './widget/keys.ts';
   }
   S.stayAtEnd = stayAtEnd;
   S.endStays = () => [...stays].forEach((f) => f());
+  // Beside a video (Leo, 23 Nov, 10a): a comment's box on a video opens past its edge, right else left, so the frames you
+  // step through stay in view. No room on either side (a video as wide as the window): by its pin, as before. Computers.
+  const besideVideo = (a) => {
+    if (coarse || !a || a.kind === 'board' || a.kind === 'page') return null;
+    const el = findTarget(a);
+    const v = el instanceof HTMLVideoElement ? el : el?.closest?.('video');
+    if (!v) return null;
+    const r = v.getBoundingClientRect(), w = 320, vw = document.documentElement.clientWidth;
+    const x = r.right + 12 + w <= vw - 12 ? r.right + 12 : r.left - 12 - w >= 12 ? r.left - 12 - w : null;
+    return x == null ? null : x + scrollX;
+  };
   function begin(anchor) {
     if (!anchor.moment) {
       const moment = mo?.momentFor(anchor); // the moment as the pin goes down, not as it is sent
       if (moment) anchor = { ...anchor, moment };
     }
     S.draft = { anchor };
-    if (anchor.kind !== 'board') dispatchEvent(new Event('lab-board-yield')); // a half board over the page makes way
     keepSpot(anchor);
     ptr.classList.add('still'); // the new pin is where the drawn pointer is: it goes at once (it faded over the pin), back with the next move
     render();
@@ -586,7 +615,7 @@ import { bindKeys } from './widget/keys.ts';
   async function sendDrawing(anchor) {
     const name = store.get('lab-name');
     if (!name) return begin(anchor);
-    const said = inkSaid(anchor.ink.mark);
+    const said = `${inkSaid(anchor.ink.mark)}${anchor.ink.cut ? ` (the first ${anchor.ink.pts.length} of ${anchor.ink.cut} strokes kept)` : ''}`; // more than 64: said, not cut silently (issue 423)
     try {
       const { comment, edit } = await send({ name, text: said, anchor });
       posted(comment, edit, said, anchor);
@@ -604,7 +633,7 @@ import { bindKeys } from './widget/keys.ts';
     if (S.paused && payload.anchor && !payload.action) payload = { ...payload, anchor: { ...payload.anchor, paused: true, atMs: mo.msOf(mo.pausedEl(payload.anchor)) } };
     const moment = payload.anchor && !payload.action && !payload.anchor.moment ? mo?.momentFor(payload.anchor) : undefined;
     if (moment) payload = { ...payload, anchor: { ...payload.anchor, moment } };
-    if ((S.slow || mo?.slowEls.size) && payload.anchor && !payload.action) payload = { ...payload, anchor: { ...payload.anchor, slow: true } }; // at ¼ speed
+    if ((S.slow || mo?.anySlow()) && payload.anchor && !payload.action) payload = { ...payload, anchor: { ...payload.anchor, slow: true } }; // at ¼ speed
     if (!payload.action && !payload.nonce) payload = { ...payload, nonce: Math.random().toString(36).slice(2) + Date.now().toString(36) };
     for (let tries = 0; !res; tries++) {
       try {
@@ -618,10 +647,21 @@ import { bindKeys } from './widget/keys.ts';
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || `could not save (${res.status})`);
     // A new pin or go from this tab can be taken back with Command-Z (the newest first).
-    if (data.comment && !payload.parent && !payload.action && payload.anchor?.kind !== 'page') placed.push(data.comment.id);
+    if (data.comment && !payload.parent && !payload.action && payload.anchor?.kind !== 'page') {
+      placed.push(data.comment.id);
+      placedAt.set(data.comment.id, Date.now());
+    }
     return data;
   }
   const placed = [];
+  const placedAt = new Map(); // id -> when it was placed: a board's newer move is what ⌘Z takes back first (Leo, 23 Nov)
+  // Where a thread's pin goes (anchoring.ts). A board pin whose element is not shown (a closed menu or tab) would leave its
+  // board out of reach with it, so it goes to the ⋯ menu as a moved pin until its element is back (Leo, 23 Nov: "be sure
+  // board pin wont became stray out of viewport").
+  const placeOf = (c) => {
+    const at = /** @type {any} */ (position(c.anchor || {}));
+    return at.why === 'hidden' && S.pinBoards?.has(c.id) ? { ...at, moved: true, why: 'lost' } : at;
+  };
   // Undo, 3 s after a new pin is sent (Leo, 19 Nov): its card opens with "undo" in the resolve key's place (thread.ts).
   // A tap deletes it (this computer as admin, anyone else with the pin's own key, which the lab takes for a fresh pin
   // nobody answered) and closes the card: no comment box, no words kept anywhere.
@@ -633,6 +673,7 @@ import { bindKeys } from './widget/keys.ts';
     await send({ action: 'delete', id: c.id, ...(ownKey && !S.isAdmin ? { edit: ownKey } : {}) });
     S.undo = null;
     S.comments = S.comments.filter((x) => x.id !== c.id && x.parent !== c.id);
+    pinBoardGone(c.id); // a board pin's board went with it (the lab drops it): its view closes
     if (ownKey) store.set(`lab-edit:${c.id}`, '');
     const at = placed.indexOf(c.id);
     if (at >= 0) placed.splice(at, 1);
@@ -650,10 +691,17 @@ import { bindKeys } from './widget/keys.ts';
     const c = id && S.comments.find((x) => x.id === id);
     if (!c) return;
     const ownKey = store.get(`lab-edit:${id}`);
+    // A board pin past its first seconds (the undo key's) holds what was put on its board: ⌘Z closes it, and its
+    // board stays, as a guest's ⌘Z does (issue 422: deleting it took the board and its pictures).
+    const keep = S.pinBoards?.has(id) && S.undo?.id !== id;
     try {
-      if (S.isAdmin) {
+      if (S.isAdmin && !keep) {
         await send({ action: 'delete', id });
         S.comments = S.comments.filter((x) => x.id !== id && x.parent !== id);
+        pinBoardGone(id);
+      } else if (S.isAdmin) {
+        const { comment } = await send({ action: 'resolve', id });
+        Object.assign(c, comment);
       } else if (ownKey) {
         const { comment } = await send({ action: 'resolve', id, edit: ownKey });
         Object.assign(c, comment);
@@ -783,10 +831,24 @@ import { bindKeys } from './widget/keys.ts';
     });
     return (labs = m);
   }).catch(() => (S.switcher = null))); // couldn't load: nothing opens, and the next ask tries again
+  const MAC = navigator.platform.startsWith('Mac');
+  // The keys you hold rather than press, under a hairline at the menu's foot (Leo, 25 Nov, the menu-shortcuts page, 2b):
+  // grey hints, not buttons. Computers only: a phone has no keys.
+  const heldKeys = (/** @type {[string, string][]} */ rows) => {
+    const box = el('div', { class: 'held', 'aria-hidden': 'true' });
+    for (const [what, key] of rows) {
+      const row = el('div', { class: 'hint-row' }, what);
+      row.append(el('kbd', {}, key));
+      box.append(row);
+    }
+    return box;
+  };
+  const pageHeld = heldKeys([['draw', `hold ${KEYS.draw}`], ['pin on a link', `${MAC ? '⌥' : 'alt'} click`], ['quote words', '⇧ drag']]);
+  const boardHeld = heldKeys([['pin', `${MAC ? '⌥' : 'alt'} click`], ['move around', 'hold space'], ['back to the page', '⇧b']]);
   const labHead = LABS ? el('div', { class: 'lab-head' }, `${script?.dataset.labName || 'lab'} · ${location.port || '80'}`) : null;
   const labsBtn = LABS ? el('button', { type: 'button' }) : null;
   if (labsBtn) {
-    labsBtn.append('labs & pages', el('kbd', { 'aria-hidden': 'true' }, navigator.platform.startsWith('Mac') ? '⌘K' : 'ctrl K'));
+    labsBtn.append('labs & pages', el('kbd', { 'aria-hidden': 'true' }, MAC ? '⌘k' : 'ctrl k'));
     // The menu closes without taking the focus back to ⋯ (its own click handler would, after the box opened, and on a
     // phone that blurred the search and bounced the keyboard).
     labsBtn.addEventListener('click', (e) => {
@@ -795,8 +857,32 @@ import { bindKeys } from './widget/keys.ts';
       void switcher().then((m) => m?.openSwitcher());
     });
   }
+  // The motion part (src/widget/motion.ts, loaded below), once it is: declared here, as the bar reads it.
+  /** @type {any} */
+  let mo = null;
+  /** @type {Promise<any> | null} */
+  let moAsked = null;
+  // Phones (Leo, 23 Nov, 3a): ⋯ → motion opens the motion sheet; there once the page has something that moves.
+  const motionBtn = el('button', { type: 'button' }, 'motion');
+  motionBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setMenu(false);
+    mo?.openMotion();
+  });
+  // The page's boards (Leo, 23 Nov, S5): a part of the bar while the page has any; it opens the ⋯ menu's place with
+  // them in it and "new board". The ⋯ menu has "new board" too, for a page with none yet.
+  const boardsBtn = /** @type {HTMLButtonElement} */ ($('.boards-btn'));
+  const newBoardBtn = el('button', { type: 'button' }, 'new board');
+  // A board opening keeps the focus off ⋯ (the menu's own click gives it back there), so Esc closes the board.
+  newBoardBtn.addEventListener('click', (e) => (e.stopPropagation(), setMenu(false), void newBoard()));
+  const boardRows = () => [...(S.pageBoards || []).map((b) => {
+    const row = el('button', { type: 'button' }, b.title || b.name);
+    row.append(el('span', { class: 'n' }, ` · ${b.frames}`));
+    row.addEventListener('click', (e) => (e.stopPropagation(), setMenu(false), void showBoard(b.name)));
+    return row;
+  }), newBoardBtn, ...(coarse ? [] : [boardHeld])];
   function placeBar() {
-    const inMenu = !S.on ? [] : [...(labHead ? [labHead, labsBtn] : []), doneBtn, movedBtn, copyBtn, toggleBtn, ...(versionLine ? [versionLine] : [])];
+    const inMenu = !S.on ? [] : S.menuBoards ? (S.menuRows ??= boardRows()) : [...(labHead ? [labHead, labsBtn] : []), doneBtn, movedBtn, ...(!globalThis.__LAB_CO__ && !S.board && self === top ? [newBoardBtn] : []), ...(globalThis.__LAB_CO__ ? [] : [copyBtn]), ...(coarse && mo ? [motionBtn] : []), toggleBtn, ...(coarse ? [] : [pageHeld]), ...(versionLine ? [versionLine] : [])];
     // In this order every time: a part that came back (hide comments, after showing them again) went to the end, below
     // the version line.
     if (S.on && (inMenu.some((b, i) => moreMenu.children[i] !== b) || moreMenu.children.length !== inMenu.length)) moreMenu.replaceChildren(...inMenu);
@@ -905,7 +991,7 @@ import { bindKeys } from './widget/keys.ts';
   // of same page?"); /_lab/board/<name> itself still works as a link from anywhere else. Any other way to a board keeps
   // the scroll under the page's key, so the board's back lands where you were. A page the browser gives back whole
   // (bfcache) has its scroll already, so the key goes, or a later reload would jump.
-  if (BOARDS && !S.board && self === top) {
+  if (!S.board && self === top) {
     const scrollKey = 'lab-scroll:' + location.pathname;
     document.addEventListener('click', (e) => {
       const a = /** @type {HTMLAnchorElement | null} */ (e.target instanceof Element ? e.target.closest('a[href]') : null);
@@ -950,6 +1036,7 @@ import { bindKeys } from './widget/keys.ts';
     const own = /auto|scroll|hidden|clip/.test(cs.overflowX + cs.overflowY); // html has an overflow of its own
     de.classList.add(own ? 'lab-hold-h' : 'lab-hold-b');
   };
+  let seekedFor = null; // the open pin whose video was taken back to its frame
   let viewW = 0; // the screen's width without its scrollbar (flipAt)
   function render() {
     // The bar shows from its first drawing on: as it comes in the page's source it holds one empty button with a dot, and that
@@ -965,6 +1052,12 @@ import { bindKeys } from './widget/keys.ts';
     // A question's choice tried in the page (thread.ts): the page's own words are back before anything is read or drawn;
     // the same card drawn again tries the same row again.
     pauseTry(S.on ? S.openId : null);
+    // A pin just opened on a video: the video goes back to the frame the pin was placed on (motion.ts showMoment).
+    if (S.openId !== seekedFor) {
+      seekedFor = S.openId;
+      const m = S.openId ? S.comments.find((/** @type {any} */ x) => x.id === S.openId)?.anchor?.moment : null;
+      if (m?.kind === 'video') void (mo ? Promise.resolve(mo) : loadMotion()).then((x) => x?.showMoment(m));
+    }
     // A pick still in its 5 s of undo goes now if its card (or the chat) has closed.
     flushPick(S.on ? S.openId : null, Boolean(S.on && S.chatOpen));
     S.grabbing = false; // a pin being dragged is replaced: its drag ends here
@@ -978,7 +1071,7 @@ import { bindKeys } from './widget/keys.ts';
     // messages; Leo, 17 Nov: "message scrolled up" on a phone).
     const prevAtEnd = prevBody ? prevBody.scrollHeight - prevBody.scrollTop - prevBody.clientHeight < 48 : false;
     // Every pin's place is read before anything is written, so the page lays out once per render, not once per pin.
-    const places = new Map(S.on ? threads().filter((c) => c.anchor?.kind !== 'page').map((c) => [c.id, position(c.anchor || {})]) : []);
+    const places = new Map(S.on ? threads().filter((c) => c.anchor?.kind !== 'page').map((c) => [c.id, placeOf(c)]) : []);
     readPins(threads().map((c) => (c.anchor?.kind === 'board' ? frameBox(c.anchor) : c.anchor && c.anchor.kind !== 'page' && !places.get(c.id)?.moved ? findTarget(c.anchor) : null)));
     // A pin that is still there stays the same element, updated in place, so what runs on it (the agent's ring, a pop, a
     // swap, a hover or open transition) carries on instead of starting again (Leo, 18 Nov: clicking or leaving a pin
@@ -994,7 +1087,9 @@ import { bindKeys } from './widget/keys.ts';
     const appear = now !== S.shown;
     const anim = appear ? ' in' : '';
     let quoted = null;
+    const lost = new Set(); // pins whose spot isn't on the page right now (see watchLost)
     const done = () => {
+      watchLost(lost);
       patchKids(layer, next); // pins still in place stay; the new ones go in, the gone ones come out
       flushPins(); // the rules of the pins the browser holds, now they are on the page (pinhold.ts)
       if ((S.closeFast || (still.matches && S.shown)) && !now && prev) { // reduced motion: a card or sheet fades out (a computer's went at once), no slide
@@ -1040,8 +1135,11 @@ import { bindKeys } from './widget/keys.ts';
       el('kbd', { 'aria-hidden': 'true' }, KEYS.toggle),
     );
     toggleBtn.classList.toggle('secondary', S.on);
+    walkieBtn.hidden = !S.on || coarse || Boolean(globalThis.__LAB_CO__);
+    // "talk", its key marked in it: tal(k) (Leo, 25 Nov: shorter than walkie-talkie).
+    if (!walkieBtn.firstChild) walkieBtn.append(keyLabel('talk', KEYS.walkie));
     host.toggleAttribute('data-labs', Boolean(!coarse && S.labsOpen)); // the page dims behind labs & pages (the widget's .scrim)
-    host.toggleAttribute('data-sheet', Boolean((coarse && S.labsOpen) || (S.on && (S.draft || S.openId || S.chatOpen)))); // phones: the sheet has the screen's bottom
+    host.toggleAttribute('data-sheet', Boolean((coarse && (S.labsOpen || S.motionOpen)) || (S.on && (S.draft || S.openId || S.chatOpen)))); // phones: the sheet has the screen's bottom
     if (coarse && appear && now) { // a sheet opening slides in once its first frame is drawn (see data-opening in styles.css)
       host.setAttribute('data-opening', '');
       requestAnimationFrame(() => requestAnimationFrame(() => host.removeAttribute('data-opening')));
@@ -1052,7 +1150,7 @@ import { bindKeys } from './widget/keys.ts';
     backCloses();
     S.refit();
     setPinning();
-    copyBtn.hidden = !S.on || !S.isAdmin || list.every((c) => c.resolved);
+    copyBtn.hidden = globalThis.__LAB_CO__ || !S.on || !S.isAdmin || list.every((c) => c.resolved);
     drawList(places);
     drawChat();
     if (!S.on) return done();
@@ -1060,7 +1158,8 @@ import { bindKeys } from './widget/keys.ts';
       if (isPage(c)) return; // in the chat, not on the page
       // Done pins with nothing new in them step aside when done ones are hidden (D); an open one stays.
       if (!S.showDone && S.openId !== c.id && (c.resolved || workState(c)[0] === 'done') && !unread(c).length) return;
-      const { left, top, moved, zone, clipped, covered, why } = places.get(c.id) || position(c.anchor || {});
+      const { left, top, moved, zone, clipped, covered, why } = places.get(c.id) || placeOf(c);
+      if (moved || why === 'hidden') lost.add(c.id);
       // A pin whose spot is gone is off the page: the ⋯ menu lists them ("moved · N"); an open one shows, to drop on a
       // new spot (drag) or close. The agent finishing one closes it.
       if (moved) {
@@ -1072,9 +1171,15 @@ import { bindKeys } from './widget/keys.ts';
       }
       const ink = zone && c.anchor.ink; // a drawing is its own pin: its lines, no marker (draw.ts)
       if (S.openId === c.id && !ink) add(drawZone(zone, `saved${anim}`)); // a drawn area shows its outline while open
-      const news = unread(c);
+      // A board pin (+board) wears its board's news too: the open threads on its board, their unread messages and where the
+      // agent stands with them (asking, then working), when its own thread has nothing to say (Leo, 23 Nov, issue 422).
+      const boardThreads = S.pinBoards?.has(c.id) ? S.comments.filter((x) => !x.parent && !x.resolved && x.anchor?.kind === 'board' && x.anchor.board === `pin-${c.id}`) : [];
+      const news = [...unread(c), ...boardThreads.flatMap((x) => unread(x))];
       const movable = !zone && (S.isAdmin || store.get(`lab-edit:${c.id}`));
-      const sg = lineUp().get(c.id) || { s: null, n: 0, at: '', line: '' }; // where it stands with the agent: sent, got (picked up), now (working), wait, stale, asks or done
+      const own = lineUp().get(c.id) || { s: null, n: 0, at: '', line: '' }; // where it stands with the agent: sent, got (picked up), now (working), wait, stale, asks or done
+      const pick = (st) => boardThreads.map((x) => [x, lineUp().get(x.id)]).find(([x, g]) => g?.s === st && (st !== 'asks' || unread(x).length))?.[1];
+      const busy = pick('asks') || (own.s === 'now' ? null : pick('now') || pick('stale'));
+      const sg = busy || own;
       // A question you've read goes back to a plain pin: amber is for one still unread (Leo, 20 Nov: "orange pin after
       // opening should become regular").
       const state = sg.s === 'asks' && !news.length ? null : sg.s;
@@ -1176,6 +1281,14 @@ import { bindKeys } from './widget/keys.ts';
           if (isTrying()) relight(); // a tried choice: its green back
           else markQuote(S.quoted);
         });
+        // A right-click on a pin on a video takes the video back to its frame and pauses it, as a click does (Leo, 24 Nov).
+        pin.addEventListener('contextmenu', (e) => {
+          const m = pinData.get(pin).c.anchor?.moment;
+          if (m?.kind !== 'video' || e.shiftKey) return;
+          e.preventDefault();
+          e.stopPropagation();
+          void (mo ? Promise.resolve(mo) : loadMotion()).then((x) => x?.showMoment(m));
+        });
         pin.addEventListener('click', (e) => {
           e.stopPropagation();
           const c = pinData.get(pin).c;
@@ -1183,7 +1296,8 @@ import { bindKeys } from './widget/keys.ts';
           if (e.altKey && mayResolve(c)) return toggleResolved(c);
           // Phones: opening it goes through goTo, which moves the page so the pin sits above its sheet, not under it.
           if (coarse && S.openId !== c.id) return goTo(c);
-          if (S.openId !== c.id && c.anchor?.kind !== 'board') dispatchEvent(new Event('lab-board-yield')); // a half board makes way for a comment on the page
+          // A pin on a video: each click, the one that closes it too, takes the video back to its frame (Leo, 24 Nov).
+          if (S.openId === c.id && c.anchor?.moment?.kind === 'video') void (mo ? Promise.resolve(mo) : loadMotion()).then((x) => x?.showMoment(c.anchor.moment));
           S.openId = S.openId === c.id ? null : c.id;
           S.draft = null;
           render();
@@ -1212,13 +1326,20 @@ import { bindKeys } from './widget/keys.ts';
         S.stepping = S.keepKeys = false;
         next.push(card);
         const boardPin = c.anchor?.kind === 'board' && !heldPin(pin); // held to the screen by the script (onBoard), not tied
-        placeCard(card, zone ? left + 14 : left, zone ? zone.top + zone.height : top, nativeTie() && !boardPin ? pin : null, zone ? zone.top - 12 : top - 40);
+        // An area's card goes past the area (so it doesn't hide it) only while that edge is near the pin: a tall area
+        // with its pin far from the edge put the card hundreds of px from its pin (#467, Leo: "pin should be connected
+        // to window"). Then it goes by the pin, as a point's does.
+        const near = 120;
+        const under = zone && zone.top + zone.height - top < near ? zone.top + zone.height : top;
+        const over = zone && top - zone.top < near ? zone.top - 12 : top - 40;
+        const byPin = !zone || (under === top && over === top - 40); // by the pin itself: laid as a point's, beside it too
+        const bx = besideVideo(c.anchor); // 10a: on a video, past its edge
+        if (bx != null) placeCard(card, bx + 14, under, null, over);
+        else placeCard(card, byPin ? left : left + 14, under, nativeTie() && !boardPin ? pin : null, over);
         if (boardPin && !sheetMode.matches) onBoard(card, c.anchor);
-        // A question with choices on quoted words: by its quote, in the margin or under it (thread.ts). Drawn again after
-        // the pick, it stays where it was instead of jumping back under its pin.
-        if (!zone && (openAsk(c) || (!appear && prev?.matches('.margin, .under')))) placeAsk(card, c);
-        if (card.matches('.margin, .under')) tieToPin(card, null, 'card'); // by its words, where the script put it
-        if (card.tie) next.push(card.tie); // its line to the words (trial.ts), kept by the layer's redraw
+        // A question with choices (an agent's pin with --choice, or a reply asking one) is this same card, placed, turned
+        // over and closed as every other (Leo, 25 Nov: "agent pin doesnt act like regular"; its own margin place ran off
+        // the window's bottom).
         // Opens at the newest message, as the chat does (a short thread doesn't scroll), on phones too (they opened at
         // the first message).
         if (!appear && prevScroll != null) {
@@ -1240,7 +1361,7 @@ import { bindKeys } from './widget/keys.ts';
         }
         if (coarse && S.cardFull) card.classList.add('full'); // stays pulled up while you step from comment to comment
         swipeDown(card, () => ((S.openId = null), (S.cardFull = false), render()), true);
-        markSeen(news);
+        markSeen(unread(c)); // its own thread: the board's threads are read on the board, where they are seen
         if (news.length) {
           drawList(); // opened is read: the "N new" pill and the tab title count it off at once
         }
@@ -1280,15 +1401,17 @@ import { bindKeys } from './widget/keys.ts';
         },
       });
       float.append(el('div', { class: 'handle' }));
-      // Paused: the moment this pin will carry, so you know it is kept (Leo, 19 Nov: "some info in pin where it was").
-      const chip = anchor.moment && S.momentChip?.(anchor.moment); // only a paused video has one (Leo, 21 Nov)
-      if (chip) float.append(chip);
+      // The moment this pin will carry, so you know it is kept (Leo, 19 Nov: "some info in pin where it was"): a quiet
+      // line, as under the sent pin's first message (Leo, 23 Nov, 4c).
+      const when = anchor.moment && S.momentLine?.(anchor.moment);
+      if (when) float.append(when);
       const row = quickRow(draft, box);
       if (row?.children.length) float.append(row);
       float.append(box);
       swipeDown(float, () => ((S.draft = null), keepSpot(null), render()));
       next.push(float);
       if (zone) placeCard(float, left + 14, zone.top + zone.height);
+      else if (besideVideo(anchor) != null) placeBeside(float, besideVideo(anchor) - 36, top, null); // 10a: on a video, past its edge
       else placeBeside(float, left, top, nativeTie() && anchor.kind !== 'board' ? layer.querySelector(':scope > .pin.draft') : null);
       if (!sheetMode.matches) onBoard(float, anchor);
       draft.back = false;
@@ -1310,11 +1433,10 @@ import { bindKeys } from './widget/keys.ts';
     if (!S.on) ptr.classList.remove('show'); // comments hidden: the system pointer is back at once
     else recheck();
     store.set('lab-on', S.on ? '1' : '0');
-    S.checkSections?.(); // hidden comments: no section bar (the file loads if there is one to show)
     S.draft = S.on ? keptDraft() : null; // hidden, a new comment lets go of the screen; its words wait, and come back when comments do
     S.openId = null;
     render();
-    mo?.drawMotion(); // the pause / play beside each moving thing goes and comes with the comments
+    if (!S.on) mo?.closeMotion(); // the motion menu goes with the comments
   };
   toggleBtn.addEventListener('click', () => setOn(!S.on));
   // The ⋯ menu is a disclosure: the button says whether it's open; opening puts focus on its first item, and Escape
@@ -1355,13 +1477,51 @@ import { bindKeys } from './widget/keys.ts';
     if (open) [...moreMenu.querySelectorAll('button')].find((b) => !b.hidden && !b.disabled)?.focus({ preventScroll: true });
     else if (refocus) moreBtn.focus({ preventScroll: true });
   }
+  // One thing open at a time (Leo, 23 Nov: "close it and open menu or chat"): opening the menu, the boards list or the
+  // chat closes an open thread, a new comment with nothing typed in it (typed words stay) and, on a computer, the chat.
+  const closeOthers = (keepChat = false) => {
+    if (coarse) return;
+    S.openId = null;
+    if (S.draft && !/** @type {HTMLTextAreaElement | null} */ (root.querySelector('.float textarea'))?.value.trim()) S.draft = null;
+    if (!keepChat) S.chatOpen = false;
+  };
+  // Drawn again once the click is done: the bar's buttons are swapped out by a render, and the menu opens from this one.
+  // Always: a press on ⋯ already closed the chat (below), and its redraw waits for a click these buttons don't pass on.
+  const closeOthersAfter = () => {
+    closeOthers();
+    setTimeout(() => render(), 0);
+  };
+  // The labit mark at the bar's end (live.ts) too (Leo, 23 Nov: "yes it should"): its click closes what is open, then does its own.
+  // Not while it carries the update's "!": that click takes the update, and the open thread comes back with the reload (live.ts).
+  root.addEventListener('click', (e) => e.composedPath().some((n) => n instanceof Element && n.classList.contains('listener') && !n.classList.contains('has-upd')) && closeOthersAfter(), true);
   moreBtn.addEventListener('click', (e) => {
     e.stopPropagation();
+    closeOthersAfter();
+    if (S.menuBoards) {
+      S.menuBoards = false; // the whole menu again, not the boards
+      placeBar();
+    }
     if (!popMenu) setMenu(moreMenu.hidden || moreMenu.classList.contains('out')); // leaving counts as closed (a popover: the browser)
   });
+  boardsBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeOthersAfter();
+    const open = popMenu ? moreMenu.matches(':popover-open') : !moreMenu.hidden && !moreMenu.classList.contains('out');
+    if (open && S.menuBoards) return setMenu(false, true);
+    S.menuBoards = true;
+    S.menuRows = null; // the list as it is now
+    placeBar();
+    setMenu(true);
+  });
   moreMenu.addEventListener('click', () => setTimeout(() => setMenu(false, true), 0));
+  // A press outside the open menu only closes it: the click it ends pins nothing (Leo, 23 Nov: "if menu opened click on
+  // canvas closing menu not opening pin"). A popover closes itself (light dismiss); the click is still the page's.
   addEventListener('pointerdown', (e) => {
-    if (!popMenu && !moreMenu.hidden && !e.composedPath().some((n) => n === moreMenu || n === moreBtn)) setMenu(false);
+    S.menuShut = 0;
+    const open = popMenu ? moreMenu.matches(':popover-open') : !moreMenu.hidden && !moreMenu.classList.contains('out');
+    if (!open || e.composedPath().some((n) => n === moreMenu || n === moreBtn || n === boardsBtn)) return;
+    S.menuShut = Date.now();
+    if (!popMenu) setMenu(false);
   }, true);
   addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !popMenu && !moreMenu.hidden) {
@@ -1369,21 +1529,18 @@ import { bindKeys } from './widget/keys.ts';
       e.stopPropagation();
     }
   }, true);
-  // Motion (src/widget/motion.ts: pause and ¼ speed, the controls beside what moves, a pin's moment) is its own file, loaded
+  // Motion (src/widget/motion.ts: pause and speed from a right-click or ⋯ → motion, a pin's moment) is its own file, loaded
   // once something on the page moves (a video, an animation: looked for a second after the page starts, when one
-  // starts, and on a phone each second), when ⌥ is held, P or S is pressed, or a comment has a moment; mo: the module, once it is.
-  /** @type {any} */
-  let mo = null;
-  /** @type {Promise<any> | null} */
-  let moAsked = null;
-  const loadMotion = () => (moAsked ??= part('motion').then((m) => (m.bindMotion(W), (mo = m))).catch(() => (moAsked = null)));
+  // starts, and on a phone each second), when P or S is pressed, or a comment has a moment; mo: the module, once it is.
+  const loadMotion = () => (moAsked ??= part('motion').then((m) => (m.bindMotion(W), (mo = m), placeBar(), m)).catch(() => (moAsked = null))); // placeBar: phones get ⋯ → motion
   const lookForMotion = () => {
     if (!moAsked && (document.querySelector('video') || document.getAnimations().some((a) => !root.contains(/** @type {any} */ (a.effect)?.target)))) void loadMotion();
   };
-  addEventListener('keydown', (e) => {
-    if (e.key === 'Alt' && !coarse && !mo) void loadMotion().then((m) => m?.altMotionSet(!e.metaKey && !e.ctrlKey && !e.shiftKey)); // its own keys come once it is there: this press is its first
-  }, true);
   for (const type of ['animationstart', 'play']) addEventListener(type, lookForMotion, true);
+  // Computers: an animation a script started says nothing; the pointer moving over the page looks again (once a second),
+  // so a right-click on it opens the motion menu.
+  let lookedAt = 0;
+  if (!coarse) addEventListener('pointermove', () => !moAsked && performance.now() - lookedAt > 1000 && ((lookedAt = performance.now()), lookForMotion()), { capture: true, passive: true });
   setTimeout(lookForMotion, 1000);
   if (coarse) {
     const phone = setInterval(() => (moAsked ? clearInterval(phone) : document.hidden || lookForMotion()), 1000);
@@ -1400,7 +1557,7 @@ import { bindKeys } from './widget/keys.ts';
   // A #block link in a message: go to that block on the page. A phone's sheet covers the page, so it closes first.
   addEventListener('lab-goto', (e) => {
     const to = /** @type {CustomEvent} */ (e).detail;
-    const target = typeof to === 'string' ? document.getElementById(to) : to; // an id, or the element itself (the section bar's)
+    const target = document.getElementById(to);
     if (!target) return;
     if (coarse) {
       S.openId = null;
@@ -1410,13 +1567,14 @@ import { bindKeys } from './widget/keys.ts';
     setTimeout(() => goToBlock(target), coarse ? 60 : 0); // after the sheet has started closing
   });
   listBtn.addEventListener('click', () => stepNew(1));
+  walkieBtn.addEventListener('click', () => {
+    closeOthers();
+    render();
+    void part('walkie').then((m) => m.toggle(W));
+  });
   chatBtn.addEventListener('click', () => {
     S.chatOpen = !S.chatOpen;
-    // On a computer, opening the chat closes an open thread, and a new comment with nothing typed in it.
-    if (S.chatOpen && !coarse) {
-      S.openId = null;
-      if (S.draft && !/** @type {HTMLTextAreaElement | null} */ (root.querySelector('.float textarea'))?.value.trim()) S.draft = null;
-    }
+    if (S.chatOpen) closeOthers(true);
     goOut(hint, () => (hint.hidden = true));
     render();
     // Computers: the cursor goes in the message box (phones wait for a tap, so the keyboard doesn't cover the chat).
@@ -1446,7 +1604,7 @@ import { bindKeys } from './widget/keys.ts';
   }, true);
   const typing = (e) =>
     e.composedPath().some((n) => n instanceof HTMLElement && (n.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName)));
-  document.addEventListener('keydown', (e) => {
+  const onDocKey = (e) => {
     const inOtherWidget = document.activeElement?.localName.includes('-') && document.activeElement !== host; // e.g. an input in a closed shadow root
     if (actionOf(e) === 'toggle' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat && !typing(e) && !inOtherWidget) {
       e.preventDefault();
@@ -1473,7 +1631,8 @@ import { bindKeys } from './widget/keys.ts';
       e.preventDefault();
       return;
     }
-    if (S.on && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (/^z$/i.test(e.key || '') || (!/^[a-z]$/i.test(e.key || '') && e.code === 'KeyZ')) && !typing(e) && !inOtherWidget && placed.length) {
+    if (S.on && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (/^z$/i.test(e.key || '') || (!/^[a-z]$/i.test(e.key || '') && e.code === 'KeyZ')) && !typing(e) && !inOtherWidget && placed.length
+      && !(/** @type {any} */ (window).__labBoard?.undoAt?.() > (placedAt.get(placed.at(-1)) || 0))) {
       e.preventDefault();
       return void undoLast();
     }
@@ -1491,21 +1650,21 @@ import { bindKeys } from './widget/keys.ts';
     // The list's keys, with comments shown and nothing typed: L list, T chat, J/K next/previous, R reply, E resolve.
     // By the key's place, not its letter, so the keys work with any layout (Russian, Greek…): the C key is C (keyOf).
     // The keys (Leo, 2026-11-15/16), marked in the bar's words: cha(t) (C was chat until 19 Nov), ne(w) (Shift-W: the one before),
-    // P pause, M hide, D show/hide done. With a thread open: R reply, E resolve.
+    // P pause, M hide, E show/hide done. With a thread open: R reply, E resolve (done's own key).
     // Shift is only for next (Shift-W: the one before); ⇧D, ⇧B and the rest belong to the board.
-    if (S.on && !typing(e) && !inOtherWidget && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat && ['pause', 'slow', 'chat', 'next', 'draw', 'done', 'reply', 'resolve'].includes(act) && (act === 'next' || act === 'draw' || !e.shiftKey)) { // ⇧D draws too: Shift straightens (below)
+    if (S.on && !typing(e) && !inOtherWidget && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat && ['pause', 'slow', 'chat', 'next', 'draw', 'done', 'reply', 'walkie'].includes(act) && (act === 'next' || act === 'draw' || !e.shiftKey)) { // ⇧D draws too: Shift straightens (below)
       const k = act;
       e.preventDefault();
       if (k === 'pause') return void loadMotion().then((m) => m?.setPause(!S.paused));
       if (k === 'slow') return void loadMotion().then((m) => m?.setSlow(!S.slow));
       if (k === 'chat') return chatBtn.click();
+      if (k === 'walkie') return walkieBtn.hidden || S.openId || S.draft || walkieBtn.click(); // not over an open card: its keys stay its own
       if (k === 'next') return stepNew(e.shiftKey ? -1 : 1);
       if (k === 'draw') return void ((S.dKey = true), (S.drew = false), part('draw')); // held, D draws (draw.ts); ⇧D tapped alone stays the board's
       // E (Leo, 21 Nov: "another key its clashing now with draw, move to E"): done threads show or hide; with a thread open it is its resolve (the same key, the thread open first).
       if (k === 'done' && !S.openId) return toggleDone();
       if (k === 'done') return void [.../** @type {NodeListOf<HTMLElement>} */ (root.querySelectorAll('.card .btn'))].find((b) => /^(resolve|reopen)$/.test(b.textContent))?.click();
       if (k === 'reply' && S.openId) /** @type {HTMLElement | null} */ (root.querySelector('.card textarea'))?.focus({ preventScroll: true });
-      else if (k === 'resolve' && S.openId && S.isAdmin) [.../** @type {NodeListOf<HTMLElement>} */ (root.querySelectorAll('.card .btn'))].find((b) => /^(resolve|reopen)$/.test(b.textContent))?.click();
       return;
     }
     // Escape closes the top one: a thread or new comment first, then the chat, then the list (typed chat text stays).
@@ -1525,7 +1684,23 @@ import { bindKeys } from './widget/keys.ts';
       e.preventDefault();
       render();
     }
-  });
+  };
+  document.addEventListener('keydown', onDocKey);
+  // Keys typed in the widget's own boxes stay in the widget: a page that binds Space, arrows or letters (a video player,
+  // a slide deck) never hears them, so a comment can be typed in full (Leo, 23 Nov: Space played the page's player and
+  // no space reached the comment). The widget's own document keys still run, here. ⌘/Control and Esc go on as before
+  // (⌘K, the page's shortcuts, the board's Esc).
+  const inWidgetBox = (e) => {
+    const t = e.composedPath()[0];
+    return t instanceof HTMLElement && t.getRootNode() === root && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+  };
+  for (const type of ['keydown', 'keypress', 'keyup']) {
+    host.addEventListener(type, (/** @type {KeyboardEvent} */ e) => {
+      if (e.metaKey || e.ctrlKey || e.key === 'Escape' || !inWidgetBox(e)) return;
+      if (type === 'keydown') onDocKey(e);
+      e.stopPropagation();
+    });
+  }
 
   // Always ready to pin: a click on the page (not on a link or control) opens a new comment there.
   // Alt/Option-click pins on links and controls too. With a comment open, the first click outside only closes it.
@@ -1546,8 +1721,9 @@ import { bindKeys } from './widget/keys.ts';
       if (n.matches(INTERACTIVE) || getComputedStyle(n).cursor === 'pointer') return true;
     return false;
   };
-  // data-uncommentable: no new pins or areas start inside this part of the page (same attribute as Claude artifacts).
-  const OFF = '[data-uncommentable]';
+  // data-lab-off: labit's own parts (board labels, zoom box, hand layer, overlay bar) where no new pin or area starts.
+  // A page's own data-uncommentable is not honoured: every part of the person's page takes a pin (Leo, 25 Nov).
+  const OFF = '[data-lab-off]';
   // Is this press on a part marked so? Through shadow roots (a board's view has one), where the press's own target is the host.
   const isOff = (e) => e.composedPath().some((n) => n instanceof Element && n.matches(OFF));
   bindDrag(W);
@@ -1585,8 +1761,9 @@ import { bindKeys } from './widget/keys.ts';
   const scrim = /** @type {HTMLElement} */ (root.querySelector('.scrim'));
   // The open sheet (phones): a thread, a new comment, the list or the chat.
   /** @returns {HTMLElement | null} */
-  const openSheet = () => (S.labsOpen && labs?.switcherSheet()) || root.querySelector('.card:not(.out), .float:not(.out)') || (S.chatOpen ? chatEl : null);
+  const openSheet = () => (S.motionOpen && mo?.motionSheet()) || (S.labsOpen && labs?.switcherSheet()) || root.querySelector('.card:not(.out), .float:not(.out)') || (S.chatOpen ? chatEl : null);
   const closeAll = () => {
+    if (S.motionOpen) return mo?.closeMotion(); // the motion sheet sits over the others: only it goes
     if (S.labsOpen) return labs?.closeSwitcher(); // labs & pages sits over the others: only it goes
     S.draft = null;
     S.openId = null;
@@ -1719,22 +1896,6 @@ import { bindKeys } from './widget/keys.ts';
     // list itself is set in labit.json or your settings.json (`actions`, docs/settings.md): nothing on the page edits it.
     const chips = LIST.map(chip);
     row.append(...chips);
-    // +board (on a page; a guest too, who is the person on another device): a board for pictures and pages goes into the
-    // page as a section at this spot, and opens; no pin is left (Leo, 21 Nov: "only board sections is enough"). The words
-    // typed are its title. It is labit's own, not one of your list, so it looks different and sits at the right end.
-    if (BOARDS && !S.board && draft.anchor.kind !== 'board') {
-      const own = Object.assign(actButton('+board'), { className: 'own', title: 'a board of pictures and pages, as a section of the page here' });
-      own.addEventListener('mousedown', (e) => e.preventDefault());
-      own.addEventListener('click', () => {
-        const title = field.value.trim();
-        fill('');
-        S.draft = null;
-        keepSpot(null);
-        render();
-        void addBoard(draft.anchor, title);
-      });
-      row.append(own);
-    }
     let tries = 0;
     const measure = () => {
       if (!row.isConnected || !row.clientWidth) return void (tries++ < 10 && requestAnimationFrame(measure));
@@ -1782,6 +1943,7 @@ import { bindKeys } from './widget/keys.ts';
   function onPageClick(e) {
     if (e.composedPath().includes(host)) return;
     if (S.undoLetGo && Date.now() - S.undoLetGo < 2000) return void (S.undoLetGo = 0); // this click let a sent pin's undo card go (above)
+    if (S.menuShut && Date.now() - S.menuShut < 1500) return void (S.menuShut = 0); // this click closed the ⋯ menu (above)
     if (S.draft || S.openId) {
       // Typed text doesn't keep it open (Leo, 18 Nov): the click closes it and the words stay as a draft (the box saves them as
       // they are typed, and the spot is kept, so it comes back); Escape discards them.
@@ -1840,6 +2002,42 @@ import { bindKeys } from './widget/keys.ts';
     onBoard(pin, a); // a board's pin the browser doesn't hold: held to the screen
     return held;
   };
+  // A pin whose spot isn't on the page when the pins are drawn (its element not built yet, words being written again, a
+  // closed tab) is left off, and only a scroll, a resize or new comments drew the pins again: a page that rewrites its
+  // words in place without changing size (a live subtitle) kept such a pin off for good, so hiding and showing the
+  // comments at the wrong moment lost it (Leo, 25 Nov: "some pins don't come back"). While one is lost, each change of
+  // the page (at most every 250 ms) looks for its spot again, and the pins are drawn once one is back. Only finding
+  // counts: a pin on words that come and go isn't taken off again at each change. With every pin on its spot, nothing is
+  // watched.
+  let lostIds = new Set();
+  let lostWatch = null;
+  let lostAt = 0;
+  let lostTimer = /** @type {any} */ (0);
+  const lookAgain = () => {
+    clearTimeout(lostTimer);
+    const wait = lostAt + 250 - Date.now();
+    if (wait > 0) return void (lostTimer = setTimeout(lookAgain, wait));
+    lostAt = Date.now();
+    if (!S.on || S.openId || S.draft || S.grabbing || isTrying()) return;
+    const back = threads().some((c) => {
+      if (!lostIds.has(c.id)) return false;
+      const at = placeOf(c);
+      return !at.moved && at.why !== 'hidden';
+    });
+    if (back) render();
+  };
+  const watchLost = (ids) => {
+    lostIds = ids;
+    if (!ids.size || !document.body) {
+      clearTimeout(lostTimer);
+      lostWatch?.disconnect();
+      lostWatch = null;
+      return;
+    }
+    if (lostWatch) return;
+    lostWatch = new MutationObserver((list) => list.some((m) => m.target !== host) && lookAgain());
+    lostWatch.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['class', 'style', 'hidden', 'open'] });
+  };
   // Scrolling an inner box or the page growing only moves the pins: their places are read together, then written.
   // A full redraw happens only when something is open (a card or a composer follows its pin) or the pins changed.
   // After a scroll, the pins the browser holds are left alone.
@@ -1851,7 +2049,9 @@ import { bindKeys } from './widget/keys.ts';
     viewW = document.documentElement.clientWidth;
     const all = threads().filter((c) => c.anchor?.kind !== 'page');
     const skip = (c) => scrolled && heldPin(pinsById.get(c.id));
-    const places = all.filter((c) => !skip(c)).map((c) => [pinsById.get(c.id), position(c.anchor || {}), c]).filter(([, at]) => !at.moved);
+    const read = all.filter((c) => !skip(c)).map((c) => [pinsById.get(c.id), placeOf(c), c]);
+    watchLost(new Set(read.filter(([, at]) => at.moved || at.why === 'hidden').map(([, , c]) => c.id)));
+    const places = read.filter(([, at]) => !at.moved);
     readPins(places.map(([, , c]) => (c.anchor?.kind === 'board' ? frameBox(c.anchor) : findTarget(c.anchor || {}))));
     if (places.length + all.filter(skip).length !== pinsById.size || places.some(([pin]) => !pin)) return render(); // one lost or found its spot
     for (const [pin, { left, top, clipped, covered, zone }, c] of places) {
@@ -1862,13 +2062,13 @@ import { bindKeys } from './widget/keys.ts';
   };
   // An open card with the cursor in its reply box is not drawn again (the box would lose its caret, selection and words):
   // its pin and card are put at the page's new place where they stand. False when that is not a plain pin and card (an
-  // area, a board, a question's margin card, a phone's sheet): they wait for the cursor to leave, as before.
+  // area, a board, a phone's sheet): they wait for the cursor to leave, as before.
   const followOpen = () => {
     const c = threads().find((t) => t.id === S.openId);
     const pin = pinsById.get(S.openId);
     const card = S.openCard;
     const a = c?.anchor || {};
-    if (!c || !pin || !card?.isConnected || sheetMode.matches || card.matches('.margin, .under') || a.kind === 'board' || a.kind === 'page') return false;
+    if (!c || !pin || !card?.isConnected || sheetMode.matches || a.kind === 'board' || a.kind === 'page') return false;
     newPass();
     viewW = document.documentElement.clientWidth;
     const at = /** @type {any} */ (position(a));
@@ -1877,7 +2077,9 @@ import { bindKeys } from './widget/keys.ts';
     const held = placePin(pin, c, false, at.left, at.top, false);
     pin.style.visibility = (at.clipped && !held) || at.covered ? 'hidden' : '';
     flushPins();
-    placeCard(card, at.left, at.top, nativeTie() ? pin : null, at.top - 40);
+    const bx = besideVideo(a);
+    if (bx != null) placeCard(card, bx + 14, at.top, null, at.top - 40);
+    else placeCard(card, at.left, at.top, nativeTie() ? pin : null, at.top - 40);
     return true;
   };
   // The host sits at the page's top left corner (styles.css :host), as its box's own: a page that makes <body> or <html>
@@ -1914,11 +2116,6 @@ import { bindKeys } from './widget/keys.ts';
   };
   addEventListener('resize', reflow);
   addEventListener('resize', () => requestAnimationFrame(() => requestAnimationFrame(revealOpen))); // a turned phone: the open thread's pin stays in sight, above its sheet
-  // A question's card in the margin (thread.ts) that no longer fits a narrower window goes back where cards go.
-  addEventListener('resize', () => {
-    const card = layer.querySelector('.card.margin');
-    if (card && card.getBoundingClientRect().right > document.documentElement.clientWidth - 12) requestAnimationFrame(render);
-  });
   addEventListener('scroll', (e) => e.target !== document && !host.contains(/** @type {Node} */ (e.target)) && reflow(true), { capture: true, passive: true }); // the page's own scroll moves only what is held to the screen
 
   // Client-side navigation (pushState, back/forward, Astro view transitions): comments follow the new page,
@@ -1926,13 +2123,14 @@ import { bindKeys } from './widget/keys.ts';
   const navigated = () => {
     if (!host.isConnected && document.body) {
       document.body.append(host);
+      sized?.observe(document.body); // a new <body>: its size is the one to follow now
       fit();
+      writingIn?.focus({ preventScroll: true }); // the words being written go on where they were
     }
     if (!pageStyle.isConnected) document.head.append(pageStyle);
     if (!pinCursorStyle.isConnected) document.head.append(pinCursorStyle);
     const was = S.page;
     S.page = pageNow();
-    S.routed?.(); // the section bar (sections.ts)
     if (S.page === was) return;
     S.seen = readSeen();
     pass = null;
@@ -1942,17 +2140,29 @@ import { bindKeys } from './widget/keys.ts';
     S.openId = null;
     render();
     load();
-    setTimeout(() => S.checkSections?.(), 400);
   };
   // The Navigation API says when the current entry changed (pushState, replaceState, back and forward alike), so the
   // page's own history is left as it is.
   /** @type {any} */ (window).navigation.addEventListener('currententrychange', () => queueMicrotask(navigated));
   document.addEventListener('astro:after-swap', navigated);
+  // A framework's hot update that writes the whole <body> again (or swaps it) takes the widget out with it, and with it an
+  // unsent comment (issue 428): it is put back at once, its words and cursor as they were. Only <html>'s and <body>'s own
+  // children are watched, not the page below them.
+  /** @type {HTMLElement | null} */
+  let writingIn = null; // the box being written in, kept through its host being taken out (no blur to trust then)
+  root.addEventListener('focusin', (e) => (writingIn = /** @type {HTMLElement} */ (e.target)));
+  root.addEventListener('focusout', () => host.isConnected && (writingIn = null));
+  const keepOn = new MutationObserver(() => {
+    if (document.body) keepOn.observe(document.body, { childList: true });
+    if (!host.isConnected) navigated();
+  });
+  keepOn.observe(document.documentElement, { childList: true });
   // Pick up comments others left while this tab was in the background.
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && !S.draft && !root.activeElement) load();
   });
-  if ('ResizeObserver' in window) new ResizeObserver(reflow).observe(document.body);
+  const sized = 'ResizeObserver' in window ? new ResizeObserver(reflow) : null;
+  sized?.observe(document.body);
 
   // The rules that act on the page itself (the pinning cursor, a drag's no-select, a sheet's overscroll), not on the
   // widget: a stylesheet in the document's head, since the widget's own live in its shadow root. The font is the system's
@@ -1975,6 +2185,10 @@ import { bindKeys } from './widget/keys.ts';
   // or comments are switched.
   S.mouse = null; // the last mouse position
   const place = (x, y, target) => {
+    // D held (draw.ts): the pointer is the pen's tip, a dot of the ink's colour where the line goes.
+    const pen = Boolean(S.on && S.dKey);
+    document.documentElement.classList.toggle('lab-pen', pen);
+    ptr.classList.toggle('draw', pen);
     const show = Boolean(target) && target !== host && !host.contains(target) && getComputedStyle(target).cursor === 'none';
     ptr.classList.toggle('show', show);
     ptr.style.transform = `translate(${x - 1}px, ${y - 27}px)`;
@@ -2001,8 +2215,8 @@ import { bindKeys } from './widget/keys.ts';
     place(e.clientX, e.clientY, t instanceof Element ? t : null);
   }, { capture: true, passive: true });
   addEventListener('scroll', recheck, { capture: true, passive: true });
-  addEventListener('keydown', (e) => (e.key === 'Shift' || e.key === 'Alt') && recheck(), true);
-  addEventListener('keyup', (e) => (e.key === 'Shift' || e.key === 'Alt') && recheck(), true);
+  addEventListener('keydown', (e) => !e.repeat && recheck(), true); // Shift, Option, D: what the pointer is (a frame later, once the key's state is set)
+  addEventListener('keyup', recheck, true);
   document.documentElement.addEventListener('mouseleave', () => ((S.mouse = null), ptr.classList.remove('show')));
   addEventListener('blur', () => ((S.mouse = null), ptr.classList.remove('show')));
   // No pictures: where the drawn pin can't show (an open dialog or full screen draws above it, or before the mouse first
@@ -2017,21 +2231,28 @@ import { bindKeys } from './widget/keys.ts';
     const plain = `:not(${INTERACTIVE}, a *, button *, label *, [role="button"] *, [contenteditable], [contenteditable] *, ${OFF}, ${OFF} *, [data-lab-comments])`;
     const top = `dialog, dialog *, [popover], [popover] *, :fullscreen, :fullscreen *`;
     pinCursorStyle.textContent =
-      `@layer lab-pointer { html:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl) body, html:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl) body *${plain} { cursor: crosshair; } ` +
+      `@layer lab-pointer { html:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl), html:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl) body, html:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl) body *${plain} { cursor: crosshair; } ` +
       // With the drawn pointer the system one hides over plain parts of the page (not in the top layer, which is above it).
-      `html.lab-drawn:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl):not(.lab-dragging) body, html.lab-drawn:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl):not(.lab-dragging) body *${plain}:not(${top}) { cursor: none; } ` +
+      // html too: under a page shorter than the window there is no body, and the plain arrow showed (Leo, 23 Nov).
+      `html.lab-drawn:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl):not(.lab-dragging), html.lab-drawn:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl):not(.lab-dragging) body, html.lab-drawn:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl):not(.lab-dragging) body *${plain}:not(${top}) { cursor: none; } ` +
       // Holding Shift (drag to quote words): the drawn I-beam with a low ink band at its foot (C3, Leo 18 Nov; text where a cursor image isn't drawn) over the page's content, back to the pin when it's let go.
       `html:has([data-lab-pinning]).lab-shift-cur:not(.lab-dragging) body *${plain}:not(img, svg, video, canvas) { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Crect x='5' y='15.5' width='14' height='5' rx='1.5' fill='%23f0b70a' fill-opacity='.6'/%3E%3Cpath d='M9 4h6M12 4v16M9 20h6' stroke='white' stroke-width='4' stroke-linecap='round' fill='none'/%3E%3Cpath d='M9 4h6M12 4v16M9 20h6' stroke='%23141414' stroke-width='1.5' stroke-linecap='round' fill='none'/%3E%3C/svg%3E") 12 12, text; } ` +
       // The pointer is inherited, so places that aren't commented on name theirs: editable text a text cursor, a part
-      // marked data-uncommentable the plain arrow (a pin pointer there would promise a comment that won't come).
+      // of labit's own (data-lab-off) the plain arrow (a pin pointer there would promise a comment that won't come).
       `html:has([data-lab-pinning]) body :is([contenteditable], [contenteditable] *) { cursor: text; } html:has([data-lab-pinning]) body :is(${OFF}, ${OFF} *) { cursor: auto; } }` +
       // Holding Option (Alt) pins links and controls too: the drawn pin shows over them (the system pointer hides).
       `html.lab-alt body, html.lab-alt body *:not([data-lab-comments], [data-lab-comments] *, ${OFF}, ${OFF} *) { cursor: crosshair !important; }` +
-      `html.lab-drawn.lab-alt body, html.lab-drawn.lab-alt body *:not([data-lab-comments], [data-lab-comments] *, ${OFF}, ${OFF} *, ${top}) { cursor: none !important; }`;
+      `html.lab-drawn.lab-alt body, html.lab-drawn.lab-alt body *:not([data-lab-comments], [data-lab-comments] *, ${OFF}, ${OFF} *, ${top}) { cursor: none !important; }` +
+      // Holding D (drawing), anywhere on the page, links and controls too, even mid-stroke: the system pointer hides and the drawn
+      // one is the pen's tip (Leo, 23 Nov: "need cursor for drawing"). The widget's own parts keep theirs.
+      `html.lab-pen.lab-drawn, html.lab-pen.lab-drawn body, html.lab-pen.lab-drawn body *:not([data-lab-comments], ${top}) { cursor: none !important; } html.lab-pen [data-lab-comments] { cursor: auto !important; }`;
   }
   // Computers, comments on: a click or drag doesn't select the page's text; hold Shift to select (and quote) words.
   // Fields and editable text stay selectable.
   pageStyle.textContent += `@media (pointer: fine) { html:has([data-lab-pinning]):not(.lab-shift, .lab-lit) body > :not([data-lab-comments]), html:has([data-lab-pinning]):not(.lab-shift, .lab-lit) body > :not([data-lab-comments]) :not(input, textarea, select, [contenteditable], [contenteditable] *) { -webkit-user-select: none; user-select: none; } }`;
+  // Pictures and videos are never selected by a press in comment mode, even with ⌥ or ⇧ held: Safari painted a clicked
+  // video as selected, blue over the frame you were pinning (Leo, 23 Nov: "clicking on 4.1 s selecting it").
+  pageStyle.textContent += '@media (pointer: fine) { html:has([data-lab-comments]) :is(video, img, canvas, picture) { -webkit-user-select: none; user-select: none; } }';
   bindKeys(W);
   pageStyle.textContent += 'html.lab-dragging, html.lab-dragging * { user-select: none !important; -webkit-user-select: none !important; cursor: crosshair !important; }';
   // While a sheet is open, a swipe down is the sheet's, not the browser's pull-to-refresh.
@@ -2041,6 +2262,10 @@ import { bindKeys } from './widget/keys.ts';
   // The room a phone's sheet made below the page's end (see goTo) stays after the sheet closes, so the page doesn't jump
   // up at the end of the slide; it shrinks away as you scroll back up.
   pageStyle.textContent += "html.lab-room body::after { content: ''; display: block; height: var(--lab-room, 0px); }";
+  // While a phone's sheet moves the page (scrolled, then held where it was by --lab-shift), the browser must not move it
+  // too: Safari's scroll anchoring took the shift for the page's content moving and scrolled as much again, so a new pin
+  // went off screen (Leo's iPhone, 25 Nov, a page with a tall product picture: scrolled 988 for 494).
+  pageStyle.textContent += 'html.lab-sheet, html.lab-moved, html.lab-room { overflow-anchor: none; }';
   // Phones: the page is scrolled in one step for a new comment's pin and drawn where it was, then let go as the keyboard
   // comes (sheets.ts revealDraft): its own blocks, not what it holds to the screen itself, nor the widget or a board's view.
   pageStyle.textContent += 'html.lab-moved body > :not([data-lab-comments], [data-lab-board-view], [data-lab-still]) { translate: 0 var(--lab-shift, 0px) !important; transition: translate var(--lab-shift-t, 0s) var(--lab-shift-e, ease) !important; }';
@@ -2066,47 +2291,34 @@ import { bindKeys } from './widget/keys.ts';
   // in (lab-lit, as on a computer) and never while a finger is down.
   pageStyle.textContent += `@media (pointer: coarse) { html:has([data-lab-pinning]):not(.lab-lit) body > :not([data-lab-comments]), html:has([data-lab-pinning]).lab-press body > :not([data-lab-comments]) { -webkit-user-select: none; user-select: none; } html:has([data-lab-pinning]) body > :not([data-lab-comments]), html:has([data-lab-pinning]) body > :not([data-lab-comments]) * { -webkit-user-drag: none; } }`;
 
-  // The section bar (src/widget/sections.ts) is its own file, loaded when the page may show one: the lab kept its room
-  // (the file clears that again), or a lab page (or one that says so) has 3 or more headings. Asked again when a route
-  // or a reload changes the page, a read comes from another device, comments come back, or headings are drawn late;
-  // those call these until the file is there and takes its own place.
-  /** @type {Promise<void> | null} */
-  let sectionsAsked = null;
-  const maybeSections = () => {
-    if (sectionsAsked || !document.body) return;
-    if (document.querySelector('style[data-lab="section-bar"]') || (document.querySelector('meta[name="lab-sections"], [data-lab-sections], link[href*="/_lab/lab."]') && document.querySelectorAll('h1, h2, h3').length > 2)) {
-      sectionsAsked = part('sections').then((m) => (m.bindSections(W), m.startSections())).catch(() => (sectionsAsked = null));
-    }
-  };
-  S.checkSections = S.syncSections = S.routed = maybeSections;
-  /** @param {any} n */
-  const heady = (n) => n?.nodeType === 1 && (n.matches('h1, h2, h3') || n.querySelector('h1, h2, h3'));
-  new MutationObserver((list, o) => {
-    if (sectionsAsked) return o.disconnect();
-    if (list.some((/** @type {{ target: any, addedNodes: NodeList }} */ m) => heady((m.target.nodeType === 3 ? m.target.parentElement : m.target)?.closest('h1, h2, h3')) || [...m.addedNodes].some(heady))) maybeSections();
-  }).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
   const start = () => {
     document.head.append(pageStyle, pinCursorStyle);
     refreshPinCursor();
     document.body.append(host);
+    keepOn.observe(document.body, { childList: true });
     fit();
     // The page's own selection while commenting, and the quoted words of an open text comment.
     // A soft green, so the quoted words stay readable in the page's own colour, on light and dark pages.
     const paint = 'background-color: rgba(52, 199, 89, .3); color: inherit;';
     pageStyle.textContent += `html:has([data-lab-pinning]) ::selection { ${paint} } ::highlight(lab-quote) { ${paint} }`;
-    bindActions(W); // data-lab-action buttons leave a pin the agent acts on
+    if (!globalThis.__LAB_CO__) bindActions(W); // data-lab-action buttons leave a pin the agent acts on
     load();
-    maybeSections(); // the section bar: what is new or updated on the page since you read it
-    scanForFramework();
-    if (!S.components) {
+    if (!globalThis.__LAB_CO__) scanForFramework();
+    if (!globalThis.__LAB_CO__ && !S.components) {
       addEventListener('load', scanForFramework, { once: true });
       addEventListener('pointerover', overFramework, { capture: true, passive: true });
     }
   };
   if (document.body) start();
   else document.addEventListener('DOMContentLoaded', start);
-  bindBoardCam(W);
-  startLive();
+  // colabit has no boards and no live stream: the build leaves both out (globalThis.__LAB_CO__ is its constant).
+  if (!globalThis.__LAB_CO__) bindBoardCam(W);
+  if (!globalThis.__LAB_CO__) startLive();
+  // colabit has no live stream: others' comments come in every 15 s while the page is in view, and when it comes back.
+  if (globalThis.__LAB_CO__) {
+    setInterval(() => document.hidden || load(), 15000);
+    document.addEventListener('visibilitychange', () => document.hidden || load());
+  }
   // ⌘K / Control-K from anywhere but a field of the page's own (where it may mean "add a link"): the first press loads
   // labs & pages and opens it once it is there.
   if (LABS) document.addEventListener('keydown', (e) => {

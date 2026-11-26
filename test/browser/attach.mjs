@@ -81,17 +81,30 @@ try {
       const file = saved && path.join(DIR, '.lab/attachments', `${saved.id}-1.${im.type}`);
       check(eng, 'its file is in .lab/attachments under the comment id', Boolean(file) && fs.existsSync(file));
       check(eng, 'the agent reads its path', saved && (await (await fetch(`${B}/_lab/agent/index`)).text()).includes(`image: .lab/attachments/${saved.id}-1.${im.type} (${im.w}×${im.h})`));
-      // the thread shows the thumbnail
+      // the thread says the picture is there, in one line, no thumbnail and nothing that opens a tab (#424)
       await sleep(500);
       await p.keyboard.press('Escape');
       const pinsN = await p.locator('button.pin').count();
       for (let i = 0; i < pinsN; i++) { // ours is the one whose thread has a picture
         await p.locator('button.pin').nth(i).click();
         await sleep(700);
-        if (await p.locator('.att img').count()) break;
+        if (await p.locator('.att').count()) break;
         await p.keyboard.press('Escape');
       }
-      check(eng, 'the thread shows the picture, loaded', await until(async () => p.evaluate(() => { const r = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.att img'))?.shadowRoot; const i = r?.querySelector('.att img'); return Boolean(i && i.naturalWidth > 0); })));
+      const att = (sel) => p.evaluate((s) => { const r = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector(s))?.shadowRoot; const a = r?.querySelector(s); return a && { text: a.textContent, label: a.getAttribute('aria-label'), h: a.getBoundingClientRect().height, img: Boolean(a.closest('.msg')?.querySelector('img:not(.atts img)')), link: Boolean(a.closest('.msg')?.querySelector('a[target="_blank"]')) }; }, sel);
+      let seen;
+      await until(async () => (seen = await att('.att'))?.text);
+      check(eng, 'the thread says "1 image attached" in one short line, no thumbnail, no new-tab link', seen?.text === '1 image attached' && seen.h <= 20 && !seen.img && !seen.link, JSON.stringify(seen));
+      // A tap on the line shows the picture in the message (loaded, no tab), a second tap hides it.
+      const tapAtt = () => p.evaluate(() => [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.att'))?.shadowRoot.querySelector('.att').click());
+      const pic = () => p.evaluate(() => { const r = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.att'))?.shadowRoot; const i = r?.querySelector('.att-pics img'); return { shown: Boolean(i && i.offsetHeight > 0 && i.naturalWidth > 0), expanded: r?.querySelector('.att')?.getAttribute('aria-expanded'), link: Boolean(r?.querySelector('.att-pics a, a[target="_blank"]')) }; });
+      await tapAtt();
+      let opened;
+      await until(async () => (opened = await pic()).shown);
+      check(eng, 'a tap on the line shows the picture in the message, loaded, no link', opened?.shown && opened.expanded === 'true' && !opened.link, JSON.stringify(opened));
+      await tapAtt();
+      const closed = await pic();
+      check(eng, 'a second tap hides it again', !closed.shown && closed.expanded === 'false', JSON.stringify(closed));
       // a drop on a reply box carries one too
       const reply = p.locator('textarea').first();
       await reply.focus();
@@ -115,6 +128,24 @@ try {
         for (let i = 0; i < 40 && !withReply; i++) { await sleep(150); withReply = (await list()).find((c) => c.parent && c.images?.length); }
         check(eng, 'the reply is saved with it', Boolean(withReply), JSON.stringify((await list()).map((c) => c.images)));
       }
+      // Leo, 23 Nov: "sends but image stuck there like doubled". The page redraws its boxes while a send with a picture is
+      // on its way (a reply comes in on the same thread): the box drawn again took the picture back, and the send emptied only the old box.
+      await ctx.route('**/_lab/api/comments', async (r) => {
+        if (r.request().method() !== 'POST') return r.continue();
+        await fetch(`${B}/_lab/api/comments`, { method: 'POST', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ page: '/index', name: 'Other', text: 'meanwhile', parent: saved?.id }) });
+        await sleep(2500);
+        return r.continue();
+      });
+      await reply.focus();
+      await paste();
+      await until(async () => (await p.locator('.atts .p img').count()) === 1);
+      await reply.fill('sent while redrawn');
+      await reply.press('Enter');
+      let redrawn;
+      for (let i = 0; i < 60 && !redrawn; i++) { await sleep(150); redrawn = (await list()).find((c) => c.text === 'sent while redrawn'); }
+      await sleep(1200);
+      check(eng, 'a picture sent while the boxes are drawn again goes with the comment and leaves no box', redrawn?.images?.length === 1 && (await p.locator('.atts .p img').count()) === 0, `saved ${JSON.stringify(redrawn?.images)}, left in boxes ${await p.locator('.atts .p img').count()}`);
+      await ctx.unroute('**/_lab/api/comments');
       // a send that fails keeps the words and the picture
       await ctx.route('**/_lab/api/comments', (r) => (r.request().method() === 'POST' ? r.abort() : r.continue()));
       await reply.focus();
@@ -144,8 +175,38 @@ try {
       let said;
       for (let i = 0; i < 40 && !said; i++) { await sleep(150); said = (await list()).find((c) => c.text === 'this is the whole page'); }
       check(eng, 'the chat message is saved with the picture', said?.images?.length === 1 && said.anchor?.kind === 'page', JSON.stringify(said?.images));
-      check(eng, 'and the chat shows it, loaded', await until(async () => p.evaluate(() => { const r = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.chatwin .att img'))?.shadowRoot; const i = r?.querySelector('.chatwin .att img'); return Boolean(i && i.naturalWidth > 0); })));
+      let inChat;
+      await until(async () => (inChat = await att('.chatwin .att'))?.text);
+      check(eng, 'and the chat says so the same way', inChat?.text === '1 image attached' && !inChat.img && !inChat.link, JSON.stringify(inChat));
       check(eng, 'the agent reads it as an image: line under the message', Boolean(said) && (await (await fetch(`${B}/_lab/agent/index`)).text()).includes(`image: .lab/attachments/${said.id}-1.`));
+      // Enter right after a paste, on a fresh page (the picture part not loaded yet): the picture goes with the comment
+      // and the box is empty after, not a comment without it and the picture left in the box.
+      const q = await ctx.newPage();
+      await q.route('**/_lab/attach.js*', async (r) => { await sleep(1200); return r.continue(); }); // a part that takes a moment to come
+      await q.goto(B + '/');
+      await q.waitForFunction(() => [...document.querySelectorAll('*')].some((n) => n.shadowRoot?.querySelector('.scrim')), null, { timeout: 8000 });
+      await sleep(800);
+      await q.mouse.click(600, 120);
+      const quick = q.locator('textarea').first();
+      await until(async () => (await quick.count()) > 0);
+      await quick.fill('pasted and sent at once');
+      await quick.focus();
+      await q.evaluate(async () => {
+        const cv = Object.assign(document.createElement('canvas'), { width: 300, height: 200 });
+        cv.getContext('2d').fillRect(0, 0, 300, 200);
+        const blob = await new Promise((r) => cv.toBlob(r, 'image/png'));
+        const dt = new DataTransfer();
+        dt.items.add(new File([blob], 'image.png', { type: 'image/png' }));
+        const at = document.activeElement?.shadowRoot?.activeElement || document.activeElement;
+        at.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true, composed: true }));
+      });
+      await quick.press('Enter');
+      let fast;
+      for (let i = 0; i < 60 && !fast; i++) { await sleep(150); fast = (await list()).find((c) => c.text === 'pasted and sent at once'); }
+      await sleep(1500);
+      const leftOver = await q.locator('.atts .p img').count();
+      check(eng, 'Enter right after a paste: the comment goes with its picture and the box keeps none', fast?.images?.length === 1 && leftOver === 0, `saved ${JSON.stringify(fast?.images)}, left in boxes ${leftOver}, last ${JSON.stringify((await list()).slice(-2).map((c) => [c.text, c.images?.length]))}`);
+      await q.close();
       await p.keyboard.press('Escape');
     } finally {
       await browser.close();

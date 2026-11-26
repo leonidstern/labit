@@ -90,6 +90,12 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
     process.exit(0);
   }
 
+  // `labit gc`: what each lab keeps in its .lab and what could go. Only reports (lib/gc.ts).
+  if (pos[0] === 'gc') {
+    console.log((await import('./gc.ts')).gcReport());
+    process.exit(0);
+  }
+
   // `labit list`: what runs, so an agent reuses a lab instead of starting another.
   if (pos[0] === 'list') {
     const labs = runningLabs();
@@ -146,6 +152,10 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
     }
     const out = path.join(HERE, '.lab', 'lab-pages.md');
     fs.mkdirSync(path.dirname(out), { recursive: true });
+    // Run in a folder no lab has served, this makes its .lab: git skips it as it skips a lab's (local.mjs ignoreLab).
+    try {
+      fs.writeFileSync(path.join(path.dirname(out), '.gitignore'), '*\n', { flag: 'wx' });
+    } catch {}
     fs.writeFileSync(out, (lines.join('\n').trim() || (opts.all ? 'No labs running.' : 'No labs for this folder. `pages --all` lists every lab on this computer.')) + '\n');
     console.log(out);
     process.exit(0);
@@ -187,7 +197,7 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
   }
 
   // ---------- Claude's side: wait, reply, resolve, pin ----------
-  if (['wait', 'reply', 'resolve', 'pin', 'invite'].includes(pos[0])) {
+  if (['wait', 'reply', 'resolve', 'thread', 'pin', 'invite'].includes(pos[0])) {
     // `pin move <id> <selector>` and `pin gone <id>` settle a pin that is already there; any other `pin` makes one.
     const settle = pos[0] === 'pin' && (pos[1] === 'move' || pos[1] === 'gone') ? pos[1] : '';
     const [cmd, ref, ...words] = settle ? [pos[0], ...pos.slice(2)] : pos;
@@ -208,16 +218,23 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
     // A lab started again has a new key in its .lab/server.json (this folder's, not a lab above): each try reads it again, so the old key isn't refused
     // (before, a wait outlived the restart and then ended on "forbidden", and the lab showed nobody listening).
     const call = async (pathname: string, body: object, seconds = 5) => {
-      let until = 0;
+      let lost = 0; // when the lab went, in this spell of not reaching it
       for (;;) {
         try {
           server = JSON.parse(fs.readFileSync(path.join(dir, '.lab/server.json'), 'utf8'));
         } catch {} // mid-write or gone: the last one read
+        const tried = Date.now();
         try {
-          return await labCall(server, pathname, body, session);
+          const out = await labCall(server, pathname, body, session);
+          // Said so a gap shows in the agent's output with its length (the lab's log has the other side).
+          if (lost) console.log(`The lab was gone for ${Math.round((tried - lost) / 1000)} s and is back.`);
+          return out;
         } catch {
-          if (!until) until = Date.now() + seconds * 1000;
-          if (Date.now() >= until) return gone();
+          // A try that was held open a while (a wait the lab took again after an update) reached the lab: this is a new
+          // spell. Before, the clock from the first update kept running under the held wait, and the next update, minutes
+          // later, ended it at once (23 Nov: waits died on a 0.3 s hand-over).
+          if (!lost || Date.now() - tried > 2000) lost = Date.now();
+          if (Date.now() - lost >= seconds * 1000) return gone();
           await new Promise((r) => setTimeout(r, 400));
         }
       }
@@ -235,9 +252,15 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
     // says why it can't just be detected).
     const listen = async () => {
       const { seconds, capped } = waitSeconds(opts, process.stdout.isTTY === true);
-      const out = await call('/_lab/wait', { timeout: seconds, pages: listenPages(opts, true), ack: true }, 20);
+      // 2 minutes: a lab taking a newer build is usually back within a second, but one was gone 20 s and more three
+      // times on 23 Nov (while its build was made), and each wait that gave up left the person's pins unheard.
+      const out = await call('/_lab/wait', { timeout: seconds, pages: listenPages(opts, true), ack: true }, Number(process.env.LABIT_WAIT_HOLD_S) || 120);
       console.log(WAIT_SAID[out.status] ?? out.text);
-      await labAck(server, out.delivery, session);
+      // Codex can't be woken once its turn ended, and what a background command prints then is read by nobody: a
+      // `wait --bg` there that confirmed its hand-off left the pins "picked up" and unread (#420, tested on Codex
+      // 0.166). Unconfirmed, the lab takes them back after a few seconds unless the session answers them, and the labit
+      // hook brings them in when the person next writes or the turn ends.
+      if (!(opts.bg && session.kind === 'codex')) await labAck(server, out.delivery, session);
       if (capped && out.status === 204)
         console.log(
           `\nThat wait was held to ${FOREGROUND_CAP} seconds. Run it in the background (your app's own way of doing that) and ` +
@@ -280,12 +303,12 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
     // many: pin --file points.json; on a board: pin --board <name> [--frame b] <selector|-> "text".
     if (cmd === 'pin' && !settle) {
       const usage = `${CMD} pin <selector> "text" [--page /path] | pin --file points.json | pin --board <name> --frame <id> <selector> "text"`;
-      type Point = { selector?: string; text?: string; quote?: string; at?: unknown; page?: unknown; question?: boolean; choices?: unknown; recommend?: unknown };
+      type Point = { selector?: string; text?: string; quote?: string; at?: unknown; page?: unknown; question?: boolean; choices?: unknown; hints?: unknown; hintFor?: unknown; recommend?: unknown };
       let points: Point[];
       if (opts.file !== undefined) {
         if (typeof opts.file !== 'string') die('--file takes a JSON file.');
         if (ref || words.length) die('--file holds the pins: no selector or text on the command line.');
-        const each = ['quote', 'at', 'question', 'choice', 'recommend'].filter((k) => opts[k] !== undefined);
+        const each = ['quote', 'at', 'question', 'choice', 'hint', 'recommend'].filter((k) => opts[k] !== undefined);
         if (each.length) die(`${each.map((k) => `--${k}`).join(', ')} go on a single pin: in --file put them in each pin's own entry.`);
         let list: unknown;
         try {
@@ -302,7 +325,7 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
         // On a board a pin may be on no element: with one word left over, it is the text.
         if (opts.board !== undefined && !words.length && selector) [selector, said] = ['', [ref]];
         else if (selector === '-') selector = '';
-        points = [{ selector, text: said.join(' '), quote: opts.quote, at: opts.at, question: opts.question === true, choices: Array.isArray(opts.choice) ? opts.choice : undefined, recommend: opts.recommend }];
+        points = [{ selector, text: said.join(' '), quote: opts.quote, at: opts.at, question: opts.question === true, choices: Array.isArray(opts.choice) ? opts.choice : undefined, hints: opts.hint, hintFor: opts['hint-for'], recommend: opts.recommend }];
       }
 
       let browser = false; // whether a browser has the lab open (said by the lab with its pages)
@@ -364,11 +387,17 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
         if (!text) fail(`Pin text is missing: ${CMD} pin ${selector || '<selector>'} "<point>"`);
         if (pt.quote !== undefined && (typeof pt.quote !== 'string' || !pt.quote.trim())) fail('--quote takes the exact words.');
         if (pt.quote && !selector) fail('--quote goes with a selector.');
-        let asked: { choices: string[]; recommend?: number } | undefined;
-        if (pt.choices !== undefined || pt.recommend !== undefined) {
-          const c = replyChoices({ choice: pt.choices, recommend: pt.recommend });
+        let asked: { choices: string[]; recommend?: number; hints?: string[] } | undefined;
+        if (pt.choices !== undefined || pt.recommend !== undefined || pt.hints !== undefined) {
+          // --hint after its --choice on the command line; in --file, "hints": one per choice in their order ("" for none).
+          const fromFile = opts.file !== undefined && Array.isArray(pt.hints);
+          const hint = fromFile ? (pt.hints as unknown[]).filter((h) => h !== '') : pt.hints;
+          const hintFor = fromFile ? (pt.hints as unknown[]).flatMap((h, i) => (h === '' ? [] : [i])) : pt.hintFor;
+          if (opts.file !== undefined && pt.hints !== undefined && !Array.isArray(pt.hints)) fail('"hints" is a list, one for each choice ("" for none).');
+          if (fromFile && Array.isArray(pt.choices) && (pt.hints as unknown[]).length !== pt.choices.length) fail('"hints": one for each choice ("" for none).');
+          const c = replyChoices({ choice: pt.choices, recommend: pt.recommend, ...(hint !== undefined && (!Array.isArray(hint) || hint.length) ? { hint, 'hint-for': hintFor } : {}) });
           if (c instanceof Error) fail(c.message);
-          asked = c as { choices: string[]; recommend?: number } | undefined;
+          asked = c as { choices: string[]; recommend?: number; hints?: string[] } | undefined;
         }
 
         // Where the pin goes: a page of the lab, or a board (and one of its frames).
@@ -474,6 +503,13 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
       hit = hits[0];
     }
     if (!hit) die(`No open comment ${ref || ''}${want ? ` on ${want}` : ''}. See .lab/comments.md.`);
+    // thread <id>: the whole thread, every message, resolved or not (a long one is cut short in a hand-off, #425).
+    if (cmd === 'thread') {
+      const out = await call(`/_lab/agent${hit.page}?thread=${encodeURIComponent(hit.id)}`, {});
+      if (out.status >= 300) die(`Could not read it: ${out.text}`);
+      process.stdout.write(out.text);
+      process.exit(0);
+    }
     // pin move / pin gone: the agent that changed the page settles a pin the page was unsure of (its words changed, a copy,
     // a spot that cannot be told). move puts it on the element <selector> finds (and --quote on words in it); gone says
     // its spot has been removed: the page draws a ghost where it stood. Nothing is told to the agent about it again.
@@ -516,11 +552,15 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
       if (asked && intent && intent !== 'question') die(`A reply with --choice is a question; leave out --${intent === 'working' ? 'on-it' : intent}.`);
       if (asked && opts.resolve) die('A reply with --choice waits for the person to pick; leave out --resolve.');
       if (asked) intent = 'question';
+      // --checked "<how>": the agent looked at what it did (the page at a width, a test run); a done answer without it shows
+      // as not checked (#425). Only with --done: on it, a question or a pick isn't a result.
+      if (opts.checked !== undefined && (typeof opts.checked !== 'string' || !opts.checked.trim())) die('--checked takes how you looked: --checked "opened /pricing at 390 px"');
+      if (opts.checked !== undefined && intent !== 'done') die('--checked goes with --done: it says how you checked the result.');
       const said = Object.values(((data as Record<string, object>)[hit.page] || {}) as Record<string, { id: string; parent?: string; session?: unknown; createdAt: string }>)
         .filter((c) => (c.id === hit.id || c.parent === hit.id) && !c.session)
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
         .pop()?.id;
-      const out = await call('/_lab/api/comments', { page: hit.page, parent: hit.id, nonce: nonceOf(hit.page, hit.id, hit.to, said, words.join(' ')), ...(hit.to ? { to: hit.to } : {}), name: signed(), text: words.join(' '), ...(typeof opts['suggest-rule'] === 'string' ? { suggest: opts['suggest-rule'] } : {}), ...(intent ? { intent } : {}), ...asked });
+      const out = await call('/_lab/api/comments', { page: hit.page, parent: hit.id, nonce: nonceOf(hit.page, hit.id, hit.to, said, words.join(' ')), ...(hit.to ? { to: hit.to } : {}), name: signed(), text: words.join(' '), ...(typeof opts['suggest-rule'] === 'string' ? { suggest: opts['suggest-rule'] } : {}), ...(intent ? { intent } : {}), ...(typeof opts.checked === 'string' ? { checked: opts.checked } : {}), ...asked });
       if (out.status >= 300) die(`Could not reply: ${out.text}`);
       // The page tries each choice in place of the quoted words: a choice that reaches past them is said here.
       if (asked) for (const note of choiceSpills(data[hit.page]?.[hit.id]?.anchor?.quote, asked.choices)) console.log(`Note: ${note}`);

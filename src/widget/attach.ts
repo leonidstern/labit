@@ -73,16 +73,35 @@ export async function send<T>(wrap: HTMLElement, list: Pic[], fn: (att: { attach
   return out;
 }
 
-/** A message's pictures, as thumbnails that open the whole one. The name is built here from the comment's id, never read
- *  from the record (a record with another n or type, or an id that is not 12 hex digits, shows nothing). */
+/** A message's pictures, as one quiet line ("2 images attached"), not thumbnails (Leo, 22 Nov, #424: they are there for
+ *  the agent, and big thumbnails that opened in a new tab made short comments tall). A tap on the line opens them in
+ *  the message, a second closes them (Leo, 23 Nov: "a way to look at image?"); nothing opens a tab. The name is built here
+ *  from the comment's id, never read from the record (a record with another n or type, or an id that is not 12 hex
+ *  digits, shows nothing). */
 export function show(box: HTMLElement, item: { id: string; images?: (Image & { w?: number; h?: number })[] }) {
   if (!/^[a-f0-9]{12}$/.test(item.id)) return;
+  const ok = (item.images || []).filter((i) => Number.isInteger(i.n) && i.n >= 1 && i.n <= MAX && /^(png|jpg|webp|gif)$/.test(i.type));
+  if (!ok.length) return;
   styled(box);
-  for (const i of item.images || []) {
-    if (!(Number.isInteger(i.n) && i.n >= 1 && i.n <= MAX && /^(png|jpg|webp|gif)$/.test(i.type))) continue;
-    const url = new URL(`/_lab/attachments/${item.id}-${i.n}.${i.type}`, import.meta.url).href;
-    const a = Object.assign(document.createElement('a'), { className: 'att', href: url, target: '_blank', rel: 'noopener' });
-    a.append(Object.assign(document.createElement('img'), { src: url, loading: 'lazy', decoding: 'async', alt: `picture ${i.w || ''}×${i.h || ''}`, width: i.w || undefined, height: i.h || undefined }));
-    box.append(a);
-  }
+  const said = `${ok.length} image${ok.length > 1 ? 's' : ''} attached`;
+  const line = Object.assign(document.createElement('button'), { className: 'att', type: 'button', textContent: said, title: 'show' });
+  line.setAttribute('aria-expanded', 'false');
+  line.insertAdjacentHTML('afterbegin', '<svg viewBox="0 0 12 12" aria-hidden="true"><rect x="1" y="2" width="10" height="8" rx="1.5"/><path d="M1.5 9 4.5 6l2 2 1.5-1.5L10.5 9"/></svg>');
+  let pics: HTMLElement | null = null;
+  line.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = line.getAttribute('aria-expanded') !== 'true';
+    line.setAttribute('aria-expanded', String(open));
+    line.title = open ? 'hide' : 'show';
+    if (!pics) {
+      pics = Object.assign(document.createElement('div'), { className: 'att-pics' });
+      for (const i of ok) {
+        const src = new URL(`/_lab/attachments/${item.id}-${i.n}.${i.type}`, import.meta.url).href;
+        pics.append(Object.assign(document.createElement('img'), { src, decoding: 'async', alt: `picture ${i.w || ''}×${i.h || ''}`, width: i.w || undefined, height: i.h || undefined }));
+      }
+      line.after(pics);
+    }
+    pics.hidden = !open;
+  });
+  box.append(line);
 }

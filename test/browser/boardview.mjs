@@ -1,6 +1,6 @@
 // A board in the page that links it (src/board/overlay.ts): a click on the board's link opens it over the same page (no
-// navigation, #board=<name>), a pin on frame b is the page's comment with the board's anchor, the view keeps its size
-// per page, and closing it (‹ close, Esc, back) leaves the page scrolled where it was. Not part of `npm test`.
+// navigation, #board=<name>) over the whole window, a pin on frame b is the page's comment with the board's anchor, and
+// closing it (‹ back, Esc, the browser's back) leaves the page scrolled where it was. Not part of `npm test`.
 // Run: node test/browser/boardview.mjs (needs playwright; NODE_PATH can point at a node_modules that has it).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -58,38 +58,14 @@ try {
       const sent = posts[0];
       check(eng, 'a pin on frame b posts to the page with the board anchor', sent?.page === '/canvas' && sent.anchor?.kind === 'board' && sent.anchor.board === 'pricing' && sent.anchor.frame === 'b' && Math.abs(sent.anchor.fx - 60 / (b.w / 820)) < 3, JSON.stringify(sent));
       await sleep(300);
-      // resize: half, kept for this page across a reload
+      // the whole window over the page, with no half and no edge to drag (Leo, 23 Nov, #422)
       await p.keyboard.press('Escape'); // the draft (if any) goes first
       await sleep(200);
-      const viewH = () => p.evaluate(() => document.querySelector('[data-lab-board-view]').getBoundingClientRect().height);
-      const h0 = await viewH();
-      check(eng, 'a board opens at half the window (Leo, 21 Nov: "open boards half not full by default")', Math.abs(h0 - 400) < 4, String(h0));
-      await p.click('[data-lab-board-view] .bv-size');
-      await sleep(400);
-      const hFull = await viewH();
-      await p.click('[data-lab-board-view] .bv-size');
-      await sleep(400);
-      const h1 = await viewH();
-      check(eng, 'full / half makes the view the whole window, then half of it', Math.abs(hFull - 800) < 4 && Math.abs(h1 - 400) < 4, String([hFull, h1]));
-      // the grip on its edge: dragged up to 70%
-      const g = await p.evaluate(() => { const r = document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('.bv-grip').getBoundingClientRect(); return { x: r.x + r.width / 3, y: r.y + r.height / 2 }; });
-      await p.mouse.move(g.x, g.y);
-      await p.mouse.down();
-      await p.mouse.move(g.x, 240, { steps: 5 });
-      await p.mouse.up();
-      await sleep(300);
-      const h2 = await p.evaluate(() => document.querySelector('[data-lab-board-view]').getBoundingClientRect().height);
-      check(eng, 'the grip resizes it', Math.abs(h2 - 560) < 6, String(h2));
-      await p.reload();
-      await p.waitForFunction(() => document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board'), null, { timeout: 6000 });
-      await sleep(500);
-      const h3 = await p.evaluate(() => document.querySelector('[data-lab-board-view]').getBoundingClientRect().height);
-      check(eng, 'a reload opens it again at the size kept for the page', Math.abs(h3 - h2) < 6, `${h3} vs ${h2}`);
-      await p.click('[data-lab-board-view] .bv-size'); // back to full
-      await sleep(200);
+      const whole = await p.evaluate(() => { const v = document.querySelector('[data-lab-board-view]'); const r = v.getBoundingClientRect(); return { h: r.height, top: r.top, size: Boolean(v.shadowRoot.querySelector('.bv-size, .bv-grip')), back: v.shadowRoot.querySelector('.bv-close')?.textContent }; });
+      check(eng, 'a board opens over the whole window, with back and no size controls', Math.abs(whole.h - 800) < 4 && whole.top === 0 && !whole.size && /back/.test(whole.back || ''), JSON.stringify(whole));
       await p.click('[data-lab-board-view] .bv-close');
       await sleep(400);
-      // a reload put the page at its scroll anew: close from here, then open from the link again
+      // closed from here, then opened from the link again
       const y1 = await p.evaluate(() => scrollY);
       check(eng, 'close takes it away and the address loses #board', await p.evaluate(() => !document.querySelector('[data-lab-board-view]') && !location.hash));
       await p.evaluate(() => document.getElementById('go').scrollIntoView({ block: 'center' }));
@@ -114,44 +90,7 @@ try {
       await sleep(500);
       const back = await p.evaluate(() => ({ y: scrollY, view: Boolean(document.querySelector('[data-lab-board-view]')), path: location.pathname }));
       check(eng, 'back closes it, same page, same scroll', !back.view && back.path === '/canvas' && Math.abs(back.y - y2) < 2, JSON.stringify(back));
-      // a link to another board, pressed while one is open at half: the other opens in its place, in one press
-      await p.evaluate(() => localStorage.setItem('lab-board-size:/canvas', '0.5'));
-      await p.evaluate(() => document.getElementById('go').scrollIntoView({ block: 'start' }));
-      await sleep(200);
-      await p.click('#go');
-      await p.waitForFunction(() => document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board .f[data-id="b"]'), null, { timeout: 6000 });
-      await sleep(600);
-      await p.evaluate(() => scrollBy(0, 0));
-      await p.click('#go2');
-      await sleep(900);
-      const two = await p.evaluate(() => ({ views: document.querySelectorAll('[data-lab-board-view]').length, name: document.querySelector('[data-lab-board-view]')?.getAttribute('data-lab-board-view'), hash: location.hash }));
-      check(eng, 'a link to another board, pressed while one is open, opens it in its place (Leo, 21 Nov: "opening new not closing board?")', two.views === 1 && two.name === 'other' && two.hash === '#board=other', JSON.stringify(two));
-      // a new comment on the page behind a half board (⌥-press): the board goes, the comment starts
-      await p.evaluate(() => (location.hash = ''));
-      await sleep(600);
-      await p.evaluate(() => document.querySelector('h2').scrollIntoView({ block: 'start' }));
-      await sleep(200);
-      await p.click('#go');
-      await p.waitForFunction(() => document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board .f[data-id="b"]'), null, { timeout: 6000 });
-      await sleep(600);
-      const hbox = await p.evaluate(() => { const r = document.querySelector('h2').getBoundingClientRect(); return { x: r.x + 20, y: r.y + r.height / 2 }; });
-      await withAlt(p, () => p.mouse.click(hbox.x, hbox.y));
-      await sleep(900);
-      const nc = await p.evaluate(() => ({ view: Boolean(document.querySelector('[data-lab-board-view]')), draft: Boolean(document.querySelector('[data-lab-comments]')?.shadowRoot?.querySelector('textarea')) }));
-      check(eng, 'a new comment on the page behind a half board closes the board and opens its box', !nc.view && nc.draft, JSON.stringify(nc));
-      // an area drawn on the page behind a half board (⌥-drag): the board goes, the area's comment box opens
-      await p.evaluate(() => (location.hash = ''));
-      await sleep(600);
-      await p.evaluate(() => document.querySelector('h2').scrollIntoView({ block: 'start' }));
-      await sleep(200);
-      await p.click('#go');
-      await p.waitForFunction(() => document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board .f[data-id="b"]'), null, { timeout: 6000 });
-      await sleep(600);
-      await withAlt(p, async () => { await p.mouse.move(hbox.x, hbox.y - 10); await p.mouse.down(); await p.mouse.move(hbox.x + 120, hbox.y + 30, { steps: 6 }); await p.mouse.up(); });
-      await sleep(900);
-      const area = await p.evaluate(() => ({ view: Boolean(document.querySelector('[data-lab-board-view]')), draft: Boolean(document.querySelector('[data-lab-comments]')?.shadowRoot?.querySelector('textarea')) }));
-      check(eng, 'an area drawn on the page behind a half board closes the board and opens its box', !area.view && area.draft, JSON.stringify(area));
-      // a page's pin under a half board is hidden, every time the board is opened (it was shown the second time)
+      // a page's pin under the board is hidden, every time the board is opened (it was shown the second time)
       await p.evaluate(() => (location.hash = ''));
       await sleep(500);
       const hiddenPin = () => p.evaluate(() => { const r = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim')).shadowRoot; const pin = [...r.querySelectorAll('button.pin')].find((b) => !b.classList.contains('draft')); const q = pin?.getBoundingClientRect(); return pin ? { hidden: getComputedStyle(pin).visibility === 'hidden', y: Math.round(q.y), top: Math.round(document.querySelector('[data-lab-board-view]')?.getBoundingClientRect().top ?? -1) } : null; });
@@ -162,21 +101,10 @@ try {
         await p.waitForFunction(() => document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board'), null, { timeout: 6000 });
         await sleep(1000);
         const hp = await hiddenPin();
-        check(eng, `a page pin under the half board is hidden (opened ${round === 1 ? 'first' : 'again'})`, hp && hp.y > hp.top && hp.hidden, JSON.stringify(hp));
+        check(eng, `a page pin under the board is hidden (opened ${round === 1 ? 'first' : 'again'})`, hp && hp.hidden, JSON.stringify(hp));
         await p.keyboard.press('Escape');
         await sleep(600);
       }
-      // a page's pin above the half board, opened: the board goes, the card opens (Leo, 21 Nov: "comment opened behind the
-      // board on canvas not closing board and opening it over it")
-      await p.evaluate(() => { const r = document.getElementById('go2').getBoundingClientRect(); scrollBy(0, r.top - 200); });
-      await sleep(300);
-      await p.evaluate(() => (location.hash = '#board=other'));
-      await p.waitForFunction(() => document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board'), null, { timeout: 6000 });
-      await sleep(900);
-      await p.evaluate(() => { const r = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim')).shadowRoot; [...r.querySelectorAll('button.pin')].find((b) => !b.classList.contains('draft')).click(); });
-      await sleep(900);
-      const opened = await p.evaluate(() => { const r = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim')).shadowRoot; return { view: Boolean(document.querySelector('[data-lab-board-view]')), card: Boolean(r.querySelector('textarea')) }; });
-      check(eng, 'a page pin opened over a half board closes the board and opens its card', !opened.view && opened.card, JSON.stringify(opened));
       await ctx.close();
     } finally {
       await browser.close();
@@ -184,6 +112,6 @@ try {
   }
 } finally {
   server.kill();
-  fs.rmSync(DIR, { recursive: true, force: true });
+  fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
 }
 finish();

@@ -96,7 +96,8 @@ try {
       await go('arrow');
       const hh = await box(p, 'h');
       const b = await box(p, 'b');
-      const arrow = await draw(p, 'arrow', [[[hh.l + 20, hh.cy], [hh.l + 120, (hh.cy + b.cy) / 2], [b.l + 60, b.cy]]]);
+      // Its head drawn in the same stroke, back from the tip: only a drawn head makes an arrow (#429).
+      const arrow = await draw(p, 'arrow', [[[hh.l + 20, hh.cy], [hh.l + 120, (hh.cy + b.cy) / 2], [b.l + 60, b.cy], [b.l + 76, b.cy - 20]]]);
       check(eng, 'an arrow says what it starts on and what it points at', /drawn: arrow/.test(arrow.text) && /arrow from: <h1/.test(arrow.text) && /arrow to: <p id="b"/.test(arrow.text), arrow.text.split('\n').filter((l) => /drawn|arrow/.test(l)).join(' | '));
 
       await go('under');
@@ -212,6 +213,6 @@ try {
   }
 } finally {
   server.kill();
-  fs.rmSync(DIR, { recursive: true, force: true });
+  fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
 }
 finish();

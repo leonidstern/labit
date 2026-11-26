@@ -26,13 +26,10 @@ save('index.html', page('one'));
 const app = `setTimeout(() => (document.getElementById('late').innerHTML = ${JSON.stringify(lines(150))}), 700);`;
 save('app.js', app);
 save('late.html', '<!doctype html><meta charset="utf-8"><title>l</title><h1>Late</h1><div id="late"></div><script src="app.js"></script>');
-// Lab pages (they link lab.css) with sections: one builds them 250 ms after it loads, one has two and gets a third.
-const bsec = (n) => `<h2 id="bh${n}">Section ${n}</h2>${[1, 2, 3, 4, 5, 6].map((k) => `<p id="b${n}${k}">Paragraph ${n}${k}. The quick brown fox jumps over the lazy dog and keeps going for a while.</p>`).join('')}`;
-const labHead = '<!doctype html><meta charset="utf-8"><title>b</title><link rel="stylesheet" href="/_lab/lab.css">';
-const barLate = (word) => `${labHead}<h1>Late ${word}</h1><main id="m"></main><script>setTimeout(() => (document.getElementById('m').innerHTML = ${JSON.stringify([1, 2, 3, 4, 5].map(bsec).join(''))}), 250)</script>`;
-const barPlain = (n) => `${labHead}<h1>Plain</h1>${Array.from({ length: n }, (_, i) => bsec(i + 1)).join('')}${lines(30)}`;
-save('barlate.html', barLate('one'));
-save('barplain.html', barPlain(2));
+// #428: a page with a script of its own, saved while a drawing is being drawn; and a plain page that misses saves.
+const drawPage = (word) => `<!doctype html><meta charset="utf-8"><title>${word}</title><h1>Draw ${word}</h1>${lines(20)}<script>window.own = 1</script>`;
+save('drawhold.html', drawPage('one'));
+save('plain.html', `<!doctype html><meta charset="utf-8"><title>p</title><h1>Plain</h1>${lines(20)}`);
 save('labit.json', JSON.stringify({ port: PORT }));
 const server = startLab(DIR, labEnv());
 await labUp(B);
@@ -123,45 +120,32 @@ try {
       await sleep(2000);
       const ly = await late.evaluate(() => Math.round(scrollY));
       check(eng, 'a page built after it loads gets its scroll back', Math.abs(ly - 3000) < 3, `3000 -> ${ly}`);
-      // The section bar keeps 38 px of room at the top of a lab page. On a page that builds its headings after it loads
-      // the room comes late: the pins go with the page at once (not 38 px too high until the next redraw), and a reload
-      // puts the scroll back to the pixel (it was saved with the room, and put back before the room was there).
-      await post('/barlate', 'b32');
-      const off = (pg, id) => pg.evaluate((id) => {
-        const r = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.more'))?.shadowRoot;
-        const p = r?.querySelector('.pin')?.getBoundingClientRect();
-        const e = document.getElementById(id)?.getBoundingClientRect();
-        return { pin: p && e ? Math.round(p.y - e.y) : null, top: e ? Math.round(e.y) : null, room: parseFloat(getComputedStyle(document.documentElement).paddingTop) };
-      }, id);
-      const bl = await open('/barlate');
-      await sleep(700); // built at 250 ms, the bar and its room soon after; the redraw that used to put the pins right is at 3 s
-      const early = await off(bl, 'b32');
-      await sleep(3000);
-      const settled = await off(bl, 'b32');
-      check(eng, 'the room comes late (control)', settled.room > 0, JSON.stringify(settled));
-      check(eng, 'the pins go with the page when the room comes, before the next redraw', early.pin !== null && early.pin === settled.pin, JSON.stringify({ early, settled }));
-      await bl.evaluate(() => { document.getElementById('bh3').scrollIntoView(); scrollBy(0, -120); });
-      await sleep(1800);
-      const was = await off(bl, 'b32');
-      save('barlate.html', barLate('two'));
-      await bl.waitForFunction(() => !window.__kept, null, { timeout: 8000 }).catch(() => {});
-      await sleep(1500);
-      const now = await off(bl, 'b32');
-      check(eng, 'a late-built page with a section bar: the reload puts the scroll back to the pixel, the pins on their words', Math.abs(now.top - was.top) < 2 && now.pin === was.pin, JSON.stringify({ was, now }));
-      await bl.close();
+      // #428: its file saved mid-drawing, the page waits for the drawing to be sent before it reloads (it lost the strokes).
+      const dh = await open('/drawhold');
+      await dh.keyboard.down('d');
+      await dh.mouse.move(200, 200);
+      await dh.mouse.down();
+      for (let i = 1; i <= 10; i++) await dh.mouse.move(200 + i * 20, 200 + i * 4);
+      save('drawhold.html', drawPage('two'));
+      await sleep(3200); // past the 1.5 s a touch holds a reload anyway
+      const mid = await dh.evaluate(() => window.__kept === 1);
+      await dh.mouse.up();
+      await dh.keyboard.up('d');
+      await dh.waitForFunction(() => !window.__kept, null, { timeout: 8000 }).catch(() => {});
+      const inks = (await (await fetch(B + '/_lab/api/comments?page=/drawhold')).json()).comments.filter((c) => c.anchor?.ink);
+      check(eng, 'a save mid-drawing waits: the page reloads after the drawing is sent, and the drawing is saved', mid && (await dh.title()) === 'two' && inks.length === 1, JSON.stringify({ mid, title: await dh.title(), inks: inks.length }));
+      await dh.close();
 
-      // An edit gives a lab page its third heading: the bar comes, with its room, while the save cross-fades in (nothing
-      // can be hit then). What is in view stays where it is.
-      const bp = await open('/barplain');
-      await bp.evaluate(() => { document.getElementById('bh2').scrollIntoView(); scrollBy(0, -120); });
-      await sleep(1800);
-      const held = await off(bp, 'b22');
-      save('barplain.html', barPlain(3));
-      await bp.waitForFunction(() => parseFloat(getComputedStyle(document.documentElement).paddingTop) > 0, null, { timeout: 8000 }).catch(() => {});
-      await sleep(600);
-      const still = await off(bp, 'b22');
-      check(eng, 'the bar comes with a third heading: what is in view stays where it is', still.room > 0 && Math.abs(still.top - held.top) < 2 && (await bp.evaluate(() => window.__kept === 1)), JSON.stringify({ held, still }));
-      await bp.close();
+      // #428: a burst too big to list (a branch switch: 60 files at once), none of them this page's: a page with no scripts
+      // of its own catches up in place instead of reloading. (Saves missed while away take the same path.)
+      const pl = await open('/plain');
+      // Patched in place first: the widget fetched the page and the tab icon itself, which are not the page's own asks.
+      save('plain.html', `<!doctype html><meta charset="utf-8"><title>p</title><h1>Plain, saved</h1>${lines(20)}`);
+      await pl.waitForFunction(() => document.querySelector('h1').textContent === 'Plain, saved', null, { timeout: 5000 }).catch(() => {});
+      for (let i = 0; i < 60; i++) save(`burst-${i}.md`, `# ${i}`);
+      await sleep(4000);
+      check(eng, 'a burst too big to list: a page with no scripts of its own is not reloaded, after a patch fetched it', await pl.evaluate(() => window.__kept === 1 && document.querySelector('h1').textContent === 'Plain, saved' && performance.getEntriesByType('resource').some((e) => e.initiatorType === 'fetch' && new URL(e.name).pathname === '/plain')));
+      await pl.close();
       await ctx.close();
     } finally {
       await browser.close();
@@ -169,6 +153,6 @@ try {
   }
 } finally {
   server.kill();
-  fs.rmSync(DIR, { recursive: true, force: true });
+  fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
 }
 finish();

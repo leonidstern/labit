@@ -125,7 +125,7 @@ export function act(action: string, a: Ask, e: Env): Done {
       const pages = String(a.flow).split(',').map((s) => s.trim()).filter(Boolean);
       if (!pages.length || pages.length > MAX_FRAMES || pages.some((p) => !labPath(p))) return no('--flow takes pages of this lab in order: --flow /cart,/checkout,/thanks');
       pages.forEach((p, i) => add({ src: p, w: 1280, label: `${i + 1} ${e.titleOf(p) || p.slice(1) || 'home'}` }));
-    } else if (page) add({ src: page, w: 1440, h: 900 });
+    } // else it starts empty: the person or agent adds what goes on it (Leo, 24 Nov: a new board "should be empty").
     save(e.root, { ...b, rev: 1 });
     const done = read(e.root, into)!;
     return { text: view(done, page ? e.fileOf(page) : null), board: done };

@@ -3,14 +3,14 @@
 // A board in the page, and the widget's part in it: showing a board, a tap on it that closes a comment, the board's camera
 // moving the pins with it, and the page's pins hiding under a board's view.
 import { heldPin } from './pinhold.ts';
-import { anchorAt, coveredAt, findTarget, position } from './anchoring.ts';
+import { anchorAt, coveredAt, position } from './anchoring.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let W: any;
 let S: any; // the widget's state (W.S), read once at startup
 // A board in this page (src/board/overlay.ts, loaded when one is opened): its link, the address's #board=<name> (a
 // reload, a forward) or a board pin picked in the list opens it. Closing it lets go of a board pin that was open.
-export const showBoard = (name: string, of = '', push = true) =>
+export const showBoard = (name: string, of = '', push = true) => globalThis.__LAB_CO__ ? undefined :
   W.part('boardview').then((m) => (W.host.setAttribute('data-board', ''), m.show(name, { page: S.page, of, push, onClose: () => {
     W.host.removeAttribute('data-board');
     for (const pin of W.pinsById.values()) if (W.pinData.get(pin)) W.pinData.get(pin).covered = undefined; // opened again, it is looked at anew (a pin said covered stayed shown)
@@ -20,47 +20,48 @@ export const showBoard = (name: string, of = '', push = true) =>
     if (S.draft?.anchor?.kind === 'board') S.draft = null;
     W.render();
   } })), () => W.say("the board couldn't load"));
-/** +board: a board of references as a section of the page, at the spot picked, and no pin (Leo, 21 Nov: "no need board
- * pins only board sections is enough"). The lab writes <lab-board name> into the page's file after the element (place,
- * local.mjs), makes the board (named pin-<id> as before: the lab's own, kept out of the boards list) with the words
- * typed as its title, and it opens. A page the lab can't write into (a dev server's, not .html) gets nothing. */
-export const addBoard = async (anchor: { kind?: string }, title: string) => {
-  const name = `pin-${[...crypto.getRandomValues(new Uint8Array(6))].map((n) => n.toString(16).padStart(2, '0')).join('')}`;
-  const post = (b: object) => fetch('/_lab/api/board', { method: 'POST', headers: W.headers(), body: JSON.stringify({ name, of: `${S.page}#${name}`, ...b }) }).then((r) => r.ok, () => false);
-  const at = blockOf(anchor.kind !== 'page' ? (findTarget(anchor) as Element | null) : null);
-  if (!(await post({ action: 'place', path: at ? pathOf(at) : [], words: at?.textContent?.replace(/\s+/g, ' ').trim().slice(0, 40) || '' }))) return W.say("a board goes into a page served from its own .html file: this one can't take it");
-  if (!(await post({ action: 'new', topic: title }))) return W.say("the board couldn't be made");
-  return showBoard(name);
+/** A board pin taken back (undo, ⌘Z): its board went with it, so it is no longer one, and its view closes if open. */
+export const pinBoardGone = (id: string) => {
+  if (globalThis.__LAB_CO__) return;
+  if (!S.pinBoards?.delete(id)) return;
+  void W.part('boardview').then((m) => m.hide(`pin-${id}`), () => {});
 };
-// The element a section goes after: the pinned one, or the first of its own that stands in the page as a block: not a
-// word in a line, an item of a list, a cell, or a box with others beside it (a card in a row; a grid or flex box that
-// stacks its boxes is fine to go into).
-const ITEM = /^(li|dt|dd|td|th|tr|thead|tbody|tfoot|caption|summary|legend|option|figcaption)$/;
-const beside = (n: Element) => {
-  const r = n.getBoundingClientRect();
-  return [...(n.parentElement?.children || [])].some((s) => {
-    if (s === n || s === W.host) return false;
-    const q = s.getBoundingClientRect();
-    return q.width > 0 && q.top < r.bottom - 1 && q.bottom > r.top + 1;
+// This page's boards, read from the lab's list: the bar's "boards" part lists them (Leo, 23 Nov, S5: every board of a
+// page in one place, no hidden ones). Pins that hold a board (pin-<id>, made by +board before) still show it in their card.
+type Listed = { name: string; of?: string; title?: string; frames: number };
+const loadPinBoards = () =>
+  fetch('/_lab/api/board', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null), () => null).then((d) => {
+    if (!d?.boards) return;
+    const mine = (d.boards as Listed[]).filter((b) => (b.of || '').split('#')[0] === S.page);
+    const ids = mine.filter((b) => b.name.startsWith('pin-') && b.of === `${S.page}#${b.name}`).map((b) => b.name.slice(4));
+    const was = JSON.stringify([...S.pinBoards, S.pageBoards]);
+    S.pinBoards = new Set(ids);
+    S.pageBoards = mine;
+    if (JSON.stringify([...S.pinBoards, S.pageBoards]) !== was) W.render();
   });
+/** "+ New board" in the boards list: a board of this page, named after it, and it opens. */
+export const newBoard = async () => {
+  if (globalThis.__LAB_CO__) return;
+  const made = await fetch('/_lab/api/board', { method: 'POST', headers: W.headers(), body: JSON.stringify({ action: 'new', of: S.page }) }).then((r) => (r.ok ? r.json() : null), () => null);
+  if (!made?.board) return W.say("the board couldn't be made");
+  void loadPinBoards();
+  return showBoard(made.board.name);
 };
-const blockOf = (n: Element | null) => {
-  for (; n && n.parentElement && n !== document.body; n = n.parentElement) {
-    if (!/^inline|contents/.test(getComputedStyle(n).display) && !ITEM.test(n.localName) && !beside(n)) return n;
-    if (n.parentElement === document.body) break;
-  }
-  return n === document.body ? null : n;
-};
-// Where it is in the page as the file has it (lib/htmlspot.ts): its tag and place among its kind, from <body> down;
-// the widget's own box is not the page's.
-const pathOf = (n: Element) => {
-  const path: [string, number][] = [];
-  for (; n && n !== document.body && n.parentElement; n = n.parentElement) {
-    let i = 1;
-    for (let sib = n.previousElementSibling; sib; sib = sib.previousElementSibling) if (sib.localName === n.localName && sib !== W.host) i++;
-    path.unshift([n.localName, i]);
-  }
-  return path;
+/** A board pin's card holds its board: the strip of what is on it and Open (the strip a board section had, overlay.ts). */
+export const boardStrip = (c: { id: string }) => {
+  if (globalThis.__LAB_CO__) return null;
+  if (!S.pinBoards?.has(c.id)) return null;
+  const name = `pin-${c.id}`;
+  const host = W.el('div', { class: 'pinboard', name });
+  // Open: the card closes as the board comes up over the page (one Esc then closes the board, not a card under it).
+  host.addEventListener('click', (e: Event) => {
+    if (!e.composedPath().some((n) => n instanceof HTMLButtonElement)) return;
+    S.openId = null;
+    W.render();
+    void showBoard(name);
+  });
+  void W.part('boardview').then((m) => m.section(host, { page: S.page }), () => {});
+  return host;
 };
 // A board as a section of the page (<lab-board name>, put there by +board), drawn by the board's part (src/board/overlay.ts).
 const fillSection = (host: HTMLElement) =>
@@ -86,6 +87,7 @@ const defineSection = () => {
     const first = rev < 0;
     rev = d.boards;
     if (!first) for (const n of d.boardNames || [null]) sections(n || undefined);
+    if (!first) void loadPinBoards();
   });
 };
 // A tap on the board outside an open comment or the chat closes it, as a click outside one does on a page (onPageClick,
@@ -100,6 +102,14 @@ const dismiss = () => {
   if (chat) S.chatOpen = false;
   W.render();
   return true;
+};
+// Many pins drop their soft shadow while the camera moves and take it back once it rests (styles.css): Safari's engine
+// draws 480 shadows too slowly to keep a pan smooth.
+let resting: ReturnType<typeof setTimeout>;
+const moving = () => {
+  W.layer.toggleAttribute('data-moving', true);
+  clearTimeout(resting);
+  resting = setTimeout(() => W.layer.removeAttribute('data-moving'), 200);
 };
 // The board's camera moved (a pinch, a pan) and nothing else: its pins go with it in the same frame, placed by the
 // board's own sums (no read of the page, no redraw of the widget: that took 70 ms a frame on a page with many pins,
@@ -123,6 +133,7 @@ const followCamera = () => {
     const a = W.pinData.get(pin)?.c.anchor;
     if (a?.kind === 'board' && !heldPin(pin)) moves.push([id, pin, position(a)]);
   }
+  if (moves.length > 100) moving();
   const [sx, sy] = [scrollX, scrollY];
   for (const [id, pin, at] of moves) {
     // A drawing is placed by its corner (its lines are laid from there), any other pin by its own spot: the corner where the
@@ -167,8 +178,11 @@ export function bindBoardCam(w: unknown) {
   S = W.S;
   // A board page (src/board/): a tap in comment mode puts a pin on the board (anchoring.ts asks the board where a point is
   // and where a pin sits), and the pins move with the camera.
-  if (W.boards && !S.board && self === top) {
+  S.pinBoards = new Set<string>();
+  S.pageBoards = [] as Listed[];
+  if (!S.board && self === top && !globalThis.__LAB_CO__) { // colabit has no boards
     defineSection();
+    void loadPinBoards();
     Object.assign(window, { __labBoardView: { show: showBoard } });
     const bn = /^#board=([a-z0-9][a-z0-9_-]*)/i.exec(location.hash)?.[1];
     if (bn) showBoard(bn, '', false);

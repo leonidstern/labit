@@ -2,7 +2,90 @@
 
 Versions follow [semver](https://semver.org). Before 1.0, a minor version can change how things work.
 
-## Unreleased
+## 0.8.3 · 2026-11-25
+
+Walkie-talkie: talk while you point, and the agent gets what you said and where. Plus keys in the menus, a lighter page script and Windows fixes.
+
+- **Walkie-talkie.** `tal(k)` in the bar, or K: the bar turns into one pill, and your computer's own dictation types into it (no microphone in the page). Point, click, circle, shake or drag over words while you talk; Send (⌘↵) puts the whole walk in the page's chat as one message, each part with the element it was about. Esc drops it.
+- **Menu shortcuts.** The ⋯ and boards menus show their keys, in plain grey; held keys sit under a hairline. The unused resolve key is gone.
+- **Every part of a page takes a pin.** A page's `data-uncommentable` is ignored; only labit's own parts are off.
+- **⌘K lists the pages someone opened or pinned**; search finds the rest.
+- **Pins whose spot was missing come back** once it is on the page.
+- **The section bar is gone.**
+- **A question's card** is placed, turned and closed like every pin card, and its time no longer covers its words.
+- **Lighter page script:** live reload in place loads on the first save (78.8 → 76.2 KB gzip); colabit leaves out what it doesn't use (86 → 75 KB) and has drawings and motion built in.
+- **Windows:** no start crash on `.lab/lock`, paths shown with `/`, Git Bash page paths refused with a hint.
+- **Phones:** a new pin's page move is no longer doubled by Safari.
+- **Enter with no name** keeps the cursor in your words.
+
+## 0.8.2 · 2026-11-25
+
+colabit, your own lab for the people you work with, plus small fixes to the agent's own pins.
+
+- **colabit: comments on your deployed sites.** Your own lab for the people you work with, on your own Vercel: one address, a path per person, labit's pins and threads on every page, no agent. One click to deploy (Vercel + Upstash), `node co/colabit.mjs add <name> <site> --deploy` per person (live in seconds), and the widget updates itself from labit's main. See [co/README.md](co/README.md).
+- **An agent's pin hides the unsure outline** while its ring shows.
+- **Agent pins for questions on a spot and for review findings** are in the skill.
+- **Pages: an agent's own unanswered pin no longer counts as waiting.**
+- **A pin's `--hint` on a `--choice` is kept**, and `hints` work in `--file`.
+
+## 0.8.1 · 2026-11-24
+
+A small follow-up to 0.8.0: video frame-stepping is taken back out, a pin on a video opens (or right-clicks) back to its frame, and new boards start empty.
+
+- **Video frame-stepping is gone again.** The arrow keys, ⇧ arrows and Space no longer step or play a video, and ⌥ ← → no longer step it while you write; the keys are the page's again. The moment line and per-reply frames from 0.8.0 go with it.
+- **A pin on a video opens at its frame.** Opening a pin placed on a video, clicking it again or right-clicking it takes the video back to the moment the pin went down and holds it there; the rest of the page keeps moving. Play it again as usual.
+- **A new board starts empty.** "new board" (and a pin's own board) no longer puts the page on it as a first frame; you or the agent add what goes there. Boards made with `--variants`, `--widths` or `--flow` are unchanged.
+- **The one-time link page follows light/dark** like the rest of the lab.
+
+## 0.8.0 · 2026-11-24
+
+Boards are always on now (the setting is gone, hence a minor version), videos step a frame at a time from the keyboard, comments made right after a page opens show at once, and steadier phones. The full list is below.
+
+- **Step a video a frame at a time.** With comments shown on a computer, ← → step the video you right-clicked, picked or came back to from a pin one frame, ⇧← ⇧→ one second, and Space plays or pauses it. An arrow on a playing video pauses it first. The motion menu counts the frame as you step. Paused loops and animations step by 1/60 s, and a video in an open board frame steps the same way. With nothing to move, the keys stay the page's.
+- **Step the video while you write.** In a comment or reply about a video, ⌥ ← → step it one frame; your words and cursor stay put, and ⌥⇧ ← → still select words. ⌥K is left to the system. The moment line above the box follows the step, the comment keeps the moment it ends on, and each reply keeps its own moment (with its frame), which a click goes back to.
+- **The moment line fits on one line**, lined up with the box's words.
+- **A comment's box on a video opens beside it**, not over the picture.
+- **Clicking a video or picture never selects it.**
+- **A click on words tells the agent which word.** A plain click still pins the element and highlights nothing, but the agent text quotes the word under the pin again ("…unlimited [history] on every…").
+- **A comment made just after a page opens shows there without a reload.**
+- **Going to a new comment from far away opens its card by its pin.**
+- **A scrolled thread or chat fades at its top edge.**
+- **Phones: the comment box no longer jumps while you type**, and the labit mark sits at the bar's right end, as on a computer.
+- **A wait holds on for 2 minutes while the lab takes a newer build**, and wait output tells the agent to listen again first.
+- **Boards are always on.** The `boards` setting and `LABIT_BOARDS` are gone: every page has its boards part in the bar and "new board" in the ⋯ menu. An old `"boards"` in a settings file is skipped.
+- **A wait no longer ends on the second update of a lab.** The 2-minute clock from one hand-over kept running under the wait the new lab took, so the next update, any time later, ended it at once. Each gap now has its own clock.
+- **A busy agent hears about your pins mid-work.** When pins come while the agent works on something else, the labit plugin tells it with its next tool result, not when its whole task ends. It then answers what is quick and puts a status line on the rest, so the pin no longer sits at "picked up" with no word.
+- **A lab that updates itself no longer adds another `--port` to its command each time.**
+- **An area pin follows the words it covered.** An area drawn over one row of a list stays on that row when rows above it get shorter or go; when its row's words changed it stays and shows unsure; when the row is deleted it shows as moved (and the agent is told it is gone). It used to keep its share of the box, and landed on other rows or on the next block.
+- **A new version goes next to the one it follows.** Agents are told (in the skill and the first hand-off) to put a redo or another round on a research page right after the original, with its own id and a plain heading like "Pricing, new version", never at the bottom. On a live project it is made where it was asked, as a board variant, so the real page stays as it was until picked.
+- **No light line along a picture's edge while it moves on a board.** Pictures no longer sit on a white card that could show through at a half pixel.
+- **A click on the labit mark closes an open comment too**, as ⋯, the boards list and the chat do. A new comment with words in it stays.
+- **Long animations get the motion menu.** An animation that ends but runs 5 s or more (a film or slideshow on one clock) now gets the right-click menu, P and S, like a loop does. Short ones that end (a highlight) are still moments.
+- **Moving pictures near a board's edge no longer moves the view.** Panned to the edge, frames dragged inward leave the camera where you put it; the edges only stop a pan, they never push the view.
+- **⌘Z on a board takes back only the newest thing.** A pin or drawing made after moving a picture goes first; the picture stays put until the next ⌘Z.
+- **One click on ⋯ or the boards list opens it, even with a comment or the chat open.** The open thread (and a new comment with nothing typed in it) closes in the same click, as the chat button already did.
+- **Lab addresses in messages are links even without http://.** An agent's "localhost:4403/page/" (or 127.0.0.1) in a reply now opens like a full address: on the reader's own origin when it is this lab, as written otherwise.
+- **Frame names on a board show only once the frame is pressed or picked.** Pictures and pages alike, so the board shows just the work.
+- **What you type in a comment stays in the comment.** A page that binds Space or other keys (a video player, a slide deck) no longer hears keys typed in labit's boxes, so Space no longer plays the page and the comment keeps its spaces. ⌘/Control keys and Esc still work as before.
+- **A page's boards are in the bar.** "boards · N" shows while the page has boards, yours and the agent's (`labit board new --of /page`); its click lists them with "new board", and the ⋯ menu has "new board" for a page with none. The comment box no longer has `+board`, and boards are no longer pins (those made before still open from their pin).
+- **Fine lines in pictures on a board no longer sparkle as you zoom in Safari.** Each picture is its own layer, scaled as it is, and drawn small it shows a preview: 1024, 512, 256 and 128 px, made once by the board's page and kept by the lab beside the picture (`<id>-p256.webp`). A smaller preview comes at once as you zoom out; a bigger one only once the zoom rests.
+- **A picked frame on a board has the same thin outline as hover.** No thicker ring.
+- **A board is made on the page you asked on.** `labit board new` without `--of` is about the page of the pins the agent was handed, a board pin there; with no such page it asks which page instead of making a board of its own. The skill says the same.
+- **A drawing lands as you drew it.** Every point you drew is kept (up to 500 a line, was thinned to half a px and 200) and placed to a tenth, so the line that lands is the line you saw.
+- **A click with the ⋯ menu open only closes it.** It no longer also starts a pin.
+- **The listening mark sits in the bar.** It is the bar's last part, after ⋯, on the bar's own colour, so it reads on a black page too (it showed only its eye there). Its words open above the bar's end.
+- **A board lets go of an open frame when you click beside it.** A double-click opens a frame to use its page; a click on the empty board now closes it again, as Esc does, so the board's keys, paste and drag work without a reload. Pasting several pictures at once puts each one on the board, side by side in the order pasted, not only the first.
+- **Arrows land as you drew them.** A drawing keeps every stroke, an arrow's own head too; the clean head that was drawn at the end of its line landed on a barb or past a jitter, small or backwards. An arrow with a curl at its end no longer reads as scribbled over.
+- **Shift draws straight as you go.** With Shift held the line is straight from where it began while you draw, so it no longer jumps when you lift; a box or loop still comes out neat. A line through a heading is read as crossed out wherever it slopes (it was asked once, at its middle). The chat's send arrow no longer flies off, as in a comment.
+- **Arrows land as big as drawn.** The clean head is as long as the head you drew (12 to 60 px; it was always 12), the light smoothing no longer trails your hand or cuts an arrowhead short, and an arrow's end in empty space below a page says "empty space on the page" instead of quoting the page's script.
+- **Shorter status lines.** Under your message only what the ticks don't say: on it, quiet, 2nd in line, no answer (✓ and ✓✓ already say sent and picked up). An agent's done answer has no "checked" line under it any more (what it checked still reaches the agent text).
+- **Wake-ups for opencode 2 and the Cursor CLI.** The opencode plugin is now in opencode 2's shape (`{ id, setup }`; opencode 2 refused the old one, so it never loaded) and wakes an idle session through `session.prompt`. `wait` and `reply` sign with the session ids these agents put in their shells (`OPENCODE_SESSION_ID`, `CURSOR_CONVERSATION_ID`): the Cursor CLI doesn't pass its start hook's env on, so a Cursor session was never recognised as the one that listened.
+- **A drawing lands as you drew it.** It keeps its colour once sent (it was faded twice, so it landed paler), the line is lightly smoothed (more when you draw slowly, less when fast) and ends exactly where you lift, and holding D shows a pen dot instead of the pointer, on short pages too. It lands without a blink: the live line stays until the sent one shows (Safari painted a frame with neither), the sent line keeps up to 200 points a line (was 80, which straightened curves as it landed), and the pen dot and the pin morph into each other instead of flashing a red pin.
+- **The skill gives its reasons.** Rules say why (one question per pin: a small box on a phone; no dev server for plain pages: file lines and reloads), so an agent can tell when one doesn't apply. Helpers may keep a status line on their pins but never answer or run `wait`; looks are shown drawn rather than ordered onto a board; a narrow-window pin is checked for being phone-only before an `@media` change. A test keeps the skill's timings and flags in step with the code.
+- **Batches aren't taken back mid-way.** An answer or status line on any pin of a hand-off restarts the 2-minute "not answered" clock for the others, so an agent working through five pins one by one keeps pins 4 and 5. A session that goes quiet still loses what it never answered.
+- **Truer hand-off for agents.** The answer line shows `reply <id> --done` and `--wait --bg`; the status-line lapse is said right for agents without the plugin (3 minutes); the hand-off points to the full text at `/_lab/agent/<page>`. A drawing's quick action keeps the change small but no longer forbids checking around; a wifi guest's wordless drawing or action button is said as a request to weigh, not an order.
+- **Motion menus.** Nothing of labit sits on moving things any more. On a computer, right-click a video or a looping animation for its menu at the pointer: its moment, pause or play, speed ¼ ½ 1, comment at that moment, and pause all; a right-click anywhere else (or with ⇧) is the browser's own, and ⌥ is only for commenting again. On a phone, ⋯ → motion opens a sheet (pick on page, pause all, speed for all); a tap after "pick on page" picks a moving thing without playing it or pinning, and its sheet comes. Setting a thing back to 1 gives it its own speed back.
+- **The moment in a comment.** Every pin on a loop, animation, video or GIF shows its moment as a quiet line under its first message, beside the time (and above the box while you write); a click on it pauses the page there again, except for a GIF's, which only says.
 
 ## 0.7.1 · 2026-11-21
 

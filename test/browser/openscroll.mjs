@@ -49,7 +49,7 @@ async function lab(n) {
     const c = await post({ name: i % 2 ? 'Ann' : 'Sam', text: long(i), anchor: chatSpot });
     if (i < 22) seen.push(c.id);
   }
-  return { B, A, seen, post, stop: () => (server.kill(), fs.rmSync(dir, { recursive: true, force: true })) };
+  return { B, A, seen, post, stop: () => (server.kill(), fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5 })) };
 }
 
 for (const [n, eng] of engines().entries()) {

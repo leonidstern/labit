@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { IMAGE_FILE, imageInfo } from './images.mjs';
 
-export type Frame = { id: string; src: string; kind?: 'image'; file?: string; iw?: number; ih?: number; guest?: boolean; w: number; h: number; x?: number; y?: number; label?: string; variantOf?: string; state?: 'live' | 'picked' | 'archived'; auto?: boolean };
+export type Frame = { id: string; src: string; kind?: 'image'; file?: string; iw?: number; ih?: number; pv?: number[]; guest?: boolean; w: number; h: number; x?: number; y?: number; label?: string; variantOf?: string; state?: 'live' | 'picked' | 'archived'; auto?: boolean };
 export type Board = { v: 1; name: string; rev: number; title?: string; of?: string; frames: Frame[] };
 
 // (the commands: lib/boardact.ts)
@@ -46,6 +46,9 @@ export function check(raw: any, name: string, was?: Board | null): Board | strin
     const w = px(f.w, 200, 4000) ?? 1280;
     const out: Frame = { id: f.id, src: f.src, w, h: px(f.h, 200, 4000) ?? heightFor(w) };
     if (image) Object.assign(out, { kind: 'image', file: f.file, iw: px(f.iw, 1, 16384), ih: px(f.ih, 1, 16384), ...(f.guest === true ? { guest: true } : {}) });
+    // Its previews are the lab's to say: the stored file's, or the board as stored when a page sends its copy (which may be from before them).
+    const pv = was ? was.frames.find((g) => g.id === f.id)?.pv : f.pv;
+    if (image && Array.isArray(pv) && pv.length && pv.every((n) => PREVIEWS.includes(n))) out.pv = [...pv];
     const auto = f.auto === true || !Number.isFinite(f.x) || !Number.isFinite(f.y);
     if (!auto) [out.x, out.y] = [px(f.x, -1e6, 1e6)!, px(f.y, -1e6, 1e6)!];
     if (one(f.label, 80)) out.label = one(f.label, 80);
@@ -94,6 +97,10 @@ const safeName = (name: string) => {
 const fileOf = (root: string, name: string) => path.join(dirOf(root), `${safeName(name)}.json`);
 export const frameFile = (root: string, name: string, id: string) => path.join(dirOf(root), safeName(name), `${id}.html`);
 /** An image frame's file, in its board's folder: a plain <id>.<ext> and nothing else. */
+/** A picture's previews, by long side: made once (by the board's page) and kept beside it, shown when it is drawn small
+ * (Leo, 23 Nov: fine lines sparkled far out). Only the sizes under the picture's own long side. */
+export const PREVIEWS = [1024, 512, 256, 128];
+export const previewFile = (id: string, size: number, ext: string) => `${id}-p${size}.${ext}`;
 export const imageFile = (root: string, name: string, file: string) => {
   if (!IMAGE_FILE.test(file)) throw new Error(`not an image file name: ${String(file).slice(0, 40)}`);
   return path.join(dirOf(root), safeName(name), file);
@@ -154,9 +161,9 @@ export const imageAt = (file: string) => {
   fs.closeSync(fd);
   return imageInfo(head.subarray(0, n));
 };
-/** A picture as a new frame of a stored board: its file is written, the frame put (at the given centre, or placed by the lab),
+/** A picture as a new frame of a stored board: its file is written, the frame put (at the given centre or top-left corner, or placed by the lab),
  *  rev and file saved. All of it is synchronous, so nothing can come between the read and the write. */
-export function addImage(root: string, b: Board, bytes: Buffer, info: { ext: string; w: number; h: number }, at?: { x: number; y: number }, opts?: { label?: string; after?: string; guest?: boolean }): { frame: Frame } | { error: string } {
+export function addImage(root: string, b: Board, bytes: Buffer, info: { ext: string; w: number; h: number }, at?: { x: number; y: number; corner?: boolean }, opts?: { label?: string; after?: string; guest?: boolean }): { frame: Frame } | { error: string } {
   if (counted(b.frames) >= MAX_FRAMES) return { error: `A board holds at most ${MAX_FRAMES} frames.` };
   const dir = path.join(dirOf(root), safeName(b.name));
   const left = (id: string) => { try { return fs.readdirSync(dir).some((n) => n.startsWith(`${id}.`)); } catch { return false; } };
@@ -167,7 +174,7 @@ export function addImage(root: string, b: Board, bytes: Buffer, info: { ext: str
   const w = px(info.w * k, 200, 4000)!;
   const h = px(info.h * k, 200, 4000)!;
   const f: Frame = { id, src: `/_lab/board/${b.name}/${id}`, kind: 'image', file, iw: info.w, ih: info.h, w, h, state: 'live', ...(opts?.guest ? { guest: true } : {}), ...(opts?.label ? { label: one(opts.label, 80) } : {}) };
-  if (at) [f.x, f.y] = [px(at.x - w / 2, -1e6, 1e6)!, px(at.y - h / 2, -1e6, 1e6)!];
+  if (at) [f.x, f.y] = at.corner ? [px(at.x, -1e6, 1e6)!, px(at.y, -1e6, 1e6)!] : [px(at.x - w / 2, -1e6, 1e6)!, px(at.y - h / 2, -1e6, 1e6)!]; // its centre, or (corner) its top left
   writeAtomic(imageFile(root, b.name, file), bytes);
   insert(b, f, opts?.after);
   b.rev++;

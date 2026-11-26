@@ -62,7 +62,8 @@ button:focus-visible { outline: 2px solid var(--_accent); outline-offset: 2px; }
   transform: translate(var(--lab-zx), var(--lab-zy)) scale(var(--lab-zk)); transform-origin: 0 0; pointer-events: none; }
 @layer zoom { :host([data-zoom]) .ui > * { pointer-events: auto; } } /* a layer: loses to their own pointer-events rules */
 .pin, .pin * { -webkit-user-select: none; user-select: none; } /* a hold on a placed pin selected its letter on iOS and later taps did nothing; the page-level rule skips the widget host */
-.pin, .motion-ctl { box-shadow: 0 0 0 1px var(--_edge), 0 2px 8px rgba(0,0,0,.16); }
+.pin { box-shadow: 0 0 0 1px var(--_edge), 0 2px 8px rgba(0,0,0,.16); }
+.layer[data-moving] .pin:not(.open, .ink, .dragging, :hover) { box-shadow: 0 0 0 1px var(--_edge); } /* boardcam.ts moving */
 .pin { position: absolute; width: 28px; height: 28px; margin: -28px 0 0 0; border-radius: 14px 14px 14px 2px;
        background: var(--_bg); border: 0;
        display: grid; place-items: center; cursor: pointer; padding: 0; color: var(--_fg); font-size: 12px; font-weight: 500;
@@ -109,13 +110,17 @@ button.pin.done { color: var(--_green-fg); }
 .pin:is(.resolved, .moved) { opacity: .5; } /* a done pin is as big as an open one, only faded (Leo, 18 Nov) */
 .pin.moved:not(.resolved) { scale: .8; }
 .pin.unsure:not(.resolved) { outline: 1.5px dashed var(--_amber); outline-offset: 2px; } /* a guess: look-alikes, or its words changed */
+/* The agent's ring sits on the same edge: both at once read as one half-amber, half-green ring, a loader that looks
+   stuck (Leo, 24 Nov). The ring wins; the card still says the spot is a guess. Most often its words changed because
+   the agent is editing them. */
+.pin.unsure:has(> .ring:not(.gone)) { outline: 0; }
 .spotnote { padding: 6px 12px 0; font-size: 12px; letter-spacing: 0; color: var(--_muted); }
 button.pin:is(.resolved, .moved):is(:hover, .open) { opacity: 1; }
 .pin.grab { touch-action: none; }
 button.pin.dragging { cursor: grabbing; transform: scale(1.1); opacity: 1; box-shadow: 0 0 0 .5px color-mix(in srgb, var(--_fg) 30%, transparent), 0 8px 20px rgba(0,0,0,.22); }
 /* A drawing (hold D and drag, draw.ts) is its own pin: its lines over its area, no marker. Only the lines take the click
    (a wider see-through copy of them). Done or resolved, it fades like a pin. */
-.ink { position: absolute; overflow: visible; pointer-events: none; opacity: .6; } /* one look, drawn and at rest, on the whole drawing (so its pen segments don't darken where they overlap) */
+svg.ink { position: absolute; overflow: visible; pointer-events: none; opacity: .6; } /* one look, drawn and at rest, on the whole drawing (so its pen segments don't darken where they overlap) */
 /* Always the red pen (Leo, 20 Nov): --lab-ink is the page's text colour on lab pages, which made lines look like content. */
 .ink path { fill: none; stroke: var(--lab-pen, var(--_red)); stroke-width: 3px; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 /* A fingertip wide (Leo's pick E, 20 Nov): 16 px was easy to miss on a phone. */
@@ -171,8 +176,11 @@ button.pin.ink, button.pin.ink:is(:hover, :active, .open) { margin: 0; backgroun
 .ptr { position: fixed; left: 0; top: 0; width: 28px; height: 28px; border-radius: 14px 14px 14px 2px; corner-shape: round;
        background: var(--_bg); box-shadow: 0 0 0 .5px color-mix(in srgb, var(--_fg) 30%, transparent), 0 2px 6px rgba(0,0,0,.18);
        display: grid; place-items: center; pointer-events: none; z-index: 2147483647; opacity: 0; will-change: transform;
-       transition: opacity var(--_t-quick) var(--_ease-out), background-color var(--_t-quick) var(--_ease-out); }
+       transition: opacity var(--_t-quick) var(--_ease-out), background-color var(--_t-quick) var(--_ease-out), width var(--_t-quick) var(--_ease-out),
+                   height var(--_t-quick) var(--_ease-out), border-radius var(--_t-quick) var(--_ease-out), translate var(--_t-quick) var(--_ease-out); }
 .ptr.show { opacity: 1; }
+.ptr.draw { width: 8px; height: 8px; border-radius: 50%; translate: -3px 23px; background: var(--lab-pen, var(--_red)); box-shadow: 0 0 0 1.5px var(--_bg); } /* holding D: the pen's tip, centred on the point (place() puts the pin's tip there) */
+.ptr.draw span { opacity: 0; transition: none; } /* the pin and the pen dot morph into each other: size, corners and colour together, not a red pin for a moment (Leo, 23 Nov: "morphing from dot to pin blinking") */
 .ptr.still { opacity: 0; transition: none; } /* a pin was just placed under it: gone at once, not a fade over the new pin */
 .ptr span { grid-area: 1 / 1; font-size: 12px; letter-spacing: 0; font-weight: 600; line-height: 1; transition: opacity var(--_t-quick) var(--_ease-out), transform var(--_t-quick) var(--_ease-out); }
 .pin.new::after { content: ''; position: absolute; top: -4px; right: -4px; width: 9px; height: 9px; border-radius: 50%;
@@ -185,12 +193,12 @@ button.pin.ink, button.pin.ink:is(:hover, :active, .open) { margin: 0; backgroun
 .card > .foot { flex: none; }
 /* A question with choices (labit reply --choice), V1 "plain list" (Leo, 18 Nov): no bubble, no letters, no tags. The
    question, the versions as a plain list of rows (the page's own words muted, "· now"), a tick on the one shown; a tap
-   answers (no Keep button), with an undo for 5 s. An answered question keeps its rows, the pick ticked in green. On quoted words the card opens in the
-   margin (.margin) and a thin line (.tie) runs from the words to it. */
+   answers (no Keep button), with an undo for 5 s. An answered question keeps its rows, the pick ticked in green. The card is placed as every thread card is. */
 .msg.asks, .msg.asks[data-agent] { max-width: none; align-self: stretch; background: none; padding: 0; border-radius: 0; } /* over the agent's wash */
 .msg.asks > b { display: none; }
 .msg.asks .p { font-weight: 400; } /* the question reads like the rest, not bold (Leo, 20 Nov) */
 .msg.asks .stamp { bottom: auto; top: 3px; right: 0; }
+.msg.asks .stamp-room { float: right; margin: 3px 0 0 10px; } /* its room at the first line's end (chat.ts stamped) */
 .choices { display: grid; gap: 8px; margin: 8px 0 2px; max-width: 85%; } /* as wide as the messages */
 .choices .rows { display: grid; gap: 2px; }
 button.choice { display: flex; align-items: baseline; gap: 4px; width: 100%; margin: 0; padding: 7px 10px; border: 0; border-radius: var(--_r-s);
@@ -210,7 +218,6 @@ button.choice.picked { opacity: 1; }
 .choices .note { color: var(--_muted); min-height: 1.35em; padding-left: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } /* always one line tall: a note never makes the card taller */
 .choices .note.idle { visibility: hidden; }
 .choices .note .btn.undo { margin-left: 1px; }
-.card.margin { width: 280px; }
 /* Tied to its pin (thread.ts tieToPin): the browser keeps it there. A thread's card is laid by the script (thread.ts spot:
    below its pin, above it or beside it, whole in the window) as offsets from the pin, which these rules only start from.
    A new comment's box: where the script puts it, from the pin's corner (--lab-cx / --lab-cy; its other place --lab-ux /
@@ -225,7 +232,6 @@ button.choice.picked { opacity: 1; }
   --lab-up: calc(anchor(top) - var(--lab-ay)); --lab-uleft: max(12px, calc(anchor(left) + var(--lab-ux))); }
 .tied-card { left: max(12px, calc(anchor(left) + var(--lab-cx))); }
 .tied-beside { --lab-min: 8px; margin-block: 0 8px; /* the 8 px under it counts in the browser's check, so it keeps off the bottom edge */ left: calc(anchor(left) + var(--lab-cx)); position-try-fallbacks: --lab-under, --lab-under-above, --lab-fit, --lab-left, --lab-edge-above; /* Chrome tries 5 at most */ }
-.tie { position: absolute; height: 1px; background: var(--_fg); opacity: .3; pointer-events: none; }
 .card.in, .float.in { animation: lab-in var(--_t-base) var(--_ease); }
 .card.out, .float.out, .more-menu.out, .sw-box.out, .hint.out { animation: lab-out var(--_t-quick) var(--_ease-in) forwards; pointer-events: none; } /* one exit (comments.js leave) */
 .row { display: flex; gap: 12px; justify-content: flex-start; align-items: center; margin-top: 8px; }
@@ -280,6 +286,7 @@ button.btn.undo { color: var(--_fg); }
 .who span { color: var(--_muted); }
 .who input { flex: 1; min-width: 0; border: 0; background: none; padding: 0; margin: 0; outline: none; color: var(--_muted); text-overflow: ellipsis; }
 .who input:focus { color: var(--_fg); }
+.who input.need::placeholder { color: var(--_red); }
 .box.open:not(.one) .line { display: block; animation: lab-fade var(--_fade); }
 .box.open .who { display: flex; animation: lab-fade var(--_fade); }
 /* One line once your name is known: text, a quiet "as <name>" (still editable) and the arrow, side by side.
@@ -296,7 +303,7 @@ button.btn.undo { color: var(--_fg); }
 .send.ready { background: var(--_accent); color: var(--_accent-fg); animation: lab-ready var(--_t-quick) var(--_ease-out); }
 /* The first letter typed: the arrow turns dark with a tiny pop, so you see it's ready (lab A5, Leo 16 Nov). */
 @keyframes lab-ready { 50% { transform: scale(1.04); } }
-/* The send sign: a paper plane, one filled shape cut with clip-path (crisp at any size, no joins); it flies off on send. */
+/* The send sign: a paper plane, one filled shape cut with clip-path (crisp at any size, no joins). */
 .send .arr { display: block; position: relative; left: -1px; width: 12px; height: 11px; background: currentColor; clip-path: polygon(0 42%, 100% 0, 66% 100%, 46% 60%); }
 .send * { color: inherit; }
 .act { grid-area: send; display: flex; align-items: center; gap: 4px; }
@@ -313,6 +320,14 @@ button.btn.undo { color: var(--_fg); }
         display: flex; flex-direction: column; background: var(--_bg); color: var(--_fg); border-radius: var(--_radius); box-shadow: var(--_shadow); font-size: 13px; letter-spacing: -.006em; }
 .list .tabs { display: flex; flex-wrap: wrap; gap: 2px; flex: none; padding: 12px 8px 6px; }
 .msgs { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+/* A list scrolled down fades out at its top edge (Leo, 23 Nov: a message cut in half at the top read as a glitch): the
+   first 16 px of scrolling bring in a 16 px fade, so a message going under the edge fades instead of being sliced. At
+   the top nothing fades. Browsers without scroll timelines keep the plain edge. */
+@supports (animation-timeline: scroll()) {
+  .msgs, .card > .body { mask: linear-gradient(transparent, #000 16px) 0 -16px / 100% calc(100% + 16px) no-repeat;
+                         animation: lab-scrolled-top linear both; animation-timeline: scroll(self); animation-range: 0 16px; }
+}
+@keyframes lab-scrolled-top { to { mask-position: 0 0; } }
 .list .none { padding: 8px; color: var(--_muted); }
 /* Thin scrollbars inside the dialogs (chat, threads, the list), like macOS overlay ones, on a clear track. */
 /* Leo, 20 Nov (pick C): a 4 px bar flush against the box's edge, no inset. Safari and Chrome draw it from the
@@ -326,16 +341,16 @@ button.btn.undo { color: var(--_fg); }
 .chatwin .chat { flex: none; background: var(--_bg); padding: 6px 6px 8px; }
 .msgs { display: flex; flex-direction: column; gap: 8px; padding: 4px 10px 8px; overflow-x: hidden; }
 .msgs > :first-child { margin-top: auto; } /* a short conversation sits by the box, like a chat */
-/* A long chat lays out only the messages near the screen; each keeps its last height while away. */
-.msgs > .msg { content-visibility: auto; contain-intrinsic-size: auto 64px; }
+/* A long chat lays out only the messages near the screen; each keeps its last height while away. Not a thread card's:
+   its first frame drew each message at the 64 px guess, then the card grew and jumped when the next pin was clicked
+   (#467, Leo: "clicking new glitching"). */
+.chatwin .msgs > .msg { content-visibility: auto; contain-intrinsic-size: auto 64px; }
 /* The agent's folded "on it" messages: one small muted row ("2 updates ›"), a tap opens them in place. */
 .msgs > .updates { align-self: flex-start; background: none; border: 0; padding: 2px 4px; margin: 0; font: inherit; font-size: 12px; letter-spacing: 0; color: var(--_muted); cursor: pointer; border-radius: var(--_radius); }
 .msgs > .updates:hover, .msgs > .updates:focus-visible { color: var(--_fg); }
 .msgs > .updates:focus-visible { outline: 2px solid var(--_accent); outline-offset: 1px; } /* keyboard focus is seen on the small row */
-/* Something just sent eases in; the arrow flies off and comes back. */
+/* Something just sent eases in. The arrow stays put, in the chat as in a comment (Leo, 23 Nov: "no need plane animation"). */
 .fresh { animation: lab-in var(--_t-base) var(--_ease); } /* a message arrives as a card does */
-.send.sent .arr { animation: lab-fly var(--_t-slow) var(--_ease); }
-@keyframes lab-fly { 45% { transform: translate(9px, -9px) scale(.6); opacity: 0; } 46% { transform: translate(-7px, 7px) scale(.6); opacity: 0; } }
 .msg { max-width: 85%; padding: 7px 10px; border-radius: var(--_radius); background: var(--_soft); align-self: flex-start; }
 .msg.mine { align-self: flex-end; color: var(--_fg); } /* yours: soft green, dark text */
 /* One soft green: your bubbles, and a question's pick (not the reply box's grey, Leo's 5b) */
@@ -398,6 +413,14 @@ button.btn.undo { color: var(--_fg); }
         font: inherit; font-size: 13px; letter-spacing: -.006em; white-space: nowrap;
         display: inline-flex; gap: 6px; align-items: center; color: var(--_fg); text-decoration: none; cursor: default; }
 .listener span { color: var(--_muted); }
+/* In the bar, after ⋯ (Leo, 23 Nov: on a black page the mark alone showed only its eye): a segment like the others, the
+   mark on the bar's colour with no shadow of its own, and its words above the bar's right end (the bar clips what
+   sticks out of it, a fixed box is not clipped). */
+.bar > .listener { width: auto; height: auto; align-self: stretch; padding: 0 12px; border-radius: 0; box-shadow: inset .5px 0 0 var(--_line); }
+.bar > .listener.first { box-shadow: none; }
+.bar > .listener .mark { transform: none; filter: none; }
+.bar > .listener .cb { right: 6px; top: 6px; }
+.bar > .listener .w { position: fixed; left: auto; right: 16px; bottom: calc(16px + var(--_pill-h) + 10px); }
 /* The mark says the state, three ways (Leo, 18 Nov: black only when nobody listens): plain green while an agent is
    connected and listening, green with twitching ears while one works on pins (Leo: no third colour), black and still when nobody
    listens. A dropped connection keeps the last state, faded, instead of looking like nobody. Only transforms move, on three small shapes, so nothing else
@@ -441,7 +464,7 @@ button.btn.undo { color: var(--_fg); }
 /* Keys whisper: a small grey letter, no chip; a bit clearer while the pointer is on the bar. */
 kbd { font-size: 10px; letter-spacing: .012em; line-height: 17px; min-width: 0; padding: 0 1px; text-align: center; background: none;
       color: var(--_muted) !important; opacity: .45; }
-kbd, .motion-ctl, .onb { transition: opacity var(--_t-quick) var(--_ease-out); } /* .onb: what the page holds to a board, back as its view rests */
+kbd, .onb { transition: opacity var(--_t-quick) var(--_ease-out); } /* .onb: what the page holds to a board, back as its view rests */
 .bar:hover kbd { opacity: .75; }
 .bar button kbd { margin-left: -4px; } /* the hint sits close to its word: chat (c) */
 /* One bar of segments, a hairline between them; the less used ones in the ⋯ menu above it (phones too: same bar, bigger to tap). */
@@ -480,7 +503,11 @@ kbd, .motion-ctl, .onb { transition: opacity var(--_t-quick) var(--_ease-out); }
 .more-menu button:disabled { color: var(--_muted); cursor: default; }
 /* A pin left by the agent: labit's mark in place of a letter. */
 .pin .agentmark { width: 60%; height: 60%; display: block; }
-.more-menu kbd { margin: 0; }
+.more-menu kbd { margin: 0; font-size: 12px; letter-spacing: .02em; line-height: inherit; opacity: 1; } /* a plain grey key at the row's end, readable (Leo, 25 Nov, 2b) */
+.more-menu kbd::before, .more-menu kbd::after { content: none; }
+.more-menu .held { margin: 4px 0 0; padding-top: 4px; border-top: var(--_hair); }
+.more-menu .hint-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 5px 10px; font-size: 13px; letter-spacing: -.006em; color: var(--_muted); white-space: nowrap; cursor: default; }
+.more-menu .n { color: var(--_muted); } /* a board's frame count in the boards list */
 /* Which labit this is: the menu's last line, small and quiet, selectable to paste into a bug report. */
 .more-menu .labit-version { margin: 4px 10px 2px; padding-top: 6px; border-top: var(--_hair); font-size: 11px;
   color: var(--_muted); user-select: text; overflow-wrap: anywhere; }
@@ -578,8 +605,8 @@ kbd::before { content: '('; } kbd::after { content: ')'; } /* read as a hint: ch
   /* The listening pill and the hints step away with the bar and come back in step with the sheet as a finger drags it
      down (--lab-p), instead of popping back once it has gone (Leo, 20 Nov: "harsh… don't show pill animation like
      slowly swiping it with finger"). */
-  :is(.listener, .left) { transition: opacity var(--_t-base) var(--_ease-out), transform var(--_t-slow) var(--_ease-settle); }
-  :host([data-sheet]) :is(.listener, .left) { opacity: var(--lab-p, 0); transform: translateY(calc(24px * (1 - var(--lab-p, 0)))); pointer-events: none; }
+  .left { transition: opacity var(--_t-base) var(--_ease-out), transform var(--_t-slow) var(--_ease-settle); }
+  :host([data-sheet]) .left { opacity: var(--lab-p, 0); transform: translateY(calc(24px * (1 - var(--lab-p, 0)))); pointer-events: none; }
   :host([data-sheet]) .hint { visibility: hidden; } /* a hint is centred by its transform: it just steps out */
   /* The bar steps down under the screen's edge while a sheet is open and comes back as the sheet goes: --lab-p is
      how far the sheet is on its way out (0 open, 1 gone), set while a finger drags it and while it slides away,
@@ -661,21 +688,15 @@ kbd::before { content: '('; } kbd::after { content: ')'; } /* read as a hint: ch
   /* The action buttons keep the computer's corner (Leo, 19 Nov: from the sheet's they read as pills on a phone). */
   .float > .quick button { border-radius: max(0px, calc(var(--_radius) - 8px)); }
 }
-/* Phones: the listening label is the mark on the "chat" button (dark and blinking now and then: listening,
-   green with twitching ears: working, grey: nobody), the bar goes back to the bottom, and the send button is big
-   enough for a thumb. */
+/* Phones: the mark sits where it does on a computer, the bar's last segment at the bottom right (Leo, 24 Nov: "the rabbit
+   on phones in the right corner, like on desktop"), 44 px to tap like the bar's buttons; the bar goes back to the bottom,
+   and the send button is big enough for a thumb. */
 @media (pointer: coarse) and (max-width: 560px), (pointer: coarse) and (max-height: 500px) { /* phones, upright or on their side */
-  .listener { display: none !important; }
   .left { bottom: 72px; } /* only the copy-link pill is left here on a phone: it sits above the bar */
   .bar { bottom: 16px !important; box-shadow: var(--_shadow-low); }
   .hint { bottom: 64px !important; }
-  /* Sized and set to the word: its ink about 1.3× the text's height, its foot on the baseline, 6 px from "chat" like the count. */
-  .chat-btn .mark { align-self: center; width: 13px; height: 13px; margin: 0 -2.5px 0 -2px; translate: 0 -1.5px; }
-  .chat-btn[data-agent=listening] .mark { fill: var(--_green-fg); }
-  .chat-btn:is([data-agent=away], [data-agent=quiet]) .mark { fill: var(--_fg); }
-  .chat-btn.stale .mark { opacity: .4; }
-  .chat-btn[data-agent=working] .mark :is(.e1, .e2) { animation: lab-twitch var(--_twitch); }
-  .chat-btn[data-agent=working] .mark .e2 { animation-delay: calc(var(--_t-quick) * 1.5); }
+  .bar > .listener { min-width: 44px; padding: 0 14px; }
+  .bar > .listener .w { bottom: calc(16px + 44px + 10px); }
   .send, .clip { width: 36px; height: 36px; position: relative; }
   .send::before { content: ''; position: absolute; inset: -4px; border-radius: 50%; } /* 44 pt to hit, 36 to see */
   .send .arr { width: 17px; height: 15px; margin: auto; }
@@ -688,7 +709,7 @@ kbd::before { content: '('; } kbd::after { content: ')'; } /* read as a hint: ch
    closes it). A tapped sheet rises in from the bottom (--lab-from still sets where its small scale pivots). */
 @media (pointer: coarse) and (max-width: 560px), (pointer: coarse) and (max-height: 500px) {
   :host { --_gap: 8px; --_card-r: 30px; }
-  .card, .float, .list, .sw-box { left: var(--_gap) !important; right: var(--_gap); bottom: var(--_gap) !important; border-radius: var(--_card-r) !important;
+  .card, .float, .list, .sw-box, .motion-sheet { left: var(--_gap) !important; right: var(--_gap); bottom: var(--_gap) !important; border-radius: var(--_card-r) !important;
     background: var(--_bg);
     box-shadow: 0 0 0 .5px color-mix(in srgb, var(--_fg) 10%, transparent), 0 0 8px rgba(0, 0, 0, .14); transform-origin: var(--lab-from, 50% 100%); }
   :host([data-kb]) :is(.card, .list:not([hidden]), .sw-box) { top: calc(var(--lab-top, 0px) + var(--_gap)) !important; height: calc(var(--lab-vh, 100dvh) - 2 * var(--_gap)) !important; }
@@ -742,7 +763,7 @@ kbd::before { content: '('; } kbd::after { content: ')'; } /* read as a hint: ch
   .more-menu[popover], .more-menu[popover]:popover-open { translate: none; scale: none; transition: opacity var(--_t-calm) var(--_ease-out); }
   @starting-style { .more-menu[popover]:popover-open { opacity: 0; translate: none; scale: none; } }
   .more-menu[popover].out:not(:popover-open) { display: grid; opacity: 1; } /* closing: kept shown for its fade (comments.js, beforetoggle) */
-  /* The bar and the pill stay where they are and fade as a sheet opens (they slid under or off the screen); the section line does the same (sections.css, loaded later). */
+  /* The bar and the pill stay where they are and fade as a sheet opens (they slid under or off the screen). */
   :host([data-sheet]) :is(.bar, .listener, .left) { transform: none; transition: opacity var(--_t-calm) var(--_ease-out); }
   :is(.bar, .listener, .left) { transition: opacity var(--_t-calm) var(--_ease-out); }
 }

@@ -66,6 +66,8 @@ test('replies are signed by the agent that runs reply', async () => {
     [{ AMP_CURRENT_THREAD_ID: 'T-1', CLAUDECODE: '1' }, 'Amp · session T-1'], // Amp also sets CLAUDECODE
     [{ CURSOR_AGENT: '1' }, 'Cursor'],
     [{ OPENCODE_CLIENT: 'cli' }, 'opencode'],
+    [{ CURSOR_AGENT: '1', CURSOR_CONVERSATION_ID: 'conv-1234567' }, 'Cursor · session conv-123'], // what the Cursor CLI sets in its shells
+    [{ OPENCODE: '1', OPENCODE_SESSION_ID: 'ses_df7ace91' }, 'opencode · session ses_df7a'], // what opencode 2 sets in its shells
     [{ ANTIGRAVITY_AGENT: '1' }, 'Antigravity'],
     [{ LAB_AGENT: 'copilot' }, 'Copilot'],
     [{ LAB_AGENT: 'My Bot' }, 'My Bot'],
@@ -96,6 +98,8 @@ test("the pages' waiting count reads who wrote last from the reply's session, no
     body: JSON.stringify({ page: '/index', parent: id, name: 'Campbell', text: 'and the footer?' }), // a person, with an agent-like name
   });
   assert.equal(await waiting(), 1, 'a person named Campbell wrote last');
+  await cli(dir, ['pin', '#x', 'A review note', '--page', '/index', '--no-check'], { LAB_AGENT: 'aider' });
+  assert.equal(await waiting(), 1, "the agent's own pin, unanswered, waits on the person, not on an agent");
 });
 
 test('a listening Codex session is shown by name, with its resume command', async () => {
@@ -118,10 +122,14 @@ test("Codex's sandbox: a blocked call says so and how to get around it", async (
   const dir = tmp('sandbox');
   fs.mkdirSync(path.join(dir, '.lab'));
   fs.writeFileSync(path.join(dir, '.lab/server.json'), JSON.stringify({ port: 9, token: 'x' }));
-  const out = await cli(dir, ['wait', '--timeout', '5'], { CODEX_SANDBOX_NETWORK_DISABLED: '1', CODEX_THREAD_ID: 't' });
+  // \`pin\`, not \`wait\`: both say the same line when the lab can't be reached, but a wait holds on two minutes for a lab
+  // coming back before it says so (and this ran two of them, four minutes of the whole unit run). A pin gives up after 5 s.
+  const [out, plain] = await Promise.all([
+    cli(dir, ['pin', '#t', 'hi'], { CODEX_SANDBOX_NETWORK_DISABLED: '1', CODEX_THREAD_ID: 't' }),
+    cli(dir, ['pin', '#t', 'hi'], {}),
+  ]);
   assert.match(out, /Codex's sandbox blocks/);
   assert.match(out, /network_access=true/);
-  const plain = await cli(dir, ['wait', '--timeout', '5'], {});
   assert.match(plain, /isn't running/);
 });
 

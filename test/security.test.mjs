@@ -368,18 +368,6 @@ test('a link is minted only for the agent on this computer, and only on a --wifi
   assert.ok(links.length && links.every((l) => /^http:\/\/[^/]+:\d+\/_lab\/j\/[0-9a-f]{32}$/.test(l)), links.join(' '));
 });
 
-test('sections: a guest needs a pass, and with one reads and writes like anybody the lab lets in', { skip: !lan && 'no local network address to come in on' }, async () => {
-  const r = await wraw(new URL((await invite())[0]).pathname, { host: lan });
-  const cookie = r.cookie.split(';')[0];
-  const asGuest = (headers, body) => wraw('/_lab/api/sections' + (body ? '' : '?name=Mira&page=/index'), { host: lan, method: body ? 'POST' : 'GET', body, headers: { origin: `http://${lan}:${WPORT}`, 'content-type': 'application/json', ...headers } });
-  const look = JSON.stringify({ name: 'Mira', page: '/index', sections: { guest: 'guest mark' } });
-  assert.equal((await asGuest({}, look)).status, 403, 'no pass, no write');
-  assert.equal((await asGuest({}, undefined)).status, 403, 'no pass, no read');
-  assert.equal((await asGuest({ cookie }, look)).status, 204, 'with the pass');
-  assert.deepEqual(JSON.parse((await asGuest({ cookie }, undefined)).text).sections, { guest: 'guest mark' });
-  assert.equal((await asGuest({ cookie, origin: 'https://evil.example' }, look)).status, 403, "and the pass doesn't open it to other sites");
-});
-
 test("a guest's copy of the agent's text has no path of this computer and no file names of the project", { skip: !lan && 'no local network address to come in on' }, async () => {
   const own = `http://localhost:${WPORT}`;
   await wifiToken(); // the lab is up
@@ -546,11 +534,11 @@ test('a guest on the wifi sees the gate until they open a link', { skip: !lan &&
 test('a guest who keeps using the lab stays in: a pin or a mark renews the pass, not only a page load', { skip: !lan && 'no local network address to come in on' }, async () => {
   const r = await wraw(new URL((await invite())[0]).pathname, { host: lan });
   const cookie = r.cookie.split(';')[0];
-  const look = JSON.stringify({ name: 'Mira', page: '/index', sections: { renew: 'renew mark' } });
-  const post = await wraw('/_lab/api/sections', { host: lan, method: 'POST', body: look, headers: { cookie, origin: `http://${lan}:${WPORT}`, 'content-type': 'application/json' } });
-  assert.equal(post.status, 204);
+  const look = JSON.stringify({ name: 'Mira', page: '/index', ids: [] });
+  const post = await wraw('/_lab/api/reads', { host: lan, method: 'POST', body: look, headers: { cookie, origin: `http://${lan}:${WPORT}`, 'content-type': 'application/json' } });
+  assert.notEqual(post.status, 403, 'let in');
   assert.match(post.cookie || '', new RegExp(`^lab_guest_${WPORT}=[0-9a-f]{16}\\.[0-9a-f]{32}; Path=/; Max-Age=86400`), 'a write from an open tab starts the day again');
-  const read = await wraw('/_lab/api/sections?name=Mira&page=/index', { host: lan, headers: { cookie } });
+  const read = await wraw('/_lab/api/reads?name=Mira&page=/index', { host: lan, headers: { cookie } });
   assert.match(read.cookie || '', new RegExp(`^lab_guest_${WPORT}=`), 'and so does a read');
 });
 

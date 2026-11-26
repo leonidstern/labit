@@ -5,7 +5,7 @@
 import { check, done, drawn, eachEngine, go, lab, letters, box, look, mark, note, ring, said, send, sleep, stroke, until } from './edge-draw-kit.mjs';
 
 const PAGE = '<!doctype html><meta charset="utf-8"><title>d</title><style>body{margin:40px;font:20px/1.5 sans-serif} h1{margin:0 0 80px} p{width:600px;margin:0 0 60px}</style><h1 id="h">Pricing</h1><p id="a">Plans start small and grow with you</p><p id="b">Cancel any time from your account</p><p id="c">Questions go to the team</p>';
-const NAMES = ['dot', 'tap', 'long', 'diag', 'open', 'nearly', 'over', 'wavy', 'ripple', 'drift', 'drift2', 'head', 'ticks', 'ticksin'];
+const NAMES = ['dot', 'tap', 'long', 'diag', 'hook', 'twice', 'open', 'nearly', 'over', 'wavy', 'ripple', 'drift', 'drift2', 'head', 'ticks', 'ticksin'];
 const L = await lab(Object.fromEntries(NAMES.map((n) => [n, PAGE])));
 
 try {
@@ -42,9 +42,16 @@ try {
     const long = await draw('long', async () => { const b = await box(p, 'a'); return [[[8, b.b + 2], [990, b.b + 4]]]; }, 30);
     check(eng, 'a line under the words from one edge of the window to the other reads as underlined, with all the words', /drawn: underlined/.test(long.text) && /Plans start small and grow with you/.test(long.text) && long.a?.docW > 950, said(long.text));
 
-    // 4. A very long diagonal, corner to corner: an arrow, from what it starts on to what it ends on.
+    // 4. A very long diagonal, corner to corner, with no head: a line (Leo, 22 Nov, #429: only a drawn head makes an
+    // arrow), from what it starts on to what it ends on.
     const diag = await draw('diag', async () => { const h = await box(p, 'h'); const c = await box(p, 'c'); return [[[h.l + 10, h.cy], [c.l + 100, c.cy]]]; }, 30);
-    check(eng, 'a long diagonal reads as an arrow from the heading to the last paragraph; the words between are in its area', /drawn: arrow/.test(diag.text) && /arrow from: <h1/.test(diag.text) && /arrow to: <p id="c"/.test(diag.text) && /Cancel any time/.test(diag.text), said(diag.text));
+    check(eng, 'a long diagonal with no head reads as a line from the heading to the last paragraph; the words between are in its area', /drawn: line/.test(diag.text) && /line from: <h1/.test(diag.text) && /line to: <p id="c"/.test(diag.text) && /Cancel any time/.test(diag.text), said(diag.text));
+    // The same with a small hook where the hand lifts (#429): still a line, its whole length kept.
+    const hook = await draw('hook', async () => { const h = await box(p, 'h'); const c = await box(p, 'c'); const e = [c.l + 100, c.cy]; return [[[h.l + 10, h.cy], e, [e[0] + 6, e[1] - 7], [e[0] - 1, e[1] - 10]]]; }, 30);
+    check(eng, 'a diagonal ending in a small hook still reads as a line, not an arrow', /drawn: line/.test(hook.text), said(hook.text));
+    // Drawn there and back over itself (#430): a line, not a loop, and the lines sent are all of it.
+    const twice = await draw('twice', async () => { const h = await box(p, 'h'); const c = await box(p, 'c'); return [[[h.l + 10, h.cy], [c.l + 100, c.cy], [h.l + 14, h.cy + 4]]]; }, 30);
+    check(eng, 'a diagonal drawn there and back over itself reads as a line from the heading, not as circled', /drawn: line/.test(twice.text) && /line from: <h1/.test(twice.text), said(twice.text));
 
     // 5. Loops. Three quarters round the heading, never closed.
     const loop = async (page, from, to) => draw(page, async () => { const h = await box(p, 'a'); const w = await letters(p, 'a', 0, 11); return [ring((w.l + w.r) / 2, h.cy, (w.r - w.l) / 2 + 16, 26, from, to, 40)]; });
@@ -78,7 +85,7 @@ try {
     const ticksin = await draw('ticksin', async () => { const s = await shaft(); return [[s.from, s.tip], [[s.tip[0] - 22, s.tip[1] - 6], s.tip], [[s.tip[0] - 4, s.tip[1] - 24], s.tip]]; });
     // (Three strokes that don't join are sent as an unclear mark, which is the widget's honest answer: either passes.)
     check(eng, 'an arrow whose head is two ticks drawn in towards the tip: an arrow, or an unclear mark with all three lines', /drawn: (arrow|3 strokes, unclear mark)/.test(ticksin.text) && ticksin.a?.ink?.pts?.length === 3 && ticksin.n === 1, said(ticksin.text));
-    note(eng, 'the marks, as read', [dot, long, diag, open, nearly, over, wavy, ripple, drift, drift2, head, ticks, ticksin].map((d) => mark(d.text)).join(' · '));
+    note(eng, 'the marks, as read', [dot, long, diag, hook, twice, open, nearly, over, wavy, ripple, drift, drift2, head, ticks, ticksin].map((d) => mark(d.text)).join(' · '));
   });
 } finally {
   L.stop();

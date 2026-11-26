@@ -26,7 +26,7 @@ try {
     try {
       for (const [where, url] of [['board page', `${B}/_lab/board/pricing?of=%2Fcanvas`], ['board view', `${B}/canvas#board=pricing`]]) {
         const ctx = await browser.newContext({ viewport: { width: 1200, height: 800 } });
-        await ctx.addInitScript(() => { localStorage.setItem('lab-name', 'zz-close'); localStorage.setItem('lab-on', '1'); localStorage.setItem('lab-board-size:/canvas', '1'); }); // full: the canvas above the frames is the board's
+        await ctx.addInitScript(() => { localStorage.setItem('lab-name', 'zz-close'); localStorage.setItem('lab-on', '1'); }); // full: the canvas above the frames is the board's
         const p = await ctx.newPage();
         p.on('pageerror', (e) => console.log('pageerror', e.message));
         await p.goto(url);
@@ -126,6 +126,6 @@ try {
   }
 } finally {
   server.kill();
-  fs.rmSync(DIR, { recursive: true, force: true });
+  fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
 }
 finish();

@@ -99,3 +99,23 @@ test('a progress line inside the window, the agent\'s or the hook\'s, keeps the 
     await call('/_lab/api/comments', { page: '/design', parent: comment.id, name: 'x', text: 'done', intent: 'done' }, who || 'hooked');
   }
 });
+
+test('a batch worked through one pin at a time: a sign on any of its pins restarts the clock for the rest, it never clears it', async () => {
+  const pins = [];
+  for (const t of ['batch one', 'batch two', 'batch three']) pins.push((await post(t)).comment);
+  await sleep(300);
+  const a = await waitAcked('batcher');
+  for (const t of ['batch one', 'batch two', 'batch three']) assert.match(a.text, new RegExp(t), `${t} in one hand-off`);
+  await sleep(1000);
+  await call('/_lab/api/comments', { page: '/design', parent: pins[0].id, name: 'batcher', text: 'done', intent: 'done' }, 'batcher');
+  await sleep(1000); // 2 s after the hand-off, 1 s after the first answer
+  assert.ok((await find(pins[1].id)).handedAt, 'pin two still handed: the session is working through the batch');
+  assert.ok((await find(pins[2].id)).handedAt, 'pin three too');
+  await call('/_lab/api/comments', { page: '/design', parent: pins[1].id, name: 'batcher', text: 'done', intent: 'done' }, 'batcher');
+  await sleep(2600); // nothing more: the clock runs out from the last sign
+  const three = await find(pins[2].id);
+  assert.equal(three.handedAt, undefined, 'a session that went quiet still loses the pin it never answered');
+  assert.ok(three.unanswered);
+  assert.ok((await find(pins[1].id)).handedAt, 'an answered one stays');
+  await call('/_lab/api/comments', { page: '/design', parent: pins[2].id, name: 'batcher', text: 'done', intent: 'done' }, 'batcher');
+});

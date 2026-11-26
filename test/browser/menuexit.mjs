@@ -66,6 +66,18 @@ try {
           check(eng, `the ⋯ menu fades out after ${how === 'esc' ? 'Esc' : 'the ⋯ button'}`, shown.length >= 3 && shown[1] < 1 && fr[fr.length - 1] === null, `${shown.length} frames shown, second frame opacity ${shown[1]}`);
           await sleep(200);
         }
+        // A click on the page with the menu open only closes it: no new pin, no comment box (Leo, 23 Nov)
+        await open();
+        await p.mouse.click(300, 300);
+        await sleep(600);
+        const after = await sh(p, `({ menu: !r.querySelector('.more-menu').hidden, box: r.querySelectorAll('textarea').length })`);
+        check(eng, 'a click on the page with the ⋯ menu open closes it and pins nothing', !after.menu && after.box === 0, JSON.stringify(after));
+        await p.mouse.click(300, 300);
+        await sleep(600);
+        const again = await sh(p, `r.querySelectorAll('textarea').length`);
+        check(eng, 'the next click on the page pins as usual', again === 1, String(again));
+        await p.keyboard.press('Escape');
+        await sleep(300);
         // Over the page's own top-layer dialog (non-modal) and a fixed element at the highest z-index: is the menu's first item what a click would hit?
         await p.evaluate('document.getElementById("dlg").show()');
         const b = await sh(p, `(() => { const q = r.querySelector('.more').getBoundingClientRect(); return [q.x + q.width / 2, q.y + q.height / 2]; })()`);
@@ -73,6 +85,51 @@ try {
         await sleep(500);
         const hit = await sh(p, `(() => { const m = r.querySelector('.more-menu'); const q = m.querySelector('button').getBoundingClientRect(); const t = document.elementFromPoint(q.x + 5, q.y + 5); return { open: !m.hidden, top: t?.localName + '#' + (t?.id || '') }; })()`);
         console.log(`     ${eng} over a page dialog and a top z-index element: ${JSON.stringify(hit)}`);
+        await ctx.close();
+      }
+
+      // I. One thing open at a time (Leo, 23 Nov: "close it and open menu or chat"): with a thread or the chat open, one
+      // click on ⋯ closes it and opens the menu; with a thread open, the chat closes it too.
+      {
+        const [ctx, p] = await mk({ viewport: { width: 1200, height: 800 } });
+        const at = (sel) => sh(p, `(() => { const q = r.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return [q.x + q.width / 2, q.y + q.height / 2]; })()`);
+        const state = () => sh(p, `({ card: Boolean(r.querySelector('.card:not(.out)')), chat: !r.querySelector('.chatwin').hidden, menu: (() => { const m = r.querySelector('.more-menu'); return m.matches(':popover-open') || (!m.hidden && !m.classList.contains('out')); })() })`);
+        const openCard = async () => {
+          await p.evaluate('document.getElementById("p30").scrollIntoView({ block: "center" })');
+          await sleep(500);
+          const pin = await at('button.pin');
+          await p.mouse.click(pin[0], pin[1]);
+          await sleep(600);
+        };
+        await openCard();
+        const before = await state();
+        let b = await at('.more');
+        await p.mouse.click(b[0], b[1]);
+        await sleep(600);
+        const after = await state();
+        check(eng, 'a thread open, one click on ⋯ closes it and opens the menu', before.card && !after.card && after.menu, JSON.stringify([before, after]));
+        await p.keyboard.press('Escape');
+        await sleep(400);
+        await p.evaluate(() => document.activeElement?.blur());
+        await p.keyboard.press('t');
+        await sleep(600);
+        const chat = await state();
+        b = await at('.more');
+        await p.mouse.click(b[0], b[1]);
+        await sleep(600);
+        const chat2 = await state();
+        check(eng, 'the chat open, one click on ⋯ closes it and opens the menu', chat.chat && !chat2.chat && chat2.menu, JSON.stringify([chat, chat2]));
+        // the labit mark at the bar's end closes an open thread too (Leo, 23 Nov: "yes it should")
+        await p.keyboard.press('Escape');
+        await sleep(400);
+        await openCard();
+        const mk1 = await state();
+        await sh(p, `(() => { const w = r.querySelector('.listener'); if (w) w.hidden = false; })()`);
+        const lb = await at('.listener');
+        await p.mouse.click(lb[0], lb[1]);
+        await sleep(600);
+        const mk2 = await state();
+        check(eng, 'a thread open, a click on the labit mark closes it', mk1.card && !mk2.card, JSON.stringify([mk1, mk2]));
         await ctx.close();
       }
 

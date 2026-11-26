@@ -64,8 +64,11 @@ test('the link moves to a newer build: the lab moves onto it, same port, and a w
   const first = server().pid;
   const waiting = cli(['wait', '--bg', '--timeout', '30'], { cwd: DIR, env }, path.join(LINK, 'local.mjs'));
   await sleep(500);
+  const log = path.join(DIR, '.lab', 'lab.log');
+  fs.writeFileSync(log, 'x'.repeat(1.1e6)); // years of hand-overs
   point(build('b', 'main bbb'));
   await until(async () => server().pid !== first && /edge: main bbb/.test(await page()), 'the lab did not move onto the newer build');
+  assert.ok(fs.statSync(log).size < 1e5, 'a lab.log past 1 MB starts over');
   await sleep(800); // the wait is back on the lab, with its new key
   const res = await fetch(B + '/_lab/api/comments', {
     method: 'POST',

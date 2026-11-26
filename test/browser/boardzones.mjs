@@ -136,6 +136,85 @@ try {
       await p.keyboard.up('d');
       const drew = await until(async () => ((await inkCount()) > had ? true : null));
       check(eng, 'D with the focus inside a live frame draws', Boolean(drew), JSON.stringify({ had, now: await inkCount() }));
+      // #423: holding D, a press that hardly moves is no click. It opened an empty box, the next D typed a "d" into it, and
+      // every stroke after that drew nothing.
+      await open();
+      const had2 = await inkCount();
+      let fa3 = await rect('a');
+      await p.keyboard.down('d');
+      await p.mouse.move(fa3.x + 60, fa3.y + 60);
+      await p.mouse.down();
+      await p.mouse.move(fa3.x + 63, fa3.y + 62);
+      await p.mouse.up();
+      await p.keyboard.up('d');
+      await sleep(600);
+      await p.keyboard.down('d');
+      await p.mouse.move(fa3.x + fa3.w * 0.2, fa3.y + fa3.h * 0.6);
+      await p.mouse.down();
+      for (let i = 1; i <= 12; i++) await p.mouse.move(fa3.x + fa3.w * (0.2 + i * 0.03), fa3.y + fa3.h * (0.6 + (i % 3) * 0.04), { steps: 3 });
+      await p.mouse.up();
+      await p.keyboard.up('d');
+      const drew2 = await until(async () => ((await inkCount()) > had2 ? true : null));
+      const typed = await p.evaluate((r) => [...new Function(`return ${r}`)().querySelectorAll('textarea')].map((t) => t.value).join(''), widget);
+      check(eng, 'holding D, a tiny press opens no box and the drawing after it is saved', Boolean(drew2) && !typed.includes('d'), JSON.stringify({ had2, typed }));
+      // #423: holding D, the wheel doesn't move the board (strokes before and after a pan came apart).
+      await open();
+      const still0 = await rect('b');
+      await p.keyboard.down('d');
+      await p.mouse.move(still0.x + still0.w / 2, still0.y + still0.h / 2);
+      for (let i = 0; i < 3; i++) { await p.mouse.wheel(0, 120); await sleep(60); }
+      await p.keyboard.up('d');
+      await sleep(300);
+      const still1 = await rect('b');
+      check(eng, 'holding D, the wheel leaves the board where it is', Math.abs(still1.x - still0.x) < 1 && Math.abs(still1.y - still0.y) < 1, JSON.stringify([still0, still1]));
+      // #423: a drawing from one frame to the other is on the board itself: it keeps its lines (it was a point pin, the lines
+      // lost), goes with the zoom, comes back after a reload, and the agent reads it in the board's px.
+      await sleep(1200);
+      const had3 = (await comments()).length;
+      fa3 = await rect('a');
+      const fb3 = await rect('b');
+      const [ax, bx, ay] = [fa3.x + fa3.w * 0.5, fb3.x + fb3.w * 0.5, Math.min(fa3.y + fa3.h, fb3.y + fb3.h) - 30];
+      await p.keyboard.down('d');
+      await p.mouse.move(ax, ay);
+      await p.mouse.down();
+      for (let i = 1; i <= 16; i++) await p.mouse.move(ax + ((bx - ax) * i) / 16, ay - 40 * Math.sin((i / 16) * Math.PI), { steps: 3 });
+      await p.mouse.up();
+      await p.keyboard.up('d');
+      const across = await until(async () => { const c = await comments(); return c.length > had3 ? c.at(-1) : null; });
+      const ca = across?.anchor || {};
+      check(eng, 'a drawing across two frames keeps its lines, on the board itself', Boolean(ca.ink?.pts?.[0]?.length) && !ca.frame && ca.zw === 1 && ca.docW > 0, JSON.stringify({ frame: ca.frame, zw: ca.zw, docW: ca.docW, ink: Boolean(ca.ink) }));
+      const t3 = await text();
+      check(eng, 'the agent reads a drawing across frames in the board\'s px', /area on the board: -?\d+–-?\d+ px across/.test(t3), t3.split('\n').filter((l) => /area|type:/.test(l)).join(' | '));
+      const onA = () => p.evaluate((r) => { const svgs = [...new Function(`return ${r}`)().querySelectorAll('.pin.ink svg')]; const f = window.__labBoard.box('a').getBoundingClientRect(); const q = svgs.map((s) => s.getBoundingClientRect()).sort((x, y) => y.width - x.width)[0]; return q ? [Math.round(((q.x - f.x) / f.width) * 100) / 100, Math.round((q.width / f.width) * 100) / 100] : null; }, widget);
+      await sleep(500);
+      const z0 = await onA();
+      await p.mouse.move(fb3.x, fb3.y);
+      await p.keyboard.down('Control');
+      for (let i = 0; i < 3; i++) { await p.mouse.wheel(0, -120); await sleep(80); }
+      await p.keyboard.up('Control');
+      await sleep(500);
+      const z1 = await onA();
+      check(eng, 'zoomed in, a drawing across frames stays where it was on them', Boolean(z0 && z1) && Math.abs(z0[0] - z1[0]) < 0.03 && Math.abs(z0[1] - z1[1]) < 0.03 && z0[1] > 0.5, JSON.stringify({ z0, z1 }));
+      await open();
+      const z2 = await until(onA);
+      check(eng, 'after a reload a drawing across frames is drawn again', Boolean(z2) && Math.abs(z2[1] - z0[1]) < 0.03, JSON.stringify({ z0, z2 }));
+      // #423: a drawing of many strokes keeps them all (16 were kept, the rest dropped without a word), and each mark in it
+      // names the frame it is on (they named the board's dialog).
+      await sleep(1200);
+      const had4 = (await comments()).length;
+      const fa4 = await rect('a');
+      await p.keyboard.down('d');
+      for (let i = 0; i < 24; i++) {
+        await p.mouse.move(fa4.x + fa4.w * 0.1 + i * 9, fa4.y + fa4.h * 0.3);
+        await p.mouse.down();
+        await p.mouse.move(fa4.x + fa4.w * 0.1 + i * 9, fa4.y + fa4.h * 0.3 + 30, { steps: 3 });
+        await p.mouse.move(fa4.x + fa4.w * 0.1 + i * 9 + 3, fa4.y + fa4.h * 0.3 + 60, { steps: 3 });
+        await p.mouse.up();
+      }
+      await p.keyboard.up('d');
+      const many = await until(async () => { const c = await comments(); return c.length > had4 ? c.at(-1) : null; });
+      const mk = many?.anchor?.ink || {};
+      check(eng, 'a drawing of 24 strokes keeps all 24, and its marks name frame a', mk.pts?.length === 24 && Boolean(mk.marks?.length) && mk.marks.every((m) => /data-id="a"/.test(m)), JSON.stringify({ lines: mk.pts?.length, marks: mk.marks?.slice(0, 2) }));
     } finally {
       await browser.close();
     }

@@ -49,7 +49,7 @@ const check = (eng, name, ok, detail = '') => {
 const keys = () => JSON.parse(fs.readFileSync(path.join(DIR, '.lab/server.json'), 'utf8'));
 const asAgent = (page, body) => fetch(B + '/_lab/api/comments', { method: 'POST', headers: { 'content-type': 'application/json', origin: B, 'x-lab-admin': keys().agent, 'x-lab-agent': '1' }, body: JSON.stringify({ page, name: 'Claude', ...body }) }).then((r) => r.json());
 
-const TEXT = `Design is on ${B}/links#sec2 and in #sec2 too, more at ${B}/other?x=1#a, ${B}/links#ghost, #nothere, ${B.replace(PORT, '9')}/z and javascript:alert(1).`;
+const TEXT = `Design is on ${B}/links#sec2 and in #sec2 too, more at ${B}/other?x=1#a, ${B}/links#ghost, #nothere, ${B.replace(PORT, '9')}/z and javascript:alert(1). Without http too: localhost:${PORT}/bare-page/, 127.0.0.1:${PORT}/two. and localhost:99/far, not mylocalhost:${PORT}/no.`;
 
 try {
   await asAgent('/links', { text: TEXT, anchor: { kind: 'element', selector: '.blurb', x: 0.5, y: 0.5, element: '<p class="blurb">' } });
@@ -75,6 +75,9 @@ try {
       check(eng, 'an address of another port stays as written', links.some((l) => l.href === `http://localhost:9/z`), JSON.stringify(links));
       check(eng, 'the same page with a #section, and a bare #section, are shortcuts: no address, no new tab', links.filter((l) => l.href === '#sec2' && l.text === '#sec2' && !l.target).length === 2, JSON.stringify(links));
       check(eng, 'a #section the page does not have is plain words, written as the agent did', !links.some((l) => /ghost|nothere/.test(l.text)) && text.includes('#nothere') && text.includes(`${B}/links#ghost`), text);
+      check(eng, 'a lab address written without http:// is a link too, on the reader\'s origin, a trailing full stop left out', by(`${R}/bare-page/`)?.target === '_blank' && by(`${R}/two`)?.href === `${R}/two`, JSON.stringify(links));
+      check(eng, 'one without http:// on another port links as written, with http://', links.some((l) => l.text === 'localhost:99/far' && l.href === 'http://localhost:99/far'), JSON.stringify(links));
+      check(eng, 'a word that only ends in localhost is not a link', !links.some((l) => /\/no$/.test(l.href)) && text.includes(`mylocalhost:${PORT}/no`), JSON.stringify(links));
       check(eng, 'javascript: is never a link', !links.some((l) => /^javascript/i.test(l.href)) && text.includes('javascript:alert(1)'), JSON.stringify(links));
       const before = await p.evaluate(() => scrollY);
       await sh(() => { r.querySelector('.msg a.link[href="#sec2"]').click(); });

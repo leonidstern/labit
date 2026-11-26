@@ -9,6 +9,19 @@ export function listenPages(opts: Opts, forWait = false): string[] | null {
   if (!raw) return null;
   return String(raw).split(',').map((p) => '/' + p.trim().replace(/^\/+/, '').replace(/\.html?$/i, '')).filter((p) => p !== '/');
 }
+/** A page given as a Windows path (--page C:/Program Files/Git/spot/trade): Git Bash rewrites an argument that starts
+ *  with / into a path under its own folder before labit sees it, so the pin would land on a page that doesn't exist.
+ *  The message to stop with, or null. Page keys never hold a drive letter, so this refuses nothing real. */
+export function windowsPagePath(opts: Opts): string | null {
+  for (const flag of ['page', 'pages']) {
+    if (typeof opts[flag] !== 'string') continue;
+    const bad = opts[flag].split(',').map((p: string) => p.trim()).find((p: string) => /^[A-Za-z]:[\\/]/.test(p));
+    if (!bad) continue;
+    const page = bad.replace(/\\/g, '/').match(/\/Git\/(?:usr\/)?(.+)$/i)?.[1] || '<page>';
+    return `--${flag} got "${bad}", a Windows path: Git Bash turns an argument that starts with / into one. Write the page without its first slash (--${flag} ${page}), or run the command with MSYS_NO_PATHCONV=1.`;
+  }
+  return null;
+}
 // One list of flags for every command: anything else starting with -- is refused, so a typo
 // (`reply abc "Done" --resolv`) stops instead of landing in the reply's text. After a bare --, all is words.
 const SWITCHES = ['--wifi', '--no-wifi', '--no-open', '--resolve', '--wait', '--new', '--all', '--bg', '--dev', '--fast', '--no-fast', '--done', '--on-it', '--question', '--first', '--no-check'];
@@ -100,7 +113,10 @@ export function waitSeconds(opts: Opts, isTTY = false): { seconds: number; cappe
 // --fast / --no-fast switched the quick model, removed 15 Nov: still accepted, so older scripts keep working; they do nothing.
 // How answers should read, said with every pin (the page shows short blocks and '- ' lists as such).
 export const WRITE_SHORT = "Write answers short: they're read in a small window, often on a phone. One point per line or two, a blank line between points, '- ' lines for lists.";
-const VALUED = ['--port', '--name', '--page', '--pages', '--timeout', '--dir', '--proxy', '--model', '--suggest-rule', '--at', '--progress', '--choice', '--hint', '--recommend', '--of', '--variants', '--widths', '--flow', '--label', '--width', '--after', '--quote', '--file', '--board', '--frame'];
+// Where a new version of something goes: beside the one it follows, so nobody hunts for it at the page's end (Leo, 23 Nov).
+// The first hand-off says it short; the skill says it whole (test/skill-sync).
+export const NEW_VERSION_NEAR = 'A new version: on a research page, right after the one it follows, never at the bottom, its heading saying so; on a live project, where it was asked, as a board variant, the page unchanged until picked.';
+const VALUED = ['--port', '--name', '--page', '--pages', '--timeout', '--dir', '--proxy', '--model', '--suggest-rule', '--checked', '--at', '--progress', '--choice', '--hint', '--recommend', '--of', '--variants', '--widths', '--flow', '--label', '--width', '--after', '--quote', '--file', '--board', '--frame'];
 // Flags given more than once, each time adding one (reply --choice "A" --choice "B"): a list, in the order given.
 const REPEATED = ['--choice', '--hint'];
 // The command line's words (pos) and options (opts), and any --flag it doesn't know.

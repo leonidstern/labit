@@ -34,7 +34,7 @@ async function lab(n) {
       body: JSON.stringify({ page: '/index', name: 'Leo', text, anchor: { selector: sel, x: 0.2, y: 0.5, docX: 0.1, docY: 20, width: 1000, element: `<p id="${sel.slice(1)}">` } }),
     }).then((r) => r.json()).then((j) => j.comment.id);
   const comments = () => fetch(B + '/_lab/api/comments?page=/index').then((r) => r.json()).then((j) => j.comments);
-  return { B, cli, post, comments, stop: () => (server.kill(), fs.rmSync(dir, { recursive: true, force: true })) };
+  return { B, cli, post, comments, stop: () => (server.kill(), fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5 })) };
 }
 
 for (const [n, eng] of engines().entries()) {
@@ -78,7 +78,7 @@ for (const [n, eng] of engines().entries()) {
     await shadow(() => { [...r.querySelectorAll('button.pin')][1].click(); });
     await until(() => shadow(() => { return !!r.querySelector('.card .stamp'); }));
     const stamp = () => shadow(() => { return r.querySelector('.card .msg.mine .stamp .state')?.textContent || ''; });
-    check(eng, 'a waiting pin says its place in its thread, under the bubble', (await stamp()) === 'waiting · 1st in line', await stamp());
+    check(eng, 'a waiting pin says its place in its thread, under the bubble', (await stamp()) === '1st in line', await stamp());
     // The words change with the state, under the bubble: the bubble keeps its size (Leo, 20 Nov: it jumped). The picked-up pin's
     // one-line bubble is as tall as the waiting one's, and in both the words sit below it.
     const bubble = () => shadow(() => { const m = r.querySelector('.card .msg.mine'); const b = m.getBoundingClientRect(); const w = m.querySelector('.state').getBoundingClientRect(); return `${Math.round(b.height)} tall, words ${w.top >= b.bottom ? 'below' : 'inside'}`; });
@@ -87,7 +87,7 @@ for (const [n, eng] of engines().entries()) {
     await until(() => shadow(() => { return !r.querySelector('.card'); }));
     await shadow(() => { [...r.querySelectorAll('button.pin')][0].click(); });
     await until(() => shadow(() => { return !!r.querySelector('.card .stamp'); }));
-    check(eng, 'the status words do not change the bubble: waiting and picked up are as tall, the words below', (await bubble()) === waitingSize && /below/.test(waitingSize) && (await stamp()) === 'picked up', `${waitingSize} vs ${await bubble()}`);
+    check(eng, 'the status words do not change the bubble: waiting and picked up (no words: ✓✓ says it) are as tall, the words below', (await bubble()) === waitingSize && /below/.test(waitingSize) && (await stamp()) === '', `${waitingSize} vs ${await bubble()}`);
     await p.keyboard.press('Escape');
 
     // Progress: the ring turns, the pill says what it does, hovering says it too, and no message is added.

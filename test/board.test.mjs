@@ -142,10 +142,10 @@ test('the lab watches .lab/boards: a board file bumps boards, a saved variant is
   s.close();
 });
 
-test('pages list: boards are listed, scratch frames and board keys are not pages', async () => {
+test('pages list: boards have no rows of their own; scratch frames and board keys are not pages', async () => {
   await put(B, 'name=hero', { frames: 'abc'.split('').map((id) => ({ id, src: `/_lab/board/hero/${id}`, w: 1280, h: 800 })) });
   const info = await (await fetch(`${B}/_lab/pages`)).json();
-  assert.ok(info.boards.some((b) => b.name === 'hero' && b.frames === 3));
+  assert.equal(info.boards, undefined);
   assert.equal(info.pages.some((p) => /board|\.lab/.test(p.file + p.path)), false);
 });
 
@@ -386,4 +386,18 @@ test('git stays clean: a repo that ignores .lab sees nothing of boards', async (
   await cli(DIR, 'new', 'Clean', '--of', '/pricing', '--variants', '3');
   await cli(DIR, 'pick', 'clean', 'b');
   assert.equal(g('status', '--porcelain').trim(), '');
+});
+
+test('board new with no --of is about the page the agent was handed pins on; with none, it asks which page', async () => {
+  // Leo, 23 Nov: "new asked boards create on same page if asked inside page".
+  const env = { ...process.env, CLAUDE_CODE_SESSION_ID: '', CODEX_THREAD_ID: '', AMP_CURRENT_THREAD_ID: '', CURSOR_CONVERSATION_ID: '', OPENCODE_SESSION_ID: '' };
+  const as = (id, ...args) => new Promise((resolve) => execFile(process.execPath, [LAB, ...args], { cwd: DIR, env: { ...env, LAB_SESSION_ID: id } }, (err, stdout, stderr) => resolve({ code: err ? err.code : 0, out: stdout + stderr })));
+  const none = await as('nobody-handed', 'board', 'new', 'Loose');
+  assert.notEqual(none.code, 0);
+  assert.match(none.out, /Say which page the board is about: labit board new "<topic>" --of \/page/);
+  await pin('/cart', { text: 'show me three cart layouts', anchor: { kind: 'element', selector: 'h1', x: 0.5, y: 0.5 } });
+  assert.match((await as('cart-asker', 'wait', '--timeout', '8', '--pages', '/cart')).out, /three cart layouts/);
+  const made = await as('cart-asker', 'board', 'new', 'Cart layouts');
+  assert.equal(made.code, 0, made.out);
+  assert.match(made.out, /^# Board cart-layouts · Cart layouts\nurl: http:\/\/localhost:\d+\/cart#board=cart-layouts /);
 });
