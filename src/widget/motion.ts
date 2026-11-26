@@ -265,7 +265,7 @@ const speedRow = (now, set) => {
 };
 // The right-click menu's rows where nothing moves (Leo, 26 Nov, option 3): comment first; on a link, button or field,
 // commenting on it and (with the pin, where a click comments) using it; elsewhere drawing, and quoting selected words.
-const CTL = 'a[href], button, input, select, textarea, summary, label, [role="button"], [role="link"]';
+const CTL = 'a[href],button,input,select,textarea,summary,label,[role=button],[role=link]';
 const hereRows = (rows: HTMLElement[]) => {
   const at = spot;
   const pin = () => (closeMotion(), W.begin(W.anchorAt(at.x, at.y)));
@@ -300,7 +300,7 @@ const fill = () => {
   }
   if (under && !custom) { // the browser's own menu is a key away
     const hint = W.el('div', { class: 'hint-row' }, 'browser menu');
-    hint.append(W.el('kbd', {}, `${W.MAC ? '⌥' : 'alt'} right-click`));
+    hint.append(W.el('kbd', {}, '⌥ right-click'));
     rows.push(W.el('hr', {}), hint);
   }
   box.replaceChildren(...rows);

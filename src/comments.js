@@ -92,7 +92,7 @@ import { bindKeys } from './widget/keys.ts';
     anchorAt,
     begin,
     offerSelection,
-    get drawOnce() { return () => (drawOnce(), void part('draw')); },
+    drawOnce: () => (drawOnce(), void part('draw')),
     boardStrip,
     sendDrawing,
     get addComment() { return addComment; },
@@ -121,7 +121,6 @@ import { bindKeys } from './widget/keys.ts';
     get keepSpot() { return keepSpot; },
     get isPage() { return isPage; },
     get KEYS() { return KEYS; },
-    get MAC() { return MAC; },
     get keyLabel() { return keyLabel; },
     get layer() { return layer; },
     get listBtn() { return listBtn; },
@@ -705,6 +704,13 @@ import { bindKeys } from './widget/keys.ts';
   }
   // Command-Z (Control-Z elsewhere), not in a text box: the last pin or go placed from this tab goes away. This
   // computer deletes it; a guest, who can't delete, resolves it (it steps aside).
+  // This computer takes a thread away for good (⌘Z on the last one placed, a pin's right-click menu): its replies and a
+  // board pin's board go with it.
+  const dropThread = async (id) => {
+    await send({ action: 'delete', id });
+    S.comments = S.comments.filter((x) => x.id !== id && x.parent !== id);
+    pinBoardGone(id);
+  };
   async function undoLast() {
     const id = placed.pop();
     const c = id && S.comments.find((x) => x.id === id);
@@ -714,11 +720,8 @@ import { bindKeys } from './widget/keys.ts';
     // board stays, as a guest's ⌘Z does (issue 422: deleting it took the board and its pictures).
     const keep = S.pinBoards?.has(id) && S.undo?.id !== id;
     try {
-      if (S.isAdmin && !keep) {
-        await send({ action: 'delete', id });
-        S.comments = S.comments.filter((x) => x.id !== id && x.parent !== id);
-        pinBoardGone(id);
-      } else if (S.isAdmin) {
+      if (S.isAdmin && !keep) await dropThread(id);
+      else if (S.isAdmin) {
         const { comment } = await send({ action: 'resolve', id });
         Object.assign(c, comment);
       } else if (ownKey) {
@@ -1348,12 +1351,7 @@ import { bindKeys } from './widget/keys.ts';
             ['reply', () => (open(), setTimeout(() => /** @type {HTMLElement | null} */ (root.querySelector('.card textarea'))?.focus({ preventScroll: true }), 60)), KEYS.reply]];
           if (mayResolve(c)) rows.push([c.resolved ? 'open again' : 'resolve', () => toggleResolved(c), KEYS.done]);
           // This computer (the lab's admin) can take a thread away, as ⌘Z does for the last one placed.
-          if (S.isAdmin) rows.push(['delete', () => void send({ action: 'delete', id: c.id }).then(() => {
-            S.comments = S.comments.filter((x) => x.id !== c.id && x.parent !== c.id);
-            if (S.openId === c.id) S.openId = null;
-            pinBoardGone(c.id);
-            render();
-          }, () => say("couldn't delete that, try again"))]);
+          if (S.isAdmin) rows.push(['delete', () => void dropThread(c.id).then(() => ((S.openId = S.openId === c.id ? null : S.openId), render()), () => {})]);
           void loadMotion().then((x) => x?.menuWith(e.clientX, e.clientY, rows));
         });
         pin.addEventListener('click', (e) => {
@@ -2043,7 +2041,6 @@ import { bindKeys } from './widget/keys.ts';
   document.addEventListener('contextmenu', (e) => (S.press || S.afterDrag) && e.preventDefault(), true);
   // ⌃ click is a Mac's right-click: it opens the menu, and its click, which still comes, does nothing (it opened the pin
   // under it, and the menu's "open" then closed it again: Leo, 26 Nov, "open/resolve doesnt work").
-  S.menuAt = 0;
   addEventListener('click', (e) => e.ctrlKey && Date.now() - S.menuAt < 1000 && (e.preventDefault(), e.stopImmediatePropagation()), true);
   // The right-click menu (Leo, 26 Nov, option 3 of /context-menu): labit's own, its rows from what is under the pointer
   // (motion.ts menuAt). ⌥ or ⇧ right-click, a board, full screen or comments hidden: the browser's. Computers only.
