@@ -70,11 +70,18 @@ try {
         // and the next time comments show, the menu has its real rows back.
         {
           await open();
-          await sh(p, `(window.__h = []) && (() => { const go = () => { const m = r.querySelector('.more-menu'); if (getComputedStyle(m).display !== 'none') window.__h.push(Math.round(m.getBoundingClientRect().height)); if (window.__h.length < 30 && getComputedStyle(m).display !== 'none') requestAnimationFrame(go); }; requestAnimationFrame(go); })()`);
-          await sh(p, `r.querySelector('.more-menu .toggle').click()`);
+          await p.evaluate('document.getElementById("cover").style.display = "none"');
+          // Clicked with the mouse on it: the row keeps its hover grey while the menu fades (Leo, 26 Nov).
+          const t = await sh(p, `(() => { const q = r.querySelector('.more-menu .toggle').getBoundingClientRect(); return [q.x + q.width / 2, q.y + q.height / 2]; })()`);
+          await p.mouse.move(t[0], t[1]);
+          await sleep(200);
+          await sh(p, `(window.__h = []) && (() => { const go = () => { const m = r.querySelector('.more-menu'); if (getComputedStyle(m).display !== 'none' && +getComputedStyle(m).opacity > 0.1) { const row = [...m.querySelectorAll('button')].find((b) => b.textContent.startsWith('hide comments')); window.__h.push([Math.round(m.getBoundingClientRect().height), row ? getComputedStyle(row).backgroundColor : 'none']); requestAnimationFrame(go); } }; requestAnimationFrame(go); })()`);
+          await p.mouse.click(t[0], t[1]);
           await sleep(700);
-          const hs = await p.evaluate('window.__h');
+          const hs = (await p.evaluate('window.__h')).map(([h]) => h);
+          const greys = (await p.evaluate('window.__h')).map(([, bg]) => bg);
           check(eng, 'hiding comments from the ⋯ menu: the menu leaves at its own height', hs.length >= 2 && Math.max(...hs) - Math.min(...hs) <= 8, hs.join(' '));
+          check(eng, 'and the clicked row keeps its grey until the menu is gone', greys.length >= 2 && new Set(greys).size === 1 && !/rgba\(0, 0, 0, 0\)|transparent/.test(greys[0]), greys.join(' | '));
           await sh(p, `r.querySelector('.bar .toggle').click()`);
           await sleep(500);
           await open();
@@ -82,6 +89,20 @@ try {
           check(eng, 'the ⋯ menu has its real rows again once comments show', real, String(real));
           await p.keyboard.press('Escape');
           await sleep(400);
+        }
+        // A row picked: the ⋯ button's grey leaves with the menu, not at once while it still fades (Leo, 26 Nov).
+        {
+          await open();
+          const c = await sh(p, `(() => { const q = [...r.querySelectorAll('.more-menu button')].find((b) => b.textContent === 'copy link').getBoundingClientRect(); return [q.x + q.width / 2, q.y + q.height / 2]; })()`);
+          await p.mouse.move(c[0], c[1]);
+          await sleep(200);
+          await sh(p, `(window.__d = []) && (() => { const go = () => { const m = r.querySelector('.more-menu'); if (getComputedStyle(m).display !== 'none' && +getComputedStyle(m).opacity > 0.3) { window.__d.push(+getComputedStyle(r.querySelector('.more')).backgroundColor.match(/[\\d.]+(?=\\))/)?.[0] || 0); requestAnimationFrame(go); } }; requestAnimationFrame(go); })()`);
+          await p.mouse.click(c[0], c[1]);
+          await sleep(700);
+          const d = await p.evaluate('window.__d');
+          check(eng, 'a row picked: the ⋯ button stays grey while the menu is still clearly there', d.length >= 2 && d.every((a) => a > 0.01), d.join(' '));
+          await p.keyboard.press('Escape');
+          await sleep(300);
         }
         // A click on the page with the menu open only closes it: no new pin, no comment box (Leo, 23 Nov)
         await open();
@@ -95,6 +116,7 @@ try {
         check(eng, 'the next click on the page pins as usual', again === 1, String(again));
         await p.keyboard.press('Escape');
         await sleep(300);
+        await p.evaluate('document.getElementById("cover").style.display = ""');
         // Over the page's own top-layer dialog (non-modal) and a fixed element at the highest z-index: is the menu's first item what a click would hit?
         await p.evaluate('document.getElementById("dlg").show()');
         const b = await sh(p, `(() => { const q = r.querySelector('.more').getBoundingClientRect(); return [q.x + q.width / 2, q.y + q.height / 2]; })()`);

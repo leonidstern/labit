@@ -1633,7 +1633,12 @@ import { bindKeys } from './widget/keys.ts';
   // the menu is still fading out, and it snapped ~100 px shorter on its way (Leo, 26 Nov: "hiding menu flickering"). It
   // leaves with copies of the rows as they were; the next open puts the real ones back (render).
   moreMenu.addEventListener('click', (e) => {
-    if (e.composedPath().includes(toggleBtn)) moreMenu.replaceChildren(...[...moreMenu.children].map((n) => n.cloneNode(true)));
+    // The row under the pointer keeps its grey in the copy (a copy has no :hover; it went white mid-fade, Leo 26 Nov).
+    if (e.composedPath().includes(toggleBtn)) moreMenu.replaceChildren(...[...moreMenu.children].map((n) => {
+      const copy = /** @type {Element} */ (n.cloneNode(true));
+      for (const [i, b] of [n, ...n.querySelectorAll('button')].entries()) if (b.matches('button:hover')) (i ? copy.querySelectorAll('button')[i - 1] : copy).classList.add('hov');
+      return copy;
+    }));
   }, true);
   moreMenu.addEventListener('click', () => setTimeout(() => setMenu(false, true), 0));
   // A press outside the open menu only closes it: the click it ends pins nothing (Leo, 23 Nov: "if menu opened click on
