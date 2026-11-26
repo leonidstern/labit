@@ -31,11 +31,11 @@ const paintZone = () => {
 export const draftHasText = () => Boolean(S.draft) && [...(W.root.querySelectorAll('.float textarea') as NodeListOf<HTMLTextAreaElement>)].some((t) => t.value.trim());
 export function startDrag(e) {
   // An open card doesn't block a new area: it closes once the area is drawn (a plain click still just closes it).
-  if ((!S.on && !e.altKey) || draftHasText() || e.button !== 0 || e.pointerType === 'touch' || e.metaKey || e.ctrlKey || (e.shiftKey && !S.shiftUp && !S.dKey)) return;
+  if (((!S.on || S.use) && !e.altKey) || draftHasText() || e.button !== 0 || e.pointerType === 'touch' || e.metaKey || e.ctrlKey || (e.shiftKey && !S.shiftUp && !S.dKey)) return;
   // Holding D, a press on an earlier drawing's line draws a new one instead of opening it.
   if (e.composedPath().includes(W.host) && !(S.dKey && e.composedPath().some((n) => n instanceof Element && n.matches('.ink .hit')))) return;
-  // Holding D, a press on a link or a button draws too: circling a broken button is the point (sims, 20 Nov).
-  if (!e.altKey && !S.dKey && W.control(e.target)) return;
+  // A press on a link or a button is the page's unless the widget took it (comments.js takes); holding D it draws too.
+  if (!S.taken && !S.dKey && W.control(e.target)) return;
   if (W.isOff(e)) return;
   if (S.drag) return; // one pointer at a time: a palm on the glass while the pen draws is not a second stroke
   S.drag = { x0: e.clientX, y0: e.clientY, x1: e.clientX, y1: e.clientY, active: false, ink: S.dKey, id: e.pointerId };
@@ -252,7 +252,7 @@ export function bindDrag(w: unknown) {
   S.afterDrag = false;
   S.liveZone = null;
   S.zoneFrame = 0;
-  document.addEventListener('pointerdown', (e) => !e.altKey && startDrag(e), true); // Option presses are taken earlier (see optionPress)
+  document.addEventListener('pointerdown', (e) => !e.altKey && startDrag(e), true); // Option presses (a board's) are taken earlier (see takes)
   document.addEventListener(
     'pointermove',
     (e) => {

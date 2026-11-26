@@ -28,7 +28,7 @@ const shiftKey = (e) => {
   if (e.shiftKey) document.documentElement.classList.add('lab-shift');
   else S.shiftOff = setTimeout(() => (document.documentElement.classList.remove('lab-shift'), W.recheck()), 400);
 };
-const setAlt = (down) => document.documentElement.classList.toggle('lab-alt', Boolean(down));
+const setAlt = (down) => (document.documentElement.classList.toggle('lab-alt', Boolean(down)), W.host.toggleAttribute('data-lab-alt', Boolean(down))); // the bar's arrow lights while it's held
 export function bindKeys(w: unknown) {
   W = w;
   S = W.S;

@@ -470,6 +470,14 @@ kbd, .onb { transition: opacity var(--_t-quick) var(--_ease-out); } /* .onb: wha
 /* One bar of segments, a hairline between them; the less used ones in the ⋯ menu above it (phones too: same bar, bigger to tap). */
 .bar > button { box-shadow: inset .5px 0 0 var(--_line); border-radius: 0; background: none; padding: 8px 12px; gap: 6px; }
 .bar > button.first { box-shadow: none; }
+.bar > .mode { display: flex; align-items: center; gap: 2px; padding: 0 4px; box-shadow: inset .5px 0 0 var(--_line); }
+.bar > .mode[hidden] { display: none; }
+.bar > .mode.first { box-shadow: none; }
+.mode button { padding: 4px 6px; border-radius: var(--_r-s); background: none; color: var(--_muted); }
+.mode button:hover, .mode .on { background: var(--_soft); color: var(--_fg); }
+:host([data-lab-alt]) .mode button { background: none; color: var(--_muted); } /* ⌥ held: the arrow, for now */
+:host([data-lab-alt]) .mode button + button { background: var(--_soft); color: var(--_fg); }
+.mode svg { width: 16px; height: 16px; display: block; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; }
 /* Hover, pressed and "its menu is open" are the first grey step after white (soft), not the second: on the white
    bar the second read as a dirty block (Leo, 16 Nov). */
 /* Only with a mouse: on a phone the grey stayed on a tapped segment (iOS keeps :hover after a tap; Leo, 16 Nov). */
