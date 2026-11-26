@@ -45,6 +45,7 @@ const css = `
 #lab-board .marq{position:absolute;z-index:4;box-sizing:border-box;border:1px solid #1f7a4d;background:color-mix(in srgb,#1f7a4d 8%,transparent);pointer-events:none}
 #lab-board iframe,#lab-board img{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff;pointer-events:none}
 #lab-board .f.in iframe{pointer-events:auto}
+@media (prefers-reduced-motion:no-preference){#lab-board.ease .f{transition:top var(--lab-t-slow,.3s) var(--lab-ease,ease),height var(--lab-t-slow,.3s) var(--lab-ease,ease)}}
 #lab-board .t{position:absolute;left:0;bottom:100%;white-space:nowrap;max-width:calc(100% / var(--iz));overflow:hidden;text-overflow:ellipsis;transform-origin:0 100%;transform:scale(var(--iz));padding-bottom:4px;opacity:.75}
 #lab-board .f.i:not(.sel,.pick,.down) .t{visibility:hidden} /* a picture's file name only once it is pressed or picked (Leo, 23 Nov: "dont show picture names files always"); a page's name always (Leo, 26 Nov: "show frame names right away") */
 #lab-board .c{position:absolute;inset:0;box-sizing:border-box;padding:calc(20px*var(--iz));font-size:calc(14px*var(--iz));line-height:1.5;color:#1d1d1b;background:#f6f5f1}
@@ -340,8 +341,11 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       live(c);
     }
   }
-  function live(c: Card) {
-    if (c.frame) return;
+  // again: its page saved, a frame loads it anew in a second frame behind the first, and the two are swapped once the new one
+  // has loaded and been measured: no blank frame, no height falling back to the device's (Leo, 26 Nov: "when board opened and
+  // page updated can it be more smooth").
+  function live(c: Card, again = false) {
+    if (c.frame && !again) return;
     const fr = document.createElement('iframe');
     fr.name = `lab:${c.f.id}`;
     fr.title = c.f.label || c.f.src;
@@ -351,11 +355,12 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       fr.dataset.ready = '1';
       fr.style.visibility = '';
       for (const n of Array.from(c.inner.children)) if (n !== fr) n.remove(); // the card it covered (taken out after, not before: an iframe moved in the page loads again)
+      c.frame = fr;
       if (entered === c.f.id) focusIn(c);
       wake(); // the next one may load now
     }, { once: true });
     fr.src = c.f.src;
-    c.frame = fr;
+    if (!again) c.frame = fr;
     c.seen = performance.now();
     // Shown once it has loaded, over its card until then: a reload showed the card, then a blank white frame, then the page
     // (Leo, 21 Nov: "inside canvas after reload one thing not flicker second thing there flickering").
@@ -373,6 +378,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   // frame is made as tall as the page; whatever grew with it (sized by the window's height: 100vh) is held at the height it
   // had in the device, else such a page grew without end. Later growth (pictures, fonts) follows, once per step: a step the
   // same as the last is that loop again and stops it. Kept per frame and width, so a reload draws them tall at once.
+  let eased: ReturnType<typeof setTimeout> | undefined;
   const tallKey = `lab-tall:${name}`;
   const tall: Record<string, number> = ls(tallKey) || {};
   const grow = (c: Card, fr: HTMLIFrameElement) => {
@@ -387,11 +393,13 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     let h = page();
     let step = 0;
     const set = (to: number) => {
+      const k = c.s.id + ':' + c.s.w;
+      const first = !tall[k]; // a frame measured for the first time may fit the board again; a page saved keeps the camera
       [step, h] = [to - h, to];
       fr.style.height = `${h}px`;
-      tall[c.s.id + ':' + c.s.w] = h;
+      tall[k] = h;
       ls(tallKey, tall);
-      lay();
+      lay(first);
     };
     set(h);
     if (page() > h + 1) for (const [i, n] of all.entries()) if (n.offsetHeight > was[i] + 1) n.style.cssText += `;height:${was[i]}px!important;min-height:0!important`;
@@ -416,8 +424,14 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   };
   // Where each frame is drawn: as stored, as tall as its page, and moved down by as much as the frames over it grew (the gap
   // between them as it was, up to 160 px: a frame already put lower is not moved again).
-  const lay = () => {
+  const lay = (fit = true) => {
     if (down?.mode) return;
+    // Once the board is shown a frame's new height and the frames it moves ease there, not jump (no motion when reduced).
+    if (shown) {
+      root.classList.add('ease');
+      clearTimeout(eased);
+      eased = setTimeout(() => root.classList.remove('ease'), 400);
+    }
     const by = [...cards].sort((p, q) => p.s.y - q.s.y);
     for (const [i, c] of by.entries()) {
       const s = c.s;
@@ -427,7 +441,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       c.f = { ...s, y, h, ...(s.oh && { oh: Math.round((s.oh * h) / s.h) }) }; // (a phone's frame keeps its scale of the stored one)
       Object.assign(c.box.style, { left: `${c.f.x}px`, top: `${y}px`, width: `${c.f.w}px`, height: `${h}px` });
     }
-    if (!moved && !kept) cam = fitAll(boxes(), view);
+    if (fit && !moved && !kept) cam = fitAll(boxes(), view);
     go(cam, false);
   };
 
@@ -1064,6 +1078,11 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     /** A middle or side button dragged in an entered frame (frame.ts): the board pans by those screen px. */
     pan: (dx: number, dy: number) => go(panBy(cam, dx, dy), true, true),
     frame: (id: string) => find(id)?.frame,
+    /** A frame's page was saved and wants a reload (live.ts): the board loads it anew behind it and swaps (live, above). */
+    again: (name: string) => {
+      const c = find(name.slice(4));
+      return Boolean(c?.frame?.dataset.ready && (live(c, true), true));
+    },
     box: (id: string) => find(id)?.box || null, // a frame's box in the world: what the widget ties a board pin to
     size: (id: string) => { const c = find(id); return c ? { w: c.s.ow || c.s.w, h: c.s.oh || c.s.h, t: c.f.oh || c.f.h } : null; }, // its size in world px, read without laying the page out: h as stored (an area's shares), t as drawn (its whole page)
     /** A screen point is on this board (a page's view is less than the window). Its box read now: read as the view slid
@@ -1093,6 +1112,15 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       return { left: sx + scrollX + (zone && a.pinX ? zone.width : 0), top: sy + scrollY + (zone && a.pinY ? zone.height : 0), zone, ...((!inBox(sx, sy) || !shown) && { clipped: true }) };
     },
     camera: () => ({ ...cam }),
+    /** A pin gone to (W, a pick in the list): the camera brings its spot into view, at the same zoom, when it is off the
+     *  screen. A frame is drawn whole now, so a spot far down it is far down the board, never inside a frame that scrolls. */
+    look: (a: { frame?: string; fx?: number; fy?: number; bx?: number; by?: number }) => {
+      measure();
+      const f = find(a.frame || '')?.f;
+      const [wx, wy] = f && a.fx !== undefined ? [f.x + a.fx / kx(f), f.y + (a.fy || 0) / ky(f)] : [a.bx || 0, a.by || 0];
+      const [sx, sy] = [(wx + cam.x) * cam.z, (wy + cam.y) * cam.z];
+      if (sx < 40 || sy < 60 || sx > view.w - 40 || sy > view.h - 60) go({ ...cam, x: view.w / 2 / cam.z - wx, y: view.h / 3 / cam.z - wy });
+    },
     /** The camera glides by dy screen px (the keyboard is up: a draft pin comes above its sheet), past the board's edges if it must. */
     nudge: (dy: number) => {
       home ??= cam.y;

@@ -15,6 +15,9 @@ const doc = (t, body) => `<!doctype html><meta charset="utf-8"><title>${t}</titl
 fs.writeFileSync(path.join(DIR, 'long.html'), doc('Long', '<h1>Long</h1><div style="height:2400px;background:linear-gradient(#cde,#edc)"></div><p id="end">end</p>'));
 fs.writeFileSync(path.join(DIR, 'hero.html'), doc('Hero', '<section style="min-height:100vh;background:#dfe">hero</section><div style="height:1000px">rest</div><p id="end">end</p>'));
 fs.writeFileSync(path.join(DIR, 'short.html'), doc('Short', '<p>short</p>'));
+// a page with a script of its own: a save reloads it (not patched in place)
+const live = (n) => doc('Live', `<script>window.x = 1</script><h1>Live</h1><div style="height:${n}px;background:#cde"></div><p>end</p>`);
+fs.writeFileSync(path.join(DIR, 'live.html'), live(1200));
 fs.writeFileSync(path.join(DIR, 'labit.json'), JSON.stringify({ port: PORT }));
 const server = startLab(DIR, labEnv());
 await labUp(B);
@@ -24,6 +27,7 @@ await fetch(`${B}/_lab/api/board?name=full`, { method: 'PUT', headers: { 'conten
   { id: 'c', src: '/short', w: 600, h: 500, x: 1400, y: 0 },
   { id: 'd', src: '/short', w: 600, h: 300, x: 0, y: 660 }, // under a: moved down as a grows, the gap kept
 ] }) });
+await fetch(`${B}/_lab/api/board?name=upd`, { method: 'PUT', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ v: 1, rev: 0, frames: [{ id: 'a', src: '/live', w: 600, h: 500, x: 0, y: 0 }, { id: 'b', src: '/short', w: 600, h: 300, x: 0, y: 660 }] }) });
 try {
   for (const eng of engines()) {
     const browser = await pw[eng].launch();
@@ -87,6 +91,52 @@ try {
         await p.keyboard.press('Escape');
         await sleep(500);
       }
+      // Next new (W) to a pin far down a tall frame: the board's camera goes there (the frame does not scroll; it can't).
+      await fetch(`${B}/_lab/api/comments`, { method: 'POST', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ page: '/_board/full', name: 'Sam', text: 'far down', anchor: { kind: 'board', board: 'full', frame: 'a', fx: 300, fy: 2400, bx: 300, by: 2400, selector: '', x: 0, y: 0, docX: 0, docY: 0, width: 1200, height: 800 } }) });
+      await p.reload();
+      await p.waitForFunction(() => window.__labBoard?.camera, null, { timeout: 8000 });
+      await sleep(1500);
+      await p.keyboard.press('Escape');
+      await p.mouse.move(600, 400);
+      await p.keyboard.press('Shift+Digit2'); // 100%, the top of the board in view: the pin is off the screen
+      await sleep(500);
+      const far = () => p.evaluate(`(() => { const b = [...${sr}.querySelectorAll('button.pin')].find((x) => !x.classList.contains('draft') && x.getBoundingClientRect().width); if (!b) return null; const q = b.getBoundingClientRect(); return { y: q.y, vis: getComputedStyle(b).visibility }; })()`);
+      const off = await far();
+      await p.keyboard.press('w');
+      await sleep(800);
+      const on = await far();
+      check(eng, 'next new (W) brings a pin far down a tall frame into view: the camera goes there', on && on.y > 40 && on.y < 760 && on.vis === 'visible', JSON.stringify({ off, on }));
+      await p.keyboard.press('Escape');
+      // A save of a frame's page (it has a script: the frame is loaded anew): no moment without the page in the frame, and the
+      // new height and the frame under it ease there rather than jump (Leo, 26 Nov: "when board opened and page updated can it be more smooth").
+      const V = 'document.querySelector("[data-lab-board-view]").shadowRoot';
+      await p.goto(B + '/_lab/board/upd');
+      await p.waitForFunction(`${V}?.querySelector('iframe[name="lab:a"][data-ready]')`, null, { timeout: 10000 });
+      await sleep(1500);
+      await p.evaluate(`(() => {
+        const out = (window.__seen = []);
+        const t0 = performance.now();
+        const step = () => {
+          const box = ${V}.querySelector('#lab-board .f[data-id="a"]');
+          const shown = [...box.querySelectorAll('iframe[data-ready]')].filter((f) => f.style.visibility !== 'hidden' && f.contentDocument?.querySelector('h1'));
+          out.push({ h: box.getBoundingClientRect().height, b: ${V}.querySelector('#lab-board .f[data-id="b"]').getBoundingClientRect().top, page: shown.length > 0, z: __labBoard.camera().z });
+          if (performance.now() - t0 < 4000) requestAnimationFrame(step);
+        };
+        step();
+      })()`);
+      await sleep(300);
+      fs.writeFileSync(path.join(DIR, 'live.html'), live(2200));
+      await sleep(4200);
+      const seen = await p.evaluate(() => window.__seen);
+      const hs = seen.map((x) => Math.round(x.h));
+      const [h0, h1] = [hs[0], hs.at(-1)];
+      check(eng, 'a page saved: its frame never shows without its page', seen.every((x) => x.page), JSON.stringify(seen.filter((x) => !x.page).length));
+      check(eng, 'its height never falls back to the device\'s while it loads', Math.min(...hs) >= h0 - 1, JSON.stringify({ h0, min: Math.min(...hs) }));
+      check(eng, 'the new height eases there (steps between), and grew', h1 > h0 + 100 && hs.filter((h) => h > h0 + 2 && h < h1 - 2).length >= 3, JSON.stringify({ h0, h1, between: hs.filter((h) => h > h0 + 2 && h < h1 - 2).length }));
+      check(eng, 'the camera stays where it was', seen.every((x) => x.z === seen[0].z), JSON.stringify([seen[0].z, seen.at(-1).z]));
+      const bs = seen.map((x) => Math.round(x.b));
+      check(eng, 'the frame under it eases down with it', bs.at(-1) > bs[0] && bs.filter((v) => v > bs[0] + 2 && v < bs.at(-1) - 2).length >= 3, JSON.stringify({ from: bs[0], to: bs.at(-1) }));
+      fs.writeFileSync(path.join(DIR, 'live.html'), live(1200));
     } finally {
       await browser.close();
     }
