@@ -31,7 +31,7 @@ import { numberOf as pinNumber } from '../lib/schema.mjs';
 import { flushPins, heldPin, holdPin, letPin, newPass, readPins } from './widget/pinhold.ts';
 import { bindMessages, foldRow, foldStatus, isStatus, stampOf } from './widget/messages.ts';
 import { afterLeave, backFromReveal, bindSheets, backCloses, fromTap, holdKeyboard, leave, letGo, liftedDraft, revealDraft, roomFor, slideAway, startSheets, swipeDown } from './widget/sheets.ts';
-import { bindList, drawList, goTo, lineOf, lineUp, ord, revealOpen, stepMoved, stepNew, workState } from './widget/list.ts';
+import { bindList, drawList, goTo, lineOf, lineUp, noteOpened, ord, revealOpen, stepBack, stepMoved, stepNew, workState } from './widget/list.ts';
 import { bindChat, drawChat, stamped } from './widget/chat.ts';
 import { bindThread, grab, openAsk, moveTicked, pickByKey, pickTicked, placeBeside, placeCard, threadCard } from './widget/thread.ts';
 import { isTrying, pauseTry, relight } from './widget/trial.ts';
@@ -1370,6 +1370,7 @@ import { bindKeys } from './widget/keys.ts';
         if (appear && !S.stepping) card.classList.add('in');
         // Reduced motion: the page's scroll to the pin is instant, so the card is drawn again within its fade: it keeps the fade (a fresh node has no class).
         if (appear) S.inAt = performance.now();
+        if (appear) noteOpened(c.id); // ⇧W walks back through these (list.ts)
         else if (still.matches && performance.now() - S.inAt < 200) card.classList.add('in');
         if (prevHeight) card.style.minHeight = `min(${prevHeight}px, var(--_thread-max))`;
         S.stepping = S.keepKeys = false;
@@ -1769,21 +1770,21 @@ import { bindKeys } from './widget/keys.ts';
       return void undoLast();
     }
     // ⌥W (Leo 18 Nov: w does nothing in a text box) or Control-D goes to the next new comment from the widget's text boxes
-    // too, where a plain W types a letter; Shift: back. By the key's place: Option turns W into ∑ on a Mac.
+    // too, where a plain W types a letter; Shift: back through the ones read. By the key's place: Option turns W into ∑ on a Mac.
     const nextKey = (e.altKey && !e.ctrlKey && e.code === 'KeyW') || (e.ctrlKey && !e.altKey && e.code === 'KeyD');
     if (S.on && nextKey && !e.metaKey && !(typing(e) && !e.composedPath().includes(host))) {
       e.preventDefault();
       // Words typed in a reply box aren't thrown away: it nudges instead, send or clear them first.
       const typed = /** @type {HTMLTextAreaElement | null} */ (root.querySelector('.card textarea, .float textarea'));
       if (typed?.value.trim()) return shake(typed.closest('.card, .float'));
-      return stepNew(e.shiftKey ? -1 : 1);
+      return e.shiftKey ? stepBack() : stepNew(1);
     }
     const act = actionOf(e);
     // The list's keys, with comments shown and nothing typed: L list, T chat, J/K next/previous, R reply, E resolve.
     // By the key's place, not its letter, so the keys work with any layout (Russian, Greek…): the C key is C (keyOf).
-    // The keys (Leo, 2026-11-15/16), marked in the bar's words: cha(t) (C was chat until 19 Nov), ne(w) (Shift-W: the one before),
+    // The keys (Leo, 2026-11-15/16), marked in the bar's words: cha(t) (C was chat until 19 Nov), ne(w) (Shift-W: back to the one read before),
     // P pause, M hide, E show/hide done. With a thread open: R reply, E resolve (done's own key).
-    // Shift is only for next (Shift-W: the one before); ⇧D, ⇧B and the rest belong to the board.
+    // Shift is only for next (Shift-W: back through the ones read); ⇧D, ⇧B and the rest belong to the board.
     // H folds the bar into the rabbit or opens it (Leo, 26 Nov). Computers only.
     // C and V (Leo, 26 Nov): the pin (comment on links and buttons too) or the arrow (use the page), as in the bar, with
     // comments shown. Computers only.
@@ -1798,7 +1799,7 @@ import { bindKeys } from './widget/keys.ts';
       if (k === 'slow') return void loadMotion().then((m) => m?.setSlow(!S.slow));
       if (k === 'chat') return chatBtn.click();
       if (k === 'walkie') return walkieBtn.hidden || S.openId || S.draft || walkieBtn.click(); // not over an open card: its keys stay its own
-      if (k === 'next') return stepNew(e.shiftKey ? -1 : 1);
+      if (k === 'next') return e.shiftKey ? stepBack() : stepNew(1);
       if (k === 'draw') return void ((S.dKey = true), (S.drew = false), part('draw')); // held, D draws (draw.ts); ⇧D tapped alone stays the board's
       // E (Leo, 21 Nov: "another key its clashing now with draw, move to E"): done threads show or hide; with a thread open it is its resolve (the same key, the thread open first).
       if (k === 'done' && !S.openId) return toggleDone();
