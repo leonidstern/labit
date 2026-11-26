@@ -41,7 +41,7 @@ import { holdWhileOpen } from './widget/hold.ts';
 import { inkSvg } from './widget/ink.ts';
 import { bindActions } from './widget/actions.ts';
 import { bindDrag, draftHasText, endDrag, inkSaid, offerSelection, startDrag } from './widget/drag.ts';
-import { boardStrip, bindBoardCam, newBoard, pinBoardGone, showBoard } from './widget/boardcam.ts';
+import { boardStrip, bindBoardCam, newBoard, pinBoardGone, pressBoard, showBoard } from './widget/boardcam.ts';
 import { bindFramework, overFramework, scanForFramework } from './widget/framework.ts';
 import { bindKeys } from './widget/keys.ts';
 
@@ -928,6 +928,7 @@ import { bindKeys } from './widget/keys.ts';
     const row = el('button', { type: 'button' }, b.title || b.name);
     row.append(el('span', { class: 'n' }, ` · ${b.frames}`));
     row.addEventListener('click', (e) => (e.stopPropagation(), setMenu(false), void showBoard(b.name)));
+    row.addEventListener('pointerdown', pressBoard);
     return row;
   }), newBoardBtn, ...(coarse ? [] : [boardHeld])];
   function placeBar() {
@@ -1042,6 +1043,7 @@ import { bindKeys } from './widget/keys.ts';
   // (bfcache) has its scroll already, so the key goes, or a later reload would jump.
   if (!S.board && self === top) {
     const scrollKey = 'lab-scroll:' + location.pathname;
+    document.addEventListener('pointerdown', (e) => !e.button && !pinsControls(e) && e.target instanceof Element && /\/_lab\/board\/[a-z0-9]/i.test(e.target.closest('a[href]')?.getAttribute('href') || '') && pressBoard(), true);
     document.addEventListener('click', (e) => {
       const a = /** @type {HTMLAnchorElement | null} */ (e.target instanceof Element ? e.target.closest('a[href]') : null);
       if (!a || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || (a.target && a.target !== '_self')) return;
@@ -1071,6 +1073,7 @@ import { bindKeys } from './widget/keys.ts';
   // A pin the browser holds (pinhold.ts) is tied to its frame's box and left alone.
   const onBoard = (/** @type {HTMLElement} */ n, /** @type {any} */ a) => {
     n.classList.toggle('onb', a?.kind === 'board' && !heldPin(n)); // hidden while the view slides (styles.css)
+    n.classList.toggle('onp', a?.kind !== 'board'); // the page's own: hidden all at once while a board is over the page (styles.css)
     if (a?.kind !== 'board' || heldPin(n)) return void (n.style.position && (n.style.position = ''));
     n.style.position = 'fixed';
     n.style.left = `${parseFloat(n.style.left) - scrollX}px`;
@@ -1207,7 +1210,7 @@ import { bindKeys } from './widget/keys.ts';
       if (isPage(c)) return; // in the chat, not on the page
       // Done pins with nothing new in them step aside when done ones are hidden (D); an open one stays.
       if (!S.showDone && S.openId !== c.id && (c.resolved || workState(c)[0] === 'done') && !unread(c).length) return;
-      const { left, top, moved, zone, clipped, covered, why } = places.get(c.id) || placeOf(c);
+      const { left, top, moved, zone, clipped, why } = places.get(c.id) || placeOf(c);
       if (moved || why === 'hidden') lost.add(c.id);
       // A pin whose spot is gone is off the page: the ⋯ menu lists them ("moved · N"); an open one shows, to drop on a
       // new spot (drag) or close. The agent finishing one closes it.
@@ -1308,8 +1311,8 @@ import { bindKeys } from './widget/keys.ts';
         pin.append(inkSvg(ink, { left: 0, top: 0, width: zone.width, height: zone.height }));
       }
       const held = placePin(pin, c, ink && zone, left, top, moved);
-      // Cut off by a box it's inside (see position; a held pin: the browser), or under a board's view over the page.
-      pin.style.visibility = ((clipped && !held) || covered) && S.openId !== c.id ? 'hidden' : '';
+      // Cut off by a box it's inside (see position; a held pin: the browser). Under a board's view: styles.css, .onp.
+      pin.style.visibility = clipped && !held && S.openId !== c.id ? 'hidden' : '';
       if (born) {
         // Bound once; they read what the pin shows now (pinData), not what it showed when it was made.
         grab(pin, () => pinData.get(pin).c);
@@ -2204,9 +2207,9 @@ import { bindKeys } from './widget/keys.ts';
     const places = read.filter(([, at]) => !at.moved);
     readPins(places.map(([, , c]) => (c.anchor?.kind === 'board' ? frameBox(c.anchor) : findTarget(c.anchor || {}))));
     if (places.length + all.filter(skip).length !== pinsById.size || places.some(([pin]) => !pin)) return render(); // one lost or found its spot
-    for (const [pin, { left, top, clipped, covered, zone }, c] of places) {
+    for (const [pin, { left, top, clipped, zone }, c] of places) {
       const held = placePin(pin, c, pin.classList.contains('ink') && zone, left, top, false);
-      pin.style.visibility = (clipped && !held) || covered ? 'hidden' : '';
+      pin.style.visibility = clipped && !held ? 'hidden' : '';
     }
     flushPins();
   };
@@ -2225,7 +2228,7 @@ import { bindKeys } from './widget/keys.ts';
     if (at.moved || at.zone) return false;
     readPins([findTarget(a)]);
     const held = placePin(pin, c, false, at.left, at.top, false);
-    pin.style.visibility = (at.clipped && !held) || at.covered ? 'hidden' : '';
+    pin.style.visibility = at.clipped && !held ? 'hidden' : '';
     flushPins();
     const bx = besideVideo(a);
     if (bx != null) placeCard(card, bx + 14, at.top, null, at.top - 40);

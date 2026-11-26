@@ -131,7 +131,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   let checked = { x: 1e9, y: 1e9, z: 0 }; // the camera at the last wake/cull check
   let still: ReturnType<typeof setTimeout> | undefined;
   let movedAt = -1e9; // when the camera last moved
-  let kept = false; // the person sized the view (overlay.ts keep()): its zoom stays from then on
+  let kept = false; // the person arranged the board: its zoom stays from then on
   // The camera a view left the board at, kept for this board on this page (opts.keep), so reopened it is where it was
   // (Leo, 21 Nov: "closing/opening board drawer should not move zoom/position inside board"). Only once moved by hand.
   const keepCam = () => {
@@ -226,7 +226,6 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   // are sized again only when the zoom changed (a pan restyles nothing).
   let drawFrame = 0;
   let whole = false; // the next paint is not the camera alone
-  let boxed = false; // …or the box changed size with it (a view being dragged): the widget looks at what the view covers
   let sizing = false; // the box is changing size: fitted and held to its edges again once it rests
   const draw = () => {
     drawFrame ||= requestAnimationFrame(paintCam);
@@ -250,8 +249,8 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     // The widget moves the board's pins with it, in this same frame (detail.camera: only the camera moved, so that is
     // all it does: a whole redraw of the widget on every frame of a pinch took 70 ms a frame; Leo, 19 Nov: "zoom feels
     // weird, slow").
-    dispatchEvent(whole ? new Event('lab-board-moved') : new CustomEvent('lab-board-moved', { detail: { camera: true, box: boxed } }));
-    whole = boxed = false;
+    dispatchEvent(whole ? new Event('lab-board-moved') : new CustomEvent('lab-board-moved', { detail: { camera: true } }));
+    whole = false;
   };
   // While the camera moves the world is its own layer (the browser moves the picture it has, it doesn't draw every live
   // frame again at each step); a layer kept after it stops would stay a blurry bitmap at the new zoom. So it is let go
@@ -1007,8 +1006,9 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     frame: (id: string) => find(id)?.frame,
     box: (id: string) => find(id)?.box || null, // a frame's box in the world: what the widget ties a board pin to
     size: (id: string) => { const c = find(id); return c ? { w: c.f.ow || c.f.w, h: c.f.oh || c.f.h } : null; }, // its size in world px, read without laying the page out
-    /** A screen point is on this board (a page's view is less than the window). */
-    contains: inBox,
+    /** A screen point is on this board (a page's view is less than the window). Its box read now: read as the view slid
+     * in, it was still below the screen on a busy machine, and an ⌥-click on the board went to the page. */
+    contains: (x: number, y: number) => (measure(), inBox(x, y)),
     // Where a point on the screen is on the board: the frame under it (else the nearest), by px from its top left, and the point.
     anchor: (sx: number, sy: number) => {
       measure();
@@ -1094,7 +1094,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     const [px, py, pv] = [ox, oy, view];
     measure();
     if (!sized || !cards.length) return void ((sized = true), go(moved || held ? cam : fitAll(boxes(), view), false));
-    if (px === ox && py === oy && pv.w === view.w && pv.h === view.h) return; // already drawn at this size (resized(), below)
+    if (px === ox && py === oy && pv.w === view.w && pv.h === view.h) return; // already drawn at this size
     // What is on the board stays where it is in the view, its zoom and place, as the view's edge moves (Leo, 21 Nov:
     // "closing/opening board drawer should not move zoom/position inside board"). Only a phone's keyboard holding the
     // board (held) keeps it where it is on the screen instead, as the view grows under it.
@@ -1103,7 +1103,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     if (home != null && shift) home -= (oy - py) / cam.z; // where the glide goes back to moves with the box, as the camera does
     if (way && nudging && shift) [way.from, way.to] = [way.from - (oy - py) / cam.z, way.to - (oy - py) / cam.z];
     camBack = null;
-    sizing = boxed = true;
+    sizing = true;
     cancelAnimationFrame(drawFrame);
     paintCam(); // now, before this frame is drawn (a frame later the frames would trail the edge by one step of the drag)
     moving();
@@ -1134,16 +1134,5 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     for (const c of cards) c.frame?.remove();
     root.replaceChildren();
   };
-  // The box was set to a new size in one step (a view's half and full): drawn now (at the same zoom once kept, below), in the frame that has
-  // the new size, not once the box has rested (the board is in its old place and size for 200 ms, then jumps to its fit).
-  const resized = () => {
-    measure();
-    if (!cards.length) return;
-    if (!moved && !kept) cam = fitAll(boxes(), view); // else the same zoom and place in the view
-    go(cam, false);
-    [whole, boxed] = [false, true]; // told as the box changing with the camera, as a dragged edge is (the page's pins under it hide or show)
-    cancelAnimationFrame(drawFrame);
-    paintCam();
-  };
-  return { api: boardApi, destroy, measure: () => (measure(), go(cam, false)), resized, keep: () => void (kept = true) };
+  return { api: boardApi, destroy };
 }
