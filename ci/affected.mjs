@@ -111,10 +111,17 @@ export function listEdit(diff) {
 // WebKit shard.
 const RUNNERS = { webkit: 5, chromium: 5 };
 const TARGET = 60;
-export function shards(picked, { engines = ['webkit'], times = readTimes(), bench = false, native = false, first = [], runners = RUNNERS } = {}) {
+// Tests too long for one shard, run in parts side by side: name@i/n, ci/browser-run.mjs passes TEST_PART=i/n and the
+// test runs only that part. Each part counts as its share of the test's time. anchoring-torture alone took 250-500 s,
+// so its shard ran minutes after the others had ended.
+const SPLIT = { 'anchoring-torture': 3 };
+const parts = (n, split) => (split[n] > 1 ? Array.from({ length: split[n] }, (_, i) => `${n}@${i + 1}/${split[n]}`) : [n]);
+export function shards(picked, { engines = ['webkit'], times = readTimes(), bench = false, native = false, first = [], runners = RUNNERS, split = SPLIT } = {}) {
   const limit = (engine) => (typeof runners === 'number' ? Math.max(1, Math.floor(runners / engines.length)) : runners[engine] ?? 5);
-  const names = picked === 'all' ? Object.keys(times) : picked.split(/\s+/).filter(Boolean);
-  const cost = (n) => times[n] ?? TARGET; // a test with no time yet counts as a whole shard
+  const names = (picked === 'all' ? Object.keys(times) : picked.split(/\s+/).filter(Boolean)).flatMap((n) => parts(n, split));
+  const whole = (n) => n.split('@')[0];
+  const cost = (n) => (times[whole(n)] ?? TARGET) / (split[whole(n)] || 1); // a test with no time yet counts as a whole shard
+  first = first.flatMap((n) => parts(n, split));
   const total = names.reduce((s, n) => s + cost(n), 0);
   const jobs = [];
   for (const engine of engines) {
@@ -130,7 +137,7 @@ export function shards(picked, { engines = ['webkit'], times = readTimes(), benc
       const withNative = native && engine === 'webkit' && i === 0;
       // The PR's own test files first, then longest first: a failure shows as early as it can.
       const files = [...b.files.filter((n) => first.includes(n)), ...b.files.filter((n) => !first.includes(n))];
-      if (b.files.length || withBench || withNative) jobs.push({ engine, os: engine === 'webkit' ? 'macos-latest' : 'ubuntu-latest', shard: `${i + 1}/${k}`, files: files.join(' '), bench: withBench, native: withNative, secs: b.secs });
+      if (b.files.length || withBench || withNative) jobs.push({ engine, os: engine === 'webkit' ? 'macos-latest' : 'ubuntu-latest', shard: `${i + 1}/${k}`, files: files.join(' '), bench: withBench, native: withNative, secs: Math.round(b.secs) });
     });
   }
   // The bench alone, with no WebKit in this run: a job of its own on WebKit.
