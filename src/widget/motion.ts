@@ -300,7 +300,7 @@ const fill = () => {
   }
   if (under && !custom) { // the browser's own menu is a key away
     const hint = W.el('div', { class: 'hint-row' }, 'browser menu');
-    hint.append(W.el('kbd', {}, '⌥ right-click'));
+    hint.append(W.el('kbd', {}, `${/Mac/.test(navigator.platform) ? '⌥' : 'alt'} right-click`));
     rows.push(W.el('hr', {}), hint);
   }
   box.replaceChildren(...rows);
