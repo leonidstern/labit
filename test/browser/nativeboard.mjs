@@ -87,7 +87,7 @@ try {
       const a4 = await rect('a');
       const p4 = await pinAt();
       check(eng, 'the frame is moved: the pin goes with it', a4.x > a3.x + 10 && on(p4, a4) && p4.held === hides, JSON.stringify({ moved: [a3.x, a4.x], p4, want: spot(a4) }));
-      // The frame is resized in the board file: the pin is placed again on its point (fx stays in px from the corner).
+      // The frame is resized in the board file: the page in it is laid out again, and the pin is placed again on its element.
       const now5 = await (await fetch(`${B}/_lab/api/board?name=pins`)).json();
       await fetch(`${B}/_lab/api/board?name=pins`, { method: 'PUT', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ ...now5, frames: now5.frames.map((f) => (f.id === 'a' ? { ...f, w: 820, h: 1180, auto: false } : f)) }) });
       // The board reads its file again on the lab's word that it changed (the live stream); said here directly, so this
@@ -97,8 +97,10 @@ try {
       await sleep(400);
       const a5 = await p.evaluate(() => { const r = document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board .f[data-id="a"]').getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width }; });
       const p5 = await pinAt();
-      const want5 = { x: a5.x + an.fx * (a5.w / 820), y: a5.y + an.fy * (a5.w / 820) };
-      check(eng, 'the frame is resized: the pin is placed again on its point', Math.abs(p5.x - want5.x) < 3 && Math.abs(p5.y - want5.y) < 3, JSON.stringify({ p5, want5, w: a5.w }));
+      // On its element in the frame's page, laid out at the new width (boardanchor.mjs): its share of the element, as a page's pin.
+      const e5 = await p.evaluate((sel) => document.querySelector('[data-lab-board-view]').shadowRoot.querySelector('iframe[name="lab:a"]').contentDocument.querySelector(sel).getBoundingClientRect().toJSON(), an.selector);
+      const want5 = { x: a5.x + (e5.x + an.x * e5.width) * (a5.w / 820), y: a5.y + (e5.y + an.y * e5.height) * (a5.w / 820) };
+      check(eng, 'the frame is resized: the pin is placed again on its element', Math.abs(p5.x - want5.x) < 3 && Math.abs(p5.y - want5.y) < 3, JSON.stringify({ p5, want5, w: a5.w }));
       await ctx.close();
     } finally {
       await browser.close();
