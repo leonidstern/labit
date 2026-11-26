@@ -402,7 +402,7 @@ function mount() {
   };
   ink = mk('canvas', { class: 'wk-ink', 'aria-hidden': 'true' });
   tm = mk('span', {}, '0:00');
-  ta = mk('textarea', { placeholder: 'Dictation key, talk', 'aria-label': "what you say: your computer's own dictation types it here" });
+  ta = mk('textarea', { placeholder: 'Tap dictation key, talk', 'aria-label': "what you say: your computer's own dictation types it here" });
   const send = mk('button', { type: 'button', class: 'wk-send' }, 'Send');
   const x = mk('button', { type: 'button', class: 'wk-x', 'aria-label': 'cancel' }, 'esc');
   pill = mk('div', { class: 'walkie', role: 'group', 'aria-label': 'walkie-talkie', hidden: '' }, mk('span', { class: 'wk-tm' }, mk('i', { class: 'wk-dot' }), tm), ta, send, x);
@@ -774,6 +774,17 @@ function cut() {
   return fin;
 }
 
+// "sent ✓" on the bar's talk button for a moment, no line over the bar (Leo, 25 Nov); as wide as it was, so the bar
+// doesn't move (the longer word takes some of the button's own padding).
+function sent() {
+  const b = W.root.querySelector('.walkie-btn') as HTMLElement | null;
+  if (!b || b.style.width) return; // already saying it
+  const was = [...b.childNodes];
+  b.style.cssText = `width:${b.getBoundingClientRect().width}px;padding:0;justify-content:center`;
+  b.replaceChildren('sent ✓');
+  setTimeout(() => (b.replaceChildren(...was), (b.style.cssText = '')), 1800);
+}
+
 // The whole walk goes to the page's chat as one message: each part with its spot (words + selector).
 async function post(pieces) {
   const where = (q) => (q ? ` at ${Math.round(q.x * 100)}% across, ${Math.round(q.y * 100)}% down` : '');
@@ -794,7 +805,7 @@ async function post(pieces) {
     W.addComment(comment);
     W.markSeen([comment]);
     W.render();
-    W.say?.('walkie-talkie sent to the chat');
+    sent();
   } catch (err) {
     W.say?.(err.message || "couldn't reach the lab");
   }
