@@ -316,8 +316,8 @@ if (!opts.proxy && !alreadyRunning) {
 }
 
 // One lab in front of a dev server: a second one splits its comments (26 Nov: two labs fronted one site). A branch goes
-// into that lab with `use`.
-if (opts.proxy && !alreadyRunning && !opts.new) {
+// into that lab with `use`. Only a new lab: one with its .lab coming back (a newer build, a park, a restart) starts.
+if (opts.proxy && !alreadyRunning && !opts.new && !fs.existsSync(path.join(ROOT, '.lab'))) {
   const port = new URL(proxyUrl(opts.proxy)).port;
   const lab = runningLabs().find((l) => l.proxy && new URL(l.proxy).port === port);
   if (lab) {
