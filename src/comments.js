@@ -898,8 +898,11 @@ import { bindKeys } from './widget/keys.ts';
   };
   drawFlags();
   // The lab's word on which flags are on (the live stream, or the answer to a switch here).
+  // Only a change redraws: the live stream says which are on with every message.
   S.syncFlags = (/** @type {string[]} */ on) => {
-    for (const [name, f] of Object.entries(FLAGS)) f.on = on.includes(name);
+    let changed = false;
+    for (const [name, f] of Object.entries(FLAGS)) if (f.on !== on.includes(name)) (f.on = !f.on), (changed = true);
+    if (!changed) return;
     drawFlags();
     render();
   };
