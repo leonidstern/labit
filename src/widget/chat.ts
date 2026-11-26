@@ -123,7 +123,7 @@ export function drawChat() {
         draftKey: `lab-typing:${W.S.page}:chat`,
         attach: true,
         onSubmit: async (name, text, att) => {
-          const { comment } = await W.send({ name, text, ...att, anchor: { kind: 'page', width: innerWidth, height: innerHeight, dpr: devicePixelRatio || 1 } });
+          const { comment } = await W.send({ name, text, ...att, anchor: { kind: 'page', width: innerWidth, height: innerHeight, dpr: devicePixelRatio || 1, board: (window as unknown as { __labBoard?: { name?: string } }).__labBoard?.name } }); // sent with a board open: its name, so the agent knows (Leo, 26 Nov)
           W.addComment(comment);
           W.markSeen([comment]);
           box.scrollTop = box.scrollHeight;
