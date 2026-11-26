@@ -101,7 +101,10 @@ function collect() {
   const pack = run("npm pack --dry-run --json --ignore-scripts");
   let packInfo;
   try { packInfo = JSON.parse(pack.out)[0]; } catch { fail(`npm pack did not run:\n${pack.err}`); }
-  m.npmPackBytes = packInfo.size;
+  // The README ships too (npm always includes it), but it is docs, not code: it is left out of the cap so pictures and
+  // words in it never compete with the code for room. Its gzip size is taken off the tarball's.
+  const readme = packInfo.files.find((f) => /^readme(\.md)?$/i.test(f.path));
+  m.npmPackBytes = packInfo.size - (readme ? gzipSync(readFileSync(readme.path), { level: 9 }).length : 0);
   m.npmPackFiles = packInfo.entryCount; // informational, used by the README check
 
   // Runtime dependencies (devDependencies don't reach users).
