@@ -593,7 +593,7 @@ for (const eng of engines()) {
     await q.close();
   }
 
-  // A question with hints, a touch that scrolled, failed and hidden-page picks, and a question in the page chat (thread.ts, chat.ts).
+  // A question with hints, a touch that scrolled, a failed pick, and a question in the page chat (thread.ts, chat.ts).
   {
     const body = (a) => `<!doctype html><meta charset="utf-8"><title>Ask3</title><style>body{margin:30px;font:18px/1.6 serif}main{max-width:520px}</style><main>${a}</main>`;
     write('ask3.html', body('<p id="a">A heading-ish line of words.</p>' + Array.from({ length: 8 }, (_, i) => `<p>Filler ${i}.</p>`).join('')));
@@ -610,7 +610,7 @@ for (const eng of engines()) {
     await sleep(700);
     const info = () => sq(() => {
       const rows = [...r.querySelectorAll('.choice')];
-      return { hints: rows.map((x) => x.querySelector('.desc')?.textContent || ''), tx: rows.map((x) => x.querySelector('.tx')?.textContent), note: r.querySelector('.choices .note')?.textContent.trim(), disabled: rows.every((x) => x.disabled || x.getAttribute('aria-disabled') === 'true'), on: rows.findIndex((x) => x.classList.contains('on')), focus: r.activeElement?.localName, hintInRow: getComputedStyle(rows[0].querySelector('.desc')).position !== 'fixed' && rows[2].querySelector('.desc').getBoundingClientRect().top > rows[0].querySelector('.desc').getBoundingClientRect().bottom, hintMuted: rows[0].querySelector('.desc') && getComputedStyle(rows[0].querySelector('.desc')).color !== getComputedStyle(rows[0].querySelector('.tx')).color, elseRow: Boolean(r.querySelector('.choice.else')), noteRole: r.querySelector('.choices .note')?.getAttribute('role'), focusUndo: Boolean(r.activeElement?.classList.contains('undo')), ariaRows: rows.every((x) => x.getAttribute('aria-disabled') === 'true' && !x.disabled), noteNowrap: getComputedStyle(r.querySelector('.choices .note')).whiteSpace };
+      return { hints: rows.map((x) => x.querySelector('.desc')?.textContent || ''), tx: rows.map((x) => x.querySelector('.tx')?.textContent), note: r.querySelector('.choices .note')?.textContent.trim(), disabled: rows.every((x) => x.disabled || x.getAttribute('aria-disabled') === 'true'), on: rows.findIndex((x) => x.classList.contains('on')), focus: r.activeElement?.localName, hintInRow: getComputedStyle(rows[0].querySelector('.desc')).position !== 'fixed' && rows[2].querySelector('.desc').getBoundingClientRect().top > rows[0].querySelector('.desc').getBoundingClientRect().bottom, hintMuted: rows[0].querySelector('.desc') && getComputedStyle(rows[0].querySelector('.desc')).color !== getComputedStyle(rows[0].querySelector('.tx')).color, elseRow: Boolean(r.querySelector('.choice.else')), noteRole: r.querySelector('.choices .note')?.getAttribute('role'), focusUndo: Boolean(r.activeElement?.classList.contains('undo')), ariaRows: rows.every((x) => x.getAttribute('aria-disabled') === 'true' && !x.disabled), noteNowrap: r.querySelector('.choices .note') && getComputedStyle(r.querySelector('.choices .note')).whiteSpace };
     });
     let c = await info();
     check(eng, 'a hint shows as a muted second line in its own row (not stacked at one spot); rows without one have none; no "Something else…" row; the note is a status on one line', c.hints.join('|') === 'less scrolling||denser, harder to scan' && c.tx.join('|') === 'Tabs|List|Grid' && c.hintMuted && c.hintInRow && !c.elseRow && c.noteRole === 'status' && c.noteNowrap === 'nowrap', JSON.stringify(c));
@@ -631,9 +631,10 @@ for (const eng of engines()) {
     await touch(1, 3);
     await sleep(300);
     c = await info();
-    check(eng, 'a touch that moved 3 px answers (waiting its 5 s); the rows are aria-disabled, not disabled, and the focus goes to undo', c.disabled && c.note === 'Picked B · undo' && c.ariaRows && c.focusUndo, JSON.stringify(c));
-    await sq(() => { r.querySelector('.choices .note .btn.undo').click(); });
-    await sleep(200);
+    const moved3 = await picks();
+    check(eng, 'a touch that moved 3 px answers, at once: the rows answered, the pick sent', c.disabled && moved3.length === 1 && moved3[0].picked.n === 1, JSON.stringify([c, moved3.map((x) => x.picked)]));
+    for (const x of moved3) await post({ page: '/ask3', action: 'delete', id: x.id });
+    await sleep(1200); // the question is open again
     // Words typed in the reply box under an open question are an ordinary reply: no pick, the question stays open.
     await sq(() => { r.querySelector('.card textarea').focus(); });
     await q.keyboard.type('what about a tab bar?');
@@ -646,26 +647,20 @@ for (const eng of engines()) {
     // A pick that fails to send (the lab says no) is kept: the card, opened again, offers it again.
     await q.route('**/_lab/api/comments', (route) => (route.request().postData()?.includes('"picked"') ? route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"nope"}' }) : route.continue()));
     await sq(() => { r.querySelectorAll('.choice')[1].click(); });
-    await sleep(200);
-    await q.keyboard.press('Escape'); // the card closes: the waiting pick goes now, and fails
-    await sleep(700);
+    await sleep(500);
+    c = await info();
+    check(eng, 'a pick the lab refused: the rows open again, "failed, tap again", its row ticked', c.note === 'failed, tap again' && !c.disabled && c.on === 1 && (await picks()).length === 0, JSON.stringify(c));
+    await q.keyboard.press('Escape');
+    await sleep(500);
     await sq(() => { r.querySelector('button.pin').click(); });
     await sleep(700);
     c = await info();
     check(eng, 'a pick that failed is offered again when the card opens: "failed, tap again", its row ticked', c.note === 'failed, tap again' && !c.disabled && c.on === 1 && (await picks()).length === 0, JSON.stringify(c));
     await q.unroute('**/_lab/api/comments');
-    // The page hidden (a tab switch, the phone locked) sends a waiting pick at once, not after its 5 s.
-    await sq(() => { r.querySelectorAll('.choice')[2].click(); });
-    await sleep(300);
-    await q.evaluate(() => { Object.defineProperty(document, 'visibilityState', { get: () => 'hidden', configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
-    await sleep(900);
-    await q.evaluate(() => delete document.visibilityState);
-    const hiddenPick = await picks();
-    check(eng, 'hiding the page sends the waiting pick at once', hiddenPick.length === 1 && hiddenPick[0].picked.n === 2 && hiddenPick[0].picked.of === ask.id, JSON.stringify(hiddenPick.map((x) => x.picked)));
     await q.keyboard.press('Escape');
     await post({ page: '/ask3', action: 'delete', id: pin.id });
 
-    // The page chat: the agent's question draws its rows there too; a tap waits, undo or closing the chat decides.
+    // The page chat: the agent's question draws its rows there too; a tap answers at once.
     const root = (await post({ page: '/ask3', name: 'leo', text: 'what about the footer?', anchor: { kind: 'page', width: 1000, height: 700, dpr: 1 } })).comment;
     const chatAsk = (await post({ page: '/ask3', name: 'Claude', text: 'Footer: which?', parent: root.id, choices: ['Dark', 'Light'], hints: ['', 'matches the header'], recommend: 1 })).comment;
     await sleep(1200);
@@ -680,16 +675,8 @@ for (const eng of engines()) {
     await sq(() => { r.querySelectorAll('.msgs .choice')[0].click(); });
     await sleep(500);
     c = await chat();
-    check(eng, 'a tap in the chat waits: "Picked A · undo", nothing sent', c.disabled && c.picked === 0 && c.note === 'Picked A · undo' && (await picks()).length === 0, JSON.stringify(c));
-    await sq(() => { r.querySelector('.msgs .choices .note .btn.undo').click(); });
-    await sleep(300);
-    check(eng, 'undo in the chat puts the rows back', !(await chat()).disabled);
-    await sq(() => { r.querySelectorAll('.msgs .choice')[1].click(); });
-    await sleep(300);
-    await q.keyboard.press('Escape'); // closes the chat: the waiting pick goes at once
-    await sleep(900);
     const chatPicks = (await picks()).filter((x) => x.picked.of === chatAsk.id);
-    check(eng, 'closing the chat sends the waiting pick', chatPicks.length === 1 && chatPicks[0].picked.n === 1 && /^Picked B: Light/.test(chatPicks[0].text), JSON.stringify(chatPicks.map((x) => [x.picked, x.text])));
+    check(eng, 'a tap in the chat answers at once: the rows answered, A ticked, the pick sent', c.disabled && c.picked === 0 && chatPicks.length === 1 && /^Picked A: Dark/.test(chatPicks[0].text), JSON.stringify([c, chatPicks.map((x) => [x.picked, x.text])]));
     await q.close();
   }
 

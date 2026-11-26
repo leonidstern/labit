@@ -104,7 +104,7 @@ try {
       });
       check(eng, 'with the comment card open on words, the changed toggle key (h) is a letter, not a shortcut', typed === 'h' && (await look(p)).on === onBefore, `${typed}`);
       // A question's rows (src/widget/thread.ts, V1 plain list): J K and the arrows move nothing; on a computer 1 to 6 pick
-      // that choice (A is 1) like a tap, with its 5 s of undo, unless a text box has the focus; a tap on a row does the same.
+      // that choice (A is 1) like a tap (sent at once), unless a text box has the focus; a tap on a row does the same.
       const key = JSON.parse(fs.readFileSync(path.join(DIR, '.lab/server.json'), 'utf8')).agent;
       const send = (body, agent) => fetch(B + '/_lab/api/comments', { method: 'POST', headers: { 'content-type': 'application/json', origin: B, ...(agent ? { 'x-lab-admin': key, 'x-lab-agent': '1' } : {}) }, body: JSON.stringify({ page: '/ask', ...body }) }).then((r) => r.json());
       const asked = (await send({ name: 'leo', text: 'which?', anchor: { kind: 'element', selector: '#h', x: 0.5, y: 0.5, docX: 0.1, docY: 20, width: 1000, element: '<h1 id="h">' } })).comment;
@@ -148,20 +148,6 @@ try {
       }));
       check(eng, 'an arrow taken by the question is not left to scroll (default prevented)', pressed === true);
       await a.keyboard.press('ArrowUp'); // back on the agent's pick
-      // Enter answers the row the arrows moved to.
-      await a.keyboard.press('ArrowDown');
-      await sh('r.activeElement?.blur?.()');
-      await a.keyboard.press('Enter');
-      await sleep(400);
-      check(eng, 'Enter answers the row the arrows moved to: "Picked C · undo"', (await note()) === 'Picked C · undo' && (await picks()).length === 0, await note());
-      await a.keyboard.press('ArrowUp'); // while a pick waits, the arrows move nothing
-      await sleep(200);
-      check(eng, 'an arrow while a pick waits is ignored', (await note()) === 'Picked C · undo');
-      await sh('r.querySelector(".choices .note .btn.undo").click()');
-      await sleep(300);
-      check(eng, 'undo puts the tick back on the row the arrows left it on', (await note()) === '' && (await row()) === 2 && (await picks()).length === 0, String(await row()));
-      await a.keyboard.press('ArrowUp');
-      check(eng, 'the arrows move again after undo', (await row()) === 1);
       // In the reply box the arrows are the box's own.
       await a.keyboard.press('r');
       await a.keyboard.press('ArrowDown');
@@ -173,26 +159,26 @@ try {
       await a.keyboard.press('4'); // no fourth choice: nothing
       await sleep(200);
       check(eng, '4 and 9 (no such choice) do nothing', (await note()) === '' && (await picks()).length === 0);
-      await a.keyboard.press('3');
-      await sleep(400);
-      check(eng, '3 picks the third choice like a tap: "Picked C · undo", nothing sent yet', (await note()) === 'Picked C · undo' && (await picks()).length === 0, await note());
-      await a.keyboard.press('1'); // while waiting, a digit changes nothing (undo first)
-      await sleep(200);
-      check(eng, 'a digit while a pick waits is ignored', (await note()) === 'Picked C · undo');
-      await sh('r.querySelector(".choices .note .btn.undo").click()');
-      await sleep(300);
-      check(eng, 'undo puts the rows back; nothing sent', (await note()) === '' && (await row()) === 1 && (await picks()).length === 0);
+      // Enter answers the row the arrows moved to, at once.
+      await a.keyboard.press('ArrowDown');
       await sh('r.activeElement?.blur?.()');
-      await a.keyboard.press('Enter'); // no text box, no button: Enter takes the agent's ticked row (B), as a tap
+      await a.keyboard.press('Enter');
       await sleep(400);
-      check(eng, 'Enter picks the ticked row (the agent\'s pick): "Picked B · undo", nothing sent yet', (await note()) === 'Picked B · undo' && (await picks()).length === 0, await note());
-      await sh('r.querySelector(".choices .note .btn.undo").click()');
+      let got = await picks();
+      check(eng, 'Enter answers the row the arrows moved to (C), sent at once', got.length === 1 && got[0].picked.n === 2, JSON.stringify(got.map((c) => c.picked)));
+      await a.keyboard.press('1'); // answered: a digit picks nothing more
       await sleep(300);
-      check(eng, 'undo after Enter puts the rows back', (await note()) === '' && (await row()) === 1 && (await picks()).length === 0);
+      check(eng, 'a digit after the pick sends nothing more', (await picks()).length === 1);
+      for (const c of got) await send({ action: 'delete', id: c.id }, true);
+      await a.keyboard.press('Escape'); // the card closes (twice: the answered card put the cursor in its reply box)
+      await a.keyboard.press('Escape');
+      await sleep(1200);
+      await sh('r.querySelector("button.pin").click()'); // opened again: the question is open
+      await sleep(600);
       await a.keyboard.press('1');
-      await sleep(5700);
-      const got = await picks();
-      check(eng, '1 picks the first choice and sends after 5 s', got.length === 1 && got[0].picked.n === 0 && got[0].picked.of === q.id && /^Picked A: one/.test(got[0].text), JSON.stringify(got.map((c) => [c.picked, c.text])));
+      await sleep(400);
+      got = await picks();
+      check(eng, '1 picks the first choice, sent at once', got.length === 1 && got[0].picked.n === 0 && got[0].picked.of === q.id && /^Picked A: one/.test(got[0].text), JSON.stringify(got.map((c) => [c.picked, c.text])));
       check(eng, 'no Keep button', await sh('return !r.querySelector("button.keep")'));
       // A question in the page chat has no keys: 1 to 6 pick only the open thread card's question, so 1 keeps its pointer toggle.
       await a.keyboard.press('Escape'); // the thread card closes
