@@ -8,6 +8,7 @@ import path from 'node:path';
 import { execFile, spawn } from 'node:child_process';
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { brotliDecompressSync } from 'node:zlib';
 // A lab started by a hand-over writes to .lab/lab.log: each line carries its time, so a gap while one build takes over
 // from another shows how long it was and where (23 Nov: waits gave up after 20 s and the log could not say why).
 if (process.env.LABIT_LOG_TIMES === '1')
@@ -35,6 +36,7 @@ import * as act from './lib/boardact.ts';
 import { IMAGE_FILE, imageInfo, MAX_IMAGE } from './lib/images.mjs';
 import { IMAGE_TYPES, IMAGES_SAID, imageLine, imageName, imagesOf, MAX_IMAGES, wordsOf } from './lib/schema.mjs';
 import { proxy as makeProxy } from './lib/proxy.ts';
+import { stripTags } from './lib/colabit.ts';
 import { newer, fetchNotes } from './lib/update.ts';
 
 // The package's folder: this file's, or its parent when this is the built copy in dist/ (what npm ships).
@@ -178,7 +180,7 @@ if (pos[0] === 'settings') {
 }
 
 // The commands that answer and exit (publish, preview, list, pages, gc, wait, reply, resolve, thread, pin, invite): lib/commands.ts.
-if (['publish', 'preview', 'list', 'pages', 'wait', 'reply', 'resolve', 'thread', 'pin', 'invite', 'board', 'update', 'gc'].includes(pos[0])) {
+if (COMMANDS.includes(pos[0])) {
   await runCommand({ pos, opts, HERE, CMD, ME, die });
 }
 
@@ -1255,7 +1257,7 @@ const markSvg = (size, style = '') =>
 // Someone at this screen isn't let in yet, so nothing of the lab loads for them: the tab icon and the lab's design system
 // (/_lab/lab.css, light or dark as the device is) ride in the page.
 const GATE_ICON = `data:image/svg+xml,${encodeURIComponent(fs.readFileSync(path.join(REPO, 'public/_lab/favicon.svg'), 'utf8'))}`;
-const LAB_CSS = fs.readFileSync(path.join(REPO, 'public/_lab/lab.css'), 'utf8');
+const LAB_CSS = (fs.existsSync(path.join(REPO, 'public/_lab/lab.css')) ? fs.readFileSync(path.join(REPO, 'public/_lab/lab.css')) : brotliDecompressSync(fs.readFileSync(path.join(REPO, 'public/_lab/lab.css.br')))).toString(); // the npm package has it packed
 const gate = (res, why = 'This lab opens with a one-time link.') =>
   res.writeHead(403, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }).end(
     `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
@@ -1400,7 +1402,7 @@ stateParts.handed = () => {
 const saveHanded = saveState;
 if (Object.keys(handoff).length) saveHanded();
 for (const [id, mark] of Object.entries(isObj(labState.handed) ? labState.handed : {})) if (Array.isArray(mark)) handoff[id] = mark;
-const state = (local) => JSON.stringify({ ...version, labit: VERSION, flags: Object.keys(SET.flags), reads: readsRev, mode, heard: heard(), silent: silentNow(), session: session && (local ? session : { name: session.name, agent: session.agent, model: session.model }) });
+const state = (local) => JSON.stringify({ ...version, flags: Object.keys(SET.flags), reads: readsRev, mode, heard: heard(), silent: silentNow(), session: session && (local ? session : { name: session.name, agent: session.agent, model: session.model }) });
 const broadcast = () => {
   for (const c of clients) c.res.write(`data: ${state(c.local)}\n\n`);
 };
@@ -2193,7 +2195,8 @@ const widget = (page, admin, me = '', framed = false, req = null) => {
 // again and, when the sum is the same, leaves a page with its own scripts alone instead of reloading it (#428).
 const inject = (html, tag) => {
   tag = tag.replace('<script ', `<script data-sum="${createHash('sha1').update(html).digest('hex').slice(0, 12)}" `);
-  html = html.replace(/<script\b[^>]*\bsrc=["'][^"']*\/_lab\/comments\.js["'][^>]*>\s*<\/script>\s*/gi, '');
+  // A page made for a colabit loses its tag here too (lib/colabit.ts): one comment layer, the lab's.
+  html = stripTags(html);
   const lower = html.toLowerCase();
   const at = lower.lastIndexOf('</body>');
   const inScript = at !== -1 && lower.lastIndexOf('<script', at) > lower.lastIndexOf('</script>', at);
@@ -2374,15 +2377,7 @@ const answer = (res, data, code = 200) => res.writeHead(code, { 'content-type': 
 // When this lab was made: its .lab folder's birth (the first run in this folder). Linux may not keep births: then its
 // oldest comment, else nothing.
 // Names once each, whatever their case ("Leo" and "leo" are one person).
-const oneEach = (names) => names.filter((n, i) => names.findIndex((m) => m.toLowerCase() === n.toLowerCase()) === i);
-const created = () => {
-  try {
-    const t = fs.statSync(LAB).birthtimeMs;
-    if (t > 0) return new Date(t).toISOString();
-  } catch {}
-  const first = pages().flatMap((k) => commentsOf(k).map((c) => c.createdAt)).sort()[0];
-  return first || null;
-};
+
 // This lab's pages with their open comments, who listens, and which pages that covers (the switcher and `labit list`).
 const labInfo = () => {
   // Per page: open and done pins, when the file last changed and when anyone last wrote on it (the switcher's dates).
@@ -2390,11 +2385,8 @@ const labInfo = () => {
     const all = commentsOf(key);
     const roots = all.filter((c) => !c.parent);
     const last = all.flatMap((c) => [c.createdAt, c.resolvedAt]).filter(Boolean).sort().pop() || null;
-    const replies = all.filter((c) => c.parent);
     return {
       open: roots.filter((c) => !c.resolved).length, done: roots.filter((c) => c.resolved).length, last,
-      first: roots[0]?.createdAt || null, replies: replies.length, agent: replies.filter((c) => c.session).length,
-      people: oneEach(all.filter((c) => !c.session && c.name).map((c) => String(c.name).trim())).slice(0, 8),
     };
   };
   const edited = (file) => {
@@ -2418,12 +2410,10 @@ const labInfo = () => {
   // A dev server's pages: the ones with comments. Pages without a file (moved or deleted) keep their pins but aren't offered: going there would find nothing.
   if (PROXY) for (const key of pages()) if (!key.startsWith('/_board/') && !list.some((p) => p.key === key)) list.push({ url: origin + key, title: '', file: fileFor(key) || '', key });
   return {
-    name: LAB_NAME, root: ROOT, port: PORT, wifi: WIFI, proxy: PROXY?.origin || null, browser: openTabs() > 0, mode: session ? mode : 'away', listening: session?.name || null, heard: heard(),
-    started: STARTED,
-    created: created(),
+    name: LAB_NAME, root: ROOT, port: PORT, wifi: WIFI, proxy: PROXY?.origin || null, browser: openTabs() > 0, mode: session ? mode : 'away', listening: session?.name || null,
     pages: list.map(({ key, ...p }) => {
       const at = lastAt(key, p.file ? path.join(ROOT, p.file) : '');
-      return { ...p, path: key, ...tally(key), waiting: waitingOn(key), listener: listenerOf(key), at, when: ago(at), edited: edited(p.file), opened: opened.get(key) || null, archived: archivedPages.get(key) || null, board: boardOn.get(key) || '' };
+      return { ...p, path: key, ...tally(key), waiting: waitingOn(key), listener: listenerOf(key), when: ago(at), edited: edited(p.file), opened: opened.get(key) || null, archived: archivedPages.get(key) || null, board: boardOn.get(key) || '' };
     }),
   };
 };
@@ -2629,12 +2619,6 @@ const handler = async (req, res) => {
 
     // A background tab's light check: the same state the live stream sends, and the tab still counts as open.
     if (pathname === '/_lab/state' && req.method === 'GET') {
-      const id = String(url.searchParams.get('tab') || '').slice(0, 40);
-      if (id) {
-        const tab = tabs.get(id) || { streams: 0, seen: 0 };
-        tab.seen = Date.now();
-        tabs.set(id, tab);
-      }
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
       return res.end(state(isLoopback(req)));
     }
@@ -2916,7 +2900,7 @@ const handler = async (req, res) => {
       // A guest (a phone this lab let in): this lab's pages, and the other labs open to the wifi, whose pages go
       // through /_lab/hop: this lab vouches for the phone there (Leo, 18 Nov). No folders, no labs only this computer sees.
       const forGuest = (lab, hop) => ({
-        name: lab.name, port: lab.port, here: lab.here, mode: lab.mode, listening: lab.listening, created: lab.created, started: lab.started,
+        name: lab.name, port: lab.port, here: lab.here, mode: lab.mode, listening: lab.listening,
         pages: lab.pages.map(({ url, root: _root, file: _file, ...p }) => ({ ...p, url: hop ? `/_lab/hop?port=${lab.port}&to=${encodeURIComponent(p.path)}` : new URL(url).pathname })),
       });
       // Labs not open to the wifi (or on an older labit that doesn't say): named, so the phone knows they're there, but
@@ -2982,14 +2966,6 @@ const handler = async (req, res) => {
       }
       // Archive: a parked lab moves out of the way, under "archived" (folded), to start or bring back later. A running
       // one is parked first, as archived. Unarchive brings it back to "parked".
-      const parkedFile = path.join(PARKED, `${n}.json`);
-      if ((action === 'archive' || action === 'unarchive') && !runningLabs().some((l) => l.port === n)) {
-        const p = parkedLabs().find((x) => x.port === n);
-        if (!p) return res.writeHead(404).end('not parked');
-        writeAtomic(parkedFile, JSON.stringify({ ...p, archived: action === 'archive', at: new Date().toISOString() }, null, 2));
-        return answer(res, { ok: true });
-      }
-      if (action === 'unarchive') return res.writeHead(409).end('running, not archived');
       // The ⋯ menu's update: this lab moves onto the newer release from npm, the way a lab follows a newer build.
       if (action === 'update') {
         if (!UPDATE) return res.writeHead(409).end('no newer labit');
@@ -2997,7 +2973,7 @@ const handler = async (req, res) => {
         fromNpm(UPDATE.version).then((file) => (file ? handOver(process.execPath, [file]) : console.log(`[lab] npm did not give labit ${UPDATE.version}: this lab keeps running`)));
         return answer(res, { ok: true, ...UPDATE });
       }
-      if (!['stop', 'park', 'archive', 'archive-page', 'unarchive-page'].includes(action)) return res.writeHead(400).end('action: stop, park, archive, unarchive, start, archive-page or unarchive-page');
+      if (!['archive', 'archive-page', 'unarchive-page'].includes(action)) return res.writeHead(400).end('action: archive, start, update, archive-page or unarchive-page');
       if (n !== PORT) {
         // Another lab: it does it itself, asked with its own key (from its folder, on this same computer).
         const lab = runningLabs().find((l) => l.port === n);
@@ -3011,8 +2987,7 @@ const handler = async (req, res) => {
         }
       }
       stopListening();
-      if (action === 'stop') return answer(res, { ok: true });
-      park(action === 'archive');
+      park();
       console.log('[lab] parked from the page: start it again from the switcher (⌘K) in another lab, or run labit here');
       answer(res, { ok: true });
       setTimeout(bye, 200); // after the answer is out
@@ -3223,7 +3198,7 @@ const handler = async (req, res) => {
     if (!fs.existsSync(file) && fs.existsSync(file + '.html')) file += '.html';
     // A browser asks for /favicon.ico on its own (for a tab, a bookmark, history): a folder without one gets labit's.
     if (!fs.existsSync(file) && pathname === '/favicon.ico') return res.writeHead(302, { location: '/_lab/favicon.svg' }).end();
-    if (lab && file.endsWith('.js') && !fs.existsSync(file) && fs.existsSync(`${file}.br`)) return sendPacked(req, res, file); // the npm package's page scripts
+    if (lab && /\.(js|css)$/.test(file) && !fs.existsSync(file) && fs.existsSync(`${file}.br`)) return sendPacked(req, res, file); // the npm package's page scripts and lab.css
     if (!fs.existsSync(file)) return notFound(req, res, pathname);
     file = fs.realpathSync(file);
     if (file !== base && !file.startsWith(base + path.sep)) return res.writeHead(403).end();
@@ -3339,7 +3314,7 @@ server.on('listening', async () => {
 });
 // Parked: a record of how it was started (in ~/.labit/parked), so the switcher (⌘K) in another lab, or labit run in
 // its folder again, starts it the same way.
-const park = (archived = false, why = '') => {
+const park = (why = '') => {
   // Under --dev the lab's parent is node --watch, which would start it again at the next save and runs on meanwhile
   // (130 MB with the --dev process waiting on it): a parked lab ends it, and with it --dev.
   if (process.env.LAB_DEV) process.on('exit', () => process.kill(process.ppid));
@@ -3347,7 +3322,7 @@ const park = (archived = false, why = '') => {
     fs.mkdirSync(PARKED, { recursive: true });
     // Run from npm: started again through npx at this version, not from this version's folder in npx's cache.
     const npx = CMD.startsWith('npx');
-    writeAtomic(path.join(PARKED, `${PORT}.json`), JSON.stringify({ port: PORT, root: ROOT, name: LAB_NAME, argv: process.argv.slice(1), execArgv: process.execArgv, ...(EDGE ? { edge: EDGE } : {}), ...(npx ? { npx, version: VERSION } : {}), ...(archived ? { archived: true } : {}), ...(why ? { why } : {}), ...(session ? { session } : {}), at: new Date().toISOString() }, null, 2));
+    writeAtomic(path.join(PARKED, `${PORT}.json`), JSON.stringify({ port: PORT, root: ROOT, name: LAB_NAME, argv: process.argv.slice(1), execArgv: process.execArgv, ...(EDGE ? { edge: EDGE } : {}), ...(npx ? { npx, version: VERSION } : {}), ...(why ? { why } : {}), ...(session ? { session } : {}), at: new Date().toISOString() }, null, 2));
   } catch {}
 };
 // A lab nobody uses parks itself after an hour (LABIT_IDLE_MS; 0 keeps it running): no page open on it, no agent
@@ -3358,7 +3333,7 @@ if (IDLE_MS > 0)
   setInterval(() => {
     if (clients.size || waiters.length || mode === 'working') usedAt = Date.now();
     else if (Date.now() - usedAt >= IDLE_MS) {
-      park(false, 'idle');
+      park('idle');
       console.log(`[lab] nobody used this lab for ${Math.round(IDLE_MS / 60000)} min: parked. Start it again from the switcher (⌘K) in another lab, or run labit here`);
       bye();
     }

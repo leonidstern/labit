@@ -335,7 +335,7 @@ function inkLoop() {
   cx.lineCap = cx.lineJoin = 'round';
   cx.strokeStyle = getComputedStyle(W.host).getPropertyValue('--_green-fg').trim() || 'green';
   const pts = drawn.filter((p) => t - p.t < 600);
-  if (pts.length > 2) {
+  if (pts.length > 2 && words.length) {
     cx.globalAlpha = 0.35;
     cx.lineWidth = 2;
     cx.beginPath();
@@ -387,8 +387,10 @@ const onKey = (e) => {
   if (e.key === 'Escape') return (e.preventDefault(), e.stopPropagation(), stop(false));
   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) return (e.preventDefault(), e.stopPropagation(), stop(true));
 };
+// The clock counts from the first word: until words come, nothing looks like recording (the pointer is still noted,
+// as it leads the words).
 const clock = () => {
-  const s = Math.floor(now());
+  const s = words.length ? Math.floor(now() - words[0].t) : 0;
   tm.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 };
 

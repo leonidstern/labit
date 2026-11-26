@@ -44,6 +44,14 @@ import { bindFramework, overFramework, scanForFramework } from './widget/framewo
 import { bindKeys } from './widget/keys.ts';
 
 (() => {
+  // colabit stays off on a page a labit lab serves (lib/colabit.ts): the lab's reload holder (window.__lab, first on a
+  // page behind a dev server) or the lab's own widget tag is there. One comment layer per page, so pins never split
+  // between the lab's store and the colabit's. The lab takes colabit's tag out of its pages already; this covers a page
+  // that adds the script by itself. The lab's own build leaves the check out (globalThis.__LAB_CO__ is false there).
+  if (globalThis.__LAB_CO__ && (/** @type {any} */ (window).__lab || [...document.scripts].some((s) => /\/_lab\/comments\.js\b/.test(s.src)))) {
+    console.info('[colabit] off: a labit lab serves this page, and its own comments are here.');
+    return;
+  }
   // The widget's state, in one place, so its parts can live in their own files (src/widget/*) and share it.
   const state = {};
   // Debug only (a page, e.g. a test, sets window.__labDebug before this loads): a change to what the page shows that no

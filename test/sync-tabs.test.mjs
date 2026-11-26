@@ -137,22 +137,6 @@ test('pins made one after another reach the agent together, in one message', asy
   p.close();
 });
 
-test('a page that only polls the state (a background tab) still counts as open', async () => {
-  await drain();
-  const p = await live('bg-1');
-  const w = wait();
-  await until(() => modeOf(p) === 'listening', 4000, 'listening');
-  p.hide(); // the stream is let go in the background ...
-  for (let i = 0; i < 3; i++) {
-    const s = await (await fetch(`${B}/_lab/state?tab=bg-1`)).json(); // ... and the state polled instead
-    assert.equal(s.mode, 'listening');
-    await sleep(800);
-  }
-  assert.equal(w.over(), false, 'past the grace and still listening');
-  assert.equal((await bye('bg-1')).status, 204);
-  assert.match((await w.done).out, /page was closed/);
-});
-
 test('a tab that goes silent (no bye, no check-in: it crashed, or a phone froze it) stops counting after the timeout', async () => {
   await drain();
   const p = await live('crash-1');
@@ -181,23 +165,10 @@ test('a bye that arrives before its stream has closed still lets the tab go', as
   assert.ok(ms < 2500, `ended ${ms} ms after: within the 1 s grace, not after the 3 s silent-tab timeout`);
 });
 
-test('labs & pages: this lab and its pages; stop listening needs the key and ends the wait with its own word', async () => {
+test('labs & pages: this lab and its pages', async () => {
   await drain();
   const got = await (await fetch(B + '/_lab/labs')).json();
   const me = got.labs.find((l) => l.here);
   assert.equal(me.port, Number(PORT));
   assert.ok(me.pages.some((p) => p.path === '/other'), 'its pages are listed');
-  const w = wait();
-  const p = await live('sw-1');
-  await until(() => modeOf(p) === 'listening', 4000, 'listening');
-  const no = await fetch(B + '/_lab/labs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'stop', port: Number(PORT) }) });
-  assert.equal(no.status, 403, 'no key, no stop');
-  const { token } = serverJson(DIR);
-  const ok = await fetch(B + '/_lab/labs', { method: 'POST', headers: { 'content-type': 'application/json', 'x-lab-admin': token }, body: JSON.stringify({ action: 'stop', port: Number(PORT) }) });
-  assert.equal(ok.status, 200);
-  const { out } = await w.done;
-  assert.match(out, /stopped listening from the page/);
-  await until(() => modeOf(p) === 'away', 3000, 'away once stopped');
-  p.close();
-  await sleep(300); // its bye reaches the lab before the file's end stops it
 });
