@@ -103,6 +103,14 @@ const dismiss = () => {
   W.render();
   return true;
 };
+// Many pins drop their soft shadow while the camera moves and take it back once it rests (styles.css): Safari's engine
+// draws 480 shadows too slowly to keep a pan smooth.
+let resting: ReturnType<typeof setTimeout>;
+const moving = () => {
+  W.layer.toggleAttribute('data-moving', true);
+  clearTimeout(resting);
+  resting = setTimeout(() => W.layer.removeAttribute('data-moving'), 200);
+};
 // The board's camera moved (a pinch, a pan) and nothing else: its pins go with it in the same frame, placed by the
 // board's own sums (no read of the page, no redraw of the widget: that took 70 ms a frame on a page with many pins,
 // and ran a frame late, so the pins swam behind the frames; Leo, 19 Nov: "zoom feels weird, slow"). An open card or a
@@ -125,6 +133,7 @@ const followCamera = () => {
     const a = W.pinData.get(pin)?.c.anchor;
     if (a?.kind === 'board' && !heldPin(pin)) moves.push([id, pin, position(a)]);
   }
+  if (moves.length > 100) moving();
   const [sx, sy] = [scrollX, scrollY];
   for (const [id, pin, at] of moves) {
     // A drawing is placed by its corner (its lines are laid from there), any other pin by its own spot: the corner where the
