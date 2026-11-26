@@ -227,7 +227,6 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   // are sized again only when the zoom changed (a pan restyles nothing).
   let drawFrame = 0;
   let whole = false; // the next paint is not the camera alone
-  let boxed = false; // …or the box changed size with it (a view being dragged): the widget looks at what the view covers
   let sizing = false; // the box is changing size: fitted and held to its edges again once it rests
   const draw = () => {
     drawFrame ||= requestAnimationFrame(paintCam);
@@ -251,8 +250,8 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     // The widget moves the board's pins with it, in this same frame (detail.camera: only the camera moved, so that is
     // all it does: a whole redraw of the widget on every frame of a pinch took 70 ms a frame; Leo, 19 Nov: "zoom feels
     // weird, slow").
-    dispatchEvent(whole ? new Event('lab-board-moved') : new CustomEvent('lab-board-moved', { detail: { camera: true, box: boxed } }));
-    whole = boxed = false;
+    dispatchEvent(whole ? new Event('lab-board-moved') : new CustomEvent('lab-board-moved', { detail: { camera: true } }));
+    whole = false;
   };
   // While the camera moves the world is its own layer (the browser moves the picture it has, it doesn't draw every live
   // frame again at each step); a layer kept after it stops would stay a blurry bitmap at the new zoom. So it is let go
@@ -1099,7 +1098,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     if (home != null && shift) home -= (oy - py) / cam.z; // where the glide goes back to moves with the box, as the camera does
     if (way && nudging && shift) [way.from, way.to] = [way.from - (oy - py) / cam.z, way.to - (oy - py) / cam.z];
     camBack = null;
-    sizing = boxed = true;
+    sizing = true;
     cancelAnimationFrame(drawFrame);
     paintCam(); // now, before this frame is drawn (a frame later the frames would trail the edge by one step of the drag)
     moving();
@@ -1137,7 +1136,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     if (!cards.length) return;
     if (!moved && !kept) cam = fitAll(boxes(), view); // else the same zoom and place in the view
     go(cam, false);
-    [whole, boxed] = [false, true]; // told as the box changing with the camera, as a dragged edge is (the page's pins under it hide or show)
+    whole = false; // told as the camera moving
     cancelAnimationFrame(drawFrame);
     paintCam();
   };

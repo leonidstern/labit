@@ -133,6 +133,9 @@ button.pin.ink, button.pin.ink:is(:hover, :active, .open) { margin: 0; backgroun
 .pin.ink:is(.in, .arrive, .swap) { animation: none; } /* a drawing is not a pin: it doesn't pop in, arrive or bounce (Leo, 21 Nov: "dont do clicks animations on drawings like on pins") */
 .pin.ink, .pin.ink path:not(.hit) { transition: none; }
 :host([data-board-slide]) .onb { opacity: 0 !important; transition: none; pointer-events: none; }
+/* A board over the page hides every pin of the page in the frame it shows, by this one attribute (boardcam.ts): pin by pin,
+   as each was found under the view, Safari showed them going one by one, and back while the view slid in. */
+:host([data-board]) .onp:not(.open) { visibility: hidden !important; }
 .pin.ink:is(:hover, .open) path:not(.hit) { stroke-width: 4px; }
 .zone { position: absolute; background: none;
         border-radius: var(--_radius); pointer-events: none; }

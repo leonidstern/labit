@@ -1132,9 +1132,8 @@ export function position(anchor) {
   if (at.moved) return { ...at, from: at.left, left: edgeFor(anchor), why: 'lost' };
   if (anchor.kind === 'board') return at;
   if (!at.zone) at.left = reachable(at.left);
-  // A page's board view covers what is under it: the page's pins there hide (overlay.ts).
-  const covered = coveredAt(at.left - scrollX, at.top - scrollY); // told apart, so a scroll under the view only asks this again
-  return { ...at, covered, why: at.hidden ? 'hidden' : at.guess ? 'changed' : doubt(), clipped: covered || at.hidden || clippedAt(findTarget(anchor), at.left - scrollX - (anchor.sx || 0), at.top - scrollY) }; // a pin beside its line: its line's spot is what a scroll box hides
+  // (A board's view over the page hides the page's pins by one attribute, styles.css .onp, not pin by pin.)
+  return { ...at, why: at.hidden ? 'hidden' : at.guess ? 'changed' : doubt(), clipped: at.hidden || clippedAt(findTarget(anchor), at.left - scrollX - (anchor.sx || 0), at.top - scrollY) }; // a pin beside its line: its line's spot is what a scroll box hides
 }
 // A pin is never left where the page can't be scrolled to (Leo, 23 Nov: "be sure board pin wont became stray out of
 // viewport"): its element past the window's right edge on a page that cuts off sideways scrolling (overflow-x hidden), or
@@ -1151,12 +1150,6 @@ export function pageBottom() {
   const r = document.querySelector('[data-lab-board-view]')?.getBoundingClientRect();
   const vh = document.documentElement.clientHeight;
   return r && r.top > 40 && r.top < vh - 1 ? r.top : vh;
-}
-/** A pin whose tip is at this screen point is under a page's board view: its tip, or its far corner (a pin with its tip
- * just past the view's edge still lay over the board). */
-export function coveredAt(x: number, y: number) {
-  const covers = (window as unknown as { __labBoard?: { covers?: (x: number, y: number) => boolean } }).__labBoard?.covers;
-  return Boolean(covers && (covers(x, y) || covers(x + 28, y - 28)));
 }
 // A pin whose spot a box with overflow cut off (panned or scrolled out of a canvas, a carousel, a scroll box) hides
 // until its spot is back in view, instead of floating over the page outside that box.

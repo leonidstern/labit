@@ -3,23 +3,24 @@
 // A board in the page, and the widget's part in it: showing a board, a tap on it that closes a comment, the board's camera
 // moving the pins with it, and the page's pins hiding under a board's view.
 import { heldPin } from './pinhold.ts';
-import { anchorAt, coveredAt, position } from './anchoring.ts';
+import { anchorAt, position } from './anchoring.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let W: any;
 let S: any; // the widget's state (W.S), read once at startup
 // A board in this page (src/board/overlay.ts, loaded when one is opened): its link, the address's #board=<name> (a
 // reload, a forward) or a board pin picked in the list opens it. Closing it lets go of a board pin that was open.
+// The host's data-board hides the page's pins (styles.css, .onp): set here from the moment it is asked for, so none
+// shows while its script loads; the view keeps it while it is open (overlay.ts).
+const board = (on: boolean) => W.host.toggleAttribute('data-board', on);
 export const showBoard = (name: string, of = '', push = true) => globalThis.__LAB_CO__ ? undefined :
-  W.part('boardview').then((m) => (W.host.setAttribute('data-board', ''), m.show(name, { page: S.page, of, push, onClose: () => {
-    W.host.removeAttribute('data-board');
-    for (const pin of W.pinsById.values()) if (W.pinData.get(pin)) W.pinData.get(pin).covered = undefined; // opened again, it is looked at anew (a pin said covered stayed shown)
+  (board(true), W.part('boardview').then((m) => m.show(name, { page: S.page, of, push, onClose: () => {
     sections(name);
     const open = S.comments.find((c) => c.id === S.openId);
     if (open?.anchor?.kind === 'board') S.openId = null;
     if (S.draft?.anchor?.kind === 'board') S.draft = null;
     W.render();
-  } })), () => W.say("the board couldn't load"));
+  } }), () => (board(false), W.say("the board couldn't load"))));
 /** A board pin taken back (undo, ⌘Z): its board went with it, so it is no longer one, and its view closes if open. */
 export const pinBoardGone = (id: string) => {
   if (globalThis.__LAB_CO__) return;
@@ -159,20 +160,6 @@ const followCamera = () => {
   }
   return true;
 };
-// The page's own pins under a board's view hide (position, anchoring.ts): as the page scrolls under a half view, or
-// the view is dragged taller, only those that cross its edge are looked at again; nothing else is read or drawn.
-const coverPins = () => {
-  for (const [id, pin] of W.pinsById) {
-    const info = W.pinData.get(pin);
-    if (!info || info.c.anchor?.kind === 'board') continue;
-    // A pin the browser holds has no place in its style: its spot is read (only in a half view, as it scrolls).
-    const at = heldPin(pin) ? position(info.c.anchor || {}) : { left: parseFloat(pin.style.left), top: parseFloat(pin.style.top) };
-    const covered = coveredAt(at.left - scrollX, at.top - scrollY);
-    if (covered === Boolean(info.covered)) continue;
-    info.covered = covered;
-    pin.style.visibility = (covered || position(info.c.anchor || {}).clipped) && S.openId !== id ? 'hidden' : '';
-  }
-};
 export function bindBoardCam(w: unknown) {
   W = w;
   S = W.S;
@@ -191,10 +178,9 @@ export function bindBoardCam(w: unknown) {
   addEventListener('lab-board-moved', (e) => {
     const d = (e as CustomEvent).detail;
     if (!S.on) return;
-    // The camera alone, or the page scrolling under a half view (its own pins scroll with it, the board's are held
-    // to the screen): no redraw. With the view's box changing too, the page's pins it covers are hidden or shown.
-    if (d?.camera && followCamera()) return void (d.box && coverPins());
-    if (d?.scroll && !S.grabbing) return coverPins();
+    // The camera alone: no redraw. (The page's own pins are hidden under the view all at once, by the host's
+    // data-board: styles.css, .onp.)
+    if (d?.camera && followCamera()) return;
     S.moveFrame ||= requestAnimationFrame(() => ((S.moveFrame = 0), W.render()));
   });
 }
