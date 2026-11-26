@@ -121,7 +121,7 @@ try {
       await sleep(700);
       const rows = await sh(() => { return [...r.querySelectorAll('.choice')].map((x) => x.textContent); });
       check(eng, 'its card shows the choices as rows', rows.length === 2 && rows[0].startsWith('Plans'), JSON.stringify(rows));
-      await sh(() => { r.querySelectorAll('.choice')[0].click(); }); // a tap answers; the pick is sent 5 s later (undo until then)
+      await sh(() => { r.querySelectorAll('.choice')[0].click(); }); // a tap answers at once
       let pick;
       for (let i = 0; i < 60 && !pick; i++) { await sleep(150); pick = (await list('/ask')).find((x) => x.picked); }
       check(eng, 'a tap sends the pick under the pin itself', pick?.parent === q.id && pick.picked.of === q.id && pick.picked.n === 0 && /^Picked A: Plans/.test(pick.text), JSON.stringify(pick));
