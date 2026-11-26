@@ -50,6 +50,9 @@ try {
       check(eng, 'the link opens the board over the same page, one widget', st.path === '/canvas' && st.hash === '#board=pricing' && st.view && st.pills === 1, JSON.stringify(st));
       // a tap on frame b pins
       const b = await p.evaluate(() => { const r = document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board .f[data-id="b"]').getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width }; });
+      // The board says what is under a point once it is mounted (window.__labBoard): wait for it, and say what was there if it never is.
+      const ready = await p.waitForFunction(([x, y]) => window.__labBoard?.contains?.(x, y), [b.x + 60, b.y + 80], { timeout: 4000 }).then(() => true, () => false);
+      if (!ready) console.log('board not ready:', JSON.stringify(await p.evaluate(([x, y]) => ({ api: Boolean(window.__labBoard), has: Boolean(window.__labBoard?.contains), at: window.__labBoard?.contains?.(x, y), scrollY, hit: document.elementFromPoint(x, y)?.outerHTML.slice(0, 80) }), [b.x + 60, b.y + 80])));
       await withAlt(p, () => p.mouse.click(b.x + 60, b.y + 80));
       await sleep(400);
       await p.keyboard.type('frame b note');
