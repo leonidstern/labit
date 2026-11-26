@@ -27,7 +27,7 @@ const pack = async (files, name) => {
   fs.cpSync(path.join(REPO, 'lib'), path.join(pkg, 'lib'), { recursive: true });
   fs.cpSync(path.join(REPO, 'package.json'), path.join(pkg, 'package.json'));
   fs.mkdirSync(path.join(pkg, 'public/_lab'), { recursive: true });
-  for (const f of ['favicon.svg', 'lab.css']) fs.cpSync(path.join(REPO, 'public/_lab', f), path.join(pkg, 'public/_lab', f)); // the lab reads both as it starts
+  for (const f of ['favicon.svg', 'lab.css.br']) fs.cpSync(path.join(REPO, 'public/_lab', f), path.join(pkg, 'public/_lab', f)); // the lab reads both as it starts (lab.css packed, as npm ships it)
   for (const [f, bytes] of Object.entries(files)) fs.writeFileSync(path.join(pkg, 'public/_lab', f), bytes);
   const dir = tmp(`${name}-site`);
   fs.writeFileSync(path.join(dir, 'index.html'), '<!doctype html><title>t</title><h1>hi</h1>');
@@ -81,6 +81,19 @@ test('a packed script: brotli browsers get the packed bytes, others the unpacked
   }
   assert.equal((await get(port, '/_lab/boardview.js', { 'accept-encoding': 'br' })).status, 404, 'a script that is not there is still not there');
   assert.equal((await get(port, '/_lab/favicon.svg')).status, 200, 'the other files are served as before');
+});
+
+test('lab.css ships packed too: served unpacked or as brotli, as text/css (the lab started: it reads it for its own screens)', async () => {
+  const { port } = await pack({}, 'packed-css');
+  const css = zlib.brotliDecompressSync(fs.readFileSync(path.join(REPO, 'public/_lab/lab.css.br')));
+  assert.ok(css.equals(fs.readFileSync(path.join(REPO, 'public/_lab/lab.css'))), 'the packed file is the built one');
+  const none = await get(port, '/_lab/lab.css');
+  assert.equal(none.status, 200);
+  assert.equal(none.headers['content-type'], 'text/css');
+  assert.ok(none.bytes.equals(css));
+  const br = await get(port, '/_lab/lab.css', { 'accept-encoding': 'br' });
+  assert.equal(br.headers['content-encoding'], 'br');
+  assert.ok(zlib.brotliDecompressSync(br.bytes).equals(css));
 });
 
 test('the widget version follows the packed scripts', async () => {

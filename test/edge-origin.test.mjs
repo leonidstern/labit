@@ -195,7 +195,7 @@ test('the owner\'s switch (labs) takes the page\'s key alone: not none, not a wr
   const settings = path.join(ENV.XDG_CONFIG_HOME, 'labit', 'settings.json');
   const before = fs.existsSync(settings) ? fs.readFileSync(settings, 'utf8') : null;
   for (const [what, headers] of tries) {
-    for (const [p, method, body] of [['/_lab/labs', 'POST', { action: 'stop', port: PORT }]]) {
+    for (const [p, method, body] of [['/_lab/labs', 'POST', { action: 'archive', port: PORT }]]) {
       const r = await raw(PORT, p, { method, body: JSON.stringify(body), headers: { 'content-type': 'application/json', origin: lab.B, ...headers } });
       assert.equal(r.status, 403, `${what} on ${p} → ${r.status}`);
     }
