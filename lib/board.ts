@@ -69,10 +69,13 @@ export function check(raw: any, name: string, was?: Board | null): Board | strin
   return board;
 }
 
-/** Every frame that is drawn gets x and y: its own, or the next spot in the rows (array order, 80 px apart). */
+/** Every frame that is drawn gets x and y: its own, or the next spot in the rows (array order, 80 px apart). The rows start
+ * under the frames that have places of their own: a frame added after one was moved went to 0,0, on top of frame a (Leo,
+ * 26 Nov: two names drawn over each other). */
 export function place(board: Board): Board {
+  const put = board.frames.filter((f) => f.state !== 'archived' && Number.isFinite(f.x) && Number.isFinite(f.y));
   let x = 0;
-  let y = 0;
+  let y = put.length ? Math.min(Math.max(...put.map((f) => f.y! + f.h)) + GAP * 2, 9e5) : 0; // (held well inside the board, whose places stop at 1e6)
   let row = 0;
   const frames = board.frames.map((f) => {
     if (f.state === 'archived') return { ...f, x: undefined, y: undefined };

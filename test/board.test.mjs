@@ -60,7 +60,6 @@ test('PUT then GET round-trips; the file is .lab/boards/<name>.json with v 1', a
 
 test('frames without x and y are laid out in rows, in array order; their own places stay', async () => {
   const frames = [1, 2, 3, 4].map((n) => ({ id: 'abcd'[n - 1], src: '/pricing', w: 1440, h: 900 }));
-  frames.push({ id: 'e', src: '/cart', w: 390, h: 844, x: 7, y: 9 });
   await put(B, 'name=rows', { frames });
   const { body } = await get(B, 'name=rows');
   const at = body.frames.map((f) => [f.x, f.y]);
@@ -69,8 +68,14 @@ test('frames without x and y are laid out in rows, in array order; their own pla
   assert.deepEqual(at[2], [3040, 0]);
   assert.equal(at[3][0], 0, 'the fourth wraps to a new row');
   assert.ok(at[3][1] > 900);
-  assert.deepEqual(at[4], [7, 9]);
   assert.equal(body.frames[0].auto, true);
+  // With frames that have places of their own (one was moved), the rows start under them: a frame added then went to 0,0,
+  // over frame a, two names drawn on each other (Leo, 26 Nov).
+  await put(B, 'name=rows2', { frames: [{ id: 'a', src: '/pricing', w: 1280, h: 800, x: 0, y: 0 }, { id: 'b', src: '/cart', w: 390, h: 844, x: 1400, y: 9 }, { id: 'h', src: '/pricing', w: 1280, h: 800 }] });
+  const two = (await get(B, 'name=rows2')).body.frames.map((f) => [f.x, f.y]);
+  assert.deepEqual(two[0], [0, 0]);
+  assert.deepEqual(two[1], [1400, 9]);
+  assert.deepEqual(two[2], [0, 9 + 844 + 160], 'the new one is under the placed ones, not on frame a');
 });
 
 test('refused: bad name, other origin, no same origin, dropped frame, stale rev; a damaged file is put aside', async () => {
