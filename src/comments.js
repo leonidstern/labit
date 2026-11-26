@@ -2121,7 +2121,15 @@ import { bindKeys } from './widget/keys.ts';
 
   // A pin whose 28 px would hang past the screen's right edge points the other way: its body left of its tip, so it is
   // seen whole and never makes the page scroll sideways (a phone's sheets then measure a wider page and are cut off).
-  const flipAt = (pin, left, zone) => pin.classList.toggle('flip', !zone && left + 28 > viewW);
+  // Its tip (what a working pin is doing, on hover) opens toward the wider side and never past the window: shown or not,
+  // it is laid out, and one past the right edge widened the page (a 390 px page scrolled sideways to 587 px).
+  const flipAt = (pin, left, zone) => {
+    const flip = !zone && left + 28 > viewW;
+    const toLeft = left * 2 > viewW;
+    pin.classList.toggle('flip', flip);
+    pin.classList.toggle('tl', toLeft);
+    pin.style.setProperty('--tm', `${Math.max(0, toLeft ? left + (flip ? 4 : 32) : viewW - left + (flip ? 24 : -4)) - 8}px`);
+  };
   // A pin at its spot; a drawing (draw.ts) over its whole area, its lines stretched to it.
   const inkAt = (pin, zone, left, top) => {
     const svg = zone && pin.querySelector(':scope > svg');
