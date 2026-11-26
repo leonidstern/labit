@@ -47,7 +47,9 @@ try {
       const state = () => shadow(() => { return { pins: r.querySelectorAll('button.pin').length, moved: r.querySelector('.moved-btn').textContent, shown: !r.querySelector('.moved-btn').hidden }; });
       let s = await state();
       check(eng, 'a pin whose spot is gone is not drawn on the page', s.pins === 3, JSON.stringify(s)); // stays, rewritten, hidden
-      check(eng, 'the ⋯ menu counts it, and only it: a pin in a closed details is hidden, not moved', s.shown && s.moved === 'moved · 1', JSON.stringify(s));
+      // The lost one, and the lost one the agent finished (#569): its answer is unread, and done ones are shown. A pin in a
+      // closed details is hidden, not moved.
+      check(eng, 'the ⋯ menu counts the lost ones, the done one too; a closed-details pin is not moved', s.shown && s.moved === 'moved · 2', JSON.stringify(s));
       const look = await shadow(() => {
         const pins = [...r.querySelectorAll('button.pin')];
         return { unsure: pins.filter((b) => b.classList.contains('unsure')).length, hiddenPins: pins.filter((b) => b.style.visibility === 'hidden').length, marks: r.querySelectorAll('.lostmark').length };
@@ -82,7 +84,18 @@ try {
       await p.keyboard.press('Escape');
       await sleep(300);
       s = await state();
-      check(eng, 'after the drop it is back on the page and the count is gone', s.pins === 4 && !s.shown, JSON.stringify(s));
+      check(eng, 'after the drop it is back on the page; the done one is still counted', s.pins === 4 && s.moved === 'moved · 1', JSON.stringify(s));
+      // The done one opens from the menu, its answer readable and the thread can be opened again (#569).
+      await shadow(() => { r.querySelector('.more').click(); r.querySelector('.moved-btn').click(); return new Promise((res) => setTimeout(res, 500)); });
+      const card = await shadow(() => { return r.querySelector('.card')?.textContent || ''; });
+      check(eng, 'the done one opens from the menu with its answer and a reopen', /it is fixed/.test(card) && /reopen/.test(card), card.slice(0, 120));
+      await p.keyboard.press('Escape');
+      await sleep(300);
+      // Read, with done ones hidden (E): it steps aside from the count as a read done pin does from the page.
+      await shadow(() => { r.querySelector('.more').click(); r.querySelector('.done-btn').click(); return new Promise((res) => setTimeout(res, 400)); });
+      s = await state();
+      check(eng, 'read, with done ones hidden, it leaves the count', !s.shown, JSON.stringify(s));
+      await shadow(() => { r.querySelector('.more').click(); r.querySelector('.done-btn').click(); return new Promise((res) => setTimeout(res, 400)); });
       await p.goto('about:blank');
       await ctx.close();
       // Back as it was for the next engine (moving another's pin takes the lab's admin key).

@@ -172,8 +172,11 @@ export const stepNew = (dir) => {
   goTo(fresh[next], !W.coarse); // the reply box takes the cursor (not on phones: no keyboard popping up)
 };
 
-// Open pins whose spot is gone from the page: off the page, listed in the ⋯ menu as "moved · N".
-const movedPins = (places?: Map<string, { moved?: boolean }>) => W.threads().filter((c) => !W.isPage(c) && !c.resolved && (places?.get(c.id) || W.placeOf(c)).moved);
+// Pins whose spot is gone from the page: off the page, listed in the ⋯ menu as "moved · N". A done one is listed as a done
+// pin on the page is shown: while show done is on or it has something unread (#569: the agent's edit took its spot, its
+// answer came, and the pin was nowhere to read it or open it again).
+const movedPins = (places?: Map<string, { moved?: boolean }>) =>
+  W.threads().filter((c) => !W.isPage(c) && (!c.resolved || W.S.showDone || W.unread(c).length) && (places?.get(c.id) || W.placeOf(c)).moved);
 export const stepMoved = () => {
   const all = movedPins();
   if (all.length) goTo(all[(all.findIndex((c) => c.id === W.S.openId) + 1) % all.length]);
