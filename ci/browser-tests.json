@@ -20,6 +20,7 @@
   "boardarrange": 15,
   "boardreload": 8,
   "boardframes": 21,
+  "boardanchor": 20,
   "reloadstate": 45,
   "morphstate": 5,
   "hotrace": 22,

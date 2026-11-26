@@ -464,7 +464,7 @@ import { bindKeys } from './widget/keys.ts';
     for (const c of document.readyState === 'complete' ? threads() : []) {
       if (quick === true && !(c.session && !c.anchor?.element)) continue;
       const edit = store.get(`lab-edit:${c.id}`) || undefined;
-      if (c.resolved || looked.has(c.id) || !(S.isAdmin || edit) || !c.anchor?.selector || c.anchor.gone) continue;
+      if (c.resolved || looked.has(c.id) || !(S.isAdmin || edit) || !c.anchor?.selector || c.anchor.gone || c.anchor.kind === 'board') continue; // (a board pin's element is in its frame's page, not this one)
       looked.add(c.id);
       const anchor = foundAt(c.anchor);
       // Its words or element were changed or taken away (the agent's edit): the lab says so on the pin's next wait.
@@ -2184,8 +2184,9 @@ import { bindKeys } from './widget/keys.ts';
       const B = /** @type {any} */ (window).__labBoard;
       const box = a.frame && a.fx !== undefined ? B?.box?.(a.frame) : null;
       const size = box && B.size(a.frame);
+      const [fx, fy] = (box && B.at?.(a)) || [a.fx, a.fy || 0]; // on its element in the frame's page, when it has one there
       // (an area's pin is at the corner where the drag ended)
-      const share = size?.w && size.h ? { x: (a.fx + (a.pinX ? (a.zw || 0) * size.w : 0)) / size.w, y: ((a.fy || 0) + (a.pinY ? (a.zh || 0) * size.h : 0)) / size.t } : null;
+      const share = size?.w && size.h ? { x: (fx + (a.pinX ? (a.zw || 0) * size.w : 0)) / size.w, y: (fy + (a.pinY ? (a.zh || 0) * size.h : 0)) / size.t } : null;
       held = holdPin(pin, Boolean(share), share ? box : null, left, top, share || undefined);
     } else {
       const node = moved ? null : findTarget(a);

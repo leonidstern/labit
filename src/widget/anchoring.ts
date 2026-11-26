@@ -613,8 +613,8 @@ function sameKind(node, tag) {
 // under a point for the moment after a double-click selects a word, and the pin went on <body>, its words not found.
 export function anchorAt(clickX, clickY, words = false, onto = null) {
   let [clientX, clientY] = [clickX, clickY];
-  const board = (window as unknown as { __labBoard?: { anchor?: (x: number, y: number) => Anchor; contains?: (x: number, y: number) => boolean } }).__labBoard;
-  if (board?.anchor && (!board.contains || board.contains(clientX, clientY))) return board.anchor(clientX, clientY); // on a board (its page, or a page's board view): the board says what is there
+  const board = (window as unknown as { __labBoard?: { anchor?: (x: number, y: number, page?: boolean) => Anchor; contains?: (x: number, y: number) => boolean } }).__labBoard;
+  if (board?.anchor && (!board.contains || board.contains(clientX, clientY))) return board.anchor(clientX, clientY, true); // on a board (its page, or a page's board view): the board says what is there, and on a page's frame what it is on in the page
   let stack = document.elementsFromPoint(clientX, clientY).filter((n) => n !== host && n !== document.documentElement);
   // ...and when the point is on something else (scrolled away, under the bar), the element the caller names wins.
   if (onto && !(stack[0] && (stack[0] === onto || onto.contains(stack[0])))) stack = [onto];
