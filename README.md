@@ -2,7 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/@leonidstern/labit)](https://www.npmjs.com/package/@leonidstern/labit) [![test](https://github.com/leonidstern/labit/actions/workflows/test.yml/badge.svg)](https://github.com/leonidstern/labit/actions/workflows/test.yml) [![license: PolyForm Small Business](https://img.shields.io/badge/license-PolyForm%20Small%20Business-black)](LICENSE)
 
-**Review is the new build.** Pin comments on your pages. Your coding agent reads them, changes the code, and answers on the pin.
+**Communication canvas for agent-driven work.** labit opens what your agent makes — a page, a chart, your own app — and you comment on it where it is. Your coding agent reads the comment, changes the code, and answers on the pin. All on your machine.
 
 ![Comments pinned on a demo page](docs/comments.png)
 
@@ -15,6 +15,33 @@ npx @leonidstern/labit@latest
 ```
 
 It serves your HTML pages itself, or sits in front of your app's running dev server (Astro, Next, Vite…), and opens the page with comments on top. Click to comment, drag to mark an area, hold `D` and drag to draw on it (circle, arrow, underline, cross out), Shift-drag to quote words. `M` hides the comments.
+
+## What you can do
+
+- **Pin a spot.** Click a spot, drag an area, or Shift-drag to quote words. Your agent gets the words, the element, the section and the colours around them, and answers on the pin with a live status line while it works.
+- **Draw it.** Hold `D` and draw: a circle fixes, an X removes, an underline rewrites, an arrow moves, a caret adds. The drawing is sent when you lift; no words needed.
+- **Tap an action.** Chips in the comment box (`go`, `more`, `no`) send a whole prompt in one word. Add your own in `~/.config/labit/settings.json`:
+
+  ```json
+  { "actions": [{ "name": "tighter", "prompt": "Less space here, same words." }] }
+  ```
+
+- **Boards.** Pages and pictures side by side on one canvas: variants to pick from, a design system to zoom into.
+- **Live reload.** Save a file and the open page changes in place; your scroll and a half-typed comment stay. Behind your dev server, its own hot updates come through, and a full reload waits until you send what you're typing.
+- **Your phone too.** `--wifi` puts the lab on your phone with a one-time link; comment there, your agent answers on both.
+- **Motion.** `P` pauses everything that moves on the page, `S` plays it at ¼ speed, and a pin on a loop or video keeps its moment.
+
+## How it works
+
+1. **Install:** `npx @leonidstern/labit@latest` in your project.
+2. **Open your page:** a page your agent made, or your app behind its dev server.
+3. **Comment:** click a spot or draw. Your agent answers on the pin.
+
+## What holds up
+
+- **61 of 62 tricky spots** (a word in a long line, one card of many alike, a scaled box, shadow DOM, dark mode, a video frame): the comment carries what the agent needs to find it ([bench/](bench), 26 Nov 2026).
+- **About 470 bytes a comment**, roughly 120 tokens, as `wait` hands it over; **about $0.008 a comment** with Sonnet in the bench (30 for $0.23, 23 Nov 2026).
+- **Pins stay put** after you edit the page and reload: they find their words again.
 
 ## Let your agent answer
 
