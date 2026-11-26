@@ -184,7 +184,7 @@ export function bindBoardCam(w: unknown) {
     const bn = /^#board=([a-z0-9][a-z0-9_-]*)/i.exec(location.hash)?.[1];
     if (bn) showBoard(bn, '', false);
   }
-  Object.assign(window, { __labBoardWidget: { pinning: () => S.on, drawing: () => S.dKey, holding: () => S.on /* a phone's hold comments in either mode, as on a page */, hold: (x: number, y: number) => { if (S.draft || S.openId) W.closeOrNudge(); else W.begin(anchorAt(x, y)); }, place: (x: number, y: number) => (S.draft || S.openId ? W.closeOrNudge() : W.begin(anchorAt(x, y))), dismiss } });
+  Object.assign(window, { __labBoardWidget: { pinning: () => W.commenting() /* the pin tool picked (C): a plain click on the board comments */, drawing: () => S.dKey, holding: () => S.on /* a phone's hold comments in either mode, as on a page */, hold: (x: number, y: number) => { if (S.draft || S.openId) W.closeOrNudge(); else W.begin(anchorAt(x, y)); }, place: (x: number, y: number) => (S.draft || S.openId ? W.closeOrNudge() : W.begin(anchorAt(x, y))), dismiss } });
   addEventListener('lab-board-moved', (e) => {
     const d = (e as CustomEvent).detail;
     if (!S.on) return;

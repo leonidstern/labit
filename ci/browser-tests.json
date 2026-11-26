@@ -84,6 +84,7 @@
   "firstcomment": 12,
   "togglepins": 12,
   "colabitoff": 4,
+  "boardfull": 25,
   "quirkspage": 40,
   "boarddone": 15
 }

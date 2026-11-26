@@ -114,8 +114,7 @@ export function show(name: string, o: Opts) {
       scrollFrom = -1;
       typed = false;
     }
-    const viewTop = innerHeight - view.offsetHeight; // where the view starts when nothing is panned
-    const next = typing && viewTop < vv.height - 160 ? Math.round(vv.offsetTop) : !typing ? Math.round(vv.offsetTop) : 0;
+    const next = Math.round(vv.offsetTop); // (the view fills the window: never a half view under the keyboard)
     if (next !== pan) {
       pan = next;
       view.style.setProperty('--bv-pan', `${pan}px`);
@@ -172,7 +171,7 @@ export function show(name: string, o: Opts) {
     history.replaceState(history.state, '', `${location.pathname}${location.search}`);
     location.assign(`${of.split('#')[0]}#board=${name}`);
   };
-  const board = mountBoard(root, name, o.own ? { of: o.of, back: o.of ? () => backTo(o.of || '') : undefined, hash: true, clip: true } : { of: o.of, back: () => close(), clip: true, home, keep: `lab-board-cam:${o.page}:${name}` });
+  const board = mountBoard(root, name, o.own ? { of: o.of, back: o.of ? () => backTo(o.of || '') : undefined, hash: true } : { of: o.of, back: () => close(), home, keep: `lab-board-cam:${o.page}:${name}` });
   Object.assign(window, { __labBoard: board.api });
   // Reduced motion: it fades in (started once the board is mounted: that blocks the page for a while) (Apple: a crossfade, not a pop of the whole window). Its opacity is !important in :host (all: initial),
   // which an animation or a transition can't beat, so --bv-o is stepped here, one frame at a time.

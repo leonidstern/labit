@@ -2180,12 +2180,12 @@ import { bindKeys } from './widget/keys.ts';
     let held;
     if (a.kind === 'board') {
       // A board pin on a frame: tied to the frame's box by its share of it, so the board's camera carries it (pinhold.ts).
-      // Its size from the board, not the box: reading the box after the last pin was written lays the page out again, once per pin.
+      // Its size from the board, not the box (t: as tall as its page, h: as stored, what an area's shares are of): reading the box after the last pin was written lays the page out again, once per pin.
       const B = /** @type {any} */ (window).__labBoard;
       const box = a.frame && a.fx !== undefined ? B?.box?.(a.frame) : null;
-      const size = box && (B.size?.(a.frame) || { w: box.offsetWidth, h: box.offsetHeight });
+      const size = box && B.size(a.frame);
       // (an area's pin is at the corner where the drag ended)
-      const share = size?.w && size.h ? { x: (a.fx + (a.pinX ? (a.zw || 0) * size.w : 0)) / size.w, y: ((a.fy || 0) + (a.pinY ? (a.zh || 0) * size.h : 0)) / size.h } : null;
+      const share = size?.w && size.h ? { x: (a.fx + (a.pinX ? (a.zw || 0) * size.w : 0)) / size.w, y: ((a.fy || 0) + (a.pinY ? (a.zh || 0) * size.h : 0)) / size.t } : null;
       held = holdPin(pin, Boolean(share), share ? box : null, left, top, share || undefined);
     } else {
       const node = moved ? null : findTarget(a);

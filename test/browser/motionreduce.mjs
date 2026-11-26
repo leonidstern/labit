@@ -101,7 +101,7 @@ const SCENES_DESK = [
   { name: 'thread card goes', find: `${R}.querySelector('.card')`, act: (p) => p.keyboard.press('Escape') },
   { name: 'the ⋯ menu appears', find: `${R}.querySelector('.more-menu')`, act: (p) => rootClick(p, '.more') },
   { name: 'the ⋯ menu goes', find: `${R}.querySelector('.more-menu')`, act: (p) => p.keyboard.press('Escape') },
-  { name: 'the board view appears', find: BV, act: (p) => p.click('#go') },
+  { name: 'the board view appears', find: BV, act: (p) => p.click('#go', { modifiers: ['Alt'] }) }, // ⌥: a lab page starts with the pin, which comments on a link; ⌥ click follows it
 ];
 const SCENES_PHONE = [
   { name: 'chat sheet appears', find: `${R}.querySelector('.chatwin')`, act: (p) => rootClick(p, '.chat-btn') },
@@ -211,7 +211,7 @@ for (const eng of engines()) {
       await p.goto(B + '/');
       await waitRoot(p);
       await sleep(600);
-      await p.click('#go');
+      await p.click('#go', { modifiers: ['Alt'] }); // (⌥: the pin tool would comment on the link)
       await p.waitForFunction(() => document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board'), null, { timeout: 8000 });
       await sleep(500);
       const hs = await p.evaluate(() => [...document.querySelector('[data-lab-board-view]').shadowRoot.querySelectorAll('.bv-bar button')].map((b) => Math.round(b.getBoundingClientRect().height)));
