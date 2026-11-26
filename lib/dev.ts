@@ -112,8 +112,8 @@ const keepSqueezed = (key: string, out: Buffer): Buffer => {
   }
   return out;
 };
-// A page script the npm package ships brotli-packed (<name>.js.br, scripts/build-widget.mjs) and a checkout has plain: the
-// answer sendFile gives for <name>.js, made from the packed file. To a browser that takes brotli the packed bytes go as they
+// A page script or lab.css the npm package ships brotli-packed (<name>.br, scripts/build-widget.mjs) and a checkout has
+// plain: the answer sendFile gives for it, made from the packed file. To a browser that takes brotli the packed bytes go as they
 // are; to one that doesn't they are unpacked (once per file) and sent plain or gzipped. No range answers: a script goes whole.
 // The validator for a file's bytes: size, mtime, inode and ctime. A file saved with the same size and mtime (cp -p, rsync -t, two
 // saves in one millisecond) still differs in its ctime, and one replaced through a temp file in its inode.
@@ -126,7 +126,7 @@ export function sendPacked(req: IncomingMessage, res: ServerResponse, file: stri
   const key = `${file} ${etag} `;
   const unpacked = () => squeezed.get(`${key}plain`) ?? keepSqueezed(`${key}plain`, zlib.brotliDecompressSync(fs.readFileSync(`${file}.br`)));
   const out = squeezed.get(`${key}${enc || 'plain'}`) ?? keepSqueezed(`${key}${enc || 'plain'}`, enc === 'br' ? fs.readFileSync(`${file}.br`) : enc === 'gzip' ? squeeze(unpacked(), 'gzip') : unpacked());
-  res.writeHead(200, { 'content-type': TYPES['.js'], 'accept-ranges': 'bytes', 'cache-control': 'no-cache', etag, vary: 'accept-encoding', ...(enc && { 'content-encoding': enc }), 'content-length': out.length });
+  res.writeHead(200, { 'content-type': TYPES[path.extname(file)], 'accept-ranges': 'bytes', 'cache-control': 'no-cache', etag, vary: 'accept-encoding', ...(enc && { 'content-encoding': enc }), 'content-length': out.length });
   res.end(req.method === 'HEAD' ? undefined : out);
 }
 // One file, with byte ranges (video seeking). A bad range gets 416, never a crash.
