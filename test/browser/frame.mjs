@@ -59,7 +59,8 @@ try {
     }
   }
 } finally {
-  server.kill();
+  // Gone before its folder is: still writing .lab as it exits, the folder could not be removed (ENOTEMPTY on CI).
+  if (server.exitCode === null) await new Promise((r) => (server.once('exit', r), server.kill()));
   fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
 }
 finish();

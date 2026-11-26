@@ -213,6 +213,8 @@ try {
   }
 } finally {
   server.kill();
+  // the lab may still be writing as it ends: wait for it to exit before removing its folder
+  if (server.exitCode === null && server.signalCode === null) await new Promise((r) => server.once('exit', r));
   fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
 }
 finish();

@@ -169,7 +169,8 @@ export function startLive() {
           try {
             sessionStorage.setItem(key, JSON.stringify({ y: scrollY, x: scrollX, open: W.S.openId, chat: W.S.chatOpen, page: pageState() }));
           } catch {}
-          location.reload();
+          // A board's frame: the board loads it anew behind this one and swaps them (board/mount.ts again), no blank frame.
+          if (!frame || !(top as unknown as { __labBoard?: { again?: (n: string) => boolean } }).__labBoard?.again?.(window.name)) location.reload();
         });
     const reload = () => {
       // A tab in the background doesn't reload on every save: it reloads once, when you come back to it.

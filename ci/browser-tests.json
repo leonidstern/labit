@@ -39,6 +39,7 @@
   "areacard": 7,
   "shortcuts": 26,
   "pointerswitch": 14,
+  "contextmenu": 30,
   "boardmode": 5,
   "boardpins": 8,
   "boardview": 13,
@@ -66,6 +67,8 @@
   "pincontext": 29,
   "widgetkeys": 5,
   "boardflash": 8,
+  "boardhidepins": 10,
+  "tipedge": 6,
   "boardsbar": 40,
   "boardselect": 25,
   "boxfits": 36,
@@ -81,6 +84,7 @@
   "firstcomment": 12,
   "togglepins": 12,
   "colabitoff": 4,
+  "boardfull": 35,
   "quirkspage": 40,
   "boarddone": 15
 }

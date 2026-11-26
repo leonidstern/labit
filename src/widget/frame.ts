@@ -32,11 +32,25 @@ export function startFrame(script: HTMLScriptElement | null) {
     part: (name: string) => import(new URL(`${name}.js`, script?.src || location.href).href),
   });
   startLive();
-  // An entered frame's wheel scrolls its own page and stops at its end: it never runs on into the page behind a board's view.
-  document.documentElement.style.overscrollBehavior = 'contain';
   // A press in this page (the frame is entered: only then do presses reach it) is a press outside whatever the board's
   // widget has open, a comment or the chat: the board is told, and closes it as a click outside does on a page.
   addEventListener('pointerdown', (e) => e.button === 0 && board()?.pressed?.(), true);
+  // The middle or a side button pans the board here too, as on its canvas, and a side button's lift steps no page back or
+  // forward (Leo, 26 Nov: "mouse side buttons to pan board", "and wheel down too"). Screen px: the frame is zoomed.
+  let pan: { x: number; y: number } | null = null;
+  addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'touch' || ![1, 3, 4].includes(e.button)) return;
+    e.preventDefault();
+    pan = { x: e.screenX, y: e.screenY };
+    document.documentElement.style.cursor = 'grabbing'; // the hand, as on the board (Leo, 26 Nov: "show hand on all three")
+    document.documentElement.setPointerCapture?.(e.pointerId);
+  }, true);
+  addEventListener('pointermove', (e) => {
+    if (!pan) return;
+    board()?.pan?.(e.screenX - pan.x, e.screenY - pan.y);
+    pan = { x: e.screenX, y: e.screenY };
+  }, true);
+  for (const t of ['pointerup', 'pointercancel', 'mouseup']) addEventListener(t, (e) => ((pan = null), document.documentElement.style.removeProperty('cursor'), (e as MouseEvent).button > 2 && e.preventDefault()), true);
   // What the board may ask of this page (the rest of the bridge comes with the pins).
   Object.assign(window, { __labSpot: { clear: () => getSelection()?.removeAllRanges() } });
   // A key heard here goes to the board unless the page used it or is typing in it: the board's keys work in a focused frame.

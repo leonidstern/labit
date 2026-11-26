@@ -242,7 +242,7 @@ try {
       const opened = await menu();
       check(eng, 'a right-click on a moving thing opens the motion menu at the pointer, its moment first',
         opened.open && /^loop \d/.test(opened.head || '') && Math.abs(opened.at.x - sx) < 3 && Math.abs(opened.at.y - sy) < 3 && opened.speed === '1'
-        && JSON.stringify(opened.items) === JSON.stringify(['pause', `comment at ${opened.head.match(/^loop ([\d.]+)/)[1]} s`, 'pause all motion']), JSON.stringify(opened));
+        && JSON.stringify(opened.items) === JSON.stringify([`comment at ${opened.head.match(/^loop ([\d.]+)/)[1]} s`, 'pause', 'pause all motion']), JSON.stringify(opened));
       await pick('pause');
       await until(p, () => document.getElementById('s').getAnimations()[0]?.playState === 'paused', null, 600);
       const one = await menu();
@@ -250,7 +250,7 @@ try {
       check(eng, 'its pause stops only that one, closes the menu and drops no pin', one.anim === 'paused' && one.other === 'running' && !one.open && noPin, JSON.stringify({ one, noPin }));
       await p.mouse.click(sx, sy, { button: 'right' });
       await sleep(200);
-      check(eng, 'on a paused one the menu says play', (await menu()).items?.[0] === 'play');
+      check(eng, 'on a paused one the menu says play', (await menu()).items?.[1] === 'play', JSON.stringify((await menu()).items)); // after comment, first (Leo, 26 Nov)
       await pick('play');
       await until(p, () => document.getElementById('s').getAnimations()[0]?.playState === 'running', null, 600);
       await p.mouse.click(sx, sy, { button: 'right' });
@@ -263,19 +263,19 @@ try {
       await sleep(150);
       check(eng, '1 gives it its own speed back', await p.evaluate(() => document.getElementById('s').getAnimations()[0]?.playbackRate === 1));
       await p.keyboard.press('Escape');
-      // Anywhere else, or with ⇧: the browser's own menu (labit leaves the event alone).
+      // Still text: labit's own menu too (Leo, 26 Nov, the right-click menu); with ⇧ the browser's (labit leaves the event alone).
       await p.evaluate(() => addEventListener('contextmenu', (e) => (window.__cm = e.defaultPrevented)));
       const h1 = await p.evaluate(() => document.querySelector('h1').getBoundingClientRect().toJSON());
       await p.mouse.click(h1.left + 20, h1.top + h1.height / 2, { button: 'right' });
-      await sleep(150);
-      const plain = await p.evaluate(() => window.__cm);
+      await sleep(400);
+      const plain = (await menu()).open;
       await p.keyboard.press('Escape');
       await p.keyboard.down('Shift');
       await p.mouse.click(sx, sy, { button: 'right' });
       await p.keyboard.up('Shift');
       await sleep(150);
       const shifted = await p.evaluate(() => window.__cm);
-      check(eng, 'a right-click on still text, or ⇧ right-click, is the browser\'s own', plain === false && shifted === false && !(await menu()).open, JSON.stringify({ plain, shifted }));
+      check(eng, 'a right-click on still text opens labit\'s menu; ⇧ right-click is the browser\'s own', plain === true && shifted === false && !(await menu()).open, JSON.stringify({ plain, shifted }));
       await p.keyboard.press('Escape');
       await p.keyboard.press('s');
       await until(p, () => ['s', 't'].every((id) => document.getElementById(id).getAnimations()[0]?.playbackRate === 0.25), null, 1200);

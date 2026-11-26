@@ -31,7 +31,7 @@ import { numberOf as pinNumber } from '../lib/schema.mjs';
 import { flushPins, heldPin, holdPin, letPin, newPass, readPins } from './widget/pinhold.ts';
 import { bindMessages, foldRow, foldStatus, isStatus, stampOf } from './widget/messages.ts';
 import { afterLeave, backFromReveal, bindSheets, backCloses, fromTap, holdKeyboard, leave, letGo, liftedDraft, revealDraft, roomFor, slideAway, startSheets, swipeDown } from './widget/sheets.ts';
-import { bindList, drawList, goTo, lineOf, lineUp, ord, revealOpen, stepMoved, stepNew, workState } from './widget/list.ts';
+import { bindList, drawList, goTo, lineOf, lineUp, noteOpened, ord, revealOpen, stepBack, stepMoved, stepNew, workState } from './widget/list.ts';
 import { bindChat, drawChat, stamped } from './widget/chat.ts';
 import { bindThread, grab, openAsk, moveTicked, pickByKey, pickTicked, placeBeside, placeCard, threadCard } from './widget/thread.ts';
 import { isTrying, pauseTry, relight } from './widget/trial.ts';
@@ -40,8 +40,8 @@ import { inFrame, startFrame } from './widget/frame.ts';
 import { holdWhileOpen } from './widget/hold.ts';
 import { inkSvg } from './widget/ink.ts';
 import { bindActions } from './widget/actions.ts';
-import { bindDrag, draftHasText, endDrag, inkSaid, offerSelection, startDrag } from './widget/drag.ts';
-import { boardStrip, bindBoardCam, newBoard, pinBoardGone, showBoard } from './widget/boardcam.ts';
+import { bindDrag, draftHasText, drawOnce, endDrag, inkSaid, offerSelection, startDrag } from './widget/drag.ts';
+import { boardStrip, bindBoardCam, newBoard, pinBoardGone, pressBoard, showBoard } from './widget/boardcam.ts';
 import { bindFramework, overFramework, scanForFramework } from './widget/framework.ts';
 import { bindKeys } from './widget/keys.ts';
 
@@ -92,6 +92,8 @@ import { bindKeys } from './widget/keys.ts';
     get agentOf() { return agentOf; },
     anchorAt,
     begin,
+    offerSelection,
+    drawOnce: () => (drawOnce(), void part('draw')),
     boardStrip,
     sendDrawing,
     get addComment() { return addComment; },
@@ -703,6 +705,13 @@ import { bindKeys } from './widget/keys.ts';
   }
   // Command-Z (Control-Z elsewhere), not in a text box: the last pin or go placed from this tab goes away. This
   // computer deletes it; a guest, who can't delete, resolves it (it steps aside).
+  // This computer takes a thread away for good (⌘Z on the last one placed, a pin's right-click menu): its replies and a
+  // board pin's board go with it.
+  const dropThread = async (id) => {
+    await send({ action: 'delete', id });
+    S.comments = S.comments.filter((x) => x.id !== id && x.parent !== id);
+    pinBoardGone(id);
+  };
   async function undoLast() {
     const id = placed.pop();
     const c = id && S.comments.find((x) => x.id === id);
@@ -712,11 +721,8 @@ import { bindKeys } from './widget/keys.ts';
     // board stays, as a guest's ⌘Z does (issue 422: deleting it took the board and its pictures).
     const keep = S.pinBoards?.has(id) && S.undo?.id !== id;
     try {
-      if (S.isAdmin && !keep) {
-        await send({ action: 'delete', id });
-        S.comments = S.comments.filter((x) => x.id !== id && x.parent !== id);
-        pinBoardGone(id);
-      } else if (S.isAdmin) {
+      if (S.isAdmin && !keep) await dropThread(id);
+      else if (S.isAdmin) {
         const { comment } = await send({ action: 'resolve', id });
         Object.assign(c, comment);
       } else if (ownKey) {
@@ -928,6 +934,7 @@ import { bindKeys } from './widget/keys.ts';
     const row = el('button', { type: 'button' }, b.title || b.name);
     row.append(el('span', { class: 'n' }, ` · ${b.frames}`));
     row.addEventListener('click', (e) => (e.stopPropagation(), setMenu(false), void showBoard(b.name)));
+    row.addEventListener('pointerdown', pressBoard);
     return row;
   }), newBoardBtn, ...(coarse ? [] : [boardHeld])];
   function placeBar() {
@@ -1042,6 +1049,7 @@ import { bindKeys } from './widget/keys.ts';
   // (bfcache) has its scroll already, so the key goes, or a later reload would jump.
   if (!S.board && self === top) {
     const scrollKey = 'lab-scroll:' + location.pathname;
+    document.addEventListener('pointerdown', (e) => !e.button && !pinsControls(e) && e.target instanceof Element && /\/_lab\/board\/[a-z0-9]/i.test(e.target.closest('a[href]')?.getAttribute('href') || '') && pressBoard(), true);
     document.addEventListener('click', (e) => {
       const a = /** @type {HTMLAnchorElement | null} */ (e.target instanceof Element ? e.target.closest('a[href]') : null);
       if (!a || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || (a.target && a.target !== '_self')) return;
@@ -1071,6 +1079,7 @@ import { bindKeys } from './widget/keys.ts';
   // A pin the browser holds (pinhold.ts) is tied to its frame's box and left alone.
   const onBoard = (/** @type {HTMLElement} */ n, /** @type {any} */ a) => {
     n.classList.toggle('onb', a?.kind === 'board' && !heldPin(n)); // hidden while the view slides (styles.css)
+    n.classList.toggle('onp', a?.kind !== 'board'); // the page's own: hidden all at once while a board is over the page (styles.css)
     if (a?.kind !== 'board' || heldPin(n)) return void (n.style.position && (n.style.position = ''));
     n.style.position = 'fixed';
     n.style.left = `${parseFloat(n.style.left) - scrollX}px`;
@@ -1207,7 +1216,7 @@ import { bindKeys } from './widget/keys.ts';
       if (isPage(c)) return; // in the chat, not on the page
       // Done pins with nothing new in them step aside when done ones are hidden (D); an open one stays.
       if (!S.showDone && S.openId !== c.id && (c.resolved || workState(c)[0] === 'done') && !unread(c).length) return;
-      const { left, top, moved, zone, clipped, covered, why } = places.get(c.id) || placeOf(c);
+      const { left, top, moved, zone, clipped, why } = places.get(c.id) || placeOf(c);
       if (moved || why === 'hidden') lost.add(c.id);
       // A pin whose spot is gone is off the page: the ⋯ menu lists them ("moved · N"); an open one shows, to drop on a
       // new spot (drag) or close. The agent finishing one closes it.
@@ -1308,8 +1317,8 @@ import { bindKeys } from './widget/keys.ts';
         pin.append(inkSvg(ink, { left: 0, top: 0, width: zone.width, height: zone.height }));
       }
       const held = placePin(pin, c, ink && zone, left, top, moved);
-      // Cut off by a box it's inside (see position; a held pin: the browser), or under a board's view over the page.
-      pin.style.visibility = ((clipped && !held) || covered) && S.openId !== c.id ? 'hidden' : '';
+      // Cut off by a box it's inside (see position; a held pin: the browser). Under a board's view: styles.css, .onp.
+      pin.style.visibility = clipped && !held && S.openId !== c.id ? 'hidden' : '';
       if (born) {
         // Bound once; they read what the pin shows now (pinData), not what it showed when it was made.
         grab(pin, () => pinData.get(pin).c);
@@ -1330,13 +1339,24 @@ import { bindKeys } from './widget/keys.ts';
           if (isTrying()) relight(); // a tried choice: its green back
           else markQuote(S.quoted);
         });
-        // A right-click on a pin on a video takes the video back to its frame and pauses it, as a click does (Leo, 24 Nov).
+        // A right-click on a pin or a drawing: its own menu (Leo, 26 Nov: "on pins also should work and on drawings"):
+        // open or close it, resolve it or open it again, and a pin on a video takes the video back to its frame (Leo,
+        // 24 Nov). ⇧ or ⌥ right-click: the browser's. Phones hold a pin to move it, as before.
         pin.addEventListener('contextmenu', (e) => {
-          const m = pinData.get(pin).c.anchor?.moment;
-          if (m?.kind !== 'video' || e.shiftKey) return;
+          if (coarse || e.shiftKey || e.altKey) return;
           e.preventDefault();
           e.stopPropagation();
-          void (mo ? Promise.resolve(mo) : loadMotion()).then((x) => x?.showMoment(m));
+          S.menuAt = Date.now();
+          const c = pinData.get(pin).c;
+          const m = c.anchor?.moment;
+          if (m?.kind === 'video') void (mo ? Promise.resolve(mo) : loadMotion()).then((x) => x?.showMoment(m)); // the video back to its frame, as before (Leo, 24 Nov)
+          const open = () => S.openId === c.id || pin.click();
+          const rows = [[S.openId === c.id ? 'close' : 'open', () => pin.click()],
+            ['reply', () => (open(), setTimeout(() => /** @type {HTMLElement | null} */ (root.querySelector('.card textarea'))?.focus({ preventScroll: true }), 60)), KEYS.reply]];
+          if (mayResolve(c)) rows.push([c.resolved ? 'open again' : 'resolve', () => toggleResolved(c), KEYS.done]);
+          // This computer (the lab's admin) can take a thread away, as ⌘Z does for the last one placed.
+          if (S.isAdmin) rows.push(['delete', () => void dropThread(c.id).then(() => ((S.openId = S.openId === c.id ? null : S.openId), render()), () => {})]);
+          void loadMotion().then((x) => x?.menuWith(e.clientX, e.clientY, rows));
         });
         pin.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -1370,6 +1390,7 @@ import { bindKeys } from './widget/keys.ts';
         if (appear && !S.stepping) card.classList.add('in');
         // Reduced motion: the page's scroll to the pin is instant, so the card is drawn again within its fade: it keeps the fade (a fresh node has no class).
         if (appear) S.inAt = performance.now();
+        if (appear) noteOpened(c.id); // ⇧W walks back through these (list.ts)
         else if (still.matches && performance.now() - S.inAt < 200) card.classList.add('in');
         if (prevHeight) card.style.minHeight = `min(${prevHeight}px, var(--_thread-max))`;
         S.stepping = S.keepKeys = false;
@@ -1665,6 +1686,9 @@ import { bindKeys } from './widget/keys.ts';
   // once something on the page moves (a video, an animation: looked for a second after the page starts, when one
   // starts, and on a phone each second), when P or S is pressed, or a comment has a moment; mo: the module, once it is.
   const loadMotion = () => (moAsked ??= part('motion').then((m) => (m.bindMotion(W), (mo = m), placeBar(), m)).catch(() => (moAsked = null))); // placeBar: phones get ⋯ → motion
+  // A computer's right-click menu is the motion file's (motion.ts menuAt): it comes in once the page is idle, so the first
+  // right-click opens at once instead of after a download (Leo, 26 Nov: "it was some super lag").
+  if (!coarse) setTimeout(() => void loadMotion(), 1500);
   const lookForMotion = () => {
     if (!moAsked && (document.querySelector('video') || document.getAnimations().some((a) => !root.contains(/** @type {any} */ (a.effect)?.target)))) void loadMotion();
   };
@@ -1769,21 +1793,21 @@ import { bindKeys } from './widget/keys.ts';
       return void undoLast();
     }
     // ⌥W (Leo 18 Nov: w does nothing in a text box) or Control-D goes to the next new comment from the widget's text boxes
-    // too, where a plain W types a letter; Shift: back. By the key's place: Option turns W into ∑ on a Mac.
+    // too, where a plain W types a letter; Shift: back through the ones read. By the key's place: Option turns W into ∑ on a Mac.
     const nextKey = (e.altKey && !e.ctrlKey && e.code === 'KeyW') || (e.ctrlKey && !e.altKey && e.code === 'KeyD');
     if (S.on && nextKey && !e.metaKey && !(typing(e) && !e.composedPath().includes(host))) {
       e.preventDefault();
       // Words typed in a reply box aren't thrown away: it nudges instead, send or clear them first.
       const typed = /** @type {HTMLTextAreaElement | null} */ (root.querySelector('.card textarea, .float textarea'));
       if (typed?.value.trim()) return shake(typed.closest('.card, .float'));
-      return stepNew(e.shiftKey ? -1 : 1);
+      return e.shiftKey ? stepBack() : stepNew(1);
     }
     const act = actionOf(e);
     // The list's keys, with comments shown and nothing typed: L list, T chat, J/K next/previous, R reply, E resolve.
     // By the key's place, not its letter, so the keys work with any layout (Russian, Greek…): the C key is C (keyOf).
-    // The keys (Leo, 2026-11-15/16), marked in the bar's words: cha(t) (C was chat until 19 Nov), ne(w) (Shift-W: the one before),
+    // The keys (Leo, 2026-11-15/16), marked in the bar's words: cha(t) (C was chat until 19 Nov), ne(w) (Shift-W: back to the one read before),
     // P pause, M hide, E show/hide done. With a thread open: R reply, E resolve (done's own key).
-    // Shift is only for next (Shift-W: the one before); ⇧D, ⇧B and the rest belong to the board.
+    // Shift is only for next (Shift-W: back through the ones read); ⇧D, ⇧B and the rest belong to the board.
     // H folds the bar into the rabbit or opens it (Leo, 26 Nov). Computers only.
     // C and V (Leo, 26 Nov): the pin (comment on links and buttons too) or the arrow (use the page), as in the bar, with
     // comments shown. Computers only.
@@ -1798,7 +1822,7 @@ import { bindKeys } from './widget/keys.ts';
       if (k === 'slow') return void loadMotion().then((m) => m?.setSlow(!S.slow));
       if (k === 'chat') return chatBtn.click();
       if (k === 'walkie') return walkieBtn.hidden || S.openId || S.draft || walkieBtn.click(); // not over an open card: its keys stay its own
-      if (k === 'next') return stepNew(e.shiftKey ? -1 : 1);
+      if (k === 'next') return e.shiftKey ? stepBack() : stepNew(1);
       if (k === 'draw') return void ((S.dKey = true), (S.drew = false), part('draw')); // held, D draws (draw.ts); ⇧D tapped alone stays the board's
       // E (Leo, 21 Nov: "another key its clashing now with draw, move to E"): done threads show or hide; with a thread open it is its resolve (the same key, the thread open first).
       if (k === 'done' && !S.openId) return toggleDone();
@@ -2020,6 +2044,19 @@ import { bindKeys } from './widget/keys.ts';
   document.addEventListener('pointercancel', () => (stopPress(), pressing(false)), true);
   addEventListener('scroll', stopPress, { passive: true, capture: true });
   document.addEventListener('contextmenu', (e) => (S.press || S.afterDrag) && e.preventDefault(), true);
+  // ⌃ click is a Mac's right-click: it opens the menu, and its click, which still comes, does nothing (it opened the pin
+  // under it, and the menu's "open" then closed it again: Leo, 26 Nov, "open/resolve doesnt work").
+  addEventListener('click', (e) => e.ctrlKey && Date.now() - S.menuAt < 1000 && (e.preventDefault(), e.stopImmediatePropagation()), true);
+  // The right-click menu (Leo, 26 Nov, option 3 of /context-menu): labit's own, its rows from what is under the pointer
+  // (motion.ts menuAt). ⌥ or ⇧ right-click, a board, full screen or comments hidden: the browser's. Computers only.
+  addEventListener('contextmenu', (e) => {
+    if (coarse || !S.on || e.shiftKey || e.altKey || boardShown() || document.fullscreenElement || e.composedPath().includes(host) || isOff(e)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    S.menuAt = Date.now();
+    const [x, y, t] = [e.clientX, e.clientY, e.target];
+    void loadMotion().then((m) => m?.menuAt(x, y, t));
+  }, true);
   // The actions row of a new comment (the box is the comment, so no button for it): your own actions (labit.json
   // `actions`), each sending its text at once on a click. They go through the box's own send, so a missing name is asked
   // for there, a lab that can't be reached keeps them. ⌥ + 1…4 runs the nth button (holding ⌥ shows the numbers).
@@ -2117,7 +2154,15 @@ import { bindKeys } from './widget/keys.ts';
 
   // A pin whose 28 px would hang past the screen's right edge points the other way: its body left of its tip, so it is
   // seen whole and never makes the page scroll sideways (a phone's sheets then measure a wider page and are cut off).
-  const flipAt = (pin, left, zone) => pin.classList.toggle('flip', !zone && left + 28 > viewW);
+  // Its tip (what a working pin is doing, on hover) opens toward the wider side and never past the window: shown or not,
+  // it is laid out, and one past the right edge widened the page (a 390 px page scrolled sideways to 587 px).
+  const flipAt = (pin, left, zone) => {
+    const flip = !zone && left + 28 > viewW;
+    const toLeft = left * 2 > viewW;
+    pin.classList.toggle('flip', flip);
+    pin.classList.toggle('tl', toLeft);
+    pin.style.setProperty('--tm', `${Math.max(0, toLeft ? left + (flip ? 4 : 32) : viewW - left + (flip ? 24 : -4)) - 8}px`);
+  };
   // A pin at its spot; a drawing (draw.ts) over its whole area, its lines stretched to it.
   const inkAt = (pin, zone, left, top) => {
     const svg = zone && pin.querySelector(':scope > svg');
@@ -2135,12 +2180,12 @@ import { bindKeys } from './widget/keys.ts';
     let held;
     if (a.kind === 'board') {
       // A board pin on a frame: tied to the frame's box by its share of it, so the board's camera carries it (pinhold.ts).
-      // Its size from the board, not the box: reading the box after the last pin was written lays the page out again, once per pin.
+      // Its size from the board, not the box (t: as tall as its page, h: as stored, what an area's shares are of): reading the box after the last pin was written lays the page out again, once per pin.
       const B = /** @type {any} */ (window).__labBoard;
       const box = a.frame && a.fx !== undefined ? B?.box?.(a.frame) : null;
-      const size = box && (B.size?.(a.frame) || { w: box.offsetWidth, h: box.offsetHeight });
+      const size = box && B.size(a.frame);
       // (an area's pin is at the corner where the drag ended)
-      const share = size?.w && size.h ? { x: (a.fx + (a.pinX ? (a.zw || 0) * size.w : 0)) / size.w, y: ((a.fy || 0) + (a.pinY ? (a.zh || 0) * size.h : 0)) / size.h } : null;
+      const share = size?.w && size.h ? { x: (a.fx + (a.pinX ? (a.zw || 0) * size.w : 0)) / size.w, y: ((a.fy || 0) + (a.pinY ? (a.zh || 0) * size.h : 0)) / size.t } : null;
       held = holdPin(pin, Boolean(share), share ? box : null, left, top, share || undefined);
     } else {
       const node = moved ? null : findTarget(a);
@@ -2203,9 +2248,9 @@ import { bindKeys } from './widget/keys.ts';
     const places = read.filter(([, at]) => !at.moved);
     readPins(places.map(([, , c]) => (c.anchor?.kind === 'board' ? frameBox(c.anchor) : findTarget(c.anchor || {}))));
     if (places.length + all.filter(skip).length !== pinsById.size || places.some(([pin]) => !pin)) return render(); // one lost or found its spot
-    for (const [pin, { left, top, clipped, covered, zone }, c] of places) {
+    for (const [pin, { left, top, clipped, zone }, c] of places) {
       const held = placePin(pin, c, pin.classList.contains('ink') && zone, left, top, false);
-      pin.style.visibility = (clipped && !held) || covered ? 'hidden' : '';
+      pin.style.visibility = clipped && !held ? 'hidden' : '';
     }
     flushPins();
   };
@@ -2224,7 +2269,7 @@ import { bindKeys } from './widget/keys.ts';
     if (at.moved || at.zone) return false;
     readPins([findTarget(a)]);
     const held = placePin(pin, c, false, at.left, at.top, false);
-    pin.style.visibility = (at.clipped && !held) || at.covered ? 'hidden' : '';
+    pin.style.visibility = at.clipped && !held ? 'hidden' : '';
     flushPins();
     const bx = besideVideo(a);
     if (bx != null) placeCard(card, bx + 14, at.top, null, at.top - 40);

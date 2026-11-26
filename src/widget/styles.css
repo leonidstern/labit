@@ -136,6 +136,9 @@ button.pin.ink, button.pin.ink:is(:hover, :active, .open) { margin: 0; backgroun
 .pin.ink:is(.in, .arrive, .swap) { animation: none; } /* a drawing is not a pin: it doesn't pop in, arrive or bounce (Leo, 21 Nov: "dont do clicks animations on drawings like on pins") */
 .pin.ink, .pin.ink path:not(.hit) { transition: none; }
 :host([data-board-slide]) .onb { opacity: 0 !important; transition: none; pointer-events: none; }
+/* A board over the page hides every pin of the page in the frame it shows, by this one attribute (boardcam.ts): pin by pin,
+   as each was found under the view, Safari showed them going one by one, and back while the view slid in. */
+:host([data-board]) .onp:not(.open) { visibility: hidden !important; }
 .pin.ink:is(:hover, .open) path:not(.hit) { stroke-width: 4px; }
 .zone { position: absolute; background: none;
         border-radius: var(--_radius); pointer-events: none; }
@@ -170,8 +173,8 @@ button.pin.ink, button.pin.ink:is(:hover, :active, .open) { margin: 0; backgroun
 /* Hovering a working pin shows what it is doing (a phone has no hover: its sheet's head says it). */
 .pin.flip { margin-left: -28px; border-radius: 50%; border-bottom-right-radius: max(0px, calc(var(--_r-s) - 4px)); } /* by the right edge: its tip on the right (comments.js flipAt) */
 .pin.flip .ring { border-radius: 50%; border-bottom-right-radius: var(--_r-s); }
-.pin.flip .tip { left: auto; right: -4px; }
-.pin .tip { position: absolute; left: -4px; bottom: calc(100% + 10px); width: max-content; max-width: 240px; padding: 6px 9px; border-radius: var(--_r-s);
+.pin.tl .tip { left: auto; right: -4px; }
+.pin .tip { position: absolute; left: -4px; bottom: calc(100% + 10px); width: max-content; max-width: min(240px, var(--tm, 240px)); padding: 6px 9px; border-radius: var(--_r-s);
             background: var(--_bg); color: var(--_muted); box-shadow: var(--_shadow); font-size: 12px; letter-spacing: 0; font-weight: 400; line-height: 1.35;
             text-align: left; white-space: normal; pointer-events: none; opacity: 0; transform: translateY(2px); transition: opacity var(--_fade), transform var(--_fade); z-index: 6; }
 .pin:hover .tip { opacity: 1; transform: none; }

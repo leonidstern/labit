@@ -276,3 +276,61 @@ test('a plain folder of pages is served as pages even with a server running in i
     rm([dir]);
   }
 });
+
+test('a dev server that has a lab already gets no second one; `use` moves a lab onto another build in place', async () => {
+  const home = tmp('home');
+  const env = { ...process.env, LABIT_HOME: home };
+  const site = (await import('node:http')).createServer((q, s) => s.end('<title>Site</title>'));
+  const devPort = claimPort(6300, 90);
+  await new Promise((r) => site.listen(devPort, '127.0.0.1', r));
+  const [a, b] = [fs.realpathSync(tmp('front-a')), fs.realpathSync(tmp('front-b'))];
+  const lab = spawn(process.execPath, [LAB, '--no-open', '--proxy', String(devPort), '--port', String(claimPort(6400, 90))], { cwd: a, env });
+  kids.push(lab);
+  const reg = path.join(home, 'servers');
+  // Read again while the file is swapped: the new lab writes it once it listens.
+  const read = () => {
+    try {
+      return fs.readdirSync(reg).map((f) => JSON.parse(fs.readFileSync(path.join(reg, f), 'utf8'))).find((l) => l.root === a) || {};
+    } catch {
+      return {};
+    }
+  };
+  for (let i = 0; i < 50 && !(fs.existsSync(reg) && fs.readdirSync(reg).length); i++) await sleep(100);
+  const { port, pid } = read();
+  const second = await cli(['--no-open', '--proxy', String(devPort)], { cwd: b, env });
+  assert.equal(second.code, 0, second.out);
+  assert.match(second.out, new RegExp(`:${devPort} has a lab already: http://localhost:${port}`));
+  assert.ok(!fs.existsSync(path.join(b, '.lab')), 'no second lab started');
+  // A lab of its own coming back (a newer build, a park, a restart) starts: 26 Nov, a lab followed a new build and
+  // the new one refused to start, leaving its site with no lab.
+  fs.mkdirSync(path.join(b, '.lab'));
+  const back = spawn(process.execPath, [LAB, '--no-open', '--proxy', String(devPort), '--port', String(claimPort(6500, 90))], { cwd: b, env });
+  kids.push(back);
+  for (let i = 0; i < 50 && fs.readdirSync(reg).length < 2; i++) await sleep(100);
+  assert.equal(fs.readdirSync(reg).length, 2, 'the lab came back');
+  back.kill();
+  for (let i = 0; i < 50 && fs.readdirSync(reg).length > 1; i++) await sleep(100);
+  // Another session listening here would have its pages moved too: refused, unless the person said so (--new).
+  const other = spawn(process.execPath, [LAB, 'wait', '--timeout', '60'], { cwd: a, env: { ...env, CLAUDE_CODE_SESSION_ID: 'other' } });
+  kids.push(other);
+  for (let i = 0; i < 50 && !(await cli(['list'], { cwd: a, env })).out.includes('other'); i++) await sleep(100);
+  const me = { cwd: a, env: { ...env, CLAUDE_CODE_SESSION_ID: 'me' } };
+  const refused = await cli(['use'], me);
+  assert.equal(refused.code, 1, refused.out);
+  assert.match(refused.out, /another session listens on this lab/);
+  assert.equal(read().pid, pid, 'the lab stayed');
+  // The same file stands in for a branch's build: the lab starts again from it, on its port, in its folder.
+  const used = await cli(['use', '--new'], me);
+  assert.equal(used.code, 0, used.out);
+  let now = read();
+  for (let i = 0; i < 100 && (now.pid ?? pid) === pid; i++) await sleep(100), (now = read());
+  assert.notEqual(now.pid, pid, 'a new process took over');
+  assert.equal(now.port, port);
+  assert.equal(now.root, a);
+  process.kill(now.pid);
+  other.kill();
+  site.closeAllConnections();
+  site.close();
+  for (let i = 0; i < 50 && fs.readdirSync(reg).length; i++) await sleep(100);
+  rm([a, b, home]);
+});

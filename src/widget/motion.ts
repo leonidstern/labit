@@ -233,11 +233,17 @@ let box: HTMLElement;
 let open = false;
 let target = null; // what it is about; none: the whole page (a phone's first sheet)
 let spot = null; // where it was opened or picked: a comment from it goes there
+let custom = null; // a pin's or a drawing's own rows (comments.js): [words, run, key?]
+let under = null; // a computer's right-click: what was under the pointer (motion.ts's own menu: nothing moves there)
 let moment; // the target's moment as the menu opened: its first line and its comment's
 const words = (m) => momentText({ ...m, playing: undefined });
 const short = (m) => (m.kind === 'video' ? clock(m.at, true) : `${Math.round(m.at * 10) / 10} s`);
-const item = (label, run, keep = W.coarse) => {
+const item = (label, run, keep = W.coarse, key = '') => {
   const b = W.el('button', { type: 'button' }, label);
+  if (key) {
+    b.append(W.el('kbd', {}, key));
+    b.dataset.key = key;
+  }
   b.addEventListener('click', (e) => {
     e.stopPropagation();
     run();
@@ -257,16 +263,45 @@ const speedRow = (now, set) => {
   row.append(seg);
   return row;
 };
+// The right-click menu's rows where nothing moves (Leo, 26 Nov, option 3): comment first; on a link, button or field,
+// commenting on it and (with the pin, where a click comments) using it; elsewhere drawing, and quoting selected words.
+const CTL = 'a[href],button,input,select,textarea,summary,label,[role=button],[role=link]';
+const hereRows = (rows: HTMLElement[]) => {
+  const at = spot;
+  const pin = () => (closeMotion(), W.begin(W.anchorAt(at.x, at.y)));
+  const ctl = under?.closest?.(CTL);
+  const said = String(getSelection?.() || '').trim();
+  if (ctl) {
+    const name = ctl.matches('a') ? 'link' : ctl.matches('input, select, textarea') ? 'field' : 'button';
+    rows.push(item(`comment on this ${name}`, pin, false));
+    if (W.commenting()) rows.push(item(`use this ${name}`, () => (name === 'field' ? ctl.focus() : ctl.click()), false));
+  } else {
+    rows.push(item('comment here', pin, false), item('draw here', W.drawOnce, false, `hold ${W.KEYS.draw}`));
+    if (said) rows.push(item('quote these words', () => W.offerSelection(), false, '⇧ drag'));
+  }
+};
 const fill = () => {
   const rows: HTMLElement[] = W.coarse ? [W.el('div', { class: 'handle' })] : [];
-  if (!target) {
+  if (custom) rows.push(...custom.map(([l, run, key]) => item(l, run, false, key)));
+  else if (under && !target) hereRows(rows);
+  else if (!target) {
     rows.push(W.el('div', { class: 'lab-head' }, 'motion'), item('pick on page', startPick, false), item(S.paused ? 'play all' : 'pause all', () => setPause(!S.paused)), speedRow(pageRate, (v) => setRate(null, v)));
   } else {
     rows.push(W.el('div', { class: 'lab-head' }, moment ? words(moment) : nameOf(target)));
-    rows.push(item(isStill(target) ? 'play' : 'pause', () => (setItem(target, !isStill(target)), (moment = momentOf(target) || moment)))); // its moment as it stopped
+    // A computer's menu says comment first (option 3); a phone's sheet keeps it after the controls.
+    const said = moment ? item(`comment at ${short(moment)}`, comment, false) : under ? item('comment here', comment, false) : null;
+    if (said && under) rows.push(said);
+    const pause = item(isStill(target) ? 'play' : 'pause', () => (setItem(target, !isStill(target)), (moment = momentOf(target) || moment))); // its moment as it stopped
+    pause.dataset.key = W.KEYS.pause; // P works while the menu is open, as R and E do
+    rows.push(pause);
     rows.push(speedRow(rateOf.get(target) ?? pageRate, (v) => setRate(target, v)));
-    if (moment) rows.push(item(`comment at ${short(moment)}`, comment, false));
+    if (said && !under) rows.push(said);
     if (!W.coarse) rows.push(W.el('hr', {}), item(S.paused ? 'play all motion' : 'pause all motion', () => setPause(!S.paused)));
+  }
+  if (under && !custom) { // the browser's own menu is a key away
+    const hint = W.el('div', { class: 'hint-row' }, 'browser menu');
+    hint.append(W.el('kbd', {}, `${/Mac/.test(navigator.platform) ? '⌥' : 'alt'} right-click`));
+    rows.push(W.el('hr', {}), hint);
   }
   box.replaceChildren(...rows);
 };
@@ -276,11 +311,13 @@ function refresh() {
 const comment = () => {
   const m = moment, at = spot;
   closeMotion();
-  W.begin({ ...W.anchorAt(at.x, at.y), moment: m }); // the moment as the menu opened, not as the comment starts
+  W.begin({ ...W.anchorAt(at.x, at.y), ...(m ? { moment: m } : {}) }); // the moment as the menu opened, not as the comment starts
 };
-const openFor = (el, at) => {
+const openFor = (el, at, t = null, list = null) => {
   target = el;
   spot = at;
+  under = t;
+  custom = list;
   moment = el ? momentOf(el) : undefined;
   fill();
   open = true;
@@ -296,6 +333,10 @@ const openFor = (el, at) => {
   const y = at.y + h + 4 > innerHeight ? Math.max(4, at.y - h) : at.y;
   box.style.inset = `${y}px auto auto ${x}px`;
 };
+/** Computers: the right-click menu at a point (comments.js): what moves there, else the page there. */
+export const menuAt = (x: number, y: number, t: Element) => openFor(thingAt(x, y), { x, y }, t);
+/** Computers: a pin's or a drawing's menu, its rows given (comments.js). */
+export const menuWith = (x: number, y: number, list) => openFor(null, { x, y }, null, list);
 /** Phones: ⋯ → motion, the sheet for the whole page. */
 export const openMotion = () => openFor(null, null);
 /** The open sheet (phones), for the widget's own sheet handling. */
@@ -334,19 +375,20 @@ export function bindMotion(w: unknown) {
     // A manual popover: above the page's own dialogs, closed here on a press elsewhere, Esc or leaving the window. An
     // auto one closed again in WebKit on the lift of the very right-click that opened it.
     if ('showPopover' in HTMLElement.prototype) box.popover = 'manual';
-    addEventListener('pointerdown', (e) => open && !e.composedPath().includes(box) && closeMotion(), true);
+    // A press outside only closes it: the click it ends pins nothing (docs/design-rules.md, S.menuShut in comments.js).
+    addEventListener('pointerdown', (e) => open && !e.composedPath().includes(box) && ((S.menuShut = Date.now()), closeMotion()), true);
     addEventListener('keydown', (e) => open && e.key === 'Escape' && (swallow(e), closeMotion()), true);
+    // The keys a row shows work while the menu is open (Leo, 26 Nov: "shortcuts there doesnt work when menu opened"):
+    // R replies, E resolves, P pauses, as the row would.
+    addEventListener('keydown', (e) => {
+      const key = open && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat ? W.KEYS[W.actionOf(e)] : '';
+      const row = key && box.querySelector<HTMLElement>(`button[data-key="${CSS.escape(key)}"]`);
+      if (!row) return;
+      swallow(e);
+      row.click();
+    }, true);
     addEventListener('blur', () => closeMotion());
   }
-  // Computers: a right-click on a moving thing (Leo, 23 Nov, 1a); anywhere else, or with ⇧, or with comments hidden, the
-  // browser's own menu. Full screen is the browser's.
-  addEventListener('contextmenu', (e) => {
-    if (W.coarse || !S.on || e.shiftKey || document.fullscreenElement || e.composedPath().includes(W.host) || W.isOff(e)) return;
-    const el = thingAt(e.clientX, e.clientY);
-    if (!el) return;
-    swallow(e);
-    openFor(el, { x: e.clientX, y: e.clientY });
-  }, true);
   addEventListener('pointerdown', (e) => {
     if (!picking || e.composedPath().includes(W.host)) return;
     e.stopImmediatePropagation(); // not a hold

@@ -11,7 +11,7 @@ const pw = playwright();
 const DIR = tmp('labit-boardpins-');
 const PORT = claimPort(8260, 30);
 const B = `http://localhost:${PORT}`;
-fs.writeFileSync(path.join(DIR, 'pricing.html'), '<!doctype html><meta charset="utf-8"><title>Pricing</title><h1>Pricing one</h1><div style="height:3000px"></div>');
+fs.writeFileSync(path.join(DIR, 'pricing.html'), '<!doctype html><meta charset="utf-8"><title>Pricing</title><h1>Pricing one</h1><div style="height:200px"></div>');
 fs.writeFileSync(path.join(DIR, 'checkout.html'), '<!doctype html><meta charset="utf-8"><title>Checkout</title><h1>Checkout</h1>');
 fs.writeFileSync(path.join(DIR, 'index.html'), '<!doctype html><meta charset="utf-8"><title>k</title><h1>Keys</h1><p>text</p>');
 fs.writeFileSync(path.join(DIR, 'labit.json'), JSON.stringify({ port: PORT }));
@@ -21,6 +21,12 @@ const put = (name, frames, extra = {}) => fetch(`${B}/_lab/api/board?name=${name
 await put('pins', [{ id: 'a', src: '/pricing', w: 390, h: 844 }, { id: 'b', src: '/pricing', w: 820, h: 600 }]); // no page: it keeps its own address and pins (a board about a page: boardhome.mjs)
 try {
   for (const eng of engines()) {
+    // Each engine starts from the same board (the one before moved frame a; a moved frame keeps its place, and the rows then
+    // start under it): its rev is the lab's now.
+    if (eng !== engines()[0]) {
+      const cur = await (await fetch(`${B}/_lab/api/board?name=pins`)).json();
+      await fetch(`${B}/_lab/api/board?name=pins`, { method: 'PUT', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ ...cur, frames: [{ id: 'a', src: '/pricing', w: 390, h: 844 }, { id: 'b', src: '/pricing', w: 820, h: 600 }] }) });
+    }
     const browser = await pw[eng].launch();
     try {
       const ctx = await browser.newContext({ viewport: { width: 1200, height: 800 } });

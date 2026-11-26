@@ -71,6 +71,7 @@ const HELP = `labit ${VERSION}: comment on local pages; your agent answers on th
   labit publish <page.html|folder> [--name topic] [--dev]
   labit invite [name] [--page /path]
   labit list | pages [--all] | settings | skill | update | preview [folder]
+  labit use   this lab moves onto the build you run this from (a branch)
   labit gc   what every lab on this computer keeps in its .lab, and what could go (only reports)
 
 For the agent:
@@ -125,7 +126,7 @@ const HERE = fs.realpathSync(path.resolve(opts.dir || '.'));
 // ---------- settings (lib/settings.ts) ----------
 // labit.json in the project and ~/.config/labit/settings.json fill in what the flags and variables leave out, by
 // setting them here, so everything below (and the commands) reads them as before.
-const COMMANDS = ['publish', 'preview', 'list', 'pages', 'wait', 'reply', 'resolve', 'thread', 'pin', 'invite', 'board', 'update', 'settings', 'skill', 'gc'];
+const COMMANDS = ['publish', 'preview', 'list', 'pages', 'wait', 'reply', 'resolve', 'thread', 'pin', 'invite', 'board', 'update', 'settings', 'skill', 'gc', 'use'];
 // Your list of actions is written into your settings once, when a lab starts (or `labit settings` shows it) with none there yet.
 if (!pos[0] || !COMMANDS.includes(pos[0]) || pos[0] === 'settings') {
   try {
@@ -311,6 +312,18 @@ if (!opts.proxy && !alreadyRunning) {
         `[lab] ${tilde(ROOT)} has ${pkg.scripts?.dev ? 'a dev script' : `${framework}`} but no dev server is running here: serving its HTML files as they are, without the framework. ` +
           `Start it (npm run dev) and run this again to put comments on the real app.${othersNote(others)}`,
       );
+  }
+}
+
+// One lab in front of a dev server: a second one splits its comments (26 Nov: two labs fronted one site). A branch goes
+// into that lab with `use`. Only a new lab: one with its .lab coming back (a newer build, a park, a restart) starts.
+if (opts.proxy && !alreadyRunning && !opts.new && !fs.existsSync(path.join(ROOT, '.lab'))) {
+  const port = new URL(proxyUrl(opts.proxy)).port;
+  const lab = runningLabs().find((l) => l.proxy && new URL(l.proxy).port === port);
+  if (lab) {
+    console.log(`[lab] :${port} has a lab already: http://localhost:${lab.port} (a second one: --new)`);
+    openInBrowser(`http://localhost:${lab.port}/`);
+    process.exit(0);
   }
 }
 
@@ -2821,6 +2834,19 @@ const handler = async (req, res) => {
       // A session that isn't answering doesn't end an answering session's wait (a loop left running re-arms every few
       // seconds): the two stay open, and pins go to the answering one first.
       const quietOne = silent.has(by);
+      // One session listens on every page; another names its own (Leo, 26 Nov: two plain waits on one lab split the
+      // person's pins between two sessions, each ending the other's wait). While one session's wait on every page is
+      // open, another session's is turned away, not the open one. A wait that ended (its session gone, or working
+      // between two waits) holds nothing, and a session that stopped answering (silent) is taken over as before.
+      const holder = !want && waiters.find((w) => w.key === '*' && w.who !== by && !silent.has(w.who));
+      if (holder) {
+        console.log(`[lab] a second session asked for every page while ${holder.label} listens on them: told to name its pages`);
+        const mine = pages().filter((p) => !p.startsWith('/_') && commentsOf(p).some((c) => c.session && whoOf(c.session) === by));
+        return res.writeHead(412, { 'content-type': 'text/plain; charset=utf-8' }).end(
+          `${holder.label} already listens on every page of this lab, so this wait did not start: two sessions on every page take turns at the person's pins.\n` +
+            `Listen on the pages you work on instead: wait --bg --pages ${mine.length ? mine.join(',') : '<your pages, e.g. /my-page>'}. Pins on those pages then come to you; the rest stay with ${holder.label}.`,
+        );
+      }
       if (quietOne) silent.get(by).at = Date.now();
       for (const old of waiters.filter((w) => w.key === key && !(quietOne && w.who !== by && !silent.has(w.who)))) {
         waiters = waiters.filter((w) => w !== old); // before its close handler runs, so it doesn't mark Claude as away
@@ -2939,7 +2965,7 @@ const handler = async (req, res) => {
     // stop (listening), park, start: this computer only, with the lab's key (a web page elsewhere can't post here).
     if (pathname === '/_lab/labs' && req.method === 'POST') {
       if (!isLoopback(req) || !keyOk(req)) return res.writeHead(403).end('forbidden');
-      const { action, port, page } = await sent(req);
+      const { action, port, page, entry, sid, anyway } = await sent(req);
       const n = Number(port);
       // A page of a lab, archived or brought back: that lab keeps the list (another lab is asked, with its key).
       if (action === 'archive-page' || action === 'unarchive-page') {
@@ -2973,6 +2999,15 @@ const handler = async (req, res) => {
         console.log(`[lab] updating to labit ${UPDATE.version}`);
         fromNpm(UPDATE.version).then((file) => (file ? handOver(process.execPath, [file]) : console.log(`[lab] npm did not give labit ${UPDATE.version}: this lab keeps running`)));
         return answer(res, { ok: true, ...UPDATE });
+      }
+      // `labit use`: this lab moves onto the build the command ran from (a branch's clone, or the edge build again), on
+      // its port with its comments and listener: a branch needs no lab of its own.
+      if (action === 'use') {
+        if (!String(entry).endsWith('local.mjs') || !fs.existsSync(entry) || process.env.LAB_DEV) return res.writeHead(400).end('no');
+        // Every session's pages would move with it: not while another session listens here, unless the person said so.
+        if (!anyway && waiters.some((w) => w.sid !== sid)) return res.writeHead(409).end('another session listens on this lab: ask the person, then --new');
+        handOver(process.execPath, [entry]);
+        return answer(res, { ok: true });
       }
       if (!['archive', 'archive-page', 'unarchive-page'].includes(action)) return res.writeHead(400).end('action: archive, start, update, archive-page or unarchive-page');
       if (n !== PORT) {

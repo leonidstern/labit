@@ -9,7 +9,6 @@
 // nothing else on it, and own() below puts the view over all of it (no half, nothing is under it). That is for a board
 // with no page of its own to be over; one that is about a page goes there (the lab redirects), so it has one set of pins.
 import { mountBoard } from './mount.ts';
-import * as move from '../widget/sheetmove.ts';
 
 type Opts = { page: string; of?: string; push?: boolean; onClose?: () => void; own?: boolean }; // own: the board's own address (own() below)
 type Open = { name: string; view: HTMLElement; destroy: () => void; onClose?: () => void; restoration: ScrollRestoration; pushed: boolean };
@@ -35,13 +34,7 @@ const CSS = `
 @supports (corner-shape:squircle){:host{--_radius:calc(var(--lab-radius,12px)*1.8);--_r-s:11px}*{corner-shape:squircle}}
 `;
 const nameInHash = () => /^#board=([a-z0-9][a-z0-9_-]*)/i.exec(location.hash)?.[1] || '';
-const moved = () => dispatchEvent(new Event('lab-board-moved')); // the widget draws the pins again (the board's and the page's under it)
-// The view came to rest after a slide (the board read its box again, board.resized): every pin on the board is placed
-// again where its frame now is, as after a camera move (a plain redraw kept a pin where it was put mid-slide, off the screen).
-const rested = () => dispatchEvent(new CustomEvent('lab-board-moved', { detail: { camera: true, box: true } }));
-// The page scrolled under a half view: the board's pins are held to the screen, the page's own scroll with it, so the
-// widget only hides or shows those the view's edge crossed (no redraw per scroll step: the pins flickered; Leo, 19 Nov).
-const scrolled = () => dispatchEvent(new CustomEvent('lab-board-moved', { detail: { scroll: true } }));
+const moved = () => dispatchEvent(new Event('lab-board-moved')); // the widget draws the pins again
 
 /** The board called name in a view over this page. */
 export function show(name: string, o: Opts) {
@@ -87,11 +80,6 @@ export function show(name: string, o: Opts) {
   document.body.append(view);
   const k = view.shadowRoot!.appendChild(Object.assign(document.createElement('i'), { style: 'position:absolute;width:100px;height:0;visibility:hidden' })).getBoundingClientRect().width / 100;
   if (k > 0 && Math.abs(k - 1) > 0.001) view.style.setProperty('--bv-z', String(Math.min(10, Math.max(0.1, 1 / k))));
-  // Where the view is, kept (it is asked for every pin of the page as the page scrolls under a half view). Watched
-  // before the board watches its own box, so the board's word of a new size finds this one already right.
-  let at = view.getBoundingClientRect();
-  const ro = new ResizeObserver(() => (at = view.getBoundingClientRect()));
-  ro.observe(view);
   // A phone's keyboard: iOS pans what the screen shows up by its height (visualViewport.offsetTop) and scrolls the page
   // under the fixed view, so the view slid up with it and came back down once the comment was sent (Leo, 21 Nov: "placing
   // pin shifts canvas when opening keyboard", "canvas still shifts after i drop comment"). The view goes down by the pan
@@ -126,15 +114,13 @@ export function show(name: string, o: Opts) {
       scrollFrom = -1;
       typed = false;
     }
-    const viewTop = innerHeight - view.offsetHeight; // where the view starts when nothing is panned
-    const next = typing && viewTop < vv.height - 160 ? Math.round(vv.offsetTop) : !typing ? Math.round(vv.offsetTop) : 0;
+    const next = Math.round(vv.offsetTop); // (the view fills the window: never a half view under the keyboard)
     if (next !== pan) {
       pan = next;
       view.style.setProperty('--bv-pan', `${pan}px`);
       const host = document.querySelector<HTMLElement>('[data-lab-comments]');
       host?.style.setProperty('--lab-pan', `${pan}px`); // the board's pins and its draft move down with the view (styles.css)
       host?.toggleAttribute('data-pan', pan > 0);
-      at = view.getBoundingClientRect();
       quiet = 0;
       changed = true;
     }
@@ -185,16 +171,10 @@ export function show(name: string, o: Opts) {
     history.replaceState(history.state, '', `${location.pathname}${location.search}`);
     location.assign(`${of.split('#')[0]}#board=${name}`);
   };
-  const board = mountBoard(root, name, o.own ? { of: o.of, back: o.of ? () => backTo(o.of || '') : undefined, hash: true, clip: true } : { of: o.of, back: () => close(), clip: true, home, keep: `lab-board-cam:${o.page}:${name}` });
-  const covers = (x: number, y: number) => x >= at.left && x <= at.right && y >= at.top && y <= at.bottom;
-  Object.assign(window, { __labBoard: { ...board.api, covers } });
-  // The page scrolls under a half view: its pins and the board's are drawn again.
-  addEventListener('scroll', scrolled, { passive: true });
+  const board = mountBoard(root, name, o.own ? { of: o.of, back: o.of ? () => backTo(o.of || '') : undefined, hash: true } : { of: o.of, back: () => close(), home, keep: `lab-board-cam:${o.page}:${name}` });
+  Object.assign(window, { __labBoard: board.api });
   // Reduced motion: it fades in (started once the board is mounted: that blocks the page for a while) (Apple: a crossfade, not a pop of the whole window). Its opacity is !important in :host (all: initial),
   // which an animation or a transition can't beat, so --bv-o is stepped here, one frame at a time.
-  // It comes up from the bottom, as the comment drawer does (not the board's own address: that is the whole page).
-  // Where it is (at) and its pins are read again once it rests: a move is no resize, so the watch below misses it.
-  if (!o.own && !matchMedia('(prefers-reduced-motion: reduce)').matches) setTimeout(() => cur?.view === view && ((at = view.getBoundingClientRect()), board.resized(), rested()), slide(view, true) + 20);
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
     const d = token('calm');
     let t0 = 0;
@@ -208,7 +188,10 @@ export function show(name: string, o: Opts) {
     view.style.setProperty('--bv-o', '0');
     requestAnimationFrame(fade);
   }
-  cur = { name, view, destroy: () => (ro.disconnect(), removeEventListener('focusin', focused), vv?.removeEventListener('resize', watch), vv?.removeEventListener('scroll', watch), cancelAnimationFrame(loop), board.destroy()), onClose: o.onClose, restoration, pushed };
+  // Open over a page, the widget hides the page's pins all at once (styles.css, .onp), however it was opened (a link,
+  // back, forward).
+  if (!o.own) document.querySelector('[data-lab-comments]')?.setAttribute('data-board', '');
+  cur = { name, view, destroy: () => (removeEventListener('focusin', focused), vv?.removeEventListener('resize', watch), vv?.removeEventListener('scroll', watch), cancelAnimationFrame(loop), board.destroy()), onClose: o.onClose, restoration, pushed };
   moved();
 }
 
@@ -216,10 +199,11 @@ function teardown() {
   const c = cur;
   if (!c) return;
   cur = null;
-  removeEventListener('scroll', scrolled);
   c.destroy();
   c.view.remove();
-  document.querySelector('[data-lab-comments]')?.removeAttribute('data-board-slide');
+  const host = document.querySelector('[data-lab-comments]');
+  host?.removeAttribute('data-board-slide');
+  host?.removeAttribute('data-board');
   delete (window as unknown as { __labBoard?: unknown }).__labBoard;
   const y = keepY;
   keepY = null;
@@ -231,36 +215,17 @@ function teardown() {
   moved();
 }
 
-/** Close the view: back, when it was opened here (the entry it added goes), else the address loses its #board. */
-// The view's slide, by the comment drawer's rules (../widget/sheetmove.ts): up into place (in: from below the screen, or
-// back from where a finger left it, at `speed` px/ms toward its place), or down off the screen at the finger's speed
-// (a tap on close: from rest, easing in). Its length in ms. No move is left on it once it rests (a moved box holds what
-// is fixed inside it, the board's own layers).
-function slide(view: HTMLElement, into: boolean, speed = 0) {
-  const [quick, slow] = ['quick', 'slow'].map(token);
-  const h = view.getBoundingClientRect().height;
-  const off = /^\s*([\d.]+)px$/.exec(view.style.getPropertyValue('--bv-y'))?.[1];
-  const now = off ? parseFloat(off) : into ? h + 8 : 0; // how far down it is now
-  if (into && !off) {
-    view.style.setProperty('--bv-t', '0ms');
-    view.style.setProperty('--bv-y', `${now}px`);
-    void view.offsetHeight;
-  }
-  const way = into ? now : h + 8 - now;
-  // Opened by a tap (from below the screen, at rest) or closed by one: the chat sheet's own motion, its curve and length
-  // (Leo, 21 Nov: "do same easing for open close as we do for chat for board drawer", then "ease in ease out tokens,
-  // slower opened fast closed"): in over --lab-t-slow on --lab-ease-out, out over --lab-t-quick on --lab-ease-in. Let go by a finger, it keeps the finger's speed (sheetmove.ts).
-  const [ms, curve] = into ? (off || speed ? move.glide(way, speed, slow, quick) : [slow, ease('ease-out', 'cubic-bezier(0, 0, .58, 1)')]) : speed > 0 ? move.carry(way, speed, slow, quick) : [quick, ease('ease-in', 'cubic-bezier(.4, 0, 1, 1)')];
-  // What the widget holds to the board (its pins, an open card) is hidden for the slide, either way: gone with the first
-  // frame of a close, back once the view has come to rest (Leo, 21 Nov: "closing board have pins not immediately hidden,
-  // same opening not snappy"). Teardown lets go of it.
-  const host = document.querySelector('[data-lab-comments]');
-  host?.setAttribute('data-board-slide', '');
-  if (into) setTimeout(() => cur?.view === view && host?.removeAttribute('data-board-slide'), ms + 20);
-  view.style.setProperty('--bv-e', curve);
+// The view's slide down off the screen as it closes, the chat sheet's own way out (Leo, 21 Nov: "do same easing for open
+// close as we do for chat for board drawer", "slower opened fast closed"): over --lab-t-quick on --lab-ease-in. Its
+// length in ms. It opens with no slide, there in the frame of the click (26 Nov: "can be snappier?", option B).
+// What the widget holds to the board (its pins, an open card) goes with its first frame (21 Nov: "closing board have
+// pins not immediately hidden"); teardown lets go of it.
+function slide(view: HTMLElement) {
+  const ms = token('quick');
+  document.querySelector('[data-lab-comments]')?.setAttribute('data-board-slide', '');
+  view.style.setProperty('--bv-e', ease('ease-in', 'cubic-bezier(.4, 0, 1, 1)'));
   view.style.setProperty('--bv-t', `${ms}ms`);
-  view.style.setProperty('--bv-y', `${into ? 0 : h + 8}px`);
-  if (into) setTimeout(() => ['--bv-t', '--bv-y', '--bv-e'].forEach((k) => view.style.removeProperty(k)), ms);
+  view.style.setProperty('--bv-y', `${view.getBoundingClientRect().height + 8}px`);
   return ms;
 }
 // A motion token of lab.css (--lab-t-quick, -base, -slow, -calm) in ms, as the comment widget has them (lab.css is served
@@ -274,11 +239,13 @@ const ease = (k: string, or: string) => getComputedStyle(document.documentElemen
 let closing = false;
 /** Close the view: it slides down, then back, when it was opened here (the entry it added goes), else the address loses
  * its #board. The browser's own back takes it down at once (its own gesture is the motion). */
-function close(speed = 0) {
+function close() {
   if (!cur || closing) return;
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches && !lastOpts?.own) {
     closing = true;
-    return void setTimeout(() => ((closing = false), now()), slide(cur.view, false, speed));
+    // The page's pins come back as it starts to leave, not once it is gone (Leo, 26 Nov: "appearing with lag now").
+    document.querySelector('[data-lab-comments]')?.removeAttribute('data-board');
+    return void setTimeout(() => ((closing = false), now()), slide(cur.view));
   }
   now();
 }
