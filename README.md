@@ -31,6 +31,16 @@ It serves your HTML pages itself, or sits in front of your app's running dev ser
 - **Your phone too.** `--wifi` puts the lab on your phone with a one-time link; comment there, your agent answers on both.
 - **Motion.** `P` pauses everything that moves on the page, `S` plays it at ¼ speed, and a pin on a loop or video keeps its moment.
 
+<picture><source media="(prefers-color-scheme: dark)" srcset="docs/readme/watch-it-work-dark.png"><img src="docs/readme/watch-it-work-light.png" alt="A pin, a drawing and a board: the agent answers on the pin" width="560"></picture>
+
+<picture><source media="(prefers-color-scheme: dark)" srcset="docs/readme/actions-dark.png"><img src="docs/readme/actions-light.png" alt="Actions: a chip or a drawn mark sends a whole request" width="560"></picture>
+
+<picture><source media="(prefers-color-scheme: dark)" srcset="docs/readme/live-reload-dark.png"><img src="docs/readme/live-reload-light.png" alt="Live reload: the page changes in place when a file is saved" width="560"></picture>
+
+<picture><source media="(prefers-color-scheme: dark)" srcset="docs/readme/phone-dark.png"><img src="docs/readme/phone-light.png" alt="The lab on a phone: a comment made there, answered there" width="560"></picture>
+
+<picture><source media="(prefers-color-scheme: dark)" srcset="docs/readme/pin-to-agent-dark.png"><img src="docs/readme/pin-to-agent-light.png" alt="What the agent gets from one comment" width="560"></picture>
+
 ## How it works
 
 1. **Install:** `npx @leonidstern/labit@latest` in your project.
@@ -42,6 +52,8 @@ It serves your HTML pages itself, or sits in front of your app's running dev ser
 - **61 of 62 tricky spots** (a word in a long line, one card of many alike, a scaled box, shadow DOM, dark mode, a video frame): the comment carries what the agent needs to find it ([bench/](bench), 26 Nov 2026).
 - **About 470 bytes a comment**, roughly 120 tokens, as `wait` hands it over; **about $0.008 a comment** with Sonnet in the bench (30 for $0.23, 23 Nov 2026).
 - **Pins stay put** after you edit the page and reload: they find their words again.
+
+<picture><source media="(prefers-color-scheme: dark)" srcset="docs/readme/what-holds-up-dark.png"><img src="docs/readme/what-holds-up-light.png" alt="The bench: 61 of 62 tricky spots, the cost of a comment" width="560"></picture>
 
 ## Let your agent answer
 
