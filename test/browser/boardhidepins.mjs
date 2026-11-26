@@ -1,5 +1,5 @@
 // A board opened over a page with many pins: every pin of the page hides in the first frame the board shows, and stays
-// hidden while the view slides in and rests, when the tab comes back to the front and when another board opens over it (Leo, 26 Nov: in Safari they went one by one, and came back over the sliding
+// hidden while the view slides in and rests, when the tab comes back to the front and when another board opens over it, and closing shows them as it starts to leave (Leo, 26 Nov: in Safari they went one by one, and came back over the sliding
 // board). The board's own pin shows once it rests, and closing the board brings the page's pins back. Not part of `npm test`.
 // Run: node test/browser/boardhidepins.mjs (needs playwright; NODE_PATH can point at a node_modules that has it).
 import fs from 'node:fs';
@@ -70,6 +70,19 @@ try {
       const again = await p.evaluate(() => window.__frames);
       check(eng, 'back from another tab, none of the page\'s pins shows over the board in any frame', again.length && again.every((n) => n === 0), JSON.stringify(again));
       await other.close();
+      // Closed by ‹ back: every pin of the page shows from the first frame the board starts to leave (Leo, 26 Nov:
+      // "appearing with lag now": they came back only once it was gone, 130 ms later).
+      await p.evaluate(() => {
+        const log = (window.__frames = []);
+        const tick = () => { log.push({ view: Boolean(document.querySelector('[data-lab-board-view]')), ...window.__shown() }); if (log.length < 30) requestAnimationFrame(tick); };
+        document.querySelector('[data-lab-board-view]').shadowRoot.querySelector('.bv-close').click();
+        requestAnimationFrame(tick);
+      });
+      await sleep(700);
+      const out = await p.evaluate(() => window.__frames);
+      check(eng, `closing: all ${PAGE} page pins show in the first frame, while the board leaves`, out[0]?.page === PAGE && out[0].view && out.every((f) => f.page === PAGE), JSON.stringify(out.slice(0, 12).map((f) => [f.view ? 1 : 0, f.page])));
+      await p.evaluate(() => window.__labBoardView.show('pricing'));
+      await sleep(800);
       // One board opened over another (the first closes as the second opens): the page's pins stay hidden.
       await p.evaluate(() => {
         const log = (window.__frames = []);

@@ -270,6 +270,8 @@ function close(speed = 0) {
   if (!cur || closing) return;
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches && !lastOpts?.own) {
     closing = true;
+    // The page's pins come back as it starts to leave, not once it is gone (Leo, 26 Nov: "appearing with lag now").
+    document.querySelector('[data-lab-comments]')?.removeAttribute('data-board');
     return void setTimeout(() => ((closing = false), now()), slide(cur.view, false, speed));
   }
   now();
