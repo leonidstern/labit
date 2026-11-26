@@ -301,8 +301,17 @@ test('a dev server that has a lab already gets no second one; `use` moves a lab 
   assert.equal(second.code, 0, second.out);
   assert.match(second.out, new RegExp(`:${devPort} has a lab already: http://localhost:${port}`));
   assert.ok(!fs.existsSync(path.join(b, '.lab')), 'no second lab started');
+  // Another session listening here would have its pages moved too: refused, unless the person said so (--new).
+  const other = spawn(process.execPath, [LAB, 'wait', '--timeout', '60'], { cwd: a, env: { ...env, CLAUDE_CODE_SESSION_ID: 'other' } });
+  kids.push(other);
+  for (let i = 0; i < 50 && !(await cli(['list'], { cwd: a, env })).out.includes('other'); i++) await sleep(100);
+  const me = { cwd: a, env: { ...env, CLAUDE_CODE_SESSION_ID: 'me' } };
+  const refused = await cli(['use'], me);
+  assert.equal(refused.code, 1, refused.out);
+  assert.match(refused.out, /another session listens on this lab/);
+  assert.equal(read().pid, pid, 'the lab stayed');
   // The same file stands in for a branch's build: the lab starts again from it, on its port, in its folder.
-  const used = await cli(['use'], { cwd: a, env });
+  const used = await cli(['use', '--new'], me);
   assert.equal(used.code, 0, used.out);
   let now = read();
   for (let i = 0; i < 100 && (now.pid ?? pid) === pid; i++) await sleep(100), (now = read());
@@ -310,6 +319,7 @@ test('a dev server that has a lab already gets no second one; `use` moves a lab 
   assert.equal(now.port, port);
   assert.equal(now.root, a);
   process.kill(now.pid);
+  other.kill();
   site.closeAllConnections();
   site.close();
   for (let i = 0; i < 50 && fs.readdirSync(reg).length; i++) await sleep(100);

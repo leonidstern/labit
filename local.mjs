@@ -2952,7 +2952,7 @@ const handler = async (req, res) => {
     // stop (listening), park, start: this computer only, with the lab's key (a web page elsewhere can't post here).
     if (pathname === '/_lab/labs' && req.method === 'POST') {
       if (!isLoopback(req) || !keyOk(req)) return res.writeHead(403).end('forbidden');
-      const { action, port, page, entry } = await sent(req);
+      const { action, port, page, entry, sid, anyway } = await sent(req);
       const n = Number(port);
       // A page of a lab, archived or brought back: that lab keeps the list (another lab is asked, with its key).
       if (action === 'archive-page' || action === 'unarchive-page') {
@@ -2991,6 +2991,8 @@ const handler = async (req, res) => {
       // its port with its comments and listener: a branch needs no lab of its own.
       if (action === 'use') {
         if (!String(entry).endsWith('local.mjs') || !fs.existsSync(entry) || process.env.LAB_DEV) return res.writeHead(400).end('no');
+        // Every session's pages would move with it: not while another session listens here, unless the person said so.
+        if (!anyway && waiters.some((w) => w.sid !== sid)) return res.writeHead(409).end('another session listens on this lab: ask the person, then --new');
         handOver(process.execPath, [entry]);
         return answer(res, { ok: true });
       }

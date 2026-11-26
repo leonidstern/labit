@@ -187,11 +187,11 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
     const res = await fetch(`http://localhost:${lab.server.port}/_lab/labs`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-lab-admin': lab.server.token },
-      body: JSON.stringify({ action: pos[0], port: lab.server.port, entry: path.resolve(process.argv[1]) }),
+      body: JSON.stringify({ action: pos[0], port: lab.server.port, entry: path.resolve(process.argv[1]), sid: mySession().id, anyway: opts.new }),
     }).catch(() => null);
     if (!res) die(`The lab server for ${lab.dir} isn't running.`);
     if (pos[0] === 'use') {
-      if (!res.ok) die(`The lab didn't move`);
+      if (!res.ok) die(`The lab didn't move: ${await res.text()}`);
       console.log(`Moving: same port, comments and listener.`);
       process.exit(0);
     }
