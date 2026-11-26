@@ -48,7 +48,8 @@
     "item": "a message in a thread card; thread.ts looks the messages up",
     "under": "a card set under its words (trial.ts); comments.js asks whether a card is one when it ties it to its pin",
     "cur": "the labs & pages row you are on (switcher.ts): arrow keys start from it",
-    "bv-close": "the board view's close button; the board browser tests click it"
+    "bv-close": "the board view's close button; the board browser tests click it",
+    "saved": "a stored area's outline (anchoring.ts drawZone 'saved', as against a new one's 'draft'): boardcam.ts finds it to move it with the board's camera; no rule of its own"
   },
   "animations": [
     "lab-arrive",
