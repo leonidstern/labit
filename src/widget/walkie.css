@@ -9,6 +9,8 @@
 @media (prefers-color-scheme: dark) { .walkie { background: var(--_bg); color: var(--_fg); } }
 .wk-tm, .wk-tm span { color: inherit; } /* the clock: the sheet colours every element the page's text colour, invisible on the black pill */
 .wk-tm { display: inline-flex; align-items: center; gap: 8px; padding: 0 4px 0 14px; font-variant-numeric: tabular-nums; }
+/* No words yet: nothing that looks like recording; the dot and clock keep their room. */
+.wk-tm:has(~ :placeholder-shown) > * { visibility: hidden; }
 .wk-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--_green); animation: lab-fade var(--_t-loop) var(--_ease) infinite alternate; }
 /* As wide as its placeholder: the first letters stay in view, where the Mac shows its dictation mark. */
 .walkie textarea { width: 18ch; height: 20px; margin: 0 0 0 10px; padding: 0; border: 0; outline: none; resize: none; overflow: hidden; background: none;
