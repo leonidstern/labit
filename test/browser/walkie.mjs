@@ -51,6 +51,16 @@ try {
       const s1 = await state();
       check(eng, 'K: the bar turns into the pill, the box has the cursor, no pins on the page', (await asked()) && s1.pill && !s1.bar && s1.off && s1.focused === 'textarea', JSON.stringify(s1));
 
+      const looks = () => p.evaluate(() => { const r = document.querySelector('[data-lab-comments]').shadowRoot; const dot = getComputedStyle(r.querySelector('.wk-dot')); return [getComputedStyle(r.querySelector('.wk-tm span')).visibility, dot.visibility, r.querySelector('.walkie').getBoundingClientRect().width]; });
+      await sleep(1200);
+      const quiet = await looks();
+      await say('so');
+      await sleep(100);
+      const heard = await looks();
+      const first = await p.evaluate(() => document.querySelector('[data-lab-comments]').shadowRoot.querySelector('.wk-tm span').textContent);
+      check(eng, 'before the first word no dot and no clock; with it they show, at the same width', quiet[0] === 'hidden' && quiet[1] === 'hidden' && heard[0] === 'visible' && heard[1] === 'visible' && quiet[2] === heard[2] && first === '0:00', JSON.stringify([quiet, heard, first]));
+      await p.evaluate(() => { const ta = document.querySelector('[data-lab-comments]').shadowRoot.querySelector('.walkie textarea'); ta.value = ''; ta.dispatchEvent(new Event('input')); });
+
       const ink = await p.evaluate(() => { const r = document.querySelector('[data-lab-comments]').shadowRoot; return [getComputedStyle(r.querySelector('.wk-tm span')).color, getComputedStyle(r.querySelector('.walkie')).color]; });
       check(eng, 'the time is in the pill\'s own colour, so it shows on the black pill', ink[0] === ink[1], JSON.stringify(ink));
 
