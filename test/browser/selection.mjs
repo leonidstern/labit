@@ -81,11 +81,12 @@ async function dragWords(p, sel, text, shift = false) {
   return s;
 }
 
-async function scene(browser, run) {
+async function scene(browser, run, { arrow = false } = {}) {
   PG = `/s${++scenes}`;
   fs.writeFileSync(path.join(DIR, `${PG.slice(1)}.html`), PAGE);
   const ctx = await browser.newContext({ viewport: { width: 1000, height: 700 } });
   await ctx.addInitScript(() => localStorage.setItem('lab-name', 'leo'));
+  if (arrow) await ctx.addInitScript(() => localStorage.setItem('lab-mode', 'use')); // the arrow: the page's controls are its own
   // Debug: every change to what the page shows must be followed by a redraw (window.__labDebug in src/comments.js);
   // a miss is reported here as it happens, so a reload doesn't lose it.
   await ctx.exposeFunction('__labMiss', (s) => missed.push(s));
@@ -275,14 +276,21 @@ try {
         await sleep(500);
         const l = await look(p);
         const picked = await p.evaluate(() => document.querySelector('#field').value.slice(document.querySelector('#field').selectionStart, document.querySelector('#field').selectionEnd));
-        check(eng, 'a drag inside the page\'s own input selects its text and is not touched', picked.length > 3 && !l.zone, `${picked} ${JSON.stringify(l)}`);
-      });
+        check(eng, 'with the arrow, a drag inside the page\'s own input selects its text and is not touched', picked.length > 3 && !l.zone, `${picked} ${JSON.stringify(l)}`);
+      }, { arrow: true });
       await scene(browser, async (p) => {
         const s = await span(p, '#lnk', 'link right');
         await dragTo(p, [s.first.left + 2, s.first.top + 8], [s.last.right, s.last.top + 8]);
         await sleep(500);
         const l = await look(p);
-        check(eng, 'a drag that starts on a link leaves the page\'s own drag (no bar, no area)', !l.zone, JSON.stringify(l));
+        check(eng, 'with the arrow, a drag that starts on a link leaves the page\'s own drag (no bar, no area)', !l.zone, JSON.stringify(l));
+      }, { arrow: true });
+      await scene(browser, async (p) => {
+        const s = await span(p, '#lnk', 'link right');
+        await dragTo(p, [s.first.left + 2, s.first.top + 8], [s.last.right, s.last.top + 30]);
+        await sleep(500);
+        const l = await look(p);
+        check(eng, 'with the pin, a drag that starts on a link draws an area like anywhere else', l.zone, JSON.stringify(l));
       });
       check(eng, 'every change to what the page shows was redrawn', !missed.length, missed.splice(0).join('\n'));
     } finally {

@@ -1,7 +1,6 @@
 // Part of the comment widget, built as its own file (public/_lab/motion.js, scripts/build-widget.mjs) that src/comments.js
 // loads once the page has something that moves (a video, an animation), P or S is pressed, or a comment has a moment. Its styles come with it. Uses the widget's own parts through W, set once at startup.
 import { clock, momentText } from '../../lib/moment.mjs';
-import { selectorFor } from './anchoring.ts';
 import css from './motion.css';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -94,7 +93,7 @@ const nameOf = (el) => {
 // (a loop's total time, 835734 ms, says neither). lib/moment.mjs words it.
 const momentOf = (el) => {
   if (!el) return undefined;
-  const what = nameOf(el), sel = selectorFor(el);
+  const what = nameOf(el), sel = W.selectorFor(el);
   const playing = isStill(el) ? undefined : true; // nothing paused: the moment it was showing as the pin went down
   if (el instanceof HTMLVideoElement) {
     if (!Number.isFinite(el.currentTime)) return undefined;

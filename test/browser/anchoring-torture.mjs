@@ -897,11 +897,8 @@ async function pinDown(p, page, b) {
       : b.kind === 'img' ? [box.left + box.width * 0.4, box.top + box.height * 0.4]
       : b.kind === 'para' ? [box.left + 30, box.top + 12]
       : [box.left + Math.min(14, box.width / 2), mid];
-    // The page's own control keeps a plain click (it is the page's); Option-click pins it.
-    const control = b.kind === 'button' || b.kind === 'cardbtn';
-    if (control) await p.keyboard.down('Alt');
+    // With the pin (a lab page's start) a plain click on the page's own control pins it too (Option-click would use it).
     await p.mouse.click(x, y);
-    if (control) await p.keyboard.up('Alt');
   }
   if (!(await cardUp(p))) throw new Error(`no comment box opened: ${JSON.stringify(await p.evaluate(() => { const r = window.__torture.root(); return { floats: r?.querySelectorAll('.float').length, active: r?.activeElement?.localName, on: localStorage.getItem('lab-on'), cls: document.documentElement.className, sel: String(getSelection()) }; }))} at ${JSON.stringify(at)}`);
   await p.keyboard.type(`pin ${b.kind}`);

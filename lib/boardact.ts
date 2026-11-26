@@ -11,7 +11,9 @@ export const VARIANT = 'lab-variant';
 const live = (f: Frame) => f.src.includes(`?${VARIANT}=`);
 const LIVE_SAID = `Each variant frame is the live page with ?${VARIANT}=<frame>; branch on new URLSearchParams(location.search).get('${VARIANT}') in the page's source (frame a is the page as it is: leave it). Remove the branching when one is picked.`;
 /** The text a person gave, as a board name: "Pricing hero" is pricing-hero. */
-export const slug = (t: string) => t.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'board';
+export const slug = (t: string) => dashed(t).slice(0, 60) || 'board';
+/** Lowercase letters and digits, joined by dashes (a published page's folder name too, lib/commands.ts). */
+export const dashed = (t: string) => t.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const route = (name: string, id: string) => `/_lab/board/${name}/${id}`;
 
 /** A plain page as a variant: the same page, its relative links kept by a base at the page's own folder. */
@@ -19,6 +21,11 @@ export const seed = (html: string, rel: string) => {
   if (/<base\b/i.test(html)) return html;
   const dir = path.posix.dirname(rel.split(path.sep).join('/'));
   const tag = `<base href="${dir === '.' ? '/' : `/${dir.split('/').map(encodeURIComponent).join('/')}/`}">`;
+  return atTop(html, tag);
+};
+/** html with tag put first in it: right after <head>, else after the doctype, else at the very top. The lab's page
+ *  dressing (local.mjs: the icon, the dev-server reload hold) goes in the same way. */
+export const atTop = (html: string, tag: string) => {
   const at = /<head(\s[^>]*)?>/i.exec(html) || /<!doctype[^>]*>/i.exec(html);
   return at ? html.slice(0, at.index + at[0].length) + tag + html.slice(at.index + at[0].length) : tag + html;
 };

@@ -71,10 +71,8 @@ await video.evaluate(async (v) => {
   await new Promise((r) => { v.addEventListener('seeked', r, { once: true }); v.currentTime = 5.4; });
 });
 b = await video.boundingBox();
-// A video with controls takes Alt/Option-click, so its play button still works.
-await page.keyboard.down('Alt');
+// With the pin (a lab page's start), a plain click on a video with controls pins it too (⌥ click would use its controls).
 await clickAt(b.x + (1080 / 1280) * b.width, b.y + (140 / 720) * b.height);
-await page.keyboard.up('Alt');
 await say(truth.video.ask);
 await browser.close();
 

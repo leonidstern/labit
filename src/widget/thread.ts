@@ -1,7 +1,7 @@
 // Part of the comment widget (src/comments.js bundles it). Uses the widget's own parts through W, set once at startup.
 import { bindTrial, keptRow, onReshow, triesInPlace, tryRow, untry } from './trial.ts';
 import { stickToEnd } from './stick.ts';
-import { heldPin, holdBox, letBox } from './pinhold.ts';
+import { heldPin, holdBox, letBox, px } from './pinhold.ts';
 import { pageBottom } from './anchoring.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -22,7 +22,6 @@ export function bindThread(w: unknown) {
 type Want = { cx: number; cy: number; ux?: number; uy?: number; ay: number };
 let tieCount = 0;
 const pinNames = new WeakMap<Element, string>();
-const px = (n: number) => `${Math.round(n * 100) / 100}px`;
 // Where the browser put each tied card, as an offset from what it is tied to: once the page scrolls, the card is held
 // at that offset with no fallbacks, so it goes off screen with its pin (the fallbacks and the screen's floor are for where
 // it opens and when it grows; while scrolling they flipped it above and below its pin and pinned it to the screen's top).
