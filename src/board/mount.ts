@@ -128,7 +128,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   let checked = { x: 1e9, y: 1e9, z: 0 }; // the camera at the last wake/cull check
   let still: ReturnType<typeof setTimeout> | undefined;
   let movedAt = -1e9; // when the camera last moved
-  let kept = false; // the person arranged the board (moved a frame): its zoom stays from then on
+  let kept = false; // the person arranged the board: its zoom stays from then on
   // The camera a view left the board at, kept for this board on this page (opts.keep), so reopened it is where it was
   // (Leo, 21 Nov: "closing/opening board drawer should not move zoom/position inside board"). Only once moved by hand.
   // localStorage as JSON: read (no value given) or written; nothing when it can't be (a private window, blocked site data).
@@ -222,7 +222,6 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   // are sized again only when the zoom changed (a pan restyles nothing).
   let drawFrame = 0;
   let whole = false; // the next paint is not the camera alone
-  let boxed = false; // …or the box changed size with it (a view being dragged): the widget looks at what the view covers
   let sizing = false; // the box is changing size: fitted and held to its edges again once it rests
   const draw = () => {
     drawFrame ||= requestAnimationFrame(paintCam);
@@ -246,8 +245,8 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     // The widget moves the board's pins with it, in this same frame (detail.camera: only the camera moved, so that is
     // all it does: a whole redraw of the widget on every frame of a pinch took 70 ms a frame; Leo, 19 Nov: "zoom feels
     // weird, slow").
-    dispatchEvent(whole ? new Event('lab-board-moved') : new CustomEvent('lab-board-moved', { detail: { camera: true, box: boxed } }));
-    whole = boxed = false;
+    dispatchEvent(whole ? new Event('lab-board-moved') : new CustomEvent('lab-board-moved', { detail: { camera: true } }));
+    whole = false;
   };
   // While the camera moves the world is its own layer (the browser moves the picture it has, it doesn't draw every live
   // frame again at each step); a layer kept after it stops would stay a blurry bitmap at the new zoom. So it is let go
@@ -616,7 +615,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   const mine = (e: Event) => inside(e, root) || inside(e, handLayer);
   const pts = new Map<number, { x: number; y: number }>();
   // down.hand: this press pans (Space, the middle button, a finger); else (a mouse or pen, the primary button) it draws a box on the
-  // canvas (marq) or, on a frame, moves the picked ones (move), once it has gone 4 px. mid: the middle button (the hand without Space).
+  // canvas (marq) or, on a frame, moves the picked ones (move), once it has gone 4 px. mid: the middle or a side button (the hand without Space).
   type Down = { x: number; y: number; id: string; far: boolean; at: number; t: number; held?: boolean; hand?: boolean; mid?: boolean; shift?: boolean; mode?: 'marq' | 'move'; base?: Set<string>; start?: Map<string, { x: number; y: number }> };
   let down: Down | null = null;
   let holdTimer = 0;
@@ -626,7 +625,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   let tap = { at: 0, x: 0, y: 0 };
   let pinch = 0;
   // On a computer a plain drag draws a box that picks frames, or moves the picked ones when it starts on a frame; the board
-  // pans with Space and a drag (the hand), the middle button, or a trackpad's two fingers / the wheel (Leo, 21 Nov: "Plain
+  // pans with Space and a drag (the hand), the middle or a side button (Leo, 26 Nov), or a trackpad's two fingers / the wheel (Leo, 21 Nov: "Plain
   // drag selects, Space pans"). ⌥ makes a click a pin and a drag an area, the widget's (Leo, 21 Nov: "regular cursor to
   // operate on boards opt to call comment"). A finger pans, and a hold pins.
   let space = false;
@@ -692,7 +691,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     } else {
       // A mouse or pen's primary button picks and moves (Space or another button: the hand); a finger pans.
       const plain = !coarse && e.pointerType !== 'touch' && e.button === 0 && !space;
-      down = { x: e.clientX, y: e.clientY, id: at(e), far: false, at: performance.now(), t: e.timeStamp, hand: !plain, mid: e.pointerType !== 'touch' && e.button === 1, shift: e.shiftKey };
+      down = { x: e.clientX, y: e.clientY, id: at(e), far: false, at: performance.now(), t: e.timeStamp, hand: !plain, mid: e.pointerType !== 'touch' && [1, 3, 4].includes(e.button), shift: e.shiftKey };
       hand();
       clearTimeout(holdTimer);
       if (plain && down.id) find(down.id)?.box.classList.add('down'); // a picture's name shows as the press starts, not on the lift (Leo, 23 Nov: "it appears with delay?")
@@ -836,6 +835,9 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   }, true);
   on('dblclick', (e: MouseEvent) => mine(e) && eat(e), true);
   on('contextmenu', (e: MouseEvent) => mine(e) && e.preventDefault(), true);
+  // A side button's lift is no browser back or forward while the board is open, over any of it: it pans (Leo, 26 Nov:
+  // "mouse side buttons to pan board"). The lift's default is the browser's step, so the lift's is taken (Chrome, Firefox).
+  for (const t of ['pointerup', 'mouseup']) on(t, (e: MouseEvent) => e.button > 2 && e.preventDefault(), true);
   // A mouse or trackpad. Pinch on a trackpad arrives as a wheel with ctrlKey (Chrome, Firefox); ⌘ or Ctrl and a wheel zoom.
   // A wheel over a pin on the board is the board's too: it went to the page behind (Leo, 19 Nov: "scroll inside board
   // working weird"). An entered frame's page has nothing to scroll (it is drawn whole): its wheel comes here too (frame.ts).
@@ -1073,6 +1075,8 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     key: (k: Parameters<typeof press>[0]) => press(k, true),
     /** A press inside an entered frame (its page tells, frame.ts): outside any open comment or the chat, so they close. */
     pressed: () => void boardWidget()?.dismiss?.(),
+    /** A middle or side button dragged in an entered frame (frame.ts): the board pans by those screen px. */
+    pan: (dx: number, dy: number) => go(panBy(cam, dx, dy), true, true),
     frame: (id: string) => find(id)?.frame,
     /** A frame's page was saved and wants a reload (live.ts): the board loads it anew behind it and swaps (live, above). */
     again: (name: string) => {
@@ -1081,8 +1085,9 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     },
     box: (id: string) => find(id)?.box || null, // a frame's box in the world: what the widget ties a board pin to
     size: (id: string) => { const c = find(id); return c ? { w: c.s.ow || c.s.w, h: c.s.oh || c.s.h, t: c.f.oh || c.f.h } : null; }, // its size in world px, read without laying the page out: h as stored (an area's shares), t as drawn (its whole page)
-    /** A screen point is on this board (a page's view is less than the window). */
-    contains: inBox,
+    /** A screen point is on this board (a page's view is less than the window). Its box read now: read as the view slid
+     * in, it was still below the screen on a busy machine, and an ⌥-click on the board went to the page. */
+    contains: (x: number, y: number) => (measure(), inBox(x, y)),
     // Where a point on the screen is on the board: the frame under it (else the nearest), by px from its top left, and the point.
     anchor: (sx: number, sy: number) => {
       measure();
@@ -1164,7 +1169,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     if (px === ox && py === oy && pv.w === view.w && pv.h === view.h) return; // already drawn at this size (resized(), below)
     // What is on the board stays where it is in the view, its zoom and place, as the view's edge moves (Leo, 21 Nov:
     // "closing/opening board drawer should not move zoom/position inside board").
-    sizing = boxed = true;
+    sizing = true;
     cancelAnimationFrame(drawFrame);
     paintCam(); // now, before this frame is drawn (a frame later the frames would trail the edge by one step of the drag)
     moving();
@@ -1195,16 +1200,5 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     for (const c of cards) c.frame?.remove();
     root.replaceChildren();
   };
-  // The box was set to a new size in one step (a view's half and full): drawn now (at the same zoom once kept, below), in the frame that has
-  // the new size, not once the box has rested (the board is in its old place and size for 200 ms, then jumps to its fit).
-  const resized = () => {
-    measure();
-    if (!cards.length) return;
-    if (!moved && !kept) cam = fitAll(boxes(), view); // else the same zoom and place in the view
-    go(cam, false);
-    [whole, boxed] = [false, true]; // told as the box changing with the camera, as a dragged edge is (the page's pins under it hide or show)
-    cancelAnimationFrame(drawFrame);
-    paintCam();
-  };
-  return { api: boardApi, destroy, resized };
+  return { api: boardApi, destroy };
 }

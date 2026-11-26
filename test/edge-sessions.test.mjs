@@ -273,18 +273,27 @@ test('a wait killed while its pin is on the way: nothing is lost, the pin goes o
   }
 });
 
-test('two waits at once: the later one takes over and the earlier is told; the pin is handed over once', async () => {
+test('two waits at once: a second session asking for every page is told to name its pages; the open wait keeps them and gets the pin', async () => {
   const a = wait('sess-a', '--timeout', '30');
   await sleep(500);
-  const b = wait('sess-b', '--timeout', '30');
+  const b = await wait('sess-b', '--timeout', '30');
+  assert.match(b.out, /^Claude \(session sess-a\) already listens on every page of this lab, so this wait did not start/);
+  assert.match(b.out, /wait --bg --pages /);
+  const p = await pin(W, '/index', 'for whoever listens');
   const first = await a;
   assert.equal(first.code, 0, first.out);
-  assert.match(first.out, /^Another session is listening on these pages now; this one stopped\./);
-  const p = await pin(W, '/index', 'for whoever listens');
-  const second = await b;
-  assert.equal(second.code, 0);
-  assert.match(second.out, /^Heads up: Claude \(session sess-a\) also listened on every page just now\./);
-  assert.equal(second.out.split(`· id ${p.id}\n`).length - 1, 1);
+  assert.equal(first.out.split(`· id ${p.id}\n`).length - 1, 1, first.out.slice(0, 200));
+  // With --pages, the second session listens beside the first.
+  const mine = wait('sess-b', '--pages', '/b-only', '--timeout', '2'); // a page of its own (a claim holds after the wait)
+  const rest = wait('sess-a', '--timeout', '2');
+  assert.doesNotMatch((await mine).out + (await rest).out, /already listens|Another session is listening/);
+  // The first session's wait ended: the next session's wait on every page starts, and the one after it is told.
+  const c = wait('sess-d', '--timeout', '2');
+  await sleep(500);
+  assert.match((await wait('sess-e', '--timeout', '1')).out, /already listens on every page/);
+  await c;
+  // Pins earlier tests left in flight come back on their own clock: taken now, so the next part sees only its own.
+  for (let i = 0; i < 5 && !/No new comments yet/.test((await wait('sess-c', '--timeout', '1')).out); i++);
   // Started in the same instant by one session: one of them ends up with the pin, the other is told it was replaced.
   const both = [wait('sess-c', '--timeout', '30'), wait('sess-c', '--timeout', '30')];
   await sleep(700);
