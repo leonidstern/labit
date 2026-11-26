@@ -1777,7 +1777,7 @@ import { bindKeys } from './widget/keys.ts';
     // H folds the bar into the rabbit or opens it (Leo, 26 Nov). Computers only.
     // C and V (Leo, 26 Nov): the pin (comment on links and buttons too) or the arrow (use the page), as in the bar, with
     // comments shown. Computers only.
-    if (!coarse && !typing(e) && !inOtherWidget && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.repeat && (act === 'fold' || (S.on && /Tool$/.test(act)))) {
+    if (!coarse && !typing(e) && !inOtherWidget && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.repeat && (act === 'fold' || (S.on && act.endsWith('Tool')))) {
       e.preventDefault();
       return act === 'fold' ? setFolded(!host.hasAttribute('data-folded')) : setMode(act === 'arrowTool' ? 'use' : 'comment');
     }
