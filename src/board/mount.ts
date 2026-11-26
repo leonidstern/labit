@@ -1062,7 +1062,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     pressed: () => void boardWidget()?.dismiss?.(),
     frame: (id: string) => find(id)?.frame,
     box: (id: string) => find(id)?.box || null, // a frame's box in the world: what the widget ties a board pin to
-    size: (id: string) => { const c = find(id); return c ? { w: c.s.ow || c.s.w, h: c.s.oh || c.s.h } : null; }, // its size in world px, read without laying the page out
+    size: (id: string) => { const c = find(id); return c ? { w: c.s.ow || c.s.w, h: c.s.oh || c.s.h, t: c.f.oh || c.f.h } : null; }, // its size in world px, read without laying the page out: h as stored (an area's shares), t as drawn (its whole page)
     /** A screen point is on this board (a page's view is less than the window). */
     contains: inBox,
     // Where a point on the screen is on the board: the frame under it (else the nearest), by px from its top left, and the point.
