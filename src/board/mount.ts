@@ -1002,8 +1002,9 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     frame: (id: string) => find(id)?.frame,
     box: (id: string) => find(id)?.box || null, // a frame's box in the world: what the widget ties a board pin to
     size: (id: string) => { const c = find(id); return c ? { w: c.f.ow || c.f.w, h: c.f.oh || c.f.h } : null; }, // its size in world px, read without laying the page out
-    /** A screen point is on this board (a page's view is less than the window). */
-    contains: inBox,
+    /** A screen point is on this board (a page's view is less than the window). Its box read now: read as the view slid
+     * in, it was still below the screen on a busy machine, and an ⌥-click on the board went to the page. */
+    contains: (x: number, y: number) => (measure(), inBox(x, y)),
     // Where a point on the screen is on the board: the frame under it (else the nearest), by px from its top left, and the point.
     anchor: (sx: number, sy: number) => {
       measure();

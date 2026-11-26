@@ -57,8 +57,10 @@ try {
       await sleep(400);
       await p.keyboard.type('frame b note');
       await p.keyboard.press('Enter');
-      for (let i = 0; i < 30 && !posts.length; i++) await sleep(100);
-      const sent = posts[0];
+      // The new comment's post (a pin of the page saying where it was found again, 3 s after load, is a move: not it).
+      const made = () => posts.find((x) => !x.action);
+      for (let i = 0; i < 30 && !made(); i++) await sleep(100);
+      const sent = made();
       check(eng, 'a pin on frame b posts to the page with the board anchor', sent?.page === '/canvas' && sent.anchor?.kind === 'board' && sent.anchor.board === 'pricing' && sent.anchor.frame === 'b' && Math.abs(sent.anchor.fx - 60 / (b.w / 820)) < 3, JSON.stringify(sent));
       await sleep(300);
       // the whole window over the page, with no half and no edge to drag (Leo, 23 Nov, #422)
