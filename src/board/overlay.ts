@@ -229,7 +229,7 @@ function teardown() {
 // (a tap on close: from rest, easing in). Its length in ms. No move is left on it once it rests (a moved box holds what
 // is fixed inside it, the board's own layers).
 function slide(view: HTMLElement, into: boolean, speed = 0) {
-  const [quick, slow] = ['quick', 'slow'].map(token);
+  const [quick, base, slow] = ['quick', 'base', 'slow'].map(token);
   const h = view.getBoundingClientRect().height;
   const off = /^\s*([\d.]+)px$/.exec(view.style.getPropertyValue('--bv-y'))?.[1];
   const now = off ? parseFloat(off) : into ? h + 8 : 0; // how far down it is now
@@ -241,8 +241,8 @@ function slide(view: HTMLElement, into: boolean, speed = 0) {
   const way = into ? now : h + 8 - now;
   // Opened by a tap (from below the screen, at rest) or closed by one: the chat sheet's own motion, its curve and length
   // (Leo, 21 Nov: "do same easing for open close as we do for chat for board drawer", then "ease in ease out tokens,
-  // slower opened fast closed"): in over --lab-t-slow on --lab-ease-out, out over --lab-t-quick on --lab-ease-in. Let go by a finger, it keeps the finger's speed (sheetmove.ts).
-  const [ms, curve] = into ? (off || speed ? move.glide(way, speed, slow, quick) : [slow, ease('ease-out', 'cubic-bezier(0, 0, .58, 1)')]) : speed > 0 ? move.carry(way, speed, slow, quick) : [quick, ease('ease-in', 'cubic-bezier(.4, 0, 1, 1)')];
+  // slower opened fast closed"), then snappier (26 Nov: "can be snappier?"): in over --lab-t-base on --lab-ease-out, out over --lab-t-quick on --lab-ease-in. Let go by a finger, it keeps the finger's speed (sheetmove.ts).
+  const [ms, curve] = into ? (off || speed ? move.glide(way, speed, slow, quick) : [base, ease('ease-out', 'cubic-bezier(0, 0, .58, 1)')]) : speed > 0 ? move.carry(way, speed, slow, quick) : [quick, ease('ease-in', 'cubic-bezier(.4, 0, 1, 1)')];
   // What the widget holds to the board (its pins, an open card) is hidden for the slide, either way: gone with the first
   // frame of a close, back once the view has come to rest (Leo, 21 Nov: "closing board have pins not immediately hidden,
   // same opening not snappy"). Teardown lets go of it.
