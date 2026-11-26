@@ -28,6 +28,12 @@ const paintZone = () => {
 };
 // An open new-comment box with nothing typed in it doesn't block drawing an area (a stray click had opened one, and
 // every drag after it silently did nothing until it was closed); one with words in it does, so they aren't lost.
+// The right-click menu's "draw here" (motion.ts): one drawing, as if D were held until its stroke ends; Esc lets it go.
+export const drawOnce = () => {
+  S.dKey = S.drawOnce = true;
+  S.drew = false;
+  W.recheck();
+};
 export const draftHasText = () => Boolean(S.draft) && [...(W.root.querySelectorAll('.float textarea') as NodeListOf<HTMLTextAreaElement>)].some((t) => t.value.trim());
 export function startDrag(e) {
   // An open card doesn't block a new area: it closes once the area is drawn (a plain click still just closes it).
@@ -354,6 +360,14 @@ export function bindDrag(w: unknown) {
   }, true);
   document.addEventListener('pointerup', endDrag, true);
   document.addEventListener('pointercancel', endDrag, true);
+  const drawn = (e) => {
+    if (!S.drawOnce || (S.drag && e.type !== 'keydown')) return;
+    S.drawOnce = S.dKey = false;
+    if (S.inking && !S.drag) endInk();
+    W.recheck();
+  };
+  document.addEventListener('pointerup', drawn, true); // after endDrag: the stroke is in
+  addEventListener('keydown', (e) => e.key === 'Escape' && drawn(e), true);
   // Don't let images and videos start a native drag while comments are on: a press there marks an area.
   document.addEventListener(
     'dragstart',

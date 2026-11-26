@@ -39,7 +39,7 @@ import { inFrame, startFrame } from './widget/frame.ts';
 import { holdWhileOpen } from './widget/hold.ts';
 import { inkSvg } from './widget/ink.ts';
 import { bindActions } from './widget/actions.ts';
-import { bindDrag, draftHasText, endDrag, inkSaid, offerSelection, startDrag } from './widget/drag.ts';
+import { bindDrag, draftHasText, drawOnce, endDrag, inkSaid, offerSelection, startDrag } from './widget/drag.ts';
 import { boardStrip, bindBoardCam, newBoard, pinBoardGone, showBoard } from './widget/boardcam.ts';
 import { bindFramework, overFramework, scanForFramework } from './widget/framework.ts';
 import { bindKeys } from './widget/keys.ts';
@@ -91,6 +91,8 @@ import { bindKeys } from './widget/keys.ts';
     get agentOf() { return agentOf; },
     anchorAt,
     begin,
+    offerSelection,
+    get drawOnce() { return () => (drawOnce(), void part('draw')); },
     boardStrip,
     sendDrawing,
     get addComment() { return addComment; },
@@ -119,6 +121,7 @@ import { bindKeys } from './widget/keys.ts';
     get keepSpot() { return keepSpot; },
     get isPage() { return isPage; },
     get KEYS() { return KEYS; },
+    get MAC() { return MAC; },
     get keyLabel() { return keyLabel; },
     get layer() { return layer; },
     get listBtn() { return listBtn; },
@@ -2019,6 +2022,15 @@ import { bindKeys } from './widget/keys.ts';
   document.addEventListener('pointercancel', () => (stopPress(), pressing(false)), true);
   addEventListener('scroll', stopPress, { passive: true, capture: true });
   document.addEventListener('contextmenu', (e) => (S.press || S.afterDrag) && e.preventDefault(), true);
+  // The right-click menu (Leo, 26 Nov, option 3 of /context-menu): labit's own, its rows from what is under the pointer
+  // (motion.ts menuAt). ⌥ or ⇧ right-click, a board, full screen or comments hidden: the browser's. Computers only.
+  addEventListener('contextmenu', (e) => {
+    if (coarse || !S.on || e.shiftKey || e.altKey || boardShown() || document.fullscreenElement || e.composedPath().includes(host) || isOff(e)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    const [x, y, t] = [e.clientX, e.clientY, e.target];
+    void loadMotion().then((m) => m?.menuAt(x, y, t));
+  }, true);
   // The actions row of a new comment (the box is the comment, so no button for it): your own actions (labit.json
   // `actions`), each sending its text at once on a click. They go through the box's own send, so a missing name is asked
   // for there, a lab that can't be reached keeps them. ⌥ + 1…4 runs the nth button (holding ⌥ shows the numbers).
