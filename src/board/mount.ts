@@ -130,14 +130,13 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   let kept = false; // the person arranged the board (moved a frame): its zoom stays from then on
   // The camera a view left the board at, kept for this board on this page (opts.keep), so reopened it is where it was
   // (Leo, 21 Nov: "closing/opening board drawer should not move zoom/position inside board"). Only once moved by hand.
-  // localStorage as JSON: read (no value given) or written; null when it can't be (a private window, blocked site data).
+  // localStorage as JSON: read (no value given) or written; nothing when it can't be (a private window, blocked site data).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ls = (k: string, v?: unknown): any => {
     try {
-      return v === undefined ? JSON.parse(localStorage.getItem(k) || 'null') : localStorage.setItem(k, JSON.stringify(v));
-    } catch {
-      return null;
-    }
+      // (none stored: JSON.parse(null) is null)
+      return v === undefined ? JSON.parse(localStorage.getItem(k) as string) : localStorage.setItem(k, JSON.stringify(v));
+    } catch {}
   };
   const keepCam = () => opts.keep && moved && ls(opts.keep, { x: Math.round(cam.x), y: Math.round(cam.y), z: +cam.z.toFixed(4) });
   const keptCam = (): Cam | null => {
@@ -400,22 +399,22 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     if (page() > h + 1) for (const [i, n] of all.entries()) if (n.offsetHeight > was[i] + 1) n.style.cssText += `;height:${was[i]}px!important;min-height:0!important`;
     set(page());
     // A wheel or a pinch over it (entered) moves the board: the page has nothing to scroll (Leo, 26 Nov: "i cant scroll there
-    // zoom or whatever"). A box of the page's own that scrolls still does. Its points are the frame's, put on the screen.
+    // zoom or whatever"). Over a box of the page's own that scrolls, it scrolls that box. Its points are the frame's, put on the screen.
     const at = (e: MouseEvent): [number, number] => {
       const r = fr.getBoundingClientRect();
       const k = r.width / w.innerWidth;
       return [r.left + e.clientX * k, r.top + e.clientY * k];
     };
     w.addEventListener('wheel', (e) => {
-      for (let n = e.target as Element | null; n && n !== d.body; n = n.parentElement) if (/auto|scroll/.test(w.getComputedStyle(n).overflowY) && (e.deltaY < 0 ? n.scrollTop > 0 : n.scrollTop + n.clientHeight < n.scrollHeight - 1)) return;
+      for (let n = e.target as Element | null; n && n !== d.body; n = n.parentElement) if (n.scrollHeight > n.clientHeight && /auto|scroll/.test(w.getComputedStyle(n).overflowY)) return;
       wheel(e, ...at(e));
     }, { passive: false });
     w.addEventListener('gesturestart', pinch0);
     w.addEventListener('gesturechange', (e) => pinchTo(e, ...at(e as MouseEvent)));
-    new w.ResizeObserver(() => {
+    new w.ResizeObserver(() => requestAnimationFrame(() => { // (next frame: set inside it, the observer's loop was an error)
       const to = page();
       if (to > h + 1 && Math.abs(to - h - step) > 1) set(to);
-    }).observe(d.body);
+    })).observe(d.body);
   };
   // Where each frame is drawn: as stored, as tall as its page, and moved down by as much as the frames over it grew (the gap
   // between them as it was, up to 160 px: a frame already put lower is not moved again).
@@ -647,7 +646,11 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   let alt = false;
   // The board has the plain pointer, to pan and look; ⌥ held gives it the pin pointer (the page's, inherited) and a click
   // then comments (Leo, 21 Nov: "regular cursor to operate on boards opt to call comment").
-  const setAlt = (v: boolean) => root.classList.toggle('alt', (alt = v));
+  // A click on the board pins with the pin tool picked (C, the bar's pin), and with ⌥ held on the arrow: the other way round
+  // it picks and moves frames (Leo, 26 Nov: "cant comment pin on board": the board pinned only on ⌥, which the pin tool turns
+  // into "use", so with it picked nothing pinned at all).
+  const pins = (altKey: boolean) => !boardWidget()?.pinning() === altKey;
+  const setAlt = (v: boolean) => root.classList.toggle('alt', pins((alt = v)));
   on('keydown', (e: KeyboardEvent) => setAlt(e.altKey), true);
   on('keyup', (e: KeyboardEvent) => setAlt(e.altKey), true);
   on('blur', () => setAlt(false));
@@ -658,9 +661,9 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     if (zoomBox.classList.contains('open')) zoomBox.classList.remove('open');
     measure();
     theirs = false;
-    if (e.pointerType !== 'touch' && !space && !pts.size && boardWidget() && (e.altKey || boardWidget()!.drawing?.())) {
+    if (e.pointerType !== 'touch' && !space && !pts.size && boardWidget() && (pins(e.altKey) || boardWidget()!.drawing?.())) {
       lastDown = performance.now();
-      theirs = true; // ⌥ (or D, drawing), no Space: the widget's own click (a pin) and drag (an area, or ink)
+      theirs = true; // a pin (pins(), above, or D, drawing), no Space: the widget's own click (a pin) and drag (an area, or ink)
       return;
     }
     eat(e);
@@ -684,7 +687,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
         const d = down;
         holdTimer = window.setTimeout(() => {
           const w = boardWidget();
-          if (down !== d || d.far || pts.size !== 1 || !(w?.holding ? w.holding() : w?.pinning())) return;
+          if (down !== d || d.far || pts.size !== 1 || !w?.holding?.()) return;
           d.held = true; // the comment opens on the lift (below), as a page's hold does: opened now, the lift closed it
           navigator.vibrate?.(8);
         }, 400);
@@ -779,7 +782,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     // timer runs, and the first hold was taken for a tap (Leo, 19 Nov). The touch's own times decide it then.
     if (!d.held && !d.far && e.type === 'pointerup' && e.pointerType === 'touch' && e.timeStamp - d.t >= 400) {
       const w = boardWidget();
-      if (w?.holding ? w.holding() : w?.pinning()) d.held = true;
+      if (w?.holding?.()) d.held = true;
     }
     if (d.held) {
       const w = boardWidget();

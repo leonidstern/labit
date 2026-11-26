@@ -69,6 +69,24 @@ try {
       await sleep(500);
       const after = await p.evaluate(() => document.querySelector('[data-lab-board-view]').shadowRoot.querySelector('#lab-board .world').style.transform);
       check(eng, `a wheel over an open frame moves the board`, before !== after, JSON.stringify({ before, after }));
+      await p.evaluate(() => document.querySelector('[data-lab-board-view]').shadowRoot.querySelector('#lab-board .f[data-id="a"]').classList.remove('in'));
+      // With the pin tool (C) a plain click on a frame comments, at its top and far down its page (Leo, 26 Nov: "cant comment
+      // pin on board"); the pin is on frame a, at the page's own px.
+      const sr = '[...document.querySelectorAll("*")].find((n) => n.shadowRoot?.querySelector(".scrim"))?.shadowRoot';
+      const draft = () => p.evaluate(`Boolean(${sr}?.querySelector('.pin.draft'))`);
+      await p.mouse.move(600, 400);
+      await p.keyboard.press('c');
+      await sleep(300);
+      for (const [where, k] of [['top', 0.03], ['far down', 0.95]]) {
+        const a = await p.evaluate(() => { const r = document.querySelector('[data-lab-board-view]').shadowRoot.querySelector('#lab-board .f[data-id="a"]').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y, h: r.height }; });
+        const y = a.y + a.h * k;
+        const spot = await p.evaluate(([x, y]) => __labBoard.anchor(x, y), [a.x, y]);
+        await p.mouse.click(a.x, y);
+        await sleep(700);
+        check(eng, `with the pin tool a click comments on the frame (${where})`, (await draft()) && spot.frame === 'a' && (k < 0.5 ? spot.fy < 300 : spot.fy > 2200), JSON.stringify(spot));
+        await p.keyboard.press('Escape');
+        await sleep(500);
+      }
     } finally {
       await browser.close();
     }
