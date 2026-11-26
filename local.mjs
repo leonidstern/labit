@@ -2990,7 +2990,7 @@ const handler = async (req, res) => {
       // `labit use`: this lab moves onto the build the command ran from (a branch's clone, or the edge build again), on
       // its port with its comments and listener: a branch needs no lab of its own.
       if (action === 'use') {
-        if (!/local\.mjs$/.test(entry) || !fs.existsSync(entry) || process.env.LAB_DEV) return res.writeHead(400).end('no');
+        if (!String(entry).endsWith('local.mjs') || !fs.existsSync(entry) || process.env.LAB_DEV) return res.writeHead(400).end('no');
         handOver(process.execPath, [entry]);
         return answer(res, { ok: true });
       }
