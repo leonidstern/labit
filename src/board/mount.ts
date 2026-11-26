@@ -47,7 +47,7 @@ const css = `
 #lab-board iframe,#lab-board img{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff;pointer-events:none}
 #lab-board .f.in iframe{pointer-events:auto}
 #lab-board .t{position:absolute;left:0;bottom:100%;white-space:nowrap;max-width:calc(100% / var(--iz));overflow:hidden;text-overflow:ellipsis;transform-origin:0 100%;transform:scale(var(--iz));padding-bottom:4px;opacity:.75}
-#lab-board .f:not(.sel,.pick,.down) .t{visibility:hidden} /* a frame's name only once it is pressed or picked (Leo, 23 Nov: "dont show picture names files always", "these names too") */
+#lab-board .f.i:not(.sel,.pick,.down) .t{visibility:hidden} /* a picture's file name only once it is pressed or picked (Leo, 23 Nov: "dont show picture names files always"); a page's name always (Leo, 26 Nov: "show frame names right away") */
 #lab-board .c{position:absolute;inset:0;box-sizing:border-box;padding:calc(20px*var(--iz));font-size:calc(14px*var(--iz));line-height:1.5;color:#1d1d1b;background:#f6f5f1}
 #lab-board .c b{display:block;font-size:calc(22px*var(--iz));font-weight:600;margin-bottom:calc(6px*var(--iz))}
 #lab-board .none{position:absolute;inset:0;display:grid;place-items:center;opacity:.7}
@@ -163,7 +163,6 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     const el = document.createElement('div');
     el.className = 'c';
     text('b', c.f.label || c.f.src, el);
-    text('div', `${c.f.w} × ${c.f.h}`, el);
     if (c.f.label) text('div', c.f.src, el);
     const when = ago(edited[c.f.src.replace(/\.html?$/i, '').replace(/\/$/, '') || '/']);
     if (when) text('div', when, el);
@@ -377,7 +376,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   }
 
   // ---------- frames in the world ----------
-  const label = (f: Frame) => `${f.label || (f.kind === 'image' ? f.file : f.src)} · ${f.w} × ${f.h}`;
+  const label = (f: Frame) => f.label || (f.kind === 'image' ? f.file : f.src); // no size (Leo, 26 Nov: "their resolution no needed to show at all")
   function show(b: Board) {
     if (signal.aborted) return;
     latest = b;
@@ -398,7 +397,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       }
       was?.box.remove();
       const box = document.createElement('div');
-      box.className = 'f';
+      box.className = f.kind === 'image' ? 'f i' : 'f';
       const inner = document.createElement('div');
       inner.className = 'b';
       const c: Card = { f, box, inner, seen: 0 };
