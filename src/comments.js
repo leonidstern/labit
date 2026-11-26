@@ -1548,6 +1548,7 @@ import { bindKeys } from './widget/keys.ts';
   });
   function setMode(m) {
     store.set(modeKey(), m === 'use' ? 'use' : 'comment');
+    S.ptrHold = S.stickyCursor;
     setPinning(); // says the mode, and the pointer at once
 
   }
@@ -2316,7 +2317,7 @@ import { bindKeys } from './widget/keys.ts';
     const pen = Boolean(S.on && S.dKey);
     document.documentElement.classList.toggle('lab-pen', pen);
     ptr.classList.toggle('draw', pen);
-    const show = Boolean(target) && target !== host && !host.contains(target) && getComputedStyle(target).cursor === 'none';
+    const show = Boolean(target) && target !== host && !host.contains(target) && (getComputedStyle(target).cursor === 'none' || (S.ptrHold && ptr.classList.contains('show')));
     ptr.classList.toggle('show', show);
     ptr.style.transform = `translate(${x - 1}px, ${y - 27}px)`;
   };
@@ -2328,8 +2329,13 @@ import { bindKeys } from './widget/keys.ts';
     return t;
   };
   const recheck = () => S.mouse && requestAnimationFrame(() => S.mouse && place(S.mouse.x, S.mouse.y, under(S.mouse.x, S.mouse.y)));
+  // Safari draws the system pointer again only once the mouse moves: a switch with a still mouse (the pin to the arrow,
+  // ⌥) left no pointer at all (Leo, 26 Nov). There the drawn one stays until the first move.
+  S.stickyCursor = /AppleWebKit/.test(navigator.userAgent) && !/Chrom|Edg/.test(navigator.userAgent);
+  S.ptrHold = false;
   addEventListener('pointermove', (e) => {
     if (e.pointerType !== 'mouse') return;
+    S.ptrHold = false;
     ptr.classList.remove('still');
     document.documentElement.classList.add('lab-drawn');
     S.mouse = { x: e.clientX, y: e.clientY };
