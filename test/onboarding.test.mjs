@@ -290,7 +290,7 @@ test('a dev server that has a lab already gets no second one; `use` moves a lab 
   // Read again while the file is swapped: the new lab writes it once it listens.
   const read = () => {
     try {
-      return JSON.parse(fs.readFileSync(path.join(reg, fs.readdirSync(reg)[0]), 'utf8'));
+      return fs.readdirSync(reg).map((f) => JSON.parse(fs.readFileSync(path.join(reg, f), 'utf8'))).find((l) => l.root === a) || {};
     } catch {
       return {};
     }
@@ -301,6 +301,15 @@ test('a dev server that has a lab already gets no second one; `use` moves a lab 
   assert.equal(second.code, 0, second.out);
   assert.match(second.out, new RegExp(`:${devPort} has a lab already: http://localhost:${port}`));
   assert.ok(!fs.existsSync(path.join(b, '.lab')), 'no second lab started');
+  // A lab of its own coming back (a newer build, a park, a restart) starts: 26 Nov, a lab followed a new build and
+  // the new one refused to start, leaving its site with no lab.
+  fs.mkdirSync(path.join(b, '.lab'));
+  const back = spawn(process.execPath, [LAB, '--no-open', '--proxy', String(devPort), '--port', String(claimPort(6500, 90))], { cwd: b, env });
+  kids.push(back);
+  for (let i = 0; i < 50 && fs.readdirSync(reg).length < 2; i++) await sleep(100);
+  assert.equal(fs.readdirSync(reg).length, 2, 'the lab came back');
+  back.kill();
+  for (let i = 0; i < 50 && fs.readdirSync(reg).length > 1; i++) await sleep(100);
   // Another session listening here would have its pages moved too: refused, unless the person said so (--new).
   const other = spawn(process.execPath, [LAB, 'wait', '--timeout', '60'], { cwd: a, env: { ...env, CLAUDE_CODE_SESSION_ID: 'other' } });
   kids.push(other);
