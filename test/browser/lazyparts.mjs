@@ -41,19 +41,20 @@ try {
       const is = (name, got, want) => check(eng, name, got === want, got);
 
       const still = await asked('still.html');
-      is('a page with nothing moving asks for nothing', still.got, 'none');
-      is('a page with 3 sections asks for nothing', (await asked('sections.html')).got, 'none');
+      // A computer's right-click menu is the motion file's (Leo, 26 Nov): every page asks for it once it has loaded.
+      is('a page with nothing moving asks for motion only (its right-click menu)', still.got, 'motion');
+      is('a page with 3 sections asks for motion only', (await asked('sections.html')).got, 'motion');
       is('a page with a looping animation asks for motion only', (await asked('moving.html')).got, 'motion');
       is('a page with a video asks for motion only', (await asked('video.html')).got, 'motion');
 
-      // Still page: ⌥ is for commenting only (Leo, 23 Nov: the motion menu is a right-click), so it asks for nothing.
+      // Still page: ⌥ is for commenting only (Leo, 23 Nov: the motion menu is a right-click), so it asks for nothing more.
       await still.p.bringToFront();
       await still.p.keyboard.down('Alt');
       await sleep(600);
       await still.p.keyboard.up('Alt');
       await sleep(200);
-      const gotAlt = await still.p.evaluate(() => performance.getEntriesByType('resource').some((e) => /\/_lab\/motion\.js/.test(e.name)));
-      check(eng, 'on a still page, ⌥ asks for nothing', !gotAlt);
+      const gotAlt = await still.p.evaluate(() => performance.getEntriesByType('resource').filter((e) => /\/_lab\/motion\.js/.test(e.name)).length);
+      check(eng, 'on a still page, ⌥ asks for nothing more', gotAlt <= 1, String(gotAlt));
       await still.p.close();
 
       // An animation a script starts late (no event says so), on a page that has asked for nothing so far: the pointer

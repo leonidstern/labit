@@ -40,7 +40,7 @@ import { inFrame, startFrame } from './widget/frame.ts';
 import { holdWhileOpen } from './widget/hold.ts';
 import { inkSvg } from './widget/ink.ts';
 import { bindActions } from './widget/actions.ts';
-import { bindDrag, draftHasText, endDrag, inkSaid, offerSelection, startDrag } from './widget/drag.ts';
+import { bindDrag, draftHasText, drawOnce, endDrag, inkSaid, offerSelection, startDrag } from './widget/drag.ts';
 import { boardStrip, bindBoardCam, newBoard, pinBoardGone, pressBoard, showBoard } from './widget/boardcam.ts';
 import { bindFramework, overFramework, scanForFramework } from './widget/framework.ts';
 import { bindKeys } from './widget/keys.ts';
@@ -92,6 +92,8 @@ import { bindKeys } from './widget/keys.ts';
     get agentOf() { return agentOf; },
     anchorAt,
     begin,
+    offerSelection,
+    drawOnce: () => (drawOnce(), void part('draw')),
     boardStrip,
     sendDrawing,
     get addComment() { return addComment; },
@@ -703,6 +705,13 @@ import { bindKeys } from './widget/keys.ts';
   }
   // Command-Z (Control-Z elsewhere), not in a text box: the last pin or go placed from this tab goes away. This
   // computer deletes it; a guest, who can't delete, resolves it (it steps aside).
+  // This computer takes a thread away for good (⌘Z on the last one placed, a pin's right-click menu): its replies and a
+  // board pin's board go with it.
+  const dropThread = async (id) => {
+    await send({ action: 'delete', id });
+    S.comments = S.comments.filter((x) => x.id !== id && x.parent !== id);
+    pinBoardGone(id);
+  };
   async function undoLast() {
     const id = placed.pop();
     const c = id && S.comments.find((x) => x.id === id);
@@ -712,11 +721,8 @@ import { bindKeys } from './widget/keys.ts';
     // board stays, as a guest's ⌘Z does (issue 422: deleting it took the board and its pictures).
     const keep = S.pinBoards?.has(id) && S.undo?.id !== id;
     try {
-      if (S.isAdmin && !keep) {
-        await send({ action: 'delete', id });
-        S.comments = S.comments.filter((x) => x.id !== id && x.parent !== id);
-        pinBoardGone(id);
-      } else if (S.isAdmin) {
+      if (S.isAdmin && !keep) await dropThread(id);
+      else if (S.isAdmin) {
         const { comment } = await send({ action: 'resolve', id });
         Object.assign(c, comment);
       } else if (ownKey) {
@@ -1333,13 +1339,24 @@ import { bindKeys } from './widget/keys.ts';
           if (isTrying()) relight(); // a tried choice: its green back
           else markQuote(S.quoted);
         });
-        // A right-click on a pin on a video takes the video back to its frame and pauses it, as a click does (Leo, 24 Nov).
+        // A right-click on a pin or a drawing: its own menu (Leo, 26 Nov: "on pins also should work and on drawings"):
+        // open or close it, resolve it or open it again, and a pin on a video takes the video back to its frame (Leo,
+        // 24 Nov). ⇧ or ⌥ right-click: the browser's. Phones hold a pin to move it, as before.
         pin.addEventListener('contextmenu', (e) => {
-          const m = pinData.get(pin).c.anchor?.moment;
-          if (m?.kind !== 'video' || e.shiftKey) return;
+          if (coarse || e.shiftKey || e.altKey) return;
           e.preventDefault();
           e.stopPropagation();
-          void (mo ? Promise.resolve(mo) : loadMotion()).then((x) => x?.showMoment(m));
+          S.menuAt = Date.now();
+          const c = pinData.get(pin).c;
+          const m = c.anchor?.moment;
+          if (m?.kind === 'video') void (mo ? Promise.resolve(mo) : loadMotion()).then((x) => x?.showMoment(m)); // the video back to its frame, as before (Leo, 24 Nov)
+          const open = () => S.openId === c.id || pin.click();
+          const rows = [[S.openId === c.id ? 'close' : 'open', () => pin.click()],
+            ['reply', () => (open(), setTimeout(() => /** @type {HTMLElement | null} */ (root.querySelector('.card textarea'))?.focus({ preventScroll: true }), 60)), KEYS.reply]];
+          if (mayResolve(c)) rows.push([c.resolved ? 'open again' : 'resolve', () => toggleResolved(c), KEYS.done]);
+          // This computer (the lab's admin) can take a thread away, as ⌘Z does for the last one placed.
+          if (S.isAdmin) rows.push(['delete', () => void dropThread(c.id).then(() => ((S.openId = S.openId === c.id ? null : S.openId), render()), () => {})]);
+          void loadMotion().then((x) => x?.menuWith(e.clientX, e.clientY, rows));
         });
         pin.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -1669,6 +1686,9 @@ import { bindKeys } from './widget/keys.ts';
   // once something on the page moves (a video, an animation: looked for a second after the page starts, when one
   // starts, and on a phone each second), when P or S is pressed, or a comment has a moment; mo: the module, once it is.
   const loadMotion = () => (moAsked ??= part('motion').then((m) => (m.bindMotion(W), (mo = m), placeBar(), m)).catch(() => (moAsked = null))); // placeBar: phones get ⋯ → motion
+  // A computer's right-click menu is the motion file's (motion.ts menuAt): it comes in once the page is idle, so the first
+  // right-click opens at once instead of after a download (Leo, 26 Nov: "it was some super lag").
+  if (!coarse) setTimeout(() => void loadMotion(), 1500);
   const lookForMotion = () => {
     if (!moAsked && (document.querySelector('video') || document.getAnimations().some((a) => !root.contains(/** @type {any} */ (a.effect)?.target)))) void loadMotion();
   };
@@ -2024,6 +2044,19 @@ import { bindKeys } from './widget/keys.ts';
   document.addEventListener('pointercancel', () => (stopPress(), pressing(false)), true);
   addEventListener('scroll', stopPress, { passive: true, capture: true });
   document.addEventListener('contextmenu', (e) => (S.press || S.afterDrag) && e.preventDefault(), true);
+  // ⌃ click is a Mac's right-click: it opens the menu, and its click, which still comes, does nothing (it opened the pin
+  // under it, and the menu's "open" then closed it again: Leo, 26 Nov, "open/resolve doesnt work").
+  addEventListener('click', (e) => e.ctrlKey && Date.now() - S.menuAt < 1000 && (e.preventDefault(), e.stopImmediatePropagation()), true);
+  // The right-click menu (Leo, 26 Nov, option 3 of /context-menu): labit's own, its rows from what is under the pointer
+  // (motion.ts menuAt). ⌥ or ⇧ right-click, a board, full screen or comments hidden: the browser's. Computers only.
+  addEventListener('contextmenu', (e) => {
+    if (coarse || !S.on || e.shiftKey || e.altKey || boardShown() || document.fullscreenElement || e.composedPath().includes(host) || isOff(e)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    S.menuAt = Date.now();
+    const [x, y, t] = [e.clientX, e.clientY, e.target];
+    void loadMotion().then((m) => m?.menuAt(x, y, t));
+  }, true);
   // The actions row of a new comment (the box is the comment, so no button for it): your own actions (labit.json
   // `actions`), each sending its text at once on a click. They go through the box's own send, so a missing name is asked
   // for there, a lab that can't be reached keeps them. ⌥ + 1…4 runs the nth button (holding ⌥ shows the numbers).
