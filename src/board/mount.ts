@@ -1094,7 +1094,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     const [px, py, pv] = [ox, oy, view];
     measure();
     if (!sized || !cards.length) return void ((sized = true), go(moved || held ? cam : fitAll(boxes(), view), false));
-    if (px === ox && py === oy && pv.w === view.w && pv.h === view.h) return; // already drawn at this size (resized(), below)
+    if (px === ox && py === oy && pv.w === view.w && pv.h === view.h) return; // already drawn at this size
     // What is on the board stays where it is in the view, its zoom and place, as the view's edge moves (Leo, 21 Nov:
     // "closing/opening board drawer should not move zoom/position inside board"). Only a phone's keyboard holding the
     // board (held) keeps it where it is on the screen instead, as the view grows under it.
