@@ -240,7 +240,10 @@ const words = (m) => momentText({ ...m, playing: undefined });
 const short = (m) => (m.kind === 'video' ? clock(m.at, true) : `${Math.round(m.at * 10) / 10} s`);
 const item = (label, run, keep = W.coarse, key = '') => {
   const b = W.el('button', { type: 'button' }, label);
-  if (key) b.append(W.el('kbd', {}, key)), (b.dataset.key = key);
+  if (key) {
+    b.append(W.el('kbd', {}, key));
+    b.dataset.key = key;
+  }
   b.addEventListener('click', (e) => {
     e.stopPropagation();
     run();
@@ -288,7 +291,9 @@ const fill = () => {
     // A computer's menu says comment first (option 3); a phone's sheet keeps it after the controls.
     const said = moment ? item(`comment at ${short(moment)}`, comment, false) : under ? item('comment here', comment, false) : null;
     if (said && under) rows.push(said);
-    rows.push(item(isStill(target) ? 'play' : 'pause', () => (setItem(target, !isStill(target)), (moment = momentOf(target) || moment)), W.coarse, W.KEYS.pause)); // its moment as it stopped
+    const pause = item(isStill(target) ? 'play' : 'pause', () => (setItem(target, !isStill(target)), (moment = momentOf(target) || moment))); // its moment as it stopped
+    pause.dataset.key = W.KEYS.pause; // P works while the menu is open, as R and E do
+    rows.push(pause);
     rows.push(speedRow(rateOf.get(target) ?? pageRate, (v) => setRate(target, v)));
     if (said && !under) rows.push(said);
     if (!W.coarse) rows.push(W.el('hr', {}), item(S.paused ? 'play all motion' : 'pause all motion', () => setPause(!S.paused)));
@@ -378,7 +383,9 @@ export function bindMotion(w: unknown) {
     addEventListener('keydown', (e) => {
       const key = open && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat ? W.KEYS[W.actionOf(e)] : '';
       const row = key && box.querySelector<HTMLElement>(`button[data-key="${CSS.escape(key)}"]`);
-      if (row) (swallow(e), row.click());
+      if (!row) return;
+      swallow(e);
+      row.click();
     }, true);
     addEventListener('blur', () => closeMotion());
   }

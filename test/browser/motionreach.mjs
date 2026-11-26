@@ -75,7 +75,7 @@ try {
       await sleep(200);
       const short = await menu(p);
       await p.keyboard.press('Escape');
-      check(eng, 'a short animation that ends gets no motion menu', !short, JSON.stringify(short));
+      check(eng, 'a short animation that ends gets no motion menu (the page\'s own right-click menu: no motion head, no pause)', !short?.head && !short?.items.includes('pause'), JSON.stringify(short));
       const none = await inRoot(p, "Boolean(r.querySelector('.motion-ctl, .motions'))") || (await menu(p));
       check(eng, 'no menu open: nothing of labit on the page', !none);
       await ctx.close();

@@ -176,6 +176,8 @@ try {
         await sleep(400);
         const right = await p.evaluate(() => { const v = document.getElementById('vid'); return { paused: v.paused, t: v.currentTime }; });
         check(eng, 'a right-click on the pin takes the video back and pauses it', right.paused && Math.abs(right.t - vidPin.vm.at) < 0.11, JSON.stringify({ right, at: vidPin.vm?.at }));
+        await p.keyboard.press('Escape'); // its right-click menu opened too (Leo, 26 Nov): closed, so the next click is the page's
+        await sleep(150);
         await openNear('vid', '.card .msg .when button.moment');
         await p.evaluate(() => { const v = document.getElementById('vid'); v.play?.(); });
         await sleep(500);

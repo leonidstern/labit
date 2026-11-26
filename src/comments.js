@@ -1342,11 +1342,11 @@ import { bindKeys } from './widget/keys.ts';
           S.menuAt = Date.now();
           const c = pinData.get(pin).c;
           const m = c.anchor?.moment;
+          if (m?.kind === 'video') void (mo ? Promise.resolve(mo) : loadMotion()).then((x) => x?.showMoment(m)); // the video back to its frame, as before (Leo, 24 Nov)
           const open = () => S.openId === c.id || pin.click();
           const rows = [[S.openId === c.id ? 'close' : 'open', () => pin.click()],
             ['reply', () => (open(), setTimeout(() => /** @type {HTMLElement | null} */ (root.querySelector('.card textarea'))?.focus({ preventScroll: true }), 60)), KEYS.reply]];
           if (mayResolve(c)) rows.push([c.resolved ? 'open again' : 'resolve', () => toggleResolved(c), KEYS.done]);
-          if (m?.kind === 'video') rows.push(['show its frame', () => mo?.showMoment(m)]);
           // This computer (the lab's admin) can take a thread away, as ⌘Z does for the last one placed.
           if (S.isAdmin) rows.push(['delete', () => void send({ action: 'delete', id: c.id }).then(() => {
             S.comments = S.comments.filter((x) => x.id !== c.id && x.parent !== c.id);
