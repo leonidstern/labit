@@ -20,6 +20,7 @@ export const pressBoard = () => {
   if (globalThis.__LAB_CO__ || W.host.hasAttribute('data-board')) return;
   asked = false;
   board(true);
+  void W.part('boardview').catch(() => {}); // fetched while the button is down: the board comes up at the click
   addEventListener('pointerup', () => setTimeout(() => asked || board(false), 60), { once: true });
 };
 export const showBoard = (name: string, of = '', push = true) => globalThis.__LAB_CO__ ? undefined :
