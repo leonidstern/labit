@@ -2,6 +2,26 @@
 
 Versions follow [semver](https://semver.org). Before 1.0, a minor version can change how things work.
 
+## 0.8.5 · 2026-11-26
+
+Boards show whole pages and pan like a canvas, pins keep to their element, and one lab runs per dev server. Plus a right-click menu and pin or arrow in the bar.
+
+- **Pin or arrow in the bar**, and the bar folds into the rabbit.
+- **Right-click menu.** Comment comes first, then rows for what is under the pointer.
+- **Board frames show the whole page**, never a box that scrolls inside. A frame's name shows right away, no frame shows its size, and a new frame no longer lands on another.
+- **Boards pan with the middle and side mouse buttons**, also inside an opened frame. The pin tool comments with a plain click (⌥ flips it).
+- **Board pins keep to their element** when a frame's page changes. A saved page swaps in smoothly, an area's outline goes with the zoom, and W goes to a pin far down a frame.
+- **A board over the page hides all the page's pins at once.**
+- **One lab per dev server**, and `labit use` shows a branch in the running lab. A lab coming back in front of a dev server starts, even when another lab fronts it, and one session per lab listens on every page.
+- **Chat from a board** tells the agent which board it was sent from.
+- **Picks on a question** show and send at once.
+- **Done pins are see-through**, and a done pin whose spot is gone can still be found and reopened.
+- ⇧W goes back to the comment read before, read or not. W lands on its pin on a page with no doctype.
+- A pin's tip stays inside the window, so it never widens the page.
+- The ⋯ menu leaves at its own height, and a folded bar shows no hover tile until the pointer moves.
+- The skill says how a lab page looks, and "labit", "lab it" and "lab this" start it too.
+- A new README: what you can do, how it works, and a still of each section in light and dark.
+
 ## 0.8.4 · 2026-11-26
 
 Talk becomes an experiment, off until you turn it on, and experiments are back in the ⋯ menu.
