@@ -8,6 +8,7 @@ import type { IncomingMessage, ServerResponse, OutgoingHttpHeaders } from 'node:
 import type { Duplex } from 'node:stream';
 import { decoderFor } from './dev.ts';
 import { isPageLoad } from './pageload.ts';
+import { stripTags } from './colabit.ts';
 
 const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])$/;
 
@@ -76,9 +77,8 @@ export function proxy({ PROXY, origin: originNow, widget, keyFor, isLoopback, na
       if (ours) out['set-cookie'] = [...[ours].flat().map(String), ...(r.headers['set-cookie'] || [])];
       res.writeHead(r.statusCode || 502, out);
       // Streamed through as it arrives (Next, Astro and React stream their pages), so nothing waits for the end.
-      // The widget's script goes after the page; a copy of it the page already loads is taken out, even when its
-      // tag comes split across two pieces: an unfinished <script tag is held back until the next piece.
-      const strip = (t: string) => t.replace(/<script\b[^>]*\bsrc=["'][^"']*\/_lab\/comments\.js["'][^>]*>\s*<\/script>\s*/gi, '');
+      // The widget's script goes after the page; a copy of it the page already loads is taken out, and so is colabit's
+      // (lib/colabit.ts), even when a tag comes split across two pieces: an unfinished <script tag is held back.
       let decoder: TextDecoder | undefined;
       let held = '';
       // The lab's reload-holder has to be the first script on the page, before the dev server's own client, so it
@@ -96,11 +96,11 @@ export function proxy({ PROXY, origin: originNow, widget, keyFor, isLoopback, na
         const tag = t.lastIndexOf('<');
         // Hold back an unfinished <script>…</script>, or any tag not closed yet; send the rest now.
         const cut = script !== -1 && lower.indexOf('</script>', script) === -1 ? script : tag > t.lastIndexOf('>') ? tag : t.length;
-        res.write(strip(t.slice(0, cut)));
+        res.write(stripTags(t.slice(0, cut)));
         held = t.slice(cut);
       });
       r.on('end', () => {
-        const tail = strip(held + (decoder?.decode() ?? '')) + widget(pageKey(url.pathname), isLoopback(req), nameFor(req), req.headers['sec-fetch-dest'] === 'iframe', req);
+        const tail = stripTags(held + (decoder?.decode() ?? '')) + widget(pageKey(url.pathname), isLoopback(req), nameFor(req), req.headers['sec-fetch-dest'] === 'iframe', req);
         // A page that arrived in one piece never saw a data event with a head in it; dress it here instead.
         res.end(first ? dress(tail) : tail);
       });

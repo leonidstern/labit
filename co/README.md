@@ -40,6 +40,10 @@ The lab on `localhost:4600` with an in-memory store and everyone in `co/vercel.j
 
 The script also works on any site of yours as it is: the same script tag with `data-site="<site name>"` instead of `"lab"`. That site's comments are kept apart under its name, so its Vercel previews share production's.
 
+## Beside a labit lab
+
+When labit serves one of these sites on your computer, the lab's own widget is the one on the page: the lab takes colabit's tag out, and colabit's script stays off wherever it finds a lab's widget, so pins never split between the two. Each keeps its own pins; nothing is copied across.
+
 ## What it leaves out
 
 Everything that works with an agent: the listening pill, agent status and rings, hand-offs, the agent's text, boards, actions, choices to try, the labs switcher and update. Pictures are left out too. Drawings are in (hold D and draw; the drawing goes as a pin when you lift), and so is motion: pause and slow-down from a right-click or ⋯ → motion, and a pin on a video or animation keeps its moment. There's no live stream: an open page picks up others' comments every 15 seconds and when you come back to the tab.
