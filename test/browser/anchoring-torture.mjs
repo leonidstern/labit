@@ -42,6 +42,7 @@
 //                             before and after the change is written there (case-before.html, case-after.html)
 //   TORTURE_KNOWN=print       prints the KNOWN list this run would need
 //   TORTURE_STRICT=1          a listed cell that passes now fails the run (the list has to be trimmed)
+//   TEST_PART=2/3             one part of the cases, split by kind of pin (CI runs the parts side by side)
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -579,6 +580,25 @@ for (const flavour of FLAVOURS) {
     }
   }
 }
+// TEST_PART=i/n (ci/browser-run.mjs sets it for anchoring-torture@i/n): only the i-th of n parts, so CI can run the
+// parts side by side. The parts go by kind of pin, so each base page and each cell of the matrix (mutation × kind,
+// what KNOWN judges) sits whole in one part; the kinds are dealt largest first onto the smallest part. The live patch
+// keeps the cases it picks from the whole list, and the smallest pages run in part 1.
+const [PART, PARTS] = ONE ? [1, 1] : (process.env.TEST_PART || '1/1').split('/').map(Number);
+if (!(PARTS >= 1 && PART >= 1 && PART <= PARTS)) throw new Error(`TEST_PART=${process.env.TEST_PART}: give it as i/n`);
+const allCases = cases.splice(0);
+{
+  const sizes = Object.groupBy(allCases, (c) => c.kind);
+  const parts = Array.from({ length: PARTS }, () => ({ kinds: new Set(), n: 0 }));
+  for (const kind of [...KINDS].sort((a, b) => (sizes[b]?.length || 0) - (sizes[a]?.length || 0) || a.localeCompare(b))) {
+    const part = parts.reduce((lo, p) => (p.n < lo.n ? p : lo));
+    part.kinds.add(kind);
+    part.n += sizes[kind]?.length || 0;
+  }
+  const mine = parts[PART - 1].kinds;
+  cases.push(...allCases.filter((c) => mine.has(c.kind)));
+  bases.splice(0, bases.length, ...bases.filter((b) => mine.has(b.kind)));
+}
 
 // ---------- the smallest pages that show it ----------
 // Each failure of the matrix comes down to a few causes. These are the smallest pages that show one cause each, run on
@@ -683,7 +703,8 @@ const HOT_EVERY = Number(process.env.TORTURE_HOT ?? 16); // every Nth case is al
 const short = { webkit: 'wk', chromium: 'cr', firefox: 'ff' };
 const fileOf = (page) => path.join(DIR, `${page.slice(1)}.html`);
 const titled = (html, title) => html.replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`);
-const hot = cases.filter((c, i) => HOT_EVERY && !WIDTH[c.mut] && (ONE || i % HOT_EVERY === 0));
+const inPart = new Set(cases);
+const hot = allCases.filter((c, i) => HOT_EVERY && !WIDTH[c.mut] && (ONE || i % HOT_EVERY === 0) && inPart.has(c));
 // Every picture a page names is a file in the lab, beside the pages (they name it by file name alone).
 const pictures = new Set([...bases, ...cases, ...ROOTS.map((r) => ({ html: `${r.html} ${r.change.replaceAll('\\"', '"')}` }))].flatMap((x) => [...x.html.matchAll(/ src="([^"]+)"/g)].map((m) => m[1])));
 for (const eng of ENG) {
@@ -1005,7 +1026,7 @@ async function runEngine(eng) {
       hotResults.push({ ...row(c, eng, 'hot', got), before: before ? (before.on ? 'R' : 'W') : 'L' });
     });
     // 4. The smallest pages, on anchoring.ts alone.
-    for (const r of ONE ? [] : ROOTS) {
+    for (const r of ONE || PART !== 1 ? [] : ROOTS) {
       const p = tabs[0];
       await p.goto(`${B}/${e}/root-${r.id}`).catch(() => {});
       await untilFn(p, () => document.readyState === 'complete' && Boolean(window.__torture.root()?.querySelector('.scrim')), null, 5000);
@@ -1154,10 +1175,11 @@ if (fixed.length) console.log(`listed in KNOWN but passing now (trim the list):\
 if (process.env.TORTURE_OUT) {
   fs.mkdirSync(process.env.TORTURE_OUT, { recursive: true });
   fs.writeFileSync(path.join(process.env.TORTURE_OUT, 'anchor-torture.md'), `${md}\n`);
-  fs.writeFileSync(path.join(process.env.TORTURE_OUT, 'anchor-torture.json'), JSON.stringify({ at: new Date().toISOString(), commit: commit(), engines: ENG, seeds: SEEDS, took: took(), results, hot: hotResults, roots: rootResults, notes }, null, 1));
+  fs.writeFileSync(path.join(process.env.TORTURE_OUT, 'anchor-torture.json'), JSON.stringify({ at: new Date().toISOString(), commit: commit(), engines: ENG, seeds: SEEDS, part: `${PART}/${PARTS}`, took: took(), results, hot: hotResults, roots: rootResults, notes }, null, 1));
   console.log(`written to ${path.join(process.env.TORTURE_OUT, 'anchor-torture.md')} and anchor-torture.json`);
 }
-if (process.env.TORTURE_KNOWN === 'print') {
+if (process.env.TORTURE_KNOWN === 'print' && PARTS > 1) console.log('TORTURE_KNOWN=print needs the whole run: leave TEST_PART out');
+else if (process.env.TORTURE_KNOWN === 'print') {
   // The list this run needs: per mutation and kind, the worst outcome per flavour, with @engine when only one fails.
   const lines = [];
   for (const mut of Object.keys(wanted)) {

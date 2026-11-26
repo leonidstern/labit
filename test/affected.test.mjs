@@ -80,6 +80,14 @@ test('shards: every picked test runs once per engine, the longest shard near the
   // The real list: a full PR run is WebKit on at most 5 macOS jobs.
   const real = shards('all');
   assert.ok(real.length <= 5 && real.every((j) => j.os === 'macos-latest'));
+  // A test that runs in parts: each part once, in jobs of its own, at its share of the time; a PR's own test goes first
+  // in every shard that has a part of it.
+  const split = shards('a b c', { times, runners: 4, split: { a: 2 }, first: ['a'] });
+  assert.deepEqual(split.flatMap((j) => j.files.split(' ')).sort(), ['a@1/2', 'a@2/2', 'b', 'c']);
+  assert.equal(split.filter((j) => j.files.includes('a@')).length, 2);
+  assert.ok(split.every((j) => !j.files.includes('a@') || j.files.startsWith('a@')));
+  assert.equal(Math.max(...split.map((j) => j.secs)), 90);
+  assert.ok(shards('all').some((j) => j.files.split(' ').includes('anchoring-torture@1/3')));
 });
 
 test('main runs the browsers only for a version bump', async () => {

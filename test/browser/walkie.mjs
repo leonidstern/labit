@@ -51,6 +51,19 @@ try {
       const s1 = await state();
       check(eng, 'K: the bar turns into the pill, the box has the cursor, no pins on the page', (await asked()) && s1.pill && !s1.bar && s1.off && s1.focused === 'textarea', JSON.stringify(s1));
 
+      const looks = () => p.evaluate(() => { const r = document.querySelector('[data-lab-comments]').shadowRoot; const dot = getComputedStyle(r.querySelector('.wk-dot')); return [getComputedStyle(r.querySelector('.wk-tm span')).visibility, dot.visibility, r.querySelector('.walkie').getBoundingClientRect().width]; });
+      await sleep(1200);
+      const quiet = await looks();
+      await say('so');
+      await sleep(100);
+      const heard = await looks();
+      const first = await p.evaluate(() => document.querySelector('[data-lab-comments]').shadowRoot.querySelector('.wk-tm span').textContent);
+      check(eng, 'before the first word no dot and no clock; with it they show, at the same width', quiet[0] === 'hidden' && quiet[1] === 'hidden' && heard[0] === 'visible' && heard[1] === 'visible' && quiet[2] === heard[2] && first === '0:00', JSON.stringify([quiet, heard, first]));
+      await p.evaluate(() => { const ta = document.querySelector('[data-lab-comments]').shadowRoot.querySelector('.walkie textarea'); ta.value = ''; ta.dispatchEvent(new Event('input')); });
+
+      const ink = await p.evaluate(() => { const r = document.querySelector('[data-lab-comments]').shadowRoot; return [getComputedStyle(r.querySelector('.wk-tm span')).color, getComputedStyle(r.querySelector('.walkie')).color]; });
+      check(eng, 'the time is in the pill\'s own colour, so it shows on the black pill', ink[0] === ink[1], JSON.stringify(ink));
+
       const a = await mid('#a'), b = await mid('#b');
       await p.mouse.move(a.x, a.y, { steps: 8 });
       await sleep(500);
@@ -69,6 +82,11 @@ try {
       const lines = msg ? msg.text.split('\n') : [];
       const ia = lines.findIndex((l) => /#a\b/.test(l) && /bigger/.test(l)), ib = lines.findIndex((l) => /#b\b/.test(l) && /green/.test(l));
       check(eng, '⌘↵ sends one chat message, each part on what was pointed at, in order', Boolean(msg) && msg.anchor?.kind === 'page' && ia > 0 && ib > ia, msg ? msg.text : 'nothing sent');
+      const after = () => p.evaluate(() => { const root = document.querySelector('[data-lab-comments]').shadowRoot; const b = root.querySelector('.walkie-btn'); return { btn: b.textContent, width: b.getBoundingClientRect().width, lines: root.textContent.includes('sent to the chat') }; });
+      const t1 = await after();
+      await sleep(1500);
+      const t2 = await after();
+      check(eng, 'after sending, the button says "sent ✓" for a moment, then tal(k) again, with no line over the bar', t1.btn === 'sent ✓' && t2.btn === 'tal(k)' && Math.abs(t1.width - t2.width) < 0.5 && !t1.lines, JSON.stringify([t1, t2]));
       const s2 = await state();
       check(eng, 'after sending, the bar is back and pins work again', !s2.pill && s2.bar && !s2.off, JSON.stringify(s2));
 
