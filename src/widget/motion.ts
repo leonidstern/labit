@@ -240,7 +240,7 @@ const words = (m) => momentText({ ...m, playing: undefined });
 const short = (m) => (m.kind === 'video' ? clock(m.at, true) : `${Math.round(m.at * 10) / 10} s`);
 const item = (label, run, keep = W.coarse, key = '') => {
   const b = W.el('button', { type: 'button' }, label);
-  if (key) b.append(W.el('kbd', {}, key));
+  if (key) b.append(W.el('kbd', {}, key)), (b.dataset.key = key);
   b.addEventListener('click', (e) => {
     e.stopPropagation();
     run();
@@ -373,6 +373,13 @@ export function bindMotion(w: unknown) {
     // A press outside only closes it: the click it ends pins nothing (docs/design-rules.md, S.menuShut in comments.js).
     addEventListener('pointerdown', (e) => open && !e.composedPath().includes(box) && ((S.menuShut = Date.now()), closeMotion()), true);
     addEventListener('keydown', (e) => open && e.key === 'Escape' && (swallow(e), closeMotion()), true);
+    // The keys a row shows work while the menu is open (Leo, 26 Nov: "shortcuts there doesnt work when menu opened"):
+    // R replies, E resolves, P pauses, as the row would.
+    addEventListener('keydown', (e) => {
+      const key = open && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat ? W.KEYS[W.actionOf(e)] : '';
+      const row = key && box.querySelector<HTMLElement>(`button[data-key="${CSS.escape(key)}"]`);
+      if (row) (swallow(e), row.click());
+    }, true);
     addEventListener('blur', () => closeMotion());
   }
   addEventListener('pointerdown', (e) => {
