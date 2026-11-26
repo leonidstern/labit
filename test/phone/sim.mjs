@@ -10,7 +10,7 @@
 //   node test/phone/sim.mjs go <step>         jumps to a step by name (calibrate first, then e.g. ask-open or board-open)
 //
 // Steps: calibrate, the taps and holds on the page (tap-no-pin .. swipe-no-pin), ask-open / ask-pick (a
-// question with choices: a tap answers after 5 s with undo, no Keep), board-open .. board-close (a board over the page).
+// question with choices: a tap answers at once, no Keep), board-open .. board-close (a board over the page).
 // Before the first hold: run the tool's set_keyboard show (after its `text` action too: typing switches the simulator to a hardware
 // keyboard and no keyboard comes up). If a thread's card reads y < 0 or a tap on the dimmed page does nothing, Safari is painted out of step
 // with its rects after the keyboard toggling: open the page again (open_url) and `go` to the step.
@@ -264,7 +264,7 @@ if (cmd === 'serve') {
       return [['scrolling makes no comment box', !ss.some((s) => s.float)], ['the page scrolled', end.sy - s0.sy > 100, `scrollY ${s0.sy} → ${end.sy}`], ['no text got selected', ss.every((s) => !s.sel)]];
     } },
     // A question with choices (src/widget/thread.ts, trial.ts) on a phone: a sheet of at most half the screen, 44 pt rows,
-    // a tap on a row answers (no Keep button; the card says "Picked A · undo" and the pick goes after 5 s, or when the card closes). `go ask-open` after
+    // a tap on a row answers (no Keep button; the pick goes at once). `go ask-open` after
     // calibrate. The question sits on words in paragraph p20; the page is scrolled so they are in the lower part of the
     // screen, where a tall sheet would cover them.
     { name: 'ask-open', setup: async () => {
@@ -287,7 +287,7 @@ if (cmd === 'serve') {
         ['no keyboard just for reading', kbDown(end), `covers ${kb(end)}px`],
       ];
     } },
-    { name: 'ask-pick', say: (s) => { const r = s.rows[1]; return r ? `tap ${fmt(dev(s, r.x + r.w / 2, r.y + r.h / 2))} (row A: a tap answers, no Keep), then WAIT 6 s before check (the pick goes after 5 s)` : 'no rows on screen'; }, expect: async (ss) => {
+    { name: 'ask-pick', say: (s) => { const r = s.rows[1]; return r ? `tap ${fmt(dev(s, r.x + r.w / 2, r.y + r.h / 2))} (row A: a tap answers, no Keep), then check (the pick goes at once)` : 'no rows on screen'; }, expect: async (ss) => {
       const end = ss.at(-1);
       const cs = await comments();
       const pick = cs.find((c) => c.picked);
