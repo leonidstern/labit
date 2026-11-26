@@ -40,7 +40,7 @@ import { holdWhileOpen } from './widget/hold.ts';
 import { inkSvg } from './widget/ink.ts';
 import { bindActions } from './widget/actions.ts';
 import { bindDrag, draftHasText, endDrag, inkSaid, offerSelection, startDrag } from './widget/drag.ts';
-import { boardStrip, bindBoardCam, newBoard, pinBoardGone, showBoard } from './widget/boardcam.ts';
+import { boardStrip, bindBoardCam, newBoard, pinBoardGone, pressBoard, showBoard } from './widget/boardcam.ts';
 import { bindFramework, overFramework, scanForFramework } from './widget/framework.ts';
 import { bindKeys } from './widget/keys.ts';
 
@@ -927,6 +927,7 @@ import { bindKeys } from './widget/keys.ts';
     const row = el('button', { type: 'button' }, b.title || b.name);
     row.append(el('span', { class: 'n' }, ` · ${b.frames}`));
     row.addEventListener('click', (e) => (e.stopPropagation(), setMenu(false), void showBoard(b.name)));
+    row.addEventListener('pointerdown', pressBoard);
     return row;
   }), newBoardBtn, ...(coarse ? [] : [boardHeld])];
   function placeBar() {
@@ -1041,6 +1042,7 @@ import { bindKeys } from './widget/keys.ts';
   // (bfcache) has its scroll already, so the key goes, or a later reload would jump.
   if (!S.board && self === top) {
     const scrollKey = 'lab-scroll:' + location.pathname;
+    document.addEventListener('pointerdown', (e) => !e.button && !pinsControls(e) && e.target instanceof Element && /\/_lab\/board\/[a-z0-9]/i.test(e.target.closest('a[href]')?.getAttribute('href') || '') && pressBoard(), true);
     document.addEventListener('click', (e) => {
       const a = /** @type {HTMLAnchorElement | null} */ (e.target instanceof Element ? e.target.closest('a[href]') : null);
       if (!a || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || (a.target && a.target !== '_self')) return;

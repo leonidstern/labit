@@ -98,6 +98,26 @@ try {
       await sleep(400);
       const back = await p.evaluate(() => window.__shown());
       check(eng, 'closed, every pin of the page shows again', back.page === PAGE, JSON.stringify(back));
+      // Pressed, not yet let go: the pins are gone already, a press earlier than the click (Leo, 26 Nov: "disappering
+      // can be even faster?"); a plain press in comment mode makes a comment, and hides nothing.
+      const go = await p.locator('#go').boundingBox();
+      await p.mouse.move(go.x + 5, go.y + 5);
+      await p.keyboard.down('Alt');
+      await p.mouse.down();
+      await sleep(120);
+      const down = await p.evaluate(() => window.__shown().page);
+      await p.mouse.up();
+      await p.keyboard.up('Alt');
+      check(eng, 'an ⌥-press on the board\'s link hides the page\'s pins before it is let go', down === 0, String(down));
+      await sleep(700);
+      for (let i = 0; i < 3 && (await p.$('[data-lab-board-view]')); i++) { await p.keyboard.press('Escape'); await sleep(600); }
+      await p.mouse.down();
+      await sleep(120);
+      const plain = await p.evaluate(() => window.__shown().page);
+      await p.mouse.up();
+      check(eng, 'a plain press there (a comment) hides none of them', plain === PAGE, String(plain));
+      await p.keyboard.press('Escape');
+      await sleep(300);
       // A page that comes back reloaded with its board in the address (a save while the tab was away reloads it as it
       // shows): from its first frame on, none of the page's pins shows, as the board opens again over it.
       await p.addInitScript(() => {

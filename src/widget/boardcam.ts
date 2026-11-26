@@ -13,8 +13,17 @@ let S: any; // the widget's state (W.S), read once at startup
 // The host's data-board hides the page's pins (styles.css, .onp): set here from the moment it is asked for, so none
 // shows while its script loads; the view keeps it while it is open (overlay.ts).
 const board = (on: boolean) => W.host.toggleAttribute('data-board', on);
+let asked = false;
+/** A press on what opens a board (its link, its row in the bar): the page's pins go as it goes down, not after the
+ * click a press later (Leo, 26 Nov: "disappering can be even faster?"); back if it opened nothing (let go elsewhere). */
+export const pressBoard = () => {
+  if (globalThis.__LAB_CO__ || W.host.hasAttribute('data-board')) return;
+  asked = false;
+  board(true);
+  addEventListener('pointerup', () => setTimeout(() => asked || board(false), 60), { once: true });
+};
 export const showBoard = (name: string, of = '', push = true) => globalThis.__LAB_CO__ ? undefined :
-  (board(true), W.part('boardview').then((m) => m.show(name, { page: S.page, of, push, onClose: () => {
+  ((asked = true), board(true), W.part('boardview').then((m) => m.show(name, { page: S.page, of, push, onClose: () => {
     sections(name);
     const open = S.comments.find((c) => c.id === S.openId);
     if (open?.anchor?.kind === 'board') S.openId = null;
