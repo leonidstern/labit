@@ -593,15 +593,13 @@ export function threadCard(c, fresh = new Set(), focus = false) {
 
 // ---------- a question with choices (labit reply --choice …) ----------
 // V1 "plain list" (Leo, 18 Nov): no bubble, no letters, no tags. The question, then the versions as a plain list of rows
-// (the page's own words "· now", a tick on the one shown). A tap on a row
-// answers (20 Nov, no Keep) as a reply, "Picked B: …" (the letter is for the agent, who listed them), with
-// picked: { of, n } (lib/schema.mjs), but only after 5 s: the card says "Picked B · undo" meanwhile, and the pick goes
-// at once when the card closes (or the page is hidden). On a computer 1 to 6 pick that choice of the open thread card (the
-// same as a tap, with its undo), and Enter picks the ticked row (the agent's recommend, or the one tried last), and the arrow keys move the tick (pointing tries a row; so do they), unless a
-// text box or a button has the focus (comments.js, pickByKey, pickTicked). On a phone a touch that
-// moved (a scroll) answers nothing.
-// With quoted words on the page the rows are also tried in it (trial.ts). The page chat draws a question the same way
-// (chat.ts), with no trying: its messages have no quoted words.
+// (the page's own words "· now", a tick on the one shown). A tap on a row answers at once (Leo, 20 Nov: "answer right
+// away"; 26 Nov: it felt not immediate while it waited 5 s for an undo) as a reply, "Picked B: …" (the letter is for the
+// agent, who listed them), with picked: { of, n } (lib/schema.mjs): the reply is in the thread and the row ticked before
+// the lab answers (sendPick). On a computer 1 to 6 pick that choice of the open thread card (the same as a tap), and
+// Enter picks the ticked row (the agent's recommend, or the one tried last), and the arrow keys move the tick (pointing
+// tries a row; so do they), unless a text box or a button has the focus (comments.js, pickByKey, pickTicked). On a phone
+// a touch that moved (a scroll) answers nothing.
 // The open question in a thread: the agent's last message with choices that nobody has picked on yet.
 const pickOf = (c, ask) => W.repliesOf(c.id).filter((r) => r.picked?.of === ask.id).pop();
 export function openAsk(c) {
@@ -611,44 +609,33 @@ export function openAsk(c) {
 }
 const LETTER = (n: number) => String.fromCharCode(65 + n);
 
-// The pick just tapped, waiting its 5 s (one at a time). ui draws it in the card that shows it now: 'wait' (undo on
-// offer), 'sending', or 'off' (back to rows, with a note when it failed). The card may be drawn again meanwhile: the
-// new rows read this and pick up where it was.
-const PICK_MS = 5000;
-type Pending = { ask: string; thread: string; chat: boolean; n: number; before: number; name: string; text: string; until: number; timer: ReturnType<typeof setTimeout>; sending: boolean; ui?: (state: 'wait' | 'sending' | 'off', note?: string) => void };
-let pending: Pending | null = null;
 // A pick that could not be sent, kept by question so the card, drawn again, offers it again ("failed, tap again").
 const failedPick = new Map<string, number>();
-function commitPick(p: Pending) {
-  if (pending !== p || p.sending) return;
-  clearTimeout(p.timer);
-  p.sending = true;
-  p.ui?.('sending');
-  void (async () => {
-    try {
-      const { comment } = await W.send({ name: p.name, text: p.text, parent: p.ask, to: p.ask, picked: p.n });
-      if (pending === p) pending = null;
-      failedPick.delete(p.ask);
-      untry(); // the agent writes the pick into the file; the page shows its own words till then
+// A pick goes at once, and shows at once: its reply is in the thread (the rows answered, its row ticked) before the lab
+// answers, then swapped for the lab's copy. Not saved: the reply goes again and the rows are back, "failed, tap again".
+function sendPick(c, ask, n: number, name: string) {
+  const text = n < 0 ? 'Keep as is: none of these.' : `Picked ${LETTER(n)}: ${ask.choices[n]}`;
+  const mine = { id: `pick-${Date.now()}`, parent: c.id, to: ask.id, name, text, createdAt: new Date().toISOString(), picked: { of: ask.id, n } };
+  const drop = () => (W.S.comments = W.S.comments.filter((x) => x !== mine));
+  failedPick.delete(ask.id);
+  untry(); // the agent writes the pick into the file; the page shows its own words till then
+  W.addComment(mine);
+  W.render();
+  W.send({ name, text, parent: ask.id, to: ask.id, picked: n }).then(
+    ({ comment }) => {
+      drop();
       W.addComment(comment);
       W.markSeen([comment]);
       W.render();
-    } catch (err) {
+    },
+    (err) => {
       console.warn('labit: the pick could not be sent', err);
-      if (pending === p) pending = null;
-      failedPick.set(p.ask, p.n); // its card may be closed: it shows this when it opens again
-      p.ui?.('off', 'failed, tap again');
-    }
-  })();
+      drop();
+      failedPick.set(ask.id, n); // its card may be closed: it shows this when it opens again
+      W.render();
+    },
+  );
 }
-/** Before every redraw (comments.js render): a pick waiting its 5 s goes now when its card (or the chat) has closed. */
-export function flushPick(openId: string | null, chatOpen: boolean) {
-  if (!pending || pending.sending) return;
-  if (!(pending.chat ? chatOpen : openId === pending.thread)) commitPick(pending);
-}
-// The page is going or hidden (a tab switch, the phone locked): the pick goes now, not after its 5 s (best effort).
-addEventListener('pagehide', () => pending && commitPick(pending));
-document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && pending && commitPick(pending));
 /** 1 to 6 on a computer: the choice's row of the open thread card's question, as a tap (the chat's rows have no keys, so 1 stays comment / pointer there). Whether it took the key. */
 export function pickByKey(n: number): boolean {
   if (W.coarse) return false;
@@ -678,11 +665,6 @@ export function choicesEl(c, ask, host, chat = false) {
   box.append(list);
   const pick = pickOf(c, ask);
   const live = !pick && openAsk(c) === ask;
-  if (pick && pending?.ask === ask.id && !pending.sending) {
-    // answered from elsewhere
-    clearTimeout(pending.timer);
-    pending = null;
-  }
   const inPlace = live && !chat && triesInPlace(c);
   const exact = c.anchor?.quote?.exact || '';
   // The quoted words as they are now: their own row ("· now") when trying in place, unless a choice is the same words.
@@ -723,8 +705,8 @@ export function choicesEl(c, ask, host, chat = false) {
   if (!live) return box;
   box.classList.add('live');
 
-  // A tap answers (Leo, 20 Nov: "remove keep button answer right away"), 5 s later (undo until then). On a computer
-  // pointing at a row still tries it in the page; the row shown at first is the page's own words, or the agent's pick.
+  // A tap answers at once (sendPick). On a computer pointing at a row still tries it in the page; the row shown at first
+  // is the page's own words, or the agent's pick.
   const back = keptRow(ask);
   const lost = failedPick.get(ask.id); // its pick could not be sent when this card was last open: offered again
   let cur = lost ?? back ?? (inPlace ? (nowIs >= 0 ? nowIs : -1) : ask.recommend ?? -1);
@@ -742,56 +724,14 @@ export function choicesEl(c, ask, host, chat = false) {
     }
     show(n);
   };
-  const label = (p: Pending) => (p.n < 0 ? 'Kept as is' : `Picked ${LETTER(p.n)}`);
-  // The pick, waiting: its row ticked, the others still, "Picked B · undo" under them.
-  const wait = (p: Pending) => {
-    for (const r of rows) {
-      r.el.setAttribute('aria-disabled', 'true'); // not `disabled`: a focused row keeps its focus
-      r.el.classList.remove('on');
-      r.el.classList.toggle('picked', r.n === p.n);
-    }
-    const left = Math.max(0, p.until - Date.now());
-    const undo = W.el('button', { class: 'btn undo', type: 'button', 'aria-label': 'undo: take this pick back' });
-    const w = W.el('span', { class: 'w', style: `--undo-ms:${left}ms;--undo-from:${Math.min(1, left / PICK_MS)}` });
-    w.append(W.el('span', {}, 'undo'));
-    undo.append(w);
-    undo.addEventListener('click', () => {
-      if (pending !== p || p.sending) return;
-      clearTimeout(p.timer);
-      pending = null;
-      p.ui?.('off');
-    });
-    note.classList.remove('idle');
-    note.replaceChildren(`${label(p)} · `, undo);
-  };
-  const ui = (p: Pending) => (state: 'wait' | 'sending' | 'off', msg?: string) => {
-    if (state === 'wait') return wait(p);
-    if (state === 'sending') return wait(p), note.replaceChildren(label(p)); // the word stays, no undo
-    for (const r of rows) {
-      r.el.removeAttribute('aria-disabled');
-      r.el.classList.remove('picked');
-    }
-    select(p.before);
-    say(msg);
-  };
   const answer = (n: number) => {
-    if (pending?.ask === ask.id) return; // waiting: undo first
-    const prev = cur; // what undo goes back to
     const name = String(W.store.get('lab-name') || '').trim();
     select(n);
     if (!name) {
       say('your name first');
       return void host.querySelector('textarea')?.focus({ preventScroll: true });
     }
-    failedPick.delete(ask.id);
-    if (pending) commitPick(pending); // another question's pick still waiting: it goes now
-    const text = n < 0 ? 'Keep as is: none of these.' : `Picked ${LETTER(n)}: ${ask.choices[n]}`;
-    const p: Pending = { ask: ask.id, thread: c.id, chat, n, before: prev, name, text, until: Date.now() + PICK_MS, timer: 0 as unknown as ReturnType<typeof setTimeout>, sending: false };
-    p.timer = setTimeout(() => commitPick(p), PICK_MS);
-    p.ui = ui(p);
-    pending = p;
-    wait(p);
-    (note.querySelector('.undo') as HTMLElement | null)?.focus({ preventScroll: true }); // the tapped row is greyed: focus goes to undo
+    sendPick(c, ask, n, name);
   };
   for (const r of rows) {
     // A touch that moved more than 8 px was a scroll: it answers nothing.
@@ -808,16 +748,15 @@ export function choicesEl(c, ask, host, chat = false) {
   if (!W.coarse) list.addEventListener('pointerleave', () => show(cur));
   (box as unknown as { pick: (n: number) => boolean }).pick = (n) => {
     if (n < 0 || n >= ask.choices.length) return false;
-    if (pending?.ask !== ask.id) answer(n); // a pick already waiting: the key is still taken (it is not "comment / pointer"), undo first
+    answer(n);
     return true;
   };
   (box as unknown as { ticked: () => boolean }).ticked = () => {
     if (cur < 0 || cur >= ask.choices.length) return false;
-    if (pending?.ask !== ask.id) answer(cur); // a pick already waiting: Enter is still taken, undo first
+    answer(cur);
     return true;
   };
   (box as unknown as { move: (d: 1 | -1) => boolean }).move = (d) => {
-    if (pending?.ask === ask.id) return true; // a pick waiting: the arrows are still taken (no scroll), undo first
     const at = rows.findIndex((r) => r.n === cur);
     const next = at < 0 ? (d > 0 ? 0 : rows.length - 1) : Math.min(rows.length - 1, Math.max(0, at + d));
     if (next !== at) select(rows[next].n);
@@ -825,12 +764,6 @@ export function choicesEl(c, ask, host, chat = false) {
   };
   select(cur);
   if (lost !== undefined) say('failed, tap again');
-  // Drawn again while its pick waits (a live update): the rows show the wait, the countdown where it was.
-  if (pending?.ask === ask.id) {
-    pending.ui = ui(pending);
-    select(pending.n);
-    pending.ui(pending.sending ? 'sending' : 'wait');
-  }
   // After a hot save the words may be gone (or be back): the card is drawn again so its rows and place match them.
   if (!chat) onReshow(() => box.isConnected && (triesInPlace(c) === inPlace ? show(shown) : W.render()));
   return box;

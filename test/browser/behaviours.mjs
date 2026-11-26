@@ -439,40 +439,41 @@ for (const eng of engines()) {
     check(eng, 'Escape puts the paragraph back exactly, and closes the card', (await html()) === original && (await card()) === null, (await html()).slice(0, 120));
 
 
-    // A tap on the page's own words (the "now" row) keeps them as they are.
+    // A tap on the page's own words (the "now" row) keeps them as they are, and shows at once (Leo, 26 Nov: picking "feels
+    // not immediate", it waited 5 s for an undo): in the same moment as the tap, before the lab answers, the reply is in the
+    // thread and the rows are answered ("kept as it was").
     await sq(() => { r.querySelector('button.pin').click(); });
     await sleep(600);
-    await answer(0);
-    await sleep(400);
     const picksNow = async () => (await (await fetch(`${B}/_lab/api/comments?page=/ask`)).json()).comments.filter((x) => x.picked);
-    c = await card();
-    check(eng, 'a tap waits 5 s: "Kept as is · undo", the rows still, nothing sent yet', c && /^Kept as is · undo$/.test(c.note) && !c.noteIdle && c.disabled && (await picksNow()).length === 0, JSON.stringify(c && [c.note, c.disabled]));
-    // Undo puts the rows back, and nothing is ever sent.
-    await sq(() => { r.querySelector('.choices .note .btn.undo').click(); });
-    await sleep(300);
-    c = await card();
-    check(eng, 'undo puts the rows back, still open', c && !c.disabled && c.noteIdle && c.on === 0 && c.picked === -1, JSON.stringify(c && [c.disabled, c.noteIdle, c.on, c.picked]));
-    await sleep(5400);
-    check(eng, 'after undo nothing is sent, not even after the 5 s', (await picksNow()).length === 0);
-    // Tapped again, the card closing sends the pick at once.
-    await answer(0);
-    await sleep(300);
-    await q.keyboard.press('Escape');
-    await sleep(900);
-    const asIs = await picksNow();
-    check(eng, 'closing the card sends the waiting pick at once; a tap on the page\'s own words keeps them as they are', asIs.length === 1 && asIs[0].picked.n === -1 && asIs[0].text.startsWith('Keep as is') && (await html()) === original, JSON.stringify(asIs.map((x) => [x.picked, x.text])));
+    const sameTick = await sq(() => {
+      r.querySelectorAll('.choice')[0].click();
+      const rows = [...r.querySelectorAll('.choice')];
+      return { disabled: rows.every((x) => x.disabled), note: r.querySelector('.choices .note')?.textContent, reply: [...r.querySelectorAll('.msg')].some((m) => /Keep as is/.test(m.textContent)) };
+    });
+    check(eng, 'a tap shows its pick at once: the reply in the thread, the rows answered', sameTick.reply && sameTick.disabled && /^kept as it was/.test(sameTick.note), JSON.stringify(sameTick));
+    let asIs = [];
+    for (let i = 0; i < 20 && !asIs.length; i++) { await sleep(50); asIs = await picksNow(); }
+    const shown = await sq(() => { return [...r.querySelectorAll('.msg')].filter((m) => /Keep as is/.test(m.textContent)).length; });
+    check(eng, 'the pick is sent at once (no wait), shown once; a tap on the page\'s own words keeps them as they are', asIs.length === 1 && asIs[0].picked.n === -1 && asIs[0].text.startsWith('Keep as is') && shown === 1 && (await html()) === original, JSON.stringify([asIs.map((x) => [x.picked, x.text]), shown]));
     for (const x of asIs) await post({ page: '/ask', action: 'delete', id: x.id });
     await q.keyboard.press('Escape');
     await sleep(400);
 
-    // A tap on B sends the pick after 5 s; the words are the page's until the agent writes the file.
+    // The lab refusing a pick: its reply goes again, the rows are back and say so.
     await sq(() => { r.querySelector('button.pin').click(); });
     await sleep(600);
+    await q.route('**/_lab/api/comments', (rt) => (rt.request().method() === 'POST' ? rt.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"no"}' }) : rt.continue()));
     await answer(2);
-    await sleep(1200);
-    check(eng, 'a pick is still not sent 1.2 s after the tap', (await (await fetch(`${B}/_lab/api/comments?page=/ask`)).json()).comments.every((x) => !x.picked));
-    await sleep(4600);
-    const got = (await (await fetch(`${B}/_lab/api/comments?page=/ask`)).json()).comments.filter((x) => x.picked);
+    await sleep(400);
+    await q.unroute('**/_lab/api/comments');
+    c = await card();
+    const ghost = await sq(() => { return [...r.querySelectorAll('.msg')].some((m) => /Picked B/.test(m.textContent)); });
+    check(eng, 'a pick the lab refused: no reply left, the rows open again, "failed, tap again"', c && !c.disabled && c.note === 'failed, tap again' && !ghost && (await picksNow()).length === 0, JSON.stringify(c && [c.disabled, c.note, ghost]));
+
+    // Tapped again, B goes; the words are the page's until the agent writes the file.
+    await answer(2);
+    await sleep(400);
+    const got = await picksNow();
     c = await card();
     check(eng, 'a tap on B sends the pick', got.length === 1 && got[0].picked.of === asked.id && got[0].picked.n === 1 && got[0].text.startsWith('Picked B: ') && (await html()) === original, JSON.stringify(got.map((x) => [x.picked, x.text])));
     check(eng, 'after the pick the rows are disabled and the pick is marked', c && c.disabled && c.picked === 1, JSON.stringify(c && [c.disabled, c.picked, c.cls]));
