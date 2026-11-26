@@ -1538,6 +1538,10 @@ import { bindKeys } from './widget/keys.ts';
   };
   const setFolded = (on) => {
     store.set('lab-folded', on ? '1' : '0');
+    // The bar changes size under a still pointer: no segment lights up for hover or press until it moves again (Leo, 26
+    // Nov: "still flickering from active/hover state when closing").
+    host.setAttribute('data-still', '');
+    addEventListener('pointermove', () => host.removeAttribute('data-still'), { once: true, capture: true });
     if (on) setMenu(false);
     sayFold();
     placeBar();
