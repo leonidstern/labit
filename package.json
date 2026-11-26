@@ -20,7 +20,8 @@
     "public/_lab/walkie.js.br",
     "public/_lab/lab.css.br",
     "public/_lab/favicon.svg",
-    "skills/labit/SKILL.md.br"
+    "skills/labit/SKILL.md.br",
+    ".claude-plugin/"
   ],
   "scripts": {
     "build": "npx --yes -p esbuild@0.25.12 -p terser@5.44.0 node scripts/build-widget.mjs --outfile=public/_lab/comments.js",
