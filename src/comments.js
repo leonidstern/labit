@@ -101,6 +101,9 @@ import { bindKeys } from './widget/keys.ts';
     get composer() { return composer; },
     get contentEnd() { return contentEnd; },
     get control() { return control; },
+    get commenting() { return commenting; },
+    get pinsControls() { return pinsControls; },
+    get sayMode() { return sayMode; },
     get doneBtn() { return doneBtn; },
     get movedBtn() { return movedBtn; },
     get boardsBtn() { return boardsBtn; },
@@ -193,7 +196,7 @@ import { bindKeys } from './widget/keys.ts';
   const part = (name) => (parts[name] ??= globalThis.__LAB_CO__ ? (name === 'draw' ? import('./widget/draw.ts') : name === 'motion' ? import('./widget/motion.ts') : Promise.reject(new Error('not in colabit'))) : import(new URL(`${name}.js`, script?.src || location.href).href));
   // Shortcuts, action → key: these defaults, with what a project or you changed (labit.json or your settings.json
   // `shortcuts`, passed by the lab as data-keys; docs/settings.md).
-  const KEYS = { toggle: 'm', chat: 't', next: 'w', pause: 'p', slow: 's', draw: 'd', done: 'e', reply: 'r', walkie: 'k' };
+  const KEYS = { toggle: 'm', chat: 't', next: 'w', pause: 'p', slow: 's', draw: 'd', done: 'e', reply: 'r', walkie: 'k', pinTool: 'c', arrowTool: 'v', fold: 'h' };
   try {
     Object.assign(KEYS, JSON.parse(script?.dataset.keys || '{}'));
   } catch {}
@@ -324,12 +327,14 @@ import { bindKeys } from './widget/keys.ts';
     <div class="list chatwin" hidden><div class="tabs"></div><div class="msgs"></div><div class="chat"></div></div>
     <div class="left"><button class="secondary copy-all" type="button" hidden>copy link</button></div>
     <div class="bar" hidden>
+      <button class="secondary fold" type="button" hidden aria-expanded="true"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M3.5 2l3 3-3 3"/></svg></button>
       <button class="secondary chat-btn" type="button" hidden>chat</button>
       <button class="secondary walkie-btn" type="button" hidden></button>
       <button class="secondary list-btn" type="button" hidden>list</button>
       <button class="secondary boards-btn" type="button" hidden aria-expanded="false" aria-controls="lab-more" title="this page's boards"></button>
       <button class="secondary done-btn" type="button" hidden title="show or hide done pins on the page"></button>
       <button class="secondary moved-btn" type="button" hidden title="pins whose spot is gone from the page: open one to drop it on a new spot, or close it"></button>
+      <span class="mode" hidden><button type="button" data-m="comment" data-t="comment on links and buttons too"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="body" d="M8 1.5a5 5 0 0 1 5 5c0 3.6-5 8-5 8s-5-4.4-5-8a5 5 0 0 1 5-5z"/><path class="plus" d="M8 4.5v4M6 6.5h4"/></svg></button><button type="button" data-m="use" data-t="use links and buttons"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="body" d="M4 2l8.5 7H8.3l2.4 4.6-1.6.8-2.4-4.6L4 12.6z"/></svg></button></span>
       <button class="toggle" type="button"></button>
       <button class="secondary more" type="button" hidden aria-label="more options" aria-expanded="false" aria-controls="lab-more">⋯</button>
     </div>
@@ -533,6 +538,7 @@ import { bindKeys } from './widget/keys.ts';
   const setPinning = () => {
     const placing = S.on && !anyWriting() && !S.draft; // an open new comment, empty or not, gives the page its own pointer (Leo, 18 Nov)
     host.toggleAttribute('data-lab-pinning', placing); // not a class on <html>: a framework that hydrates the page (Next) reports it
+    sayMode();
     recheck();
   };
   // A thread or the chat opened at its newest message stays there while its words settle (a phone's sheet grows into
@@ -851,7 +857,7 @@ import { bindKeys } from './widget/keys.ts';
     }
     return box;
   };
-  const pageHeld = heldKeys([['draw', `hold ${KEYS.draw}`], ['pin on a link', `${MAC ? '⌥' : 'alt'} click`], ['quote words', '⇧ drag']]);
+  const pageHeld = heldKeys([['draw', `hold ${KEYS.draw}`], ['comment · use', `${KEYS.pinTool} · ${KEYS.arrowTool}`], ['fold the bar', KEYS.fold], ['the other one', `${MAC ? '⌥' : 'alt'} click`], ['quote words', '⇧ drag']]);
   const boardHeld = heldKeys([['pin', `${MAC ? '⌥' : 'alt'} click`], ['move around', 'hold space'], ['back to the page', '⇧b']]);
   const labHead = LABS ? el('div', { class: 'lab-head' }, `${script?.dataset.labName || 'lab'} · ${location.port || '80'}`) : null;
   const labsBtn = LABS ? el('button', { type: 'button' }) : null;
@@ -1173,6 +1179,8 @@ import { bindKeys } from './widget/keys.ts';
       el('kbd', { 'aria-hidden': 'true' }, KEYS.toggle),
     );
     toggleBtn.classList.toggle('secondary', S.on);
+    modeBox.hidden = !S.on || coarse;
+    sayFold();
     walkieBtn.hidden = !S.on || coarse || Boolean(globalThis.__LAB_CO__) || !flag('talk'); // an experiment: off unless turned on (⋯ → experiments)
     // "talk", its key marked in it: tal(k) (Leo, 25 Nov: shorter than walkie-talkie).
     if (!walkieBtn.firstChild) walkieBtn.append(keyLabel('talk', KEYS.walkie));
@@ -1477,6 +1485,68 @@ import { bindKeys } from './widget/keys.ts';
     if (!S.on) mo?.closeMotion(); // the motion menu goes with the comments
   };
   toggleBtn.addEventListener('click', () => setOn(!S.on));
+  // Comment or use (Leo, 26 Nov, pick 2: the two pointers). Commenting, a click on a link, button or field drops a pin
+  // there like anywhere else, and ⌥ click uses it; using, the page's controls keep their clicks and ⌥ click pins on them
+  // (labit's way before). The pair in the bar says which, and lights the other one while ⌥ is held. Computers only:
+  // phones pin by holding a finger still.
+  const modeBox = $('.mode');
+  // Each place starts where it's used most (Leo, 26 Nov): a lab page with the pin, colabit and boards with the arrow.
+  // A pick is kept per browser, pages and boards each their own.
+  // A board: its own page (/_board/…), or one open over the page (board/overlay.ts sets __labBoard while it shows).
+  const boardShown = () => Boolean(S.board || /** @type {any} */ (window).__labBoard);
+  const modeKey = () => (boardShown() ? 'lab-mode-board' : 'lab-mode');
+  const modeNow = () => {
+    const v = store.get(modeKey());
+    return v === 'use' || v === 'comment' ? v : globalThis.__LAB_CO__ || boardShown() ? 'use' : 'comment';
+  };
+  S.altHeld = false;
+  const commenting = () => Boolean(S.on) && !coarse && modeNow() === 'comment';
+  // Whether this press pins on a control: commenting unless ⌥ is held, using only while it is.
+  const pinsControls = (e) => (commenting() ? !e.altKey : e.altKey);
+  function sayMode() {
+    const de = document.documentElement;
+    const c = commenting();
+    const alt = Boolean(S.altHeld);
+    // lab-alt: the pin pointer over links and controls too; lab-use: ⌥ held while commenting, the page's own pointers.
+    de.classList.toggle('lab-alt', c ? !alt && host.hasAttribute('data-lab-pinning') : alt);
+    de.classList.toggle('lab-use', c && alt);
+    const mode = modeNow();
+    const now = (mode === 'comment') !== alt ? 'comment' : 'use';
+    for (const b of /** @type {HTMLCollectionOf<HTMLElement>} */ (modeBox.children)) {
+      b.classList.toggle('on', b.dataset.m === now);
+      b.setAttribute('aria-pressed', String(b.dataset.m === mode));
+      b.title = `${b.dataset.t} (${KEYS[b.dataset.m === 'use' ? 'arrowTool' : 'pinTool']})`;
+    }
+  }
+  // Folding the bar (Leo, 26 Nov, option 1 of /bar-collapse): › at its left end folds it into the rabbit, ‹ beside the
+  // rabbit opens it again; the arrow points where the bar goes. Only the bar folds: pins stay, clicks still follow the pin
+  // or the arrow. Kept per browser. Computers only: a phone's bar is its only way in.
+  const foldBtn = $('.fold');
+  const sayFold = () => {
+    const folded = !coarse && store.get('lab-folded') === '1';
+    host.toggleAttribute('data-folded', folded);
+    foldBtn.hidden = coarse;
+    foldBtn.setAttribute('aria-expanded', String(!folded));
+    foldBtn.title = `${folded ? 'open' : 'fold'} the bar (${KEYS.fold})`;
+  };
+  const setFolded = (on) => {
+    store.set('lab-folded', on ? '1' : '0');
+    if (on) setMenu(false);
+    sayFold();
+    placeBar();
+  };
+  foldBtn.addEventListener('click', (e) => (e.stopPropagation(), setFolded(!host.hasAttribute('data-folded'))));
+  modeBox.addEventListener('click', (e) => {
+    const b = /** @type {HTMLElement | null} */ (/** @type {Element} */ (e.target).closest('button[data-m]'));
+    if (!b) return;
+    e.stopPropagation();
+    setMode(b.dataset.m);
+  });
+  function setMode(m) {
+    store.set(modeKey(), m === 'use' ? 'use' : 'comment');
+    sayMode();
+    recheck();
+  }
   // The ⋯ menu is a disclosure: the button says whether it's open; opening puts focus on its first item, and Escape
   // or a pick gives focus back to the button.
   // On a computer the menu is a popover the ⋯ button opens: the browser closes it on a press elsewhere or Esc, gives
@@ -1696,6 +1766,13 @@ import { bindKeys } from './widget/keys.ts';
     // The keys (Leo, 2026-11-15/16), marked in the bar's words: cha(t) (C was chat until 19 Nov), ne(w) (Shift-W: the one before),
     // P pause, M hide, E show/hide done. With a thread open: R reply, E resolve (done's own key).
     // Shift is only for next (Shift-W: the one before); ⇧D, ⇧B and the rest belong to the board.
+    // H folds the bar into the rabbit or opens it (Leo, 26 Nov). Computers only.
+    // C and V (Leo, 26 Nov): the pin (comment on links and buttons too) or the arrow (use the page), as in the bar, with
+    // comments shown. Computers only.
+    if (!coarse && !typing(e) && !inOtherWidget && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.repeat && (act === 'fold' || (S.on && /Tool$/.test(act)))) {
+      e.preventDefault();
+      return act === 'fold' ? setFolded(!host.hasAttribute('data-folded')) : setMode(act === 'arrowTool' ? 'use' : 'comment');
+    }
     if (S.on && !typing(e) && !inOtherWidget && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat && ['pause', 'slow', 'chat', 'next', 'draw', 'done', 'reply', 'walkie'].includes(act) && (act === 'next' || act === 'draw' || !e.shiftKey)) { // ⇧D draws too: Shift straightens (below)
       const k = act;
       e.preventDefault();
@@ -1774,8 +1851,9 @@ import { bindKeys } from './widget/keys.ts';
 
   // Option (Alt) presses are for commenting: the page never sees them, so a menu item or a button doesn't run
   // and close itself before the pin lands on it.
-  const optionPress = (e) => e.altKey && !e.metaKey && !e.ctrlKey && e.button === 0 && !e.composedPath().includes(host) &&
-    !isOff(e);
+  // Commenting, presses on a link or a control are taken the same way: the page never sees them, ⌥ ones it does.
+  const optionPress = (e) => !e.metaKey && !e.ctrlKey && e.button === 0 && !e.composedPath().includes(host) && !isOff(e) &&
+    (commenting() ? !e.altKey && !(e.shiftKey && !S.shiftUp) && control(e.target) : e.altKey);
   for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup']) {
     addEventListener(type, (e) => {
       if (!optionPress(e)) return;
@@ -1789,7 +1867,7 @@ import { bindKeys } from './widget/keys.ts';
     if (!optionPress(e)) return;
     e.preventDefault();
     e.stopImmediatePropagation();
-    if (!S.afterDrag) onPageClick(e); // the click that ends an Option-drag belongs to the area
+    if (!S.afterDrag) onPageClick(e, true); // the click that ends an Option-drag belongs to the area
   }, true);
 
   // Whether a click is on one of the page's controls is read as it starts, before the page's own handlers run: a demo
@@ -1984,7 +2062,7 @@ import { bindKeys } from './widget/keys.ts';
     S.undoLetGo = 0;
     if (S.letUndoGo(e)) S.undoLetGo = Date.now();
   }, true);
-  function onPageClick(e) {
+  function onPageClick(e, taken = false) {
     if (e.composedPath().includes(host)) return;
     if (S.undoLetGo && Date.now() - S.undoLetGo < 2000) return void (S.undoLetGo = 0); // this click let a sent pin's undo card go (above)
     if (S.menuShut && Date.now() - S.menuShut < 1500) return void (S.menuShut = 0); // this click closed the ⋯ menu (above)
@@ -1996,9 +2074,10 @@ import { bindKeys } from './widget/keys.ts';
       render();
       return;
     }
+    if (commenting() && e.altKey) return; // ⌥ click while commenting: the page's own
     if ((!S.on && !e.altKey) || e.button !== 0 || e.metaKey || e.ctrlKey || (e.shiftKey && !S.shiftUp)) return;
     if (S.lastTouch && Date.now() - S.lastTouch < 800) return; // phones: a tap scrolls and reads; holding pins (below)
-    if (e.altKey) e.preventDefault();
+    if (e.altKey || taken) e.preventDefault();
     else if (e.defaultPrevented || S.ctlClick) return;
     if (isOff(e)) return;
     if (String(getSelection?.() || '').trim()) return;
@@ -2275,18 +2354,18 @@ import { bindKeys } from './widget/keys.ts';
     const plain = `:not(${INTERACTIVE}, a *, button *, label *, [role="button"] *, [contenteditable], [contenteditable] *, ${OFF}, ${OFF} *, [data-lab-comments])`;
     const top = `dialog, dialog *, [popover], [popover] *, :fullscreen, :fullscreen *`;
     pinCursorStyle.textContent =
-      `@layer lab-pointer { html:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl), html:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl) body, html:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl) body *${plain} { cursor: crosshair; } ` +
+      `@layer lab-pointer { html:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl, .lab-use), html:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl, .lab-use) body, html:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl, .lab-use) body *${plain} { cursor: crosshair; } ` +
       // With the drawn pointer the system one hides over plain parts of the page (not in the top layer, which is above it).
       // html too: under a page shorter than the window there is no body, and the plain arrow showed (Leo, 23 Nov).
-      `html.lab-drawn:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl):not(.lab-dragging), html.lab-drawn:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl):not(.lab-dragging) body, html.lab-drawn:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl):not(.lab-dragging) body *${plain}:not(${top}) { cursor: none; } ` +
+      `html.lab-drawn:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl, .lab-use):not(.lab-dragging), html.lab-drawn:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl, .lab-use):not(.lab-dragging) body, html.lab-drawn:has([data-lab-pinning]):not(.lab-shift-cur, .lab-ctl, .lab-use):not(.lab-dragging) body *${plain}:not(${top}) { cursor: none; } ` +
       // Holding Shift (drag to quote words): the drawn I-beam with a low ink band at its foot (C3, Leo 18 Nov; text where a cursor image isn't drawn) over the page's content, back to the pin when it's let go.
       `html:has([data-lab-pinning]).lab-shift-cur:not(.lab-dragging) body *${plain}:not(img, svg, video, canvas) { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Crect x='5' y='15.5' width='14' height='5' rx='1.5' fill='%23f0b70a' fill-opacity='.6'/%3E%3Cpath d='M9 4h6M12 4v16M9 20h6' stroke='white' stroke-width='4' stroke-linecap='round' fill='none'/%3E%3Cpath d='M9 4h6M12 4v16M9 20h6' stroke='%23141414' stroke-width='1.5' stroke-linecap='round' fill='none'/%3E%3C/svg%3E") 12 12, text; } ` +
       // The pointer is inherited, so places that aren't commented on name theirs: editable text a text cursor, a part
       // of labit's own (data-lab-off) the plain arrow (a pin pointer there would promise a comment that won't come).
       `html:has([data-lab-pinning]) body :is([contenteditable], [contenteditable] *) { cursor: text; } html:has([data-lab-pinning]) body :is(${OFF}, ${OFF} *) { cursor: auto; } }` +
       // Holding Option (Alt) pins links and controls too: the drawn pin shows over them (the system pointer hides).
-      `html.lab-alt body, html.lab-alt body *:not([data-lab-comments], [data-lab-comments] *, ${OFF}, ${OFF} *) { cursor: crosshair !important; }` +
-      `html.lab-drawn.lab-alt body, html.lab-drawn.lab-alt body *:not([data-lab-comments], [data-lab-comments] *, ${OFF}, ${OFF} *, ${top}) { cursor: none !important; }` +
+      `html.lab-alt:not(.lab-shift-cur) body, html.lab-alt:not(.lab-shift-cur) body *:not([data-lab-comments], [data-lab-comments] *, ${OFF}, ${OFF} *) { cursor: crosshair !important; }` +
+      `html.lab-drawn.lab-alt:not(.lab-shift-cur) body, html.lab-drawn.lab-alt:not(.lab-shift-cur) body *:not([data-lab-comments], [data-lab-comments] *, ${OFF}, ${OFF} *, ${top}) { cursor: none !important; }` +
       // Holding D (drawing), anywhere on the page, links and controls too, even mid-stroke: the system pointer hides and the drawn
       // one is the pen's tip (Leo, 23 Nov: "need cursor for drawing"). The widget's own parts keep theirs.
       `html.lab-pen.lab-drawn, html.lab-pen.lab-drawn body, html.lab-pen.lab-drawn body *:not([data-lab-comments], ${top}) { cursor: none !important; } html.lab-pen [data-lab-comments] { cursor: auto !important; }`;

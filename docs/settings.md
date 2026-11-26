@@ -148,6 +148,9 @@ win over yours, key by key.
 | `done` | `e` | Tapped: hide or show done threads (shown, faded, at first). With a thread open: resolve or reopen it |
 | `reply` | `r` | With a thread open: type a reply |
 | `walkie` | `k` | Talk while you point (your computer's own dictation types the words); ⌘↵ sends the walk to the chat, Esc drops it. An experiment, off until you turn on **talk** (see **Experiments**): off, K does nothing |
+| `pinTool` | `c` | The pin in the bar: a click on a link, button or field comments on it too (⌥ click uses it). Computers only |
+| `fold` | `h` | Fold the bar into the rabbit, or open it again (the › / ‹ at the bar's left end). Computers only |
+| `arrowTool` | `v` | The arrow in the bar: links and buttons work, ⌥ click comments on them. Computers only |
 
 Letters follow the key's place on non-Latin layouts (the T key is T in Russian too), and digits work with Shift or
 on AZERTY. The page shows your keys: the chat button reads "chat (x)" when `chat` is `x`.

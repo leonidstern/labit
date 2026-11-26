@@ -28,7 +28,12 @@ const shiftKey = (e) => {
   if (e.shiftKey) document.documentElement.classList.add('lab-shift');
   else S.shiftOff = setTimeout(() => (document.documentElement.classList.remove('lab-shift'), W.recheck()), 400);
 };
-const setAlt = (down) => document.documentElement.classList.toggle('lab-alt', Boolean(down));
+// ⌥ held: what a click on a link or a button does flips (comments.js sayMode says it on the page and in the bar).
+const setAlt = (down) => {
+  if (S.altHeld === Boolean(down)) return;
+  S.altHeld = Boolean(down);
+  W.sayMode();
+};
 export function bindKeys(w: unknown) {
   W = w;
   S = W.S;
