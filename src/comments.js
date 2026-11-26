@@ -24,6 +24,7 @@ import {
   position,
   readable,
   selectorFor,
+  winW,
 } from './widget/anchoring.ts';
 import { anyWriting, bindComposer, composer } from './widget/composer.ts';
 import { numberOf as pinNumber } from '../lib/schema.mjs';
@@ -583,7 +584,7 @@ import { bindKeys } from './widget/keys.ts';
     const el = findTarget(a);
     const v = el instanceof HTMLVideoElement ? el : el?.closest?.('video');
     if (!v) return null;
-    const r = v.getBoundingClientRect(), w = 320, vw = document.documentElement.clientWidth;
+    const r = v.getBoundingClientRect(), w = 320, vw = winW();
     const x = r.right + 12 + w <= vw - 12 ? r.right + 12 : r.left - 12 - w >= 12 ? r.left - 12 - w : null;
     return x == null ? null : x + scrollX;
   };
@@ -1093,7 +1094,7 @@ import { bindKeys } from './widget/keys.ts';
     bar.hidden = false;
     if (!moAsked && (S.draft?.anchor?.moment || S.comments.some((/** @type {any} */ x) => x.anchor?.moment))) void loadMotion().then(() => render()); // a moment's chip is the motion file's
     newPass(); // what pinhold read about the pins' elements is read again (pinhold.ts)
-    viewW = document.documentElement.clientWidth; // read once a pass, before any pin is written (flipAt)
+    viewW = winW(); // read once a pass, before any pin is written (flipAt)
     if (win.__labDebug) unseen = new Map();
     const dragged = S.grabbing;
     S.line = null; // where each thread stands with the agent is worked out again (list.ts lineUp)
@@ -1538,6 +1539,10 @@ import { bindKeys } from './widget/keys.ts';
   };
   const setFolded = (on) => {
     store.set('lab-folded', on ? '1' : '0');
+    // The bar changes size under a still pointer: no segment lights up for hover or press until it moves again (Leo, 26
+    // Nov: "still flickering from active/hover state when closing").
+    host.setAttribute('data-still', '');
+    addEventListener('pointermove', () => host.removeAttribute('data-still'), { once: true, capture: true });
     if (on) setMenu(false);
     sayFold();
     placeBar();
@@ -2190,7 +2195,7 @@ import { bindKeys } from './widget/keys.ts';
     const openHeld = () => { const pin = pinsById.get(S.openId); return heldPin(pin) && !pinData.get(pin)?.zone; };
     if (!S.on || (S.openId && !(scrolled && openHeld()))) return render();
     newPass();
-    viewW = document.documentElement.clientWidth;
+    viewW = winW();
     const all = threads().filter((c) => c.anchor?.kind !== 'page');
     const skip = (c) => scrolled && heldPin(pinsById.get(c.id));
     const read = all.filter((c) => !skip(c)).map((c) => [pinsById.get(c.id), placeOf(c), c]);
@@ -2214,7 +2219,7 @@ import { bindKeys } from './widget/keys.ts';
     const a = c?.anchor || {};
     if (!c || !pin || !card?.isConnected || sheetMode.matches || a.kind === 'board' || a.kind === 'page') return false;
     newPass();
-    viewW = document.documentElement.clientWidth;
+    viewW = winW();
     const at = /** @type {any} */ (position(a));
     if (at.moved || at.zone) return false;
     readPins([findTarget(a)]);

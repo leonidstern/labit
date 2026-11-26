@@ -2,7 +2,7 @@
 import { bindTrial, keptRow, onReshow, triesInPlace, tryRow, untry } from './trial.ts';
 import { stickToEnd } from './stick.ts';
 import { heldPin, holdBox, letBox, px } from './pinhold.ts';
-import { pageBottom } from './anchoring.ts';
+import { pageBottom, winH, winW } from './anchoring.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let W: any;
@@ -64,7 +64,7 @@ function followPin(node: HTMLElement, tie: Tie) {
 type Side = 'below' | 'above' | 'right' | 'left';
 let kept: [unknown, Side] | null = null;
 function spot(want: Want, w: number, h: number, bottom?: number): [number, number, Side] {
-  const [vw, vh] = [document.documentElement.clientWidth, bottom ?? document.documentElement.clientHeight];
+  const [vw, vh] = [winW(), bottom ?? winH()];
   const { cx, cy, ay } = want;
   const x = Math.max(12, Math.min(cx, vw - 12 - w));
   const y = Math.max(8, Math.min(cy - 46, vh - 8 - h)); // beside, its top a little above the pin's
@@ -100,7 +100,7 @@ function lay(node: HTMLElement) {
   // A page pin's card keeps above a half board view (a board's own card is on the board: the whole window is its own).
   const onPage = W.pinData.get(at.to as HTMLElement)?.c.anchor?.kind !== 'board';
   const room = onPage ? pageBottom() : undefined;
-  node.style.maxHeight = room !== undefined && room < document.documentElement.clientHeight ? `${Math.max(160, room - 16)}px` : ''; // a card taller than what the view leaves scrolls inside
+  node.style.maxHeight = room !== undefined && room < winH() ? `${Math.max(160, room - 16)}px` : ''; // a card taller than what the view leaves scrolls inside
   const [l, t, side] = spot({ cx: ax + cx, cy: ay + cy, ay: ay + up }, node.offsetWidth, node.offsetHeight, room);
   if (at.loose) {
     // On the page's own px, in the layer with its pin: both scroll on the compositor together (anchor positioning
@@ -195,7 +195,7 @@ export function placeCard(card, left, top, pin?: HTMLElement | null, aboveY = to
 export function placeBeside(node, left, top, pin?: HTMLElement | null) {
   W.layer.append(node);
   const width = node.offsetWidth;
-  const right = scrollX + document.documentElement.clientWidth - 12;
+  const right = scrollX + winW() - 12;
   const h = node.offsetHeight;
   const end = W.contentEnd();
   if (left + 36 + width <= right) {
@@ -206,7 +206,7 @@ export function placeBeside(node, left, top, pin?: HTMLElement | null) {
     node.style.top = `${top + 10 + h > end ? Math.max(scrollY + 8, top - 40 - h) : top + 10}px`;
   }
   // Whole inside the screen (8 px in), where the script is the one placing it (no pin to tie it to).
-  const low = scrollY + document.documentElement.clientHeight - 8 - h;
+  const low = scrollY + winH() - 8 - h;
   node.style.top = `${Math.max(scrollY + 8, Math.min(parseFloat(node.style.top), low))}px`;
   tieToPin(node, pin, 'beside', { cx: left + 36, cy: top - 37, ux: left - 14, uy: top + 10, ay: top - 40 });
 }
