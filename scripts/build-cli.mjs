@@ -4,6 +4,7 @@
 // passes (it folds what esbuild leaves: 0.6 KB of the package, 21 Nov; three passes come out larger).
 //   npx -p esbuild@<pinned> -p terser@<pinned> node scripts/build-cli.mjs
 import fs from 'node:fs';
+import zlib from 'node:zlib';
 import { tool } from './npx-tools.mjs';
 
 const esbuild = tool('esbuild');
@@ -26,3 +27,8 @@ for (const f of outputFiles) {
   fs.mkdirSync('dist', { recursive: true });
   fs.writeFileSync(f.path, code + '\n');
 }
+// The skill ships brotli-packed too (skills/labit/SKILL.md.br, package.json "files"), as lab.css does: `labit skill` is
+// the only reader of the package's copy (the plugins install from the repository) and unpacks it. 1.2 KB less than
+// npm's gzip of the plain file (26 Nov). A checkout reads the plain file.
+const skill = fs.readFileSync('skills/labit/SKILL.md');
+fs.writeFileSync('skills/labit/SKILL.md.br', zlib.brotliCompressSync(skill, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 11, [zlib.constants.BROTLI_PARAM_LGWIN]: 24, [zlib.constants.BROTLI_PARAM_MODE]: zlib.constants.BROTLI_MODE_TEXT, [zlib.constants.BROTLI_PARAM_SIZE_HINT]: skill.length } }));

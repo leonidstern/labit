@@ -154,10 +154,12 @@ if (fromFile('remindAfterMinutes')) process.env.LAB_REMIND_MS = String(SET.remin
 if (fromFile('updateCheck') && !SET.updateCheck) process.env.LABIT_NO_UPDATE_CHECK = '1';
 if (fromFile('model') && SET.model) process.env.LAB_MODEL = SET.model;
 for (const p of SETTINGS.problems) console.error(`[labit] ${p}`);
-// `labit skill`: the agent's instructions (skills/labit/SKILL.md, shipped in the package), for an agent that has no
+// `labit skill`: the agent's instructions (skills/labit/SKILL.md, shipped packed in the package), for an agent that has no
 // plugin. The lab's first lines point it here, so a bare `npx @leonidstern/labit@latest` is all a person has to paste.
 if (pos[0] === 'skill') {
-  process.stdout.write(fs.readFileSync(path.join(REPO, 'skills', 'labit', 'SKILL.md'), 'utf8').replace(/^---\n[\s\S]*?\n---\n+/, ''));
+  const skill = path.join(REPO, 'skills', 'labit', 'SKILL.md');
+  const text = (fs.existsSync(skill) ? fs.readFileSync(skill) : brotliDecompressSync(fs.readFileSync(`${skill}.br`))).toString(); // the npm package has it packed
+  process.stdout.write(text.replace(/^---\n[\s\S]*?\n---\n+/, ''));
   process.exit(0);
 }
 // `labit settings`: each setting, its value and where it came from.

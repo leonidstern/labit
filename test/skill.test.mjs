@@ -26,3 +26,19 @@ test('the skill offers to report labit bugs once, to the labit repo, never fakin
   assert.match(stdout, /offer once/);
   assert.match(stdout, /never claim it was filed/);
 });
+
+test('the npm package carries the skill packed (SKILL.md.br): labit skill unpacks it and prints the same', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const zlib = await import('node:zlib');
+  const { tmp } = await import('./harness.mjs');
+  const REPO = path.dirname(LAB);
+  const pkg = tmp('skill-packed');
+  fs.cpSync(path.join(REPO, 'local.mjs'), path.join(pkg, 'local.mjs'));
+  fs.cpSync(path.join(REPO, 'lib'), path.join(pkg, 'lib'), { recursive: true });
+  fs.cpSync(path.join(REPO, 'package.json'), path.join(pkg, 'package.json'));
+  fs.mkdirSync(path.join(pkg, 'skills/labit'), { recursive: true });
+  fs.writeFileSync(path.join(pkg, 'skills/labit/SKILL.md.br'), zlib.brotliCompressSync(fs.readFileSync(path.join(REPO, 'skills/labit/SKILL.md'))));
+  const run = (lab) => promisify(execFile)(process.execPath, [lab, 'skill']).then((r) => r.stdout);
+  assert.equal(await run(path.join(pkg, 'local.mjs')), await run(LAB));
+});
