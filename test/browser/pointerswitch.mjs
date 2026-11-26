@@ -55,7 +55,7 @@ try {
       s = await look(p);
       check(eng, 'pin: ⌥ click runs the button, no comment', !s.box && s.n === '1', JSON.stringify(s));
 
-      await p.mouse.click(10, 10);
+      await closeBox(p);
       await p.keyboard.press('v');
       await sleep(150);
       s = await look(p);
@@ -81,7 +81,7 @@ try {
       s = await look(p);
       const typed = await p.inputValue('#f');
       check(eng, 'C, V and H typed in a field are letters, nothing switches or folds', typed === 'cvh' && s.lit === 'use' && !s.folded, `${typed} ${JSON.stringify(s)}`);
-      await p.mouse.click(10, 10);
+      await p.evaluate(() => document.activeElement?.blur());
       await closeBox(p);
 
       await p.keyboard.press('c');

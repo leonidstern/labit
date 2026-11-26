@@ -279,7 +279,8 @@ for (const eng of engines()) {
   check(eng, 'option-click on a pin resolves its thread without opening it', clicked && Boolean(afterOne?.resolved) && !cardOpen, JSON.stringify({ clicked, resolved: afterOne?.resolved, cardOpen }));
   await fetch(B + '/_lab/api/comments', { method: 'POST', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ page: '/index', action: 'reopen', id: afterOne?.id }) });
   await untilApi((c) => c.text === 'from elsewhere' && !c.resolved, 700);
-  // A control keeps its own click: a plain click on a summary opens the details and pins nothing; option-click pins on it.
+  // With the pin (a lab page's start, Leo 26 Nov): a plain click on a summary pins on it and the details stay as they were;
+  // option-click is the page's, it opens or closes them and pins nothing (the arrow's side: test/browser/pointerswitch.mjs).
   await p.keyboard.press('Escape');
   await sleep(300);
   const before = await p.evaluate(() => document.querySelector('#d').open);
@@ -295,8 +296,8 @@ for (const eng of engines()) {
   const withAlt = await shadow(() => { return { pin: Boolean(r.querySelector('.float')), open: document.querySelector('#d').open }; });
   await p.keyboard.press('Escape');
   await sleep(300);
-  check(eng, 'a click on a control goes to the page and pins nothing; option-click pins on it, and the page does not get that click',
-    !plain.pin && plain.open === !before && withAlt.pin && withAlt.open === plain.open, JSON.stringify([before, plain, withAlt]));
+  check(eng, 'with the pin, a click on a control pins on it and the page does not get it; option-click goes to the page and pins nothing',
+    plain.pin && plain.open === before && !withAlt.pin && withAlt.open === !before, JSON.stringify([before, plain, withAlt]));
 
   // A pin is one element for as long as its thread is on the page: opening, closing and pointing at it (and away) redraw
   // the widget, but the pin and its running animation carry on, not start again (Leo, 18 Nov).
