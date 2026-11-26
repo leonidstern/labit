@@ -35,7 +35,7 @@ import * as act from './lib/boardact.ts';
 import { IMAGE_FILE, imageInfo, MAX_IMAGE } from './lib/images.mjs';
 import { IMAGE_TYPES, IMAGES_SAID, imageLine, imageName, imagesOf, MAX_IMAGES, wordsOf } from './lib/schema.mjs';
 import { proxy as makeProxy } from './lib/proxy.ts';
-import { COLABIT_OFF, withoutColabit } from './lib/colabit.ts';
+import { stripTags } from './lib/colabit.ts';
 import { newer, fetchNotes } from './lib/update.ts';
 
 // The package's folder: this file's, or its parent when this is the built copy in dist/ (what npm ships).
@@ -2193,11 +2193,8 @@ const widget = (page, admin, me = '', framed = false, req = null) => {
 // again and, when the sum is the same, leaves a page with its own scripts alone instead of reloading it (#428).
 const inject = (html, tag) => {
   tag = tag.replace('<script ', `<script data-sum="${createHash('sha1').update(html).digest('hex').slice(0, 12)}" `);
-  html = html.replace(/<script\b[^>]*\bsrc=["'][^"']*\/_lab\/comments\.js["'][^>]*>\s*<\/script>\s*/gi, '');
   // A page made for a colabit loses its tag here too (lib/colabit.ts): one comment layer, the lab's.
-  const co = withoutColabit(html);
-  if (co.off) tag = COLABIT_OFF + tag;
-  html = co.html;
+  html = stripTags(html);
   const lower = html.toLowerCase();
   const at = lower.lastIndexOf('</body>');
   const inScript = at !== -1 && lower.lastIndexOf('<script', at) > lower.lastIndexOf('</script>', at);
