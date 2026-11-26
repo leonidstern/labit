@@ -14,7 +14,13 @@ const mk = () => {
   roots.push(d);
   return d;
 };
-after(() => rm(roots));
+// Every watcher is closed at the end, also when a check failed before its own close(): a watcher left open keeps the
+// test file running for good, and the run hangs with no word of what failed.
+const watchers = [];
+after(() => {
+  for (const w of watchers) w.close();
+  rm(roots);
+});
 const atomic = (file, text) => {
   fs.writeFileSync(`${file}.tmp`, text);
   fs.renameSync(`${file}.tmp`, file);
@@ -23,6 +29,7 @@ const atomic = (file, text) => {
 const hear = (root, skip) => {
   const heard = [];
   const w = watchTree(root, (event, file) => heard.push(file), skip);
+  watchers.push(w);
   const until = async (want, ms = 2000) => {
     for (let t = 0; t < ms && !want(heard); t += 20) await sleep(20);
     return want(heard);
