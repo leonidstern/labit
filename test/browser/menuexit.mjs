@@ -66,6 +66,23 @@ try {
           check(eng, `the ⋯ menu fades out after ${how === 'esc' ? 'Esc' : 'the ⋯ button'}`, shown.length >= 3 && shown[1] < 1 && fr[fr.length - 1] === null, `${shown.length} frames shown, second frame opacity ${shown[1]}`);
           await sleep(200);
         }
+        // "hide comments" from the menu: it fades out at its own height, not snapped shorter as its rows go (Leo, 26 Nov),
+        // and the next time comments show, the menu has its real rows back.
+        {
+          await open();
+          await sh(p, `(window.__h = []) && (() => { const go = () => { const m = r.querySelector('.more-menu'); if (getComputedStyle(m).display !== 'none') window.__h.push(Math.round(m.getBoundingClientRect().height)); if (window.__h.length < 30 && getComputedStyle(m).display !== 'none') requestAnimationFrame(go); }; requestAnimationFrame(go); })()`);
+          await sh(p, `r.querySelector('.more-menu .toggle').click()`);
+          await sleep(700);
+          const hs = await p.evaluate('window.__h');
+          check(eng, 'hiding comments from the ⋯ menu: the menu leaves at its own height', hs.length >= 2 && Math.max(...hs) - Math.min(...hs) <= 8, hs.join(' '));
+          await sh(p, `r.querySelector('.bar .toggle').click()`);
+          await sleep(500);
+          await open();
+          const real = await sh(p, `r.querySelector('.more-menu .toggle') === r.querySelector('.toggle') && r.querySelector('.more-menu .toggle').textContent.startsWith('hide comments')`);
+          check(eng, 'the ⋯ menu has its real rows again once comments show', real, String(real));
+          await p.keyboard.press('Escape');
+          await sleep(400);
+        }
         // A click on the page with the menu open only closes it: no new pin, no comment box (Leo, 23 Nov)
         await open();
         await p.mouse.click(300, 300);
