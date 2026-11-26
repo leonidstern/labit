@@ -1511,8 +1511,10 @@ import { bindKeys } from './widget/keys.ts';
     const de = document.documentElement;
     const c = commenting();
     const alt = Boolean(S.altHeld);
-    // lab-alt: the pin pointer over links and controls too; lab-use: ⌥ held while commenting, the page's own pointers.
-    de.classList.toggle('lab-alt', c ? !alt && host.hasAttribute('data-lab-pinning') : alt);
+    // The pin pointer over links and controls too: said on the widget's own element (data-lab-all), never on <html>, which
+    // a framework that hydrates the page reports; lab-alt and lab-use (⌥ held, flipping it) only while the key is down.
+    host.toggleAttribute('data-lab-all', c && !alt);
+    de.classList.toggle('lab-alt', !c && alt);
     de.classList.toggle('lab-use', c && alt);
     const mode = modeNow();
     const now = (mode === 'comment') !== alt ? 'comment' : 'use';
@@ -1858,7 +1860,15 @@ import { bindKeys } from './widget/keys.ts';
   // and close itself before the pin lands on it.
   // Commenting, presses on a link or a control are taken the same way: the page never sees them, ⌥ ones it does.
   const optionPress = (e) => !e.metaKey && !e.ctrlKey && e.button === 0 && !e.composedPath().includes(host) && !isOff(e) &&
-    (commenting() ? !e.altKey && !(e.shiftKey && !S.shiftUp) && control(e.target) : e.altKey);
+    (commenting() ? e.isTrusted && !e.altKey && !(e.shiftKey && !S.shiftUp) && control(e.target) && !e.target.closest?.('[data-lab-action]') : e.altKey); // a page's own el.click() stays its own // an action button opens its own comment (actions.ts)
+  // ⌥ click on a link while commenting follows it: the browser's own ⌥ click on a link downloads it instead.
+  addEventListener('click', (e) => {
+    const a = commenting() && e.isTrusted && e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0 && !e.composedPath().includes(host) && e.target instanceof Element ? e.target.closest('a[href]') : null;
+    if (!(a instanceof HTMLElement)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    a.click();
+  }, true);
   for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup']) {
     addEventListener(type, (e) => {
       if (!optionPress(e)) return;
@@ -2374,8 +2384,8 @@ import { bindKeys } from './widget/keys.ts';
       // of labit's own (data-lab-off) the plain arrow (a pin pointer there would promise a comment that won't come).
       `html:has([data-lab-pinning]) body :is([contenteditable], [contenteditable] *) { cursor: text; } html:has([data-lab-pinning]) body :is(${OFF}, ${OFF} *) { cursor: auto; } }` +
       // Holding Option (Alt) pins links and controls too: the drawn pin shows over them (the system pointer hides).
-      `html.lab-alt:not(.lab-shift-cur) body, html.lab-alt:not(.lab-shift-cur) body *:not([data-lab-comments], [data-lab-comments] *, ${OFF}, ${OFF} *) { cursor: crosshair !important; }` +
-      `html.lab-drawn.lab-alt:not(.lab-shift-cur) body, html.lab-drawn.lab-alt:not(.lab-shift-cur) body *:not([data-lab-comments], [data-lab-comments] *, ${OFF}, ${OFF} *, ${top}) { cursor: none !important; }` +
+      `:is(html.lab-alt, html:has([data-lab-all][data-lab-pinning])):not(.lab-shift-cur) body, :is(html.lab-alt, html:has([data-lab-all][data-lab-pinning])):not(.lab-shift-cur) body *:not([data-lab-comments], [data-lab-comments] *, ${OFF}, ${OFF} *) { cursor: crosshair !important; }` +
+      `:is(html.lab-alt, html:has([data-lab-all][data-lab-pinning])).lab-drawn:not(.lab-shift-cur) body, :is(html.lab-alt, html:has([data-lab-all][data-lab-pinning])).lab-drawn:not(.lab-shift-cur) body *:not([data-lab-comments], [data-lab-comments] *, ${OFF}, ${OFF} *, ${top}) { cursor: none !important; }` +
       // Holding D (drawing), anywhere on the page, links and controls too, even mid-stroke: the system pointer hides and the drawn
       // one is the pen's tip (Leo, 23 Nov: "need cursor for drawing"). The widget's own parts keep theirs.
       `html.lab-pen.lab-drawn, html.lab-pen.lab-drawn body, html.lab-pen.lab-drawn body *:not([data-lab-comments], ${top}) { cursor: none !important; } html.lab-pen [data-lab-comments] { cursor: auto !important; }`;

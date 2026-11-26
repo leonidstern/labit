@@ -62,7 +62,7 @@ try {
       await q.goto(B + '/cart');
       await q.waitForFunction(() => [...document.querySelectorAll('*')].some((n) => n.shadowRoot?.querySelector('.scrim')), null, { timeout: 5000 });
       await sleep(600);
-      await q.click('#go');
+      await q.click('#go', { modifiers: ['Alt'] }); // with the pin a plain click comments; ⌥ follows the link
       await q.waitForFunction(() => location.pathname === '/pricing' && document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board .f[data-id="a"]'), null, { timeout: 8000 });
       await sleep(800);
       check(eng, 'a link to the board on another page opens it over the board\'s page', q.url().endsWith('/pricing#board=shop'), q.url());
