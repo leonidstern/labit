@@ -1683,6 +1683,9 @@ import { bindKeys } from './widget/keys.ts';
   // once something on the page moves (a video, an animation: looked for a second after the page starts, when one
   // starts, and on a phone each second), when P or S is pressed, or a comment has a moment; mo: the module, once it is.
   const loadMotion = () => (moAsked ??= part('motion').then((m) => (m.bindMotion(W), (mo = m), placeBar(), m)).catch(() => (moAsked = null))); // placeBar: phones get ⋯ → motion
+  // A computer's right-click menu is the motion file's (motion.ts menuAt): it comes in once the page is idle, so the first
+  // right-click opens at once instead of after a download (Leo, 26 Nov: "it was some super lag").
+  if (!coarse) setTimeout(() => void loadMotion(), 1500);
   const lookForMotion = () => {
     if (!moAsked && (document.querySelector('video') || document.getAnimations().some((a) => !root.contains(/** @type {any} */ (a.effect)?.target)))) void loadMotion();
   };
