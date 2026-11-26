@@ -25,22 +25,33 @@ const atomic = (file, text) => {
   fs.writeFileSync(`${file}.tmp`, text);
   fs.renameSync(`${file}.tmp`, file);
 };
-// The names heard so far; waits until `want` has been heard (at most 2 s).
+// The names heard so far; waits until `want` has been heard (at most 10 s: a busy computer tells of a change late, and
+// the wait ends as soon as it is heard).
 const hear = (root, skip) => {
   const heard = [];
   const w = watchTree(root, (event, file) => heard.push(file), skip);
   watchers.push(w);
-  const until = async (want, ms = 2000) => {
+  const until = async (want, ms = 10_000) => {
     for (let t = 0; t < ms && !want(heard); t += 20) await sleep(20);
     return want(heard);
   };
-  return { heard, until, w };
+  // macOS starts telling a watcher of changes a moment after fs.watch returns, and a change made before then is never
+  // told, however long the wait. ready() writes a file until it is heard, so a test's own first change counts.
+  const ready = async () => {
+    for (let i = 0; i < 100 && !heard.includes('.ready'); i++) {
+      fs.writeFileSync(path.join(root, '.ready'), String(i));
+      await sleep(100);
+    }
+    assert.ok(heard.includes('.ready'), 'the watcher hears changes');
+  };
+  return { heard, until, ready, w };
 };
 
 test('a file replaced by a rename is heard every time, not only the first', async () => {
   const root = mk();
   fs.writeFileSync(path.join(root, 'pins.json'), '0');
-  const { heard, until, w } = hear(root);
+  const { heard, until, ready, w } = hear(root);
+  await ready();
   for (let i = 1; i <= 4; i++) {
     const before = heard.filter((f) => f === 'pins.json').length;
     atomic(path.join(root, 'pins.json'), String(i));
@@ -51,7 +62,8 @@ test('a file replaced by a rename is heard every time, not only the first', asyn
 
 test('a file in a folder that appears later is heard, also when it was written before the folder was watched', async () => {
   const root = mk();
-  const { heard, until, w } = hear(root);
+  const { heard, until, ready, w } = hear(root);
+  await ready();
   fs.mkdirSync(path.join(root, 'pins'));
   fs.writeFileSync(path.join(root, 'pins', 'a.html'), 'one'); // right after the folder: its watcher may not be there yet
   assert.ok(await until((h) => h.includes(path.join('pins', 'a.html'))), 'the first file of a new folder');
@@ -64,7 +76,8 @@ test('a file in a folder that appears later is heard, also when it was written b
 test('a folder removed and made again is watched again', async () => {
   const root = mk();
   fs.mkdirSync(path.join(root, 'sub'));
-  const { heard, until, w } = hear(root);
+  const { heard, until, ready, w } = hear(root);
+  await ready();
   fs.rmSync(path.join(root, 'sub'), { recursive: true });
   await sleep(100);
   fs.mkdirSync(path.join(root, 'sub'));
@@ -79,7 +92,8 @@ test('a folder skip() names is not watched', async () => {
   const root = mk();
   fs.mkdirSync(path.join(root, 'node_modules'));
   fs.mkdirSync(path.join(root, 'src'));
-  const { heard, until, w } = hear(root, (rel) => rel.split(path.sep).includes('node_modules'));
+  const { heard, until, ready, w } = hear(root, (rel) => rel.split(path.sep).includes('node_modules'));
+  await ready();
   fs.writeFileSync(path.join(root, 'node_modules', 'big.js'), '1');
   fs.writeFileSync(path.join(root, 'src', 'a.js'), '1');
   assert.ok(await until((h) => h.includes(path.join('src', 'a.js'))));
