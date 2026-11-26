@@ -1339,6 +1339,7 @@ import { bindKeys } from './widget/keys.ts';
           if (coarse || e.shiftKey || e.altKey) return;
           e.preventDefault();
           e.stopPropagation();
+          S.menuAt = Date.now();
           const c = pinData.get(pin).c;
           const m = c.anchor?.moment;
           const open = () => S.openId === c.id || pin.click();
@@ -2037,12 +2038,17 @@ import { bindKeys } from './widget/keys.ts';
   document.addEventListener('pointercancel', () => (stopPress(), pressing(false)), true);
   addEventListener('scroll', stopPress, { passive: true, capture: true });
   document.addEventListener('contextmenu', (e) => (S.press || S.afterDrag) && e.preventDefault(), true);
+  // ⌃ click is a Mac's right-click: it opens the menu, and its click, which still comes, does nothing (it opened the pin
+  // under it, and the menu's "open" then closed it again: Leo, 26 Nov, "open/resolve doesnt work").
+  S.menuAt = 0;
+  addEventListener('click', (e) => e.ctrlKey && Date.now() - S.menuAt < 1000 && (e.preventDefault(), e.stopImmediatePropagation()), true);
   // The right-click menu (Leo, 26 Nov, option 3 of /context-menu): labit's own, its rows from what is under the pointer
   // (motion.ts menuAt). ⌥ or ⇧ right-click, a board, full screen or comments hidden: the browser's. Computers only.
   addEventListener('contextmenu', (e) => {
     if (coarse || !S.on || e.shiftKey || e.altKey || boardShown() || document.fullscreenElement || e.composedPath().includes(host) || isOff(e)) return;
     e.preventDefault();
     e.stopImmediatePropagation();
+    S.menuAt = Date.now();
     const [x, y, t] = [e.clientX, e.clientY, e.target];
     void loadMotion().then((m) => m?.menuAt(x, y, t));
   }, true);
