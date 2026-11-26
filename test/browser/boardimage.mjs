@@ -178,7 +178,7 @@ try {
       check(eng, 'no white card under a picture (its edge showed as a light line while moving)', await p.evaluate(() => getComputedStyle(document.querySelector('[data-lab-board-view]').shadowRoot.querySelector('#lab-board .f[data-id="e"] .b')).backgroundColor) === 'rgba(0, 0, 0, 0)');
       const nameShown = () => p.evaluate(() => getComputedStyle(document.querySelector('[data-lab-board-view]').shadowRoot.querySelector('#lab-board .f[data-id="e"] .t')).visibility === 'visible');
       check(eng, 'a picture\'s file name is not shown till it is picked', !(await nameShown()));
-      check(eng, 'nor any other frame\'s name, a page\'s too (Leo, 23 Nov: "these names too")', await p.evaluate(() => [...document.querySelector('[data-lab-board-view]').shadowRoot.querySelectorAll('#lab-board .f .t')].every((t) => getComputedStyle(t).visibility === 'hidden')));
+      check(eng, 'nor any other picture\'s name (a page\'s shows always: Leo, 26 Nov)', await p.evaluate(() => [...document.querySelector('[data-lab-board-view]').shadowRoot.querySelectorAll('#lab-board .f.i .t')].every((t) => getComputedStyle(t).visibility === 'hidden')));
       await p.mouse.move(rb3.x + rb3.w / 2, rb3.y + rb3.h / 2);
       await p.mouse.down();
       check(eng, 'its file name shows as the press starts, not on the lift', await nameShown());
