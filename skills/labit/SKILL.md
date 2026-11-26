@@ -1,6 +1,6 @@
 ---
 name: labit
-description: Read and answer pin comments from labit. Use when the person says "start labit" or wants to comment on their project's pages locally (local.mjs); when they say "use lab", "in lab" or "show it in lab" (show a page in labit instead of publishing an Artifact or another hosted page); or when they say "check the comments" on a lab page.
+description: Read and answer pin comments from labit. Use when the person says "start labit", "labit", "lab it" or "lab this", or wants to comment on their project's pages locally (local.mjs); when they say "use lab", "in lab" or "show it in lab" (show a page in labit instead of publishing an Artifact or another hosted page); or when they say "check the comments" on a lab page.
 ---
 
 # labit
