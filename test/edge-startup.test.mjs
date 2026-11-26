@@ -309,7 +309,7 @@ test('a settings.json that is no settings at all (cut short, empty, a list, null
   assert.deepEqual(bad, []);
 });
 
-test('a labit.json with unknown settings, wrong types, the old flags and settings that are not a project\'s to give: said, skipped, and the lab runs', async () => {
+test('a labit.json with unknown settings, wrong types and settings that are not a project\'s to give (flags among them): said, skipped, and the lab runs', async () => {
   const dir = folder('labitjson');
   fs.writeFileSync(path.join(dir, 'labit.json'), JSON.stringify({ $schema: 'x', zoom: 2, nope: { deep: [1] }, port: 'x', proxy: 5, folder: 7, open: 'no', wifi: true, name: 'Mallory', model: 'evil-model', pagesFolder: '/tmp/x',
     flags: { nope: true, inkOnText: true }, shortcuts: { toggle: 'mm', nope: 'x', next: 5, chat: 'q' }, batchSeconds: '2' }));
@@ -319,13 +319,13 @@ test('a labit.json with unknown settings, wrong types, the old flags and setting
   assert.equal(trace(lab.out()), '');
   const said = lab.out().split('\n').filter((l) => l.startsWith('[labit] '));
   for (const key of ['zoom', 'nope', 'proxy']) assert.ok(said.some((l) => l.includes(`labit.json: ${key} `) && /ignored/.test(l)), `${key}:\n${said.join('\n')}`);
-  for (const key of ['wifi', 'name', 'model', 'pagesFolder']) assert.ok(said.some((l) => l.includes(`labit.json: ${key} can only be set in your own settings`)), `${key} is yours alone:\n${said.join('\n')}`);
-  assert.ok(!said.some((l) => /flags/.test(l)), `the old flags are skipped without a word:\n${said.join('\n')}`);
+  for (const key of ['wifi', 'name', 'model', 'pagesFolder', 'flags']) assert.ok(said.some((l) => l.includes(`labit.json: ${key} can only be set in your own settings`)), `${key} is yours alone:\n${said.join('\n')}`);
   for (const part of ['shortcuts .toggle must be one letter or digit', 'shortcuts .nope is not an action', 'shortcuts .next must be one letter or digit']) assert.ok(said.some((l) => l.includes(part)), `${part}:\n${said.join('\n')}`);
   const info = (await raw(port, '/_lab/pages')).json;
   assert.deepEqual([info.wifi, info.port, info.proxy], [false, port, null]);
   const html = (await raw(port, '/')).text;
   assert.doesNotMatch(html, /Mallory|evil/);
+  assert.match(html, /data-flags='\{"talk":false\}'/, "the project can't turn on your experiments");
   await lab.stop();
   // A labit.json that is not an object of settings, or not JSON, or a folder: said, and the lab runs.
   for (const [what, content] of [['cut short', '{"port": 44'], ['a list', '[]'], ['null', 'null'], ['empty', ''], ['a folder', null]]) {

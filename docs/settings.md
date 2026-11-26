@@ -78,7 +78,7 @@ Your `~/.config/labit/settings.json`:
 | `pagesFolder` | `~/lab-pages` | | The one lab for pages that belong to no project (tries, demos, options). Agents add a page there, in a folder named for its topic, instead of starting a new lab. | yours |
 | `shortcuts` | below | | Keys for the page. | both |
 | `actions` | seeded once | | The one list of actions: the chips of the comment box, in order. See **Actions** below. | both |
-| `flags` | everything off | the ⋯ menu's **experiments** | What this lab is trying: `{ "<flag>": true }`. See **Experiments** below. | both |
+| `flags` | everything off | the ⋯ menu's **experiments** | What you are trying: `{ "<flag>": true }`. See **Experiments** below. | yours |
 
 "Project" settings belong to a project, so they're only read from `labit.json`; "yours" only from your own file (a
 project you clone can't rename you or open your lab to the network); "both" from either, the project's first.
@@ -123,8 +123,8 @@ is simply labit) or dropped, and the code goes with it.
 The easy way is the page: the ⋯ menu has an **experiments** section under a hairline, one row a flag, reading **on** or
 **off** at its end. A click switches it at once, with no restart, on every open page of the lab, and saves it in your
 own `~/.config/labit/settings.json`, so it holds in every lab you run. Only the computer running the lab can switch
-them: a guest on your wifi sees the rows greyed out. A flag the project's `labit.json` sets wins over yours, on or off:
-the menu shows that row greyed. `labit settings` lists which are on and whose each is: `flags  talk (yours)`.
+them: a guest on your wifi sees the rows greyed out. A project's `labit.json` can't set them. `labit settings` lists
+which are on.
 
 Being tried now:
 

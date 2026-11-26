@@ -78,7 +78,6 @@ const REACH = {
   'lib/board.ts': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardhome', 'boardmode', 'boardpins', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard'],
   'lib/boardact.ts': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardhome', 'boardmode', 'boardpins', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard'],
   'lib/commands.ts': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'connection', 'moved', 'progress'],
-  'lib/flags.ts': ['flags', 'walkie'],
   'lib/labcall.ts': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'connection', 'moved', 'progress'],
   'lib/proxy.ts': ['devroutes'],
   'lib/update.ts': ['update'],

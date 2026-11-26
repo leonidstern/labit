@@ -857,55 +857,35 @@ import { bindKeys } from './widget/keys.ts';
       void switcher().then((m) => m?.openSwitcher());
     });
   }
-  // Experiments (lib/flags.ts; Leo, 26 Nov): what this lab is trying, flag -> { name, on, project }, under a hairline
-  // in the ⋯ menu, one row a flag that switches it, on or off in grey at the row's end. Saved in your own settings
-  // through the lab (POST /_lab/flags), so it holds in every lab you run; one the project's labit.json sets is shown,
-  // not switched, and a guest's page switches nothing. Computers only: talk, the one there now, is.
-  const FLAGS = (() => {
-    try {
-      return JSON.parse(script?.dataset.flags || '{}');
-    } catch {
-      return {};
-    }
-  })();
-  const flag = (name) => FLAGS[name]?.on === true;
-  const FLAGSAPI = script?.dataset.live ? script.dataset.live.replace(/live$/, 'flags') : '';
+  // Experiments (FLAGS in lib/settings.ts; Leo, 26 Nov): what you are trying, flag -> on, under a hairline in the ⋯
+  // menu, one row a flag that switches it, on or off in grey at the row's end. Saved in your own settings through the
+  // lab (POST /_lab/flags), so it holds in every lab you run; a guest's page switches nothing. Computers only: talk,
+  // the one there now, is.
+  const FLAGS = JSON.parse(script?.dataset.flags || '{}');
+  const flag = (name) => FLAGS[name] === true;
   // (A phone: coarse, which is set further down.)
-  const expRows = matchMedia('(pointer: coarse)').matches || globalThis.__LAB_CO__ ? [] : Object.keys(FLAGS).map((name) => {
-    const b = /** @type {HTMLButtonElement} */ (el('button', { type: 'button', role: 'switch', 'data-flag': name }));
-    b.disabled = !adminToken || !FLAGSAPI || Boolean(FLAGS[name].project);
-    if (b.disabled) b.title = FLAGS[name].project ? "set by the project's labit.json" : 'only the computer running the lab switches this';
-    b.addEventListener('click', async (e) => {
+  const expRows = matchMedia('(pointer: coarse)').matches ? [] : Object.keys(FLAGS).map((name) => {
+    const b = el('button', { type: 'button', role: 'switch', 'data-flag': name });
+    b.disabled = !adminToken;
+    b.addEventListener('click', (e) => {
       e.stopPropagation(); // the menu stays open
-      try {
-        const r = await fetch(FLAGSAPI, { method: 'POST', headers: headers(), body: JSON.stringify({ flag: name, on: !flag(name) }) });
-        if (!r.ok) throw new Error(await r.text());
-        S.syncFlags((await r.json()).flags);
-      } catch {
-        say("couldn't switch it: is the lab running?");
-      }
+      fetch(script.dataset.live.replace(/live$/, 'flags'), { method: 'POST', headers: headers(), body: JSON.stringify({ flag: name, on: !flag(name) }) })
+        .then((r) => r.json())
+        .then((r) => S.syncFlags(r.flags), () => say("couldn't switch it: is the lab running?"));
     });
     return b;
   });
   const expBox = expRows.length ? el('div', { class: 'held' }) : null;
   expBox?.append(el('div', { class: 'hint-row' }, 'experiments'), ...expRows);
-  const drawFlags = () => {
-    for (const b of expRows) {
-      const on = flag(b.dataset.flag);
-      b.setAttribute('aria-checked', String(on));
-      b.replaceChildren(FLAGS[b.dataset.flag].name, el('kbd', { 'aria-hidden': 'true' }, on ? 'on' : 'off'));
-    }
+  // The lab's word on which flags are on (the live stream, or the answer to a switch here). Only a change redraws:
+  // the live stream says which are on with every message.
+  S.syncFlags = (/** @type {string[]} */ on, first = false) => {
+    if (!first && Object.keys(FLAGS).every((n) => FLAGS[n] === on.includes(n))) return;
+    for (const n in FLAGS) FLAGS[n] = on.includes(n);
+    for (const b of expRows) b.setAttribute('aria-checked', String(flag(b.dataset.flag))), b.replaceChildren(b.dataset.flag, el('kbd', { 'aria-hidden': 'true' }, flag(b.dataset.flag) ? 'on' : 'off'));
+    if (!first) render();
   };
-  drawFlags();
-  // The lab's word on which flags are on (the live stream, or the answer to a switch here).
-  // Only a change redraws: the live stream says which are on with every message.
-  S.syncFlags = (/** @type {string[]} */ on) => {
-    let changed = false;
-    for (const [name, f] of Object.entries(FLAGS)) if (f.on !== on.includes(name)) (f.on = !f.on), (changed = true);
-    if (!changed) return;
-    drawFlags();
-    render();
-  };
+  S.syncFlags(Object.keys(FLAGS).filter(flag), true);
   // The motion part (src/widget/motion.ts, loaded below), once it is: declared here, as the bar reads it.
   /** @type {any} */
   let mo = null;

@@ -100,7 +100,7 @@ try {
       await sleep(600);
       s = await state(p);
       check(eng, 'a click again turns it off: the row reads off, no tal(k)', s.checked === 'false' && s.end === 'off' && !s.talk, JSON.stringify(s));
-      check(eng, 'off leaves nothing in your settings', !('talk' in mine()), JSON.stringify(mine()));
+      check(eng, 'off: none on in your settings', !mine().talk, JSON.stringify(mine()));
       await (await root(p)).evaluate((r) => r.querySelector('.more').click());
       await sleep(300);
       await p.keyboard.press('k');

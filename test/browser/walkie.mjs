@@ -10,13 +10,16 @@ const pw = playwright();
 const DIR = fs.realpathSync(tmp('labit-walkie-'));
 const PORT = claimPort(8360, 40);
 const B = `http://localhost:${PORT}`;
-// Talk is an experiment (lib/flags.ts), off by default: this project turns it on (test/browser/flags.mjs checks the switch).
-fs.writeFileSync(path.join(DIR, 'labit.json'), JSON.stringify({ port: PORT, flags: { talk: true } }));
+fs.writeFileSync(path.join(DIR, 'labit.json'), JSON.stringify({ port: PORT }));
+// Talk is an experiment, off by default: your own settings turn it on here (test/browser/flags.mjs checks the switch).
+const CFG = tmp('labit-walkie-cfg-');
+fs.mkdirSync(path.join(CFG, 'labit'));
+fs.writeFileSync(path.join(CFG, 'labit', 'settings.json'), JSON.stringify({ flags: { talk: true } }));
 fs.writeFileSync(path.join(DIR, 'walk.html'), `<!doctype html><meta charset="utf-8"><title>t</title><link rel="stylesheet" href="/_lab/lab.css">
 <body><h1>Orders</h1><p>Some words to read.</p>
 <button id="a" style="margin:40px;padding:20px 40px" onclick="window.pressed = (window.pressed || 0) + 1">Export</button>
 <button id="b" style="margin:40px 40px 40px 400px;padding:20px 40px">New order</button></body>`);
-const server = startLab(DIR, labEnv(), { port: PORT });
+const server = startLab(DIR, labEnv({ XDG_CONFIG_HOME: CFG }), { port: PORT });
 await labUp(B);
 
 try {
