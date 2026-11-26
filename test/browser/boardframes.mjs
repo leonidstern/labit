@@ -16,7 +16,7 @@ const pw = playwright();
 const DIR = tmp('labit-boardframes-');
 const PORT = claimPort(8290, 30);
 const B = `http://localhost:${PORT}`;
-const page = (title, h1) => `<!doctype html><meta charset="utf-8"><title>${title}</title><h1>${h1}</h1><div style="height:600px"></div>`;
+const page = (title, h1) => `<!doctype html><meta charset="utf-8"><title>${title}</title><h1>${h1}</h1><div style="height:150px"></div>`;
 fs.writeFileSync(path.join(DIR, 'pricing.html'), page('Pricing', 'Pricing one'));
 fs.writeFileSync(path.join(DIR, 'checkout.html'), page('Checkout', 'Checkout one'));
 fs.writeFileSync(path.join(DIR, 'index.html'), page('k', 'Keys'));

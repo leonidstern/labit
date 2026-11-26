@@ -126,8 +126,7 @@ export function show(name: string, o: Opts) {
       scrollFrom = -1;
       typed = false;
     }
-    const viewTop = innerHeight - view.offsetHeight; // where the view starts when nothing is panned
-    const next = typing && viewTop < vv.height - 160 ? Math.round(vv.offsetTop) : !typing ? Math.round(vv.offsetTop) : 0;
+    const next = Math.round(vv.offsetTop); // (the view fills the window: never a half view under the keyboard)
     if (next !== pan) {
       pan = next;
       view.style.setProperty('--bv-pan', `${pan}px`);
@@ -185,7 +184,7 @@ export function show(name: string, o: Opts) {
     history.replaceState(history.state, '', `${location.pathname}${location.search}`);
     location.assign(`${of.split('#')[0]}#board=${name}`);
   };
-  const board = mountBoard(root, name, o.own ? { of: o.of, back: o.of ? () => backTo(o.of || '') : undefined, hash: true, clip: true } : { of: o.of, back: () => close(), clip: true, home, keep: `lab-board-cam:${o.page}:${name}` });
+  const board = mountBoard(root, name, o.own ? { of: o.of, back: o.of ? () => backTo(o.of || '') : undefined, hash: true } : { of: o.of, back: () => close(), home, keep: `lab-board-cam:${o.page}:${name}` });
   const covers = (x: number, y: number) => x >= at.left && x <= at.right && y >= at.top && y <= at.bottom;
   Object.assign(window, { __labBoard: { ...board.api, covers } });
   // The page scrolls under a half view: its pins and the board's are drawn again.
@@ -232,11 +231,10 @@ function teardown() {
 }
 
 /** Close the view: back, when it was opened here (the entry it added goes), else the address loses its #board. */
-// The view's slide, by the comment drawer's rules (../widget/sheetmove.ts): up into place (in: from below the screen, or
-// back from where a finger left it, at `speed` px/ms toward its place), or down off the screen at the finger's speed
-// (a tap on close: from rest, easing in). Its length in ms. No move is left on it once it rests (a moved box holds what
+// The view's slide, by the comment drawer's rules (../widget/sheetmove.ts): up into place (from below the screen, or from
+// where a slide under way has it), or down off the screen (from rest, easing in). Its length in ms. No move is left on it once it rests (a moved box holds what
 // is fixed inside it, the board's own layers).
-function slide(view: HTMLElement, into: boolean, speed = 0) {
+function slide(view: HTMLElement, into: boolean) {
   const [quick, slow] = ['quick', 'slow'].map(token);
   const h = view.getBoundingClientRect().height;
   const off = /^\s*([\d.]+)px$/.exec(view.style.getPropertyValue('--bv-y'))?.[1];
@@ -249,8 +247,8 @@ function slide(view: HTMLElement, into: boolean, speed = 0) {
   const way = into ? now : h + 8 - now;
   // Opened by a tap (from below the screen, at rest) or closed by one: the chat sheet's own motion, its curve and length
   // (Leo, 21 Nov: "do same easing for open close as we do for chat for board drawer", then "ease in ease out tokens,
-  // slower opened fast closed"): in over --lab-t-slow on --lab-ease-out, out over --lab-t-quick on --lab-ease-in. Let go by a finger, it keeps the finger's speed (sheetmove.ts).
-  const [ms, curve] = into ? (off || speed ? move.glide(way, speed, slow, quick) : [slow, ease('ease-out', 'cubic-bezier(0, 0, .58, 1)')]) : speed > 0 ? move.carry(way, speed, slow, quick) : [quick, ease('ease-in', 'cubic-bezier(.4, 0, 1, 1)')];
+  // slower opened fast closed"): in over --lab-t-slow on --lab-ease-out, out over --lab-t-quick on --lab-ease-in.
+  const [ms, curve] = into ? (off ? move.glide(way, 0, slow, quick) : [slow, ease('ease-out', 'cubic-bezier(0, 0, .58, 1)')]) : [quick, ease('ease-in', 'cubic-bezier(.4, 0, 1, 1)')];
   // What the widget holds to the board (its pins, an open card) is hidden for the slide, either way: gone with the first
   // frame of a close, back once the view has come to rest (Leo, 21 Nov: "closing board have pins not immediately hidden,
   // same opening not snappy"). Teardown lets go of it.
@@ -274,11 +272,11 @@ const ease = (k: string, or: string) => getComputedStyle(document.documentElemen
 let closing = false;
 /** Close the view: it slides down, then back, when it was opened here (the entry it added goes), else the address loses
  * its #board. The browser's own back takes it down at once (its own gesture is the motion). */
-function close(speed = 0) {
+function close() {
   if (!cur || closing) return;
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches && !lastOpts?.own) {
     closing = true;
-    return void setTimeout(() => ((closing = false), now()), slide(cur.view, false, speed));
+    return void setTimeout(() => ((closing = false), now()), slide(cur.view, false));
   }
   now();
 }

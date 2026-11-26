@@ -11,7 +11,7 @@ import type { Cam, Box } from './camera.ts';
 
 type Frame = { id: string; src: string; auto?: boolean; ow?: number; oh?: number; kind?: string; file?: string; iw?: number; ih?: number; pv?: number[]; guest?: boolean; w: number; h: number; x: number; y: number; label?: string; state?: string; variantOf?: string };
 type Board = { rev: number; frames: Frame[]; of?: string } & Record<string, unknown>;
-type Card = { f: Frame; box: HTMLElement; inner: HTMLElement; frame?: HTMLIFrameElement; seen: number; pv?: HTMLImageElement; at?: number };
+type Card = { s: Frame; f: Frame; box: HTMLElement; inner: HTMLElement; frame?: HTMLIFrameElement; seen: number; pv?: HTMLImageElement; at?: number };
 type Spot = { left: number; top: number; zone: { left: number; top: number; width: number; height: number } | null; clipped?: boolean };
 
 type MountOpts = {
@@ -19,7 +19,6 @@ type MountOpts = {
   back?: () => void; // ⇧B and Esc on an empty board: back to the page (the board page) or closing the view (a page's)
   hash?: boolean; // the camera is kept in the address's #x,y,z (the board page; a page's view keeps #board=<name>)
   keep?: string; // the camera is kept in localStorage under this key (a page's view), for the next time it opens
-  clip?: boolean; // a pin whose spot is outside the box hides (the box is less than the window)
   home?: (key: string, of: string) => void; // told once which page this board lives on (its pins are that page's) and its address
 };
 
@@ -120,9 +119,6 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   type Undo = { items: { id: string; x?: number; y?: number }[]; archived: boolean; at?: number };
   const taken: Undo[] = []; // what this browser took off or moved, newest last: ⌘Z puts the last one back
   let moved = false; // the person moved the camera: a resize no longer fits everything again
-  let heldCam: Cam | null = null; // the camera when the hold began
-  let camBack: Cam | null = null; // where the next resize puts it (the hold let go)
-  let held = false; // a resize that isn't the person's (a phone's keyboard growing a half view): the board stays where it is on the screen
   let selected = '';
   let picks = new Set<string>(); // the frames a click or a box picked (their ring): Backspace or Delete takes them off the board, a drag moves them
   let entered = '';
@@ -131,22 +127,22 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   let checked = { x: 1e9, y: 1e9, z: 0 }; // the camera at the last wake/cull check
   let still: ReturnType<typeof setTimeout> | undefined;
   let movedAt = -1e9; // when the camera last moved
-  let kept = false; // the person sized the view (overlay.ts keep()): its zoom stays from then on
+  let kept = false; // the person arranged the board (moved a frame): its zoom stays from then on
   // The camera a view left the board at, kept for this board on this page (opts.keep), so reopened it is where it was
   // (Leo, 21 Nov: "closing/opening board drawer should not move zoom/position inside board"). Only once moved by hand.
-  const keepCam = () => {
-    if (!opts.keep || !moved) return;
+  // localStorage as JSON: read (no value given) or written; null when it can't be (a private window, blocked site data).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ls = (k: string, v?: unknown): any => {
     try {
-      localStorage.setItem(opts.keep, JSON.stringify({ x: Math.round(cam.x), y: Math.round(cam.y), z: +cam.z.toFixed(4) }));
-    } catch {}
-  };
-  const keptCam = (): Cam | null => {
-    try {
-      const c = opts.keep && JSON.parse(localStorage.getItem(opts.keep) || 'null');
-      return c && [c.x, c.y, c.z].every(Number.isFinite) && c.z > 0 ? c : null;
+      return v === undefined ? JSON.parse(localStorage.getItem(k) || 'null') : localStorage.setItem(k, JSON.stringify(v));
     } catch {
       return null;
     }
+  };
+  const keepCam = () => opts.keep && moved && ls(opts.keep, { x: Math.round(cam.x), y: Math.round(cam.y), z: +cam.z.toFixed(4) });
+  const keptCam = (): Cam | null => {
+    const c = opts.keep && ls(opts.keep);
+    return c && [c.x, c.y, c.z].every(Number.isFinite) && c.z > 0 ? c : null;
   };
   let layered = false; // the world is its own layer (the camera is moving)
   let paintedZ = 0; // the zoom the labels were last sized for
@@ -162,10 +158,10 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   const card = (c: Card) => {
     const el = document.createElement('div');
     el.className = 'c';
-    text('b', c.f.label || c.f.src, el);
-    text('div', `${c.f.w} × ${c.f.h}`, el);
-    if (c.f.label) text('div', c.f.src, el);
-    const when = ago(edited[c.f.src.replace(/\.html?$/i, '').replace(/\/$/, '') || '/']);
+    text('b', c.s.label || c.s.src, el);
+    text('div', `${c.s.w} × ${c.s.h}`, el);
+    if (c.s.label) text('div', c.s.src, el);
+    const when = ago(edited[c.s.src.replace(/\.html?$/i, '').replace(/\/$/, '') || '/']);
     if (when) text('div', when, el);
     return el;
   };
@@ -267,11 +263,9 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     if (left > 1) return void (still = setTimeout(rest, left));
     if (sizing) {
       sizing = false;
-      // Held (a phone's keyboard): it stays as it is, where the hold or its glide put it. Fitted or held to its edges again
-      // here, mid-glide, it jumped 68 px and the widget drew everything again (21 Nov simulator).
-      // Once the person has sized the view (its edge, half or full) the board is never fitted again: it keeps its zoom (Leo,
-      // 21 Nov: "do not zoom images on board on resize board"). Till then a new size fits it, as the view settles.
-      if (!held) return go(moved || kept ? cam : fitAll(boxes(), view), false); // (which rests again, and lets the layer go then)
+      // Once the person has arranged the board the board is never fitted again: it keeps its zoom (Leo, 21 Nov: "do not zoom
+      // images on board on resize board"). Till then a new size fits it, as the view settles.
+      return go(moved || kept ? cam : fitAll(boxes(), view), false); // (which rests again, and lets the layer go then)
     }
     layered = false;
     for (const c of cards) previewOf(c, true);
@@ -301,11 +295,10 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   // on edge of canvas": it gave way and sprang back). pan: a move that keeps a fitted frame's focus (a phone's swipe).
   let nudging = 0; // the camera's glide to a draft pin (api.nudge)
   let home: number | null = null; // where the camera was before that glide (api.nudgeBack takes it there again)
-  let holdOff: ReturnType<typeof setTimeout> | undefined;
   const go = (next: Cam, user = true, pan = false, camOnly = false) => {
     const c = camOnly ? next : clamp(next, boxes(), view, cam); // a glide's steps are its own (api.nudge): held to the edges, each would jump to them
     if (user) moved = true;
-    if (user) [home, heldCam] = [null, null]; // moved by hand while a keyboard holds the board: it stays where the hand left it
+    if (user) home = null; // moved by hand: it stays where the hand left it
     if (user && (!pan || Math.abs(c.z - cam.z) > 1e-6)) focus = false;
     if (!user && !camOnly) whole = true; // the board itself changed (its box, its frames): the widget draws everything again
     cam = c;
@@ -355,7 +348,9 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     const fr = document.createElement('iframe');
     fr.name = `lab:${c.f.id}`;
     fr.title = c.f.label || c.f.src;
+    fr.style.height = `${c.s.h}px`; // laid out in its device's height first: what 100vh is (grow, below)
     fr.addEventListener('load', () => {
+      grow(c, fr);
       fr.dataset.ready = '1';
       fr.style.visibility = '';
       for (const n of Array.from(c.inner.children)) if (n !== fr) n.remove(); // the card it covered (taken out after, not before: an iframe moved in the page loads again)
@@ -376,6 +371,69 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     c.inner.replaceChildren(card(c));
   }
 
+  // A page is drawn whole, its frame as tall as the page, never a box that scrolls inside (Leo, 26 Nov: "dont show pages inside
+  // boards pls i cant scroll there zoom or whatever, always show full thing"). Laid out in its device's height first, then the
+  // frame is made as tall as the page; whatever grew with it (sized by the window's height: 100vh) is held at the height it
+  // had in the device, else such a page grew without end. Later growth (pictures, fonts) follows, once per step: a step the
+  // same as the last is that loop again and stops it. Kept per frame and width, so a reload draws them tall at once.
+  const tallKey = `lab-tall:${name}`;
+  const tall: Record<string, number> = ls(tallKey) || {};
+  const grow = (c: Card, fr: HTMLIFrameElement) => {
+    const d = fr.contentDocument;
+    const w = fr.contentWindow as (Window & typeof globalThis) | null;
+    if (!d?.body || !w) return;
+    const de = d.documentElement;
+    de.style.overflow = 'hidden';
+    const page = () => Math.min(30000, Math.max(de.scrollHeight, d.body.scrollHeight));
+    const all = [...d.body.querySelectorAll<HTMLElement>('*')];
+    const was = all.map((n) => n.offsetHeight);
+    let h = page();
+    let step = 0;
+    const set = (to: number) => {
+      [step, h] = [to - h, to];
+      fr.style.height = `${h}px`;
+      tall[c.s.id + ':' + c.s.w] = h;
+      ls(tallKey, tall);
+      lay();
+    };
+    set(h);
+    if (page() > h + 1) for (const [i, n] of all.entries()) if (n.offsetHeight > was[i] + 1) n.style.cssText += `;height:${was[i]}px!important;min-height:0!important`;
+    set(page());
+    // A wheel or a pinch over it (entered) moves the board: the page has nothing to scroll (Leo, 26 Nov: "i cant scroll there
+    // zoom or whatever"). A box of the page's own that scrolls still does. Its points are the frame's, put on the screen.
+    const at = (e: MouseEvent): [number, number] => {
+      const r = fr.getBoundingClientRect();
+      const k = r.width / w.innerWidth;
+      return [r.left + e.clientX * k, r.top + e.clientY * k];
+    };
+    w.addEventListener('wheel', (e) => {
+      for (let n = e.target as Element | null; n && n !== d.body; n = n.parentElement) if (/auto|scroll/.test(w.getComputedStyle(n).overflowY) && (e.deltaY < 0 ? n.scrollTop > 0 : n.scrollTop + n.clientHeight < n.scrollHeight - 1)) return;
+      wheel(e, ...at(e));
+    }, { passive: false });
+    w.addEventListener('gesturestart', pinch0);
+    w.addEventListener('gesturechange', (e) => pinchTo(e, ...at(e as MouseEvent)));
+    new w.ResizeObserver(() => {
+      const to = page();
+      if (to > h + 1 && Math.abs(to - h - step) > 1) set(to);
+    }).observe(d.body);
+  };
+  // Where each frame is drawn: as stored, as tall as its page, and moved down by as much as the frames over it grew (the gap
+  // between them as it was, up to 160 px: a frame already put lower is not moved again).
+  const lay = () => {
+    if (down?.mode) return;
+    const by = [...cards].sort((p, q) => p.s.y - q.s.y);
+    for (const [i, c] of by.entries()) {
+      const s = c.s;
+      const h = Math.max(s.h, tall[s.id + ':' + s.w] || 0);
+      let y = s.y;
+      for (const g of by.slice(0, i)) if (g.s.y < s.y && g.s.x < s.x + s.w && s.x < g.s.x + g.s.w) y = Math.max(y, g.f.y + g.f.h + Math.min(s.y - g.s.y - g.s.h, 160));
+      c.f = { ...s, y, h, ...(s.oh && { oh: Math.round((s.oh * h) / s.h) }) }; // (a phone's frame keeps its scale of the stored one)
+      Object.assign(c.box.style, { left: `${c.f.x}px`, top: `${y}px`, width: `${c.f.w}px`, height: `${h}px` });
+    }
+    if (!moved && !kept) cam = fitAll(boxes(), view);
+    go(cam, false);
+  };
+
   // ---------- frames in the world ----------
   const label = (f: Frame) => `${f.label || (f.kind === 'image' ? f.file : f.src)} · ${f.w} × ${f.h}`;
   function show(b: Board) {
@@ -391,9 +449,9 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     cards = next.map((f) => {
       const was = old.get(f.id);
       old.delete(f.id);
-      if (was && was.f.src === f.src) {
-        if (!was.frame && f.kind !== 'image' && (was.f.w !== f.w || was.f.h !== f.h)) was.inner.replaceChildren(card({ ...was, f }));
-        was.f = f;
+      if (was && was.s.src === f.src) {
+        if (!was.frame && f.kind !== 'image' && (was.s.w !== f.w || was.s.h !== f.h)) was.inner.replaceChildren(card({ ...was, s: f }));
+        was.s = was.f = f;
         return was;
       }
       was?.box.remove();
@@ -401,7 +459,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       box.className = 'f';
       const inner = document.createElement('div');
       inner.className = 'b';
-      const c: Card = { f, box, inner, seen: 0 };
+      const c: Card = { s: f, f, box, inner, seen: 0 };
       box.dataset.id = f.id;
       if (f.kind === 'image') {
         const img = Object.assign(document.createElement('img'), { src: f.src, alt: f.label || '', draggable: false, loading: 'lazy' });
@@ -418,9 +476,8 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       return c;
     });
     for (const c of old.values()) c.box.remove();
+    lay();
     for (const c of cards) {
-      const f = c.f;
-      Object.assign(c.box.style, { left: `${f.x}px`, top: `${f.y}px`, width: `${f.w}px`, height: `${f.h}px` });
       paint(c);
       previewOf(c, true);
     }
@@ -471,7 +528,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   }).catch(() => {});
 
   // The label above a frame is only text (a click on it is a click on the board).
-  const paint = (c: Card) => ((c.box.querySelector('.t') as HTMLElement).textContent = label(c.f));
+  const paint = (c: Card) => ((c.box.querySelector('.t') as HTMLElement).textContent = label(c.s));
 
   // ---------- the frame the camera is on, and entering ----------
   // \`selected\` is the frame Tab last moved to; the open (entered) frame and the picked ones wear the ring.
@@ -539,11 +596,9 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
 
   // ---------- input: the board owns its surface (these run before the widget's own listeners) ----------
   // Points are the box's own: the screen's less where the box is.
-  const lx = (e: { clientX: number }) => e.clientX - ox;
-  const ly = (e: { clientY: number }) => e.clientY - oy;
   const at = (e: { clientX: number; clientY: number }) => {
-    const x = lx(e) / cam.z - cam.x;
-    const y = ly(e) / cam.z - cam.y;
+    const x = (e.clientX - ox) / cam.z - cam.x;
+    const y = (e.clientY - oy) / cam.z - cam.y;
     return cards.findLast((c) => x >= c.f.x && x <= c.f.x + c.f.w && y >= c.f.y && y <= c.f.y + c.f.h)?.f.id || '';
   };
   const mine = (e: Event) => inside(e, root) || inside(e, handLayer);
@@ -767,7 +822,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   on('contextmenu', (e: MouseEvent) => mine(e) && e.preventDefault(), true);
   // A mouse or trackpad. Pinch on a trackpad arrives as a wheel with ctrlKey (Chrome, Firefox); ⌘ or Ctrl and a wheel zoom.
   // A wheel over a pin on the board is the board's too: it went to the page behind (Leo, 19 Nov: "scroll inside board
-  // working weird"). Only an entered frame scrolls its own page.
+  // working weird"). An entered frame's page has nothing to scroll (it is drawn whole): its wheel comes here too (frame.ts).
   const overPin = (e: Event) => {
     const t = e.composedPath()[0];
     return t instanceof Element && Boolean(t.closest('.pin')) && inBox((e as WheelEvent).clientX, (e as WheelEvent).clientY);
@@ -776,30 +831,32 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   // so e^(-deltaY / 100) is that scale again, as Safari's gesture gives it below (it was four times that: a small pinch
   // shot to the most zoom). ⌘ + wheel is the same per px. One event never does more than a quarter.
   let wheelAt = -1e9;
-  on('wheel', (e: WheelEvent) => {
-    if (!mine(e) && !overPin(e)) return;
+  // (x, y: where it is on the screen; a wheel in an entered frame tells its own, grow() above.)
+  const wheel = (e: WheelEvent, x = e.clientX, y = e.clientY) => {
     e.preventDefault();
     e.stopImmediatePropagation();
     // Holding D, the board holds still: a drawing's strokes are where they were drawn on the screen, and a pan between two
     // of them put them apart from the frames they were on (issue 423).
     if (boardWidget()?.drawing?.()) return;
-    if (e.timeStamp - wheelAt > 250) measure(); // where the box is, read once as a gesture starts, never per event
-    wheelAt = e.timeStamp;
+    const t = performance.now(); // (not the event's own time: a frame's starts later)
+    if (t - wheelAt > 250) measure(); // where the box is, read once as a gesture starts, never per event
+    wheelAt = t;
     const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? view.h : 1; // lines (a mouse in Firefox), pages, px
     if (e.ctrlKey || e.metaKey) {
       const dy = Math.max(-24, Math.min(24, e.deltaY * unit));
-      go(zoomAt(cam, lx(e), ly(e), cam.z * Math.exp(-dy * 0.01), boxes(), view));
+      go(zoomAt(cam, x - ox, y - oy, cam.z * Math.exp(-dy * 0.01), boxes(), view));
     } else go(panBy(cam, -(e.shiftKey && !e.deltaX ? e.deltaY : e.deltaX) * unit, e.shiftKey && !e.deltaX ? 0 : -e.deltaY * unit), true, true);
-  }, { passive: false, capture: true });
+  };
+  on('wheel', (e: WheelEvent) => (mine(e) || overPin(e)) && wheel(e), { passive: false, capture: true });
   // Safari's pinch.
   let g0 = 1;
-  on('gesturestart', (e: Event) => mine(e) && (e.preventDefault(), measure(), (g0 = cam.z)), true);
-  on('gesturechange', (e: Event) => {
-    if (!mine(e)) return;
+  const pinch0 = (e: Event) => (e.preventDefault(), measure(), (g0 = cam.z));
+  const pinchTo = (e: Event, x?: number, y?: number) => {
     e.preventDefault();
-    const x = e as unknown as { scale: number; clientX: number; clientY: number };
-    go(zoomAt(cam, x.clientX === undefined ? view.w / 2 : x.clientX - ox, x.clientY === undefined ? view.h / 2 : x.clientY - oy, g0 * x.scale, boxes(), view));
-  }, true);
+    go(zoomAt(cam, x === undefined ? view.w / 2 : x - ox, y === undefined ? view.h / 2 : y - oy, g0 * (e as unknown as { scale: number }).scale, boxes(), view));
+  };
+  on('gesturestart', (e: Event) => mine(e) && pinch0(e), true);
+  on('gesturechange', (e: MouseEvent) => mine(e) && pinchTo(e, e.clientX, e.clientY), true);
 
   // ---------- keys (after the widget's own: an Esc it used is not ours) ----------
   const typing = (e: Event, buttons = true) => e.composedPath().some((n) => n instanceof HTMLElement && (n.isContentEditable || (buttons ? /^(INPUT|TEXTAREA|SELECT|BUTTON)$/ : /^(INPUT|TEXTAREA)$/).test(n.tagName) || n.hasAttribute('data-lab-comments')));
@@ -954,7 +1011,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     const got = pictures(e.clipboardData);
     if (!got.length) return; // a text paste stays untouched
     measure();
-    if (!last && !(view.w >= innerWidth - 2 && view.h >= innerHeight - 2)) return; // a half view: the pointer is off the board, the paste is the page's
+    if (!last) return; // the pointer was never on the board: the paste is the page's
     eat(e);
     void putAll(got, last || undefined, alt); // every picture pasted, not only the first (Leo, 23 Nov)
   }, true);
@@ -1002,7 +1059,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     pressed: () => void boardWidget()?.dismiss?.(),
     frame: (id: string) => find(id)?.frame,
     box: (id: string) => find(id)?.box || null, // a frame's box in the world: what the widget ties a board pin to
-    size: (id: string) => { const c = find(id); return c ? { w: c.f.ow || c.f.w, h: c.f.oh || c.f.h } : null; }, // its size in world px, read without laying the page out
+    size: (id: string) => { const c = find(id); return c ? { w: c.s.ow || c.s.w, h: c.s.oh || c.s.h } : null; }, // its size in world px, read without laying the page out
     /** A screen point is on this board (a page's view is less than the window). */
     contains: inBox,
     // Where a point on the screen is on the board: the frame under it (else the nearest), by px from its top left, and the point.
@@ -1017,32 +1074,18 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     },
     // Where a board pin is, in page px (the pins' layer is the page's): with its frame, else at the point it was put.
     spot: (a: { frame?: string; fx?: number; fy?: number; bx?: number; by?: number; zw?: number; zh?: number; docW?: number; docH?: number; pinX?: number; pinY?: number }): Spot => {
-      const f = cards.find((c) => c.f.id === a.frame)?.f;
+      const c = find(a.frame || '');
+      const f = c?.f;
       const [wx, wy] = f && a.fx !== undefined ? [f.x + a.fx / kx(f), f.y + (a.fy || 0) / ky(f)] : [a.bx || 0, a.by || 0];
       const [sx, sy] = [ox + (wx + cam.x) * cam.z, oy + (wy + cam.y) * cam.z];
       // An area or a drawing on a frame: its box is its shares of the frame (as drawn, whatever the device), from its corner, and its
       // pin where the drag ended.
       // One on the board itself (not within one frame): its size is in the board's px.
-      const zone = f && a.fx !== undefined && a.zw ? { left: sx + scrollX, top: sy + scrollY, width: a.zw * f.w * cam.z, height: (a.zh || 0) * f.h * cam.z }
+      const zone = f && a.fx !== undefined && a.zw ? { left: sx + scrollX, top: sy + scrollY, width: a.zw * f.w * cam.z, height: (a.zh || 0) * c!.s.h * cam.z }
         : !a.frame && a.zw && a.docW ? { left: sx + scrollX, top: sy + scrollY, width: a.docW * cam.z, height: (a.docH || 0) * cam.z } : null;
-      return { left: sx + scrollX + (zone && a.pinX ? zone.width : 0), top: sy + scrollY + (zone && a.pinY ? zone.height : 0), zone, ...(((opts.clip && !inBox(sx, sy)) || !shown) && { clipped: true }) };
+      return { left: sx + scrollX + (zone && a.pinX ? zone.width : 0), top: sy + scrollY + (zone && a.pinY ? zone.height : 0), zone, ...((!inBox(sx, sy) || !shown) && { clipped: true }) };
     },
     camera: () => ({ ...cam }),
-    /** While on, the view's resizes keep the board where it is on the screen instead of fitting it again (a phone's keyboard). */
-    hold: (on: boolean) => {
-      clearTimeout(holdOff);
-      if (on) {
-        if (!held) heldCam = { ...cam };
-        held = true;
-        return;
-      }
-      // Let go: the next resize puts the camera back where it was before the hold, as it was (kept on the screen through a
-      // grow and a shrink it came back 110 px low, the board's edges holding it: 21 Nov simulator).
-      cancelAnimationFrame(nudging);
-      camBack = heldCam;
-      heldCam = null;
-      holdOff = setTimeout(() => ((held = false), (camBack = null)), REST * 3); // after the last resize has rested
-    },
     /** The camera glides by dy screen px (the keyboard is up: a draft pin comes above its sheet), past the board's edges if it must. */
     nudge: (dy: number) => {
       home ??= cam.y;
@@ -1068,19 +1111,17 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   // (eased in and out over 0.42 s it started after them and was still going when they had stopped). The camera alone: the
   // widget moves the pins and the open box with it and draws nothing again (drawn again on each step, the box was made
   // anew and took the cursor every frame of the glide).
-  let way: { from: number; to: number } | null = null; // the glide under way (the box changing size moves both ends with the camera)
   const glide = (to: number, done?: () => void) => {
-    const g = (way = { from: cam.y, to });
+    const from = cam.y;
     cancelAnimationFrame(nudging);
-    const ms = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : Math.min(380, 240 + Math.abs(to - g.from) * cam.z * 0.3);
+    const ms = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : Math.min(380, 240 + Math.abs(to - from) * cam.z * 0.3);
     const t0 = performance.now();
     const step = (now: number) => {
       if (signal.aborted) return;
       const k = ms ? Math.min(1, Math.max(0, (now - t0) / ms)) : 1; // (a frame's own time can be a little before t0: never backwards)
-      go({ ...cam, y: g.from + (g.to - g.from) * (1 - (1 - k) ** 3) }, false, true, true);
+      go({ ...cam, y: from + (to - from) * (1 - (1 - k) ** 3) }, false, true, true);
       if (k < 1) return void (nudging = requestAnimationFrame(step));
       nudging = 0;
-      if (way === g) way = null;
       done?.();
     };
     step(t0);
@@ -1089,16 +1130,10 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   const ro = new ResizeObserver(() => {
     const [px, py, pv] = [ox, oy, view];
     measure();
-    if (!sized || !cards.length) return void ((sized = true), go(moved || held ? cam : fitAll(boxes(), view), false));
+    if (!sized || !cards.length) return void ((sized = true), go(moved ? cam : fitAll(boxes(), view), false));
     if (px === ox && py === oy && pv.w === view.w && pv.h === view.h) return; // already drawn at this size (resized(), below)
     // What is on the board stays where it is in the view, its zoom and place, as the view's edge moves (Leo, 21 Nov:
-    // "closing/opening board drawer should not move zoom/position inside board"). Only a phone's keyboard holding the
-    // board (held) keeps it where it is on the screen instead, as the view grows under it.
-    const shift = held && !camBack;
-    cam = camBack || (shift ? { ...cam, x: cam.x - (ox - px) / cam.z, y: cam.y - (oy - py) / cam.z } : cam);
-    if (home != null && shift) home -= (oy - py) / cam.z; // where the glide goes back to moves with the box, as the camera does
-    if (way && nudging && shift) [way.from, way.to] = [way.from - (oy - py) / cam.z, way.to - (oy - py) / cam.z];
-    camBack = null;
+    // "closing/opening board drawer should not move zoom/position inside board").
     sizing = boxed = true;
     cancelAnimationFrame(drawFrame);
     paintCam(); // now, before this frame is drawn (a frame later the frames would trail the edge by one step of the drag)
@@ -1141,5 +1176,5 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     cancelAnimationFrame(drawFrame);
     paintCam();
   };
-  return { api: boardApi, destroy, measure: () => (measure(), go(cam, false)), resized, keep: () => void (kept = true) };
+  return { api: boardApi, destroy, resized };
 }

@@ -32,8 +32,6 @@ export function startFrame(script: HTMLScriptElement | null) {
     part: (name: string) => import(new URL(`${name}.js`, script?.src || location.href).href),
   });
   startLive();
-  // An entered frame's wheel scrolls its own page and stops at its end: it never runs on into the page behind a board's view.
-  document.documentElement.style.overscrollBehavior = 'contain';
   // A press in this page (the frame is entered: only then do presses reach it) is a press outside whatever the board's
   // widget has open, a comment or the chat: the board is told, and closes it as a click outside does on a page.
   addEventListener('pointerdown', (e) => e.button === 0 && board()?.pressed?.(), true);
