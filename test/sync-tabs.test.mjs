@@ -53,7 +53,7 @@ const live = (tab) =>
       });
       // hide(): the tab lets its stream go but stays open (in the background). close(): it goes away and says bye,
       // as the widget does on pagehide.
-      const s = { msgs, last: () => msgs[msgs.length - 1], beats: () => beats, ended: false, hide: () => res.destroy(), close: () => (res.destroy(), bye(tab)) };
+      const s = { msgs, last: () => msgs[msgs.length - 1], beats: () => beats, ended: false, hide: () => res.destroy(), close: () => (res.destroy(), bye(tab)?.catch(() => {})) }; // the lab may stop before the last bye lands
       res.on('close', () => (s.ended = true));
       resolve(s);
     });
