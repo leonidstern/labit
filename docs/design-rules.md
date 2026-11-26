@@ -16,6 +16,15 @@ inner { border-radius: max(0px, calc(var(--_radius) - <gap>)); }
 
 (Leo, 18 Nov: "rounded corners inside and outside different", then "make it as rule for us".)
 
+## A press outside a menu only closes it
+
+Any menu or popover of the widget (the ⋯ menu, the right-click menu, the motion menu, and every new one): a press outside it closes it and does nothing else. The click that press ends pins nothing, opens nothing and starts no area.
+
+- Set `S.menuShut = Date.now()` in the outside-press handler that closes it; `onPageClick` skips that click.
+- The page's own click is left alone only where the browser closes a popover by itself (light dismiss).
+
+(Leo, 23 Nov: "if menu opened click on canvas closing menu not opening pin", then 26 Nov on the right-click menu: "add this behavior somewhere so we wont repeat it again".)
+
 ## Two corner sizes
 
 A corner is the small token (`--_r-s`, 6 px) or the box token (`--_radius`, 12 px; squircle 11 and 21.6), a circle (`50%`) or the pin's teardrop. Parts drawn in the board's own shadow root get the same two names from its `:host`, with the same squircle step, so the board follows `--lab-radius` too.

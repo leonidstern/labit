@@ -370,7 +370,8 @@ export function bindMotion(w: unknown) {
     // A manual popover: above the page's own dialogs, closed here on a press elsewhere, Esc or leaving the window. An
     // auto one closed again in WebKit on the lift of the very right-click that opened it.
     if ('showPopover' in HTMLElement.prototype) box.popover = 'manual';
-    addEventListener('pointerdown', (e) => open && !e.composedPath().includes(box) && closeMotion(), true);
+    // A press outside only closes it: the click it ends pins nothing (docs/design-rules.md, S.menuShut in comments.js).
+    addEventListener('pointerdown', (e) => open && !e.composedPath().includes(box) && ((S.menuShut = Date.now()), closeMotion()), true);
     addEventListener('keydown', (e) => open && e.key === 'Escape' && (swallow(e), closeMotion()), true);
     addEventListener('blur', () => closeMotion());
   }
