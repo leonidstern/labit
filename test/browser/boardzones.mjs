@@ -58,7 +58,19 @@ try {
       const z = await p.evaluate((r) => { const e = new Function(`return ${r}`)().querySelector('.zone'); const b = e?.getBoundingClientRect(); return b ? { x: b.x, y: b.y, w: b.width, h: b.height } : null; }, widget);
       const fa2 = await rect('a');
       check(eng, 'after a reload the area is drawn over the frame at a quarter to three quarters of it', Boolean(z) && Math.abs(z.x - (fa2.x + fa2.w * 0.25)) < 8 && Math.abs(z.w - fa2.w * 0.5) < 10 && Math.abs(z.y - (fa2.y + fa2.h * 0.25)) < 8 && Math.abs(z.h - fa2.h * 0.5) < 10, JSON.stringify([z, fa2]));
+      // a zoom with its card open: the outline goes with the frame, not left at its size on the screen (Leo, 26 Nov: "zoom with
+      // selection pin works weird")
+      await p.mouse.move(600, 400);
+      await p.keyboard.down('Meta');
+      for (let i = 0; i < 5; i++) await p.mouse.wheel(0, -60);
+      await p.keyboard.up('Meta');
+      await sleep(500);
+      const zz = await p.evaluate((r) => { const e = new Function(`return ${r}`)().querySelector('.zone'); const b = e?.getBoundingClientRect(); return b ? { x: b.x, y: b.y, w: b.width, h: b.height } : null; }, widget);
+      const fz = await rect('a');
+      check(eng, 'zoomed with its card open, the area is still a quarter to three quarters of the frame', Boolean(zz) && fz.w > fa2.w * 1.2 && Math.abs(zz.x - (fz.x + fz.w * 0.25)) < 8 && Math.abs(zz.w - fz.w * 0.5) < 10 && Math.abs(zz.y - (fz.y + fz.h * 0.25)) < 8 && Math.abs(zz.h - fz.h * 0.5) < 10, JSON.stringify([zz, fz]));
       await p.keyboard.press('Escape');
+      await p.keyboard.press('Shift+Digit1'); // fitted again, as the rest expects
+      await sleep(500);
       // a drawing on frame b: a ring
       await sleep(300);
       const fb = await rect('b');
