@@ -2,6 +2,16 @@
 
 Versions follow [semver](https://semver.org). Before 1.0, a minor version can change how things work.
 
+## 0.8.4 · 2026-11-26
+
+Talk becomes an experiment, off until you turn it on, and experiments are back in the ⋯ menu.
+
+- **Experiments in the ⋯ menu.** An **experiments** section under a hairline, one row a flag, **on** or **off** at its end. A click switches it on every open page and saves it in your own `~/.config/labit/settings.json` (`"flags": { "talk": true }`), so it holds in every lab. Only this computer switches them; a project's `labit.json` can't.
+- **Talk is an experiment, off by default.** Off: no `tal(k)` in the bar, and K does nothing. On, as in 0.8.3, plus: a move or a sweep carries on over a pause, the button says "sent ✓" after sending, a tap hint for dictation, and the pill's clock shows in light mode.
+- **labit and colabit never share a page.** A lab takes colabit's tag out of the pages it serves, and colabit stays off beside the lab's widget.
+- **Boards with many pins pan faster in Safari.**
+- **A smaller package:** lab.css ships packed, and server code nothing called is gone.
+
 ## 0.8.3 · 2026-11-25
 
 Walkie-talkie: talk while you point, and the agent gets what you said and where. Plus keys in the menus, a lighter page script and Windows fixes.
