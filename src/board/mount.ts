@@ -549,7 +549,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   const mine = (e: Event) => inside(e, root) || inside(e, handLayer);
   const pts = new Map<number, { x: number; y: number }>();
   // down.hand: this press pans (Space, the middle button, a finger); else (a mouse or pen, the primary button) it draws a box on the
-  // canvas (marq) or, on a frame, moves the picked ones (move), once it has gone 4 px. mid: the middle button (the hand without Space).
+  // canvas (marq) or, on a frame, moves the picked ones (move), once it has gone 4 px. mid: the middle or a side button (the hand without Space).
   type Down = { x: number; y: number; id: string; far: boolean; at: number; t: number; held?: boolean; hand?: boolean; mid?: boolean; shift?: boolean; mode?: 'marq' | 'move'; base?: Set<string>; start?: Map<string, { x: number; y: number }> };
   let down: Down | null = null;
   let holdTimer = 0;
@@ -559,7 +559,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   let tap = { at: 0, x: 0, y: 0 };
   let pinch = 0;
   // On a computer a plain drag draws a box that picks frames, or moves the picked ones when it starts on a frame; the board
-  // pans with Space and a drag (the hand), the middle button, or a trackpad's two fingers / the wheel (Leo, 21 Nov: "Plain
+  // pans with Space and a drag (the hand), the middle or a side button (Leo, 26 Nov), or a trackpad's two fingers / the wheel (Leo, 21 Nov: "Plain
   // drag selects, Space pans"). ⌥ makes a click a pin and a drag an area, the widget's (Leo, 21 Nov: "regular cursor to
   // operate on boards opt to call comment"). A finger pans, and a hold pins.
   let space = false;
@@ -621,7 +621,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     } else {
       // A mouse or pen's primary button picks and moves (Space or another button: the hand); a finger pans.
       const plain = !coarse && e.pointerType !== 'touch' && e.button === 0 && !space;
-      down = { x: e.clientX, y: e.clientY, id: at(e), far: false, at: performance.now(), t: e.timeStamp, hand: !plain, mid: e.pointerType !== 'touch' && e.button === 1, shift: e.shiftKey };
+      down = { x: e.clientX, y: e.clientY, id: at(e), far: false, at: performance.now(), t: e.timeStamp, hand: !plain, mid: e.pointerType !== 'touch' && [1, 3, 4].includes(e.button), shift: e.shiftKey };
       hand();
       clearTimeout(holdTimer);
       if (plain && down.id) find(down.id)?.box.classList.add('down'); // a picture's name shows as the press starts, not on the lift (Leo, 23 Nov: "it appears with delay?")
@@ -765,6 +765,9 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   }, true);
   on('dblclick', (e: MouseEvent) => mine(e) && eat(e), true);
   on('contextmenu', (e: MouseEvent) => mine(e) && e.preventDefault(), true);
+  // A side button's lift is no browser back or forward while the board is open, over any of it: it pans (Leo, 26 Nov:
+  // "mouse side buttons to pan board"). The lift's default is the browser's step, so the lift's is taken (Chrome, Firefox).
+  for (const t of ['pointerup', 'mouseup']) on(t, (e: MouseEvent) => e.button > 2 && e.preventDefault(), true);
   // A mouse or trackpad. Pinch on a trackpad arrives as a wheel with ctrlKey (Chrome, Firefox); ⌘ or Ctrl and a wheel zoom.
   // A wheel over a pin on the board is the board's too: it went to the page behind (Leo, 19 Nov: "scroll inside board
   // working weird"). Only an entered frame scrolls its own page.
@@ -1000,6 +1003,8 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     key: (k: Parameters<typeof press>[0]) => press(k, true),
     /** A press inside an entered frame (its page tells, frame.ts): outside any open comment or the chat, so they close. */
     pressed: () => void boardWidget()?.dismiss?.(),
+    /** A middle or side button dragged in an entered frame (frame.ts): the board pans by those screen px. */
+    pan: (dx: number, dy: number) => go(panBy(cam, dx, dy), true, true),
     frame: (id: string) => find(id)?.frame,
     box: (id: string) => find(id)?.box || null, // a frame's box in the world: what the widget ties a board pin to
     size: (id: string) => { const c = find(id); return c ? { w: c.f.ow || c.f.w, h: c.f.oh || c.f.h } : null; }, // its size in world px, read without laying the page out
