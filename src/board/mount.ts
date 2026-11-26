@@ -131,7 +131,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   let checked = { x: 1e9, y: 1e9, z: 0 }; // the camera at the last wake/cull check
   let still: ReturnType<typeof setTimeout> | undefined;
   let movedAt = -1e9; // when the camera last moved
-  let kept = false; // the person sized the view (overlay.ts keep()): its zoom stays from then on
+  let kept = false; // the person arranged the board: its zoom stays from then on
   // The camera a view left the board at, kept for this board on this page (opts.keep), so reopened it is where it was
   // (Leo, 21 Nov: "closing/opening board drawer should not move zoom/position inside board"). Only once moved by hand.
   const keepCam = () => {
@@ -1130,16 +1130,5 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     for (const c of cards) c.frame?.remove();
     root.replaceChildren();
   };
-  // The box was set to a new size in one step (a view's half and full): drawn now (at the same zoom once kept, below), in the frame that has
-  // the new size, not once the box has rested (the board is in its old place and size for 200 ms, then jumps to its fit).
-  const resized = () => {
-    measure();
-    if (!cards.length) return;
-    if (!moved && !kept) cam = fitAll(boxes(), view); // else the same zoom and place in the view
-    go(cam, false);
-    whole = false; // told as the camera moving
-    cancelAnimationFrame(drawFrame);
-    paintCam();
-  };
-  return { api: boardApi, destroy, measure: () => (measure(), go(cam, false)), resized, keep: () => void (kept = true) };
+  return { api: boardApi, destroy };
 }
