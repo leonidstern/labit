@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { actionItems, seedFrom, SEED } from './actions.ts';
+import { FLAGS, flagDefaults } from './flags.ts';
 import { writeAtomic } from './board.ts';
 
 // The widget's own table (KEYS in src/comments.js), in its order (of two actions on one key the first keeps it), and
@@ -14,7 +15,7 @@ const SHORTCUTS = { toggle: 'm', chat: 't', next: 'w', pause: 'p', slow: 's', dr
 type Kind = 'number' | 'boolean' | 'string';
 // Each setting: its type, its default, and where it may be set (a project can't name you or open your lab to the
 // wifi; your own file can't say which folder or dev server a project uses).
-const SPEC: Record<string, { type: Kind | 'shortcuts' | 'actions'; def: unknown; only?: 'project' | 'personal'; min?: number }> = {
+const SPEC: Record<string, { type: Kind | 'shortcuts' | 'flags' | 'actions'; def: unknown; only?: 'project' | 'personal'; min?: number }> = {
   port: { type: 'number', def: 4400, min: 1 },
   proxy: { type: 'string', def: '', only: 'project' },
   folder: { type: 'string', def: '.', only: 'project' },
@@ -33,6 +34,8 @@ const SPEC: Record<string, { type: Kind | 'shortcuts' | 'actions'; def: unknown;
   shortcuts: { type: 'shortcuts', def: SHORTCUTS },
   // The one list of actions (lib/actions.ts): the comment box's chips, in this order. The project's list wins over yours.
   actions: { type: 'actions', def: SEED },
+  // What is being tried here (lib/flags.ts). Off unless labit.json, your settings or the ⋯ menu's experiments turn one on.
+  flags: { type: 'flags', def: flagDefaults() },
 };
 // The environment variables that set a setting (as before), and how their values read.
 const ENV: Record<string, [string, (v: string) => unknown]> = {
@@ -47,6 +50,7 @@ const ENV: Record<string, [string, (v: string) => unknown]> = {
 type Settings = {
   values: Record<string, any>;
   from: Record<string, string>; // flag, env PORT, labit.json, ~/.config/labit/settings.json, default
+  flagFrom: Record<string, 'project' | 'personal'>; // each flag a file names: the project's (which wins) or yours
   files: { project: string | null; personal: string };
   problems: string[];
 };
@@ -87,6 +91,17 @@ const check = (key: string, v: unknown, file: string, problems: string[]): unkno
     }
     return out;
   }
+  if (s.type === 'flags') {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return bad('must be an object of flag → true or false');
+    const out: Record<string, boolean> = {};
+    for (const [flag, on] of Object.entries(v)) {
+      // A flag that was kept or dropped leaves its name behind in somebody's file: skipped without a word.
+      if (!(flag in FLAGS)) continue;
+      if (typeof on !== 'boolean') bad(`.${flag} must be true or false`);
+      else out[flag] = on;
+    }
+    return out;
+  }
   if (s.type === 'actions') {
     if (!Array.isArray(v)) return bad('must be a list of { "name": "…", "prompt": "…" }');
     return actionItems(v, bad);
@@ -107,10 +122,11 @@ export function loadSettings(here: string, flags: Record<string, unknown> = {}, 
   ];
   const values: Record<string, any> = {};
   const from: Record<string, string> = {};
-  // `flags` is the old experiments switch (gone 20 Nov) and `boards` the boards switch (gone 24 Nov, Leo: "remove from
-  // flag it": boards are always on): they stay in somebody's file, and are skipped without a word.
+  const flagFrom: Settings['flagFrom'] = {};
+  // `boards` is the boards switch (gone 24 Nov, Leo: "remove from flag it": boards are always on): it stays in
+  // somebody's file, and is skipped without a word.
   for (const [file, data] of layers)
-    for (const key of Object.keys(data)) if (!(key in SPEC) && key !== '$schema' && key !== 'flags' && key !== 'boards') problems.push(`${file}: ${key} is not a setting; ignored`);
+    for (const key of Object.keys(data)) if (!(key in SPEC) && key !== '$schema' && key !== 'boards') problems.push(`${file}: ${key} is not a setting; ignored`);
   for (const key of Object.keys(SPEC)) {
     const s = SPEC[key];
     if (flags[key] !== undefined) {
@@ -132,8 +148,9 @@ export function loadSettings(here: string, flags: Record<string, unknown> = {}, 
       }
       const v = check(key, data[key], file, problems);
       if (v === undefined) continue;
-      // Shortcuts add up, one at a time: the project's over yours over the defaults.
-      if (s.type === 'shortcuts') {
+      // Shortcuts and flags add up, one at a time: the project's over yours over the defaults.
+      if (s.type === 'shortcuts' || s.type === 'flags') {
+        if (s.type === 'flags') for (const f of Object.keys(v as object)) flagFrom[f] ??= where;
         values[key] = { ...(v as object), ...values[key] };
         from[key] = from[key] ? `${from[key]} + ${file}` : file;
         continue;
@@ -142,6 +159,7 @@ export function loadSettings(here: string, flags: Record<string, unknown> = {}, 
       from[key] = file;
       break;
     }
+    if (s.type === 'flags' && values[key]) values[key] = { ...flagDefaults(), ...values[key] };
     if (s.type === 'shortcuts' && values[key]) {
       values[key] = { ...SHORTCUTS, ...values[key] };
       const taken = Object.entries(values[key] as Record<string, string>).filter(([, k], i, all) => all.findIndex(([, k2]) => k2 === k) !== i);
@@ -152,7 +170,7 @@ export function loadSettings(here: string, flags: Record<string, unknown> = {}, 
       from[key] = 'default';
     }
   }
-  return { values, from, files, problems };
+  return { values, from, flagFrom, files, problems };
 }
 
 /** The shortcuts that differ from the defaults (what the widget needs to hear). */
@@ -193,6 +211,19 @@ function editPersonal(key: string, edit: (data: Record<string, unknown>) => void
   edit(data);
   writeAtomic(file, JSON.stringify(data, null, 2) + '\n');
   return file;
+}
+
+/** Turns a flag on or off in your own settings file (the experiments section of the ⋯ menu). Off leaves no trace: off
+ *  is the absence of a flag. Returns the file. */
+export function savePersonalFlag(flag: string, on: boolean): string {
+  if (!(flag in FLAGS)) throw new Error(`${flag} is not something being tried now`);
+  return editPersonal('flags', (data) => {
+    const flags = { ...(data.flags && typeof data.flags === 'object' && !Array.isArray(data.flags) ? data.flags : {}) } as Record<string, unknown>;
+    if (on) flags[flag] = true;
+    else delete flags[flag];
+    if (Object.keys(flags).length) data.flags = flags;
+    else delete data.flags;
+  });
 }
 
 /** Sets one setting in your own file, keeping the rest. */

@@ -857,6 +857,52 @@ import { bindKeys } from './widget/keys.ts';
       void switcher().then((m) => m?.openSwitcher());
     });
   }
+  // Experiments (lib/flags.ts; Leo, 26 Nov): what this lab is trying, flag -> { name, on, project }, under a hairline
+  // in the ⋯ menu, one row a flag that switches it, on or off in grey at the row's end. Saved in your own settings
+  // through the lab (POST /_lab/flags), so it holds in every lab you run; one the project's labit.json sets is shown,
+  // not switched, and a guest's page switches nothing. Computers only: talk, the one there now, is.
+  const FLAGS = (() => {
+    try {
+      return JSON.parse(script?.dataset.flags || '{}');
+    } catch {
+      return {};
+    }
+  })();
+  const flag = (name) => FLAGS[name]?.on === true;
+  const FLAGSAPI = script?.dataset.live ? script.dataset.live.replace(/live$/, 'flags') : '';
+  // (A phone: coarse, which is set further down.)
+  const expRows = matchMedia('(pointer: coarse)').matches || globalThis.__LAB_CO__ ? [] : Object.keys(FLAGS).map((name) => {
+    const b = /** @type {HTMLButtonElement} */ (el('button', { type: 'button', role: 'switch', 'data-flag': name }));
+    b.disabled = !adminToken || !FLAGSAPI || Boolean(FLAGS[name].project);
+    if (b.disabled) b.title = FLAGS[name].project ? "set by the project's labit.json" : 'only the computer running the lab switches this';
+    b.addEventListener('click', async (e) => {
+      e.stopPropagation(); // the menu stays open
+      try {
+        const r = await fetch(FLAGSAPI, { method: 'POST', headers: headers(), body: JSON.stringify({ flag: name, on: !flag(name) }) });
+        if (!r.ok) throw new Error(await r.text());
+        S.syncFlags((await r.json()).flags);
+      } catch {
+        say("couldn't switch it: is the lab running?");
+      }
+    });
+    return b;
+  });
+  const expBox = expRows.length ? el('div', { class: 'held' }) : null;
+  expBox?.append(el('div', { class: 'hint-row' }, 'experiments'), ...expRows);
+  const drawFlags = () => {
+    for (const b of expRows) {
+      const on = flag(b.dataset.flag);
+      b.setAttribute('aria-checked', String(on));
+      b.replaceChildren(FLAGS[b.dataset.flag].name, el('kbd', { 'aria-hidden': 'true' }, on ? 'on' : 'off'));
+    }
+  };
+  drawFlags();
+  // The lab's word on which flags are on (the live stream, or the answer to a switch here).
+  S.syncFlags = (/** @type {string[]} */ on) => {
+    for (const [name, f] of Object.entries(FLAGS)) f.on = on.includes(name);
+    drawFlags();
+    render();
+  };
   // The motion part (src/widget/motion.ts, loaded below), once it is: declared here, as the bar reads it.
   /** @type {any} */
   let mo = null;
@@ -882,7 +928,7 @@ import { bindKeys } from './widget/keys.ts';
     return row;
   }), newBoardBtn, ...(coarse ? [] : [boardHeld])];
   function placeBar() {
-    const inMenu = !S.on ? [] : S.menuBoards ? (S.menuRows ??= boardRows()) : [...(labHead ? [labHead, labsBtn] : []), doneBtn, movedBtn, ...(!globalThis.__LAB_CO__ && !S.board && self === top ? [newBoardBtn] : []), ...(globalThis.__LAB_CO__ ? [] : [copyBtn]), ...(coarse && mo ? [motionBtn] : []), toggleBtn, ...(coarse ? [] : [pageHeld]), ...(versionLine ? [versionLine] : [])];
+    const inMenu = !S.on ? [] : S.menuBoards ? (S.menuRows ??= boardRows()) : [...(labHead ? [labHead, labsBtn] : []), doneBtn, movedBtn, ...(!globalThis.__LAB_CO__ && !S.board && self === top ? [newBoardBtn] : []), ...(globalThis.__LAB_CO__ ? [] : [copyBtn]), ...(coarse && mo ? [motionBtn] : []), toggleBtn, ...(expBox ? [expBox] : []), ...(coarse ? [] : [pageHeld]), ...(versionLine ? [versionLine] : [])];
     // In this order every time: a part that came back (hide comments, after showing them again) went to the end, below
     // the version line.
     if (S.on && (inMenu.some((b, i) => moreMenu.children[i] !== b) || moreMenu.children.length !== inMenu.length)) moreMenu.replaceChildren(...inMenu);
@@ -1135,7 +1181,7 @@ import { bindKeys } from './widget/keys.ts';
       el('kbd', { 'aria-hidden': 'true' }, KEYS.toggle),
     );
     toggleBtn.classList.toggle('secondary', S.on);
-    walkieBtn.hidden = !S.on || coarse || Boolean(globalThis.__LAB_CO__);
+    walkieBtn.hidden = !S.on || coarse || Boolean(globalThis.__LAB_CO__) || !flag('talk'); // an experiment: off unless turned on (⋯ → experiments)
     // "talk", its key marked in it: tal(k) (Leo, 25 Nov: shorter than walkie-talkie).
     if (!walkieBtn.firstChild) walkieBtn.append(keyLabel('talk', KEYS.walkie));
     host.toggleAttribute('data-labs', Boolean(!coarse && S.labsOpen)); // the page dims behind labs & pages (the widget's .scrim)

@@ -27,7 +27,8 @@ import { LEAN_SKIP, pagePath, sameKey } from './lib/comments-api.mjs';
 import { cut } from './lib/cut.mjs';
 import { sourceLines } from './lib/source-line.mjs';
 import { isNavigation } from './lib/pageload.ts';
-import { loadSettings, changedShortcuts, seedActions, savePersonal } from './lib/settings.ts';
+import { loadSettings, changedShortcuts, seedActions, savePersonal, savePersonalFlag } from './lib/settings.ts';
+import { FLAGS, flagsOn } from './lib/flags.ts';
 import { runCommand } from './lib/commands.ts';
 import { findDevServer as find, tilde, othersNote } from './lib/devserver.ts';
 import * as B from './lib/board.ts';
@@ -163,6 +164,7 @@ if (pos[0] === 'settings') {
   const changed = changedShortcuts(SET.shortcuts);
   const show = (k, v) =>
     k === 'shortcuts' ? (Object.keys(changed).length ? Object.entries(changed).map(([a, key]) => `${a} ${key}`).join(', ') : 'the defaults')
+      : k === 'flags' ? (flagsOn(v).map((f) => `${f} (${SETTINGS.flagFrom[f] === 'project' ? 'labit.json' : 'yours'})`).join(', ') || 'none on')
       : k === 'actions' ? v.map((a) => a.name).join(' ') || '(none)'
       : String(v === '' ? '(none)' : v);
   const home = (f) => f.replace(os.homedir(), '~');
@@ -1399,7 +1401,7 @@ stateParts.handed = () => {
 const saveHanded = saveState;
 if (Object.keys(handoff).length) saveHanded();
 for (const [id, mark] of Object.entries(isObj(labState.handed) ? labState.handed : {})) if (Array.isArray(mark)) handoff[id] = mark;
-const state = (local) => JSON.stringify({ ...version, labit: VERSION, reads: readsRev, mode, heard: heard(), silent: silentNow(), session: session && (local ? session : { name: session.name, agent: session.agent, model: session.model }) });
+const state = (local) => JSON.stringify({ ...version, labit: VERSION, flags: flagsOn(SET.flags), reads: readsRev, mode, heard: heard(), silent: silentNow(), session: session && (local ? session : { name: session.name, agent: session.agent, model: session.model }) });
 const broadcast = () => {
   for (const c of clients) c.res.write(`data: ${state(c.local)}\n\n`);
 };
@@ -2170,6 +2172,13 @@ const KEYS_ATTR = Object.keys(changedShortcuts(SET.shortcuts)).length ? ` data-k
 // Your list of actions (settings.json `actions`, lib/actions.ts): the chips of the comment box. Names
 // and prompts are yours, so the attribute is escaped (the tag can't be talked out of being a tag).
 const actionsAttr = () => ` data-actions='${JSON.stringify(SET.actions).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/'/g, '&#39;')}'`;
+// What is being tried in this lab (lib/flags.ts): every flag, its state, and whether the project's labit.json sets it
+// (then the ⋯ menu's experiments section shows it, not switched: the project wins over your own settings). Escaped as
+// the actions are, so the tag can't be talked out of being a tag.
+const flagsAttr = () => {
+  const json = JSON.stringify(Object.fromEntries(Object.entries(FLAGS).map(([k, f]) => [k, { name: f.name, on: SET.flags[k] === true, ...(SETTINGS.flagFrom[k] === 'project' ? { project: true } : {}) }])));
+  return ` data-flags='${json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/'/g, '&#39;')}'`;
+};
 // Which labit this lab runs, for the foot of the ⋯ menu: the version, and what a local edge build merged on top
 // of main (EDGE, from a script that builds one, e.g. "main ab303fa").
 const LABIT_ATTR = ` data-labit="${`labit ${VERSION}${EDGE ? ` · edge: ${EDGE}` : ''}`.replace(/[<>&'"]/g, '')}"`;
@@ -2183,7 +2192,7 @@ const widget = (page, admin, me = '', framed = false, req = null) => {
   if (req && !framed && isNavigation(req.headers)) setErrors(page, deviceOf(req), []);
   return `<script src="/_lab/comments.js" data-live="/_lab/live" data-on="1" data-page="${page}" data-version="${version.files}" data-hot="${version.hot || 0}" data-lab="${version.lab}" data-widget="${version.widget}" data-schema="${SCHEMA}"` +
   `${me ? ` data-me="${me.replace(/[<>&'"]/g, '')}"` : ''}` +
-  `${KEYS_ATTR}${actionsAttr()}${LABIT_ATTR}${updateAttr()}${PROXY ? ' data-proxied="1"' : ''} data-lab-name="${LAB_NAME.replace(/[<>&'"]/g, '')}"` +
+  `${KEYS_ATTR}${actionsAttr()}${flagsAttr()}${LABIT_ATTR}${updateAttr()}${PROXY ? ' data-proxied="1"' : ''} data-lab-name="${LAB_NAME.replace(/[<>&'"]/g, '')}"` +
   `${admin ? ` data-admin="${TOKEN}"` : ''} defer></script>\n`;
 };
 // Before the last </body>, unless that one sits inside a script (a template string); then at the end.
@@ -2705,6 +2714,27 @@ const handler = async (req, res) => {
       if (body.page) q.set('to', landing('/' + String(body.page).replace(/^\/+/, '')));
       const tail = q.size ? `?${q}` : '';
       return answer(res, { name: who, links: hosts.map((h) => `http://${h}:${PORT}/_lab/j/${code}${tail}`) });
+    }
+    // The ⋯ menu's experiments: a flag turned on or off by the person at this computer (with the lab's key), saved in
+    // their own settings file so it holds in every lab they run. A flag the project's labit.json sets is the project's:
+    // refused here. Every open page hears the new state on the live stream.
+    if (pathname === '/_lab/flags' && req.method === 'POST') {
+      if (!isLoopback(req) || !keyOk(req)) return res.writeHead(403).end('forbidden');
+      const { flag, on } = await sent(req);
+      if (typeof flag !== 'string' || !Object.hasOwn(FLAGS, flag) || typeof on !== 'boolean') return res.writeHead(400).end('flag: one of ' + Object.keys(FLAGS).join(', ') + '; on: true or false');
+      if (SETTINGS.flagFrom[flag] === 'project') return res.writeHead(409).end(`${flag} is set by the project's labit.json`);
+      let file;
+      try {
+        file = savePersonalFlag(flag, on);
+      } catch (e) {
+        return res.writeHead(500).end(`could not save it: ${e.message}`);
+      }
+      SET.flags = { ...SET.flags, [flag]: on };
+      if (on) SETTINGS.flagFrom[flag] = 'personal';
+      else delete SETTINGS.flagFrom[flag];
+      console.log(`[lab] experiment ${flag}: ${on ? 'on' : 'off'} (${file.replace(os.homedir(), '~')})`);
+      broadcast();
+      return answer(res, { flags: flagsOn(SET.flags) });
     }
     // The widget says who you are now, so the next lab on this computer starts out knowing. From this computer only:
     // a guest names themself in their own browser, and never renames this computer.

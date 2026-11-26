@@ -257,10 +257,8 @@ test('a settings.json of broken types: each one is said and skipped, and the lab
   const said = lab.out().split('\n').filter((l) => l.startsWith('[labit] ') && /ignored/.test(l));
   // (port, open, folder, batchSeconds and updateCheck are set by this start's own flags and variables, which win: the file's are not looked at)
   // (actions that are not a list are the form of before: a start writes today's list in their place, by design)
-  // (flags is the old experiments key: still in somebody's file, skipped without a word)
-  const given = ['port', 'open', 'folder', 'batchSeconds', 'updateCheck', 'actions', 'flags'];
+  const given = ['port', 'open', 'folder', 'batchSeconds', 'updateCheck', 'actions'];
   for (const key of Object.keys(BROKEN_TYPES).filter((k) => !given.includes(k))) assert.ok(said.some((l) => l.includes(`: ${key} `)), `${key} is said:\n${said.join('\n')}`);
-  assert.ok(!said.some((l) => l.includes(': flags ')), `flags is not said:\n${said.join('\n')}`);
   assert.match((await raw(port, '/')).text, /<h1>index<\/h1>/);
   assert.equal((await raw(port, '/_lab/pages')).json.wifi, false);
   assert.equal((await raw(port, '/', { to: '127.0.0.1' })).status, 200);
@@ -275,7 +273,7 @@ test('a settings.json of broken types: each one is said and skipped, and the lab
   const shown = await run(dir, ['settings'], { XDG_CONFIG_HOME: cfg, LAB_SETTLE_MS: '', LABIT_NO_UPDATE_CHECK: '' });
   assert.equal(shown.code, 1, 'labit settings fails on a problem');
   assert.equal(trace(shown.out), '');
-  for (const key of Object.keys(BROKEN_TYPES).filter((k) => k !== 'actions' && k !== 'name' && k !== 'flags')) assert.match(shown.out, new RegExp(`^\\[labit\\] .*settings\\.json: ${key} .*ignored$`, 'm'), key);
+  for (const key of Object.keys(BROKEN_TYPES).filter((k) => k !== 'actions' && k !== 'name')) assert.match(shown.out, new RegExp(`^\\[labit\\] .*settings\\.json: ${key} .*ignored$`, 'm'), key);
   assert.match(shown.out, /^port\s+4400\s+default$/m);
   assert.match(shown.out, /^name\s+Leo\s+your settings$/m, 'the name given on the page is the one in force');
   assert.match(shown.out, /^batchSeconds\s+2\s+default$/m);

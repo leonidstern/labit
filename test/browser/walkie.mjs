@@ -10,7 +10,8 @@ const pw = playwright();
 const DIR = fs.realpathSync(tmp('labit-walkie-'));
 const PORT = claimPort(8360, 40);
 const B = `http://localhost:${PORT}`;
-fs.writeFileSync(path.join(DIR, 'labit.json'), JSON.stringify({ port: PORT }));
+// Talk is an experiment (lib/flags.ts), off by default: this project turns it on (test/browser/flags.mjs checks the switch).
+fs.writeFileSync(path.join(DIR, 'labit.json'), JSON.stringify({ port: PORT, flags: { talk: true } }));
 fs.writeFileSync(path.join(DIR, 'walk.html'), `<!doctype html><meta charset="utf-8"><title>t</title><link rel="stylesheet" href="/_lab/lab.css">
 <body><h1>Orders</h1><p>Some words to read.</p>
 <button id="a" style="margin:40px;padding:20px 40px" onclick="window.pressed = (window.pressed || 0) + 1">Export</button>

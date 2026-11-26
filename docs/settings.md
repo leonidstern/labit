@@ -78,6 +78,7 @@ Your `~/.config/labit/settings.json`:
 | `pagesFolder` | `~/lab-pages` | | The one lab for pages that belong to no project (tries, demos, options). Agents add a page there, in a folder named for its topic, instead of starting a new lab. | yours |
 | `shortcuts` | below | | Keys for the page. | both |
 | `actions` | seeded once | | The one list of actions: the chips of the comment box, in order. See **Actions** below. | both |
+| `flags` | everything off | the ⋯ menu's **experiments** | What this lab is trying: `{ "<flag>": true }`. See **Experiments** below. | both |
 
 "Project" settings belong to a project, so they're only read from `labit.json`; "yours" only from your own file (a
 project you clone can't rename you or open your lab to the network); "both" from either, the project's first.
@@ -110,6 +111,27 @@ characters at most) and a `prompt` (the full text your agent gets):
   said when labit starts and left out; the rest still counts.
 - On selected words the row stays **rewrite · cut · go**. ⌥ + 1 to 4 run the chips in the order they show.
 
+## Experiments
+
+A new instrument arrives as a flag: off unless you turn it on, tried in a real lab, then kept (the flag goes away and it
+is simply labit) or dropped, and the code goes with it.
+
+```json
+{ "flags": { "talk": true } }
+```
+
+The easy way is the page: the ⋯ menu has an **experiments** section under a hairline, one row a flag, reading **on** or
+**off** at its end. A click switches it at once, with no restart, on every open page of the lab, and saves it in your
+own `~/.config/labit/settings.json`, so it holds in every lab you run. Only the computer running the lab can switch
+them: a guest on your wifi sees the rows greyed out. A flag the project's `labit.json` sets wins over yours, on or off:
+the menu shows that row greyed. `labit settings` lists which are on and whose each is: `flags  talk (yours)`.
+
+Being tried now:
+
+- `talk`: talk while you point (`tal(k)` in the bar, or K). Off, the bar has no talk and K does nothing. Computers only.
+
+A flag nobody is trying any more (it was kept, or dropped) is skipped without a word.
+
 ## Shortcuts
 
 Each key is one letter or digit. You only list the ones you change; the others keep their default. A project's keys
@@ -125,7 +147,7 @@ win over yours, key by key.
 | `draw` | `d` | Held while you drag: draw a comment (a circle, an arrow, an underline…); the agent is told what it reads as |
 | `done` | `e` | Tapped: hide or show done threads (shown, faded, at first). With a thread open: resolve or reopen it |
 | `reply` | `r` | With a thread open: type a reply |
-| `walkie` | `k` | Talk while you point (your computer's own dictation types the words); ⌘↵ sends the walk to the chat, Esc drops it |
+| `walkie` | `k` | Talk while you point (your computer's own dictation types the words); ⌘↵ sends the walk to the chat, Esc drops it. An experiment, off until you turn on **talk** (see **Experiments**): off, K does nothing |
 
 Letters follow the key's place on non-Latin layouts (the T key is T in Russian too), and digits work with Shift or
 on AZERTY. The page shows your keys: the chat button reads "chat (x)" when `chat` is `x`.
