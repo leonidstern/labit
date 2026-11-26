@@ -127,6 +127,8 @@ const moving = () => {
 // and ran a frame late, so the pins swam behind the frames; Leo, 19 Nov: "zoom feels weird, slow"). An open card or a
 // new comment's box on the board moves by as much as its pin, as it is (what is typed in it stays). Pins the browser
 // holds move by themselves. False when it can't (a pin being dragged): the caller draws everything again.
+const zoneTo = (z: HTMLElement | null, b: { left: number; top: number; width: number; height: number }) =>
+  z && Object.assign(z.style, { left: `${b.left}px`, top: `${b.top}px`, width: `${b.width}px`, height: `${b.height}px` });
 const followCamera = () => {
   if (S.grabbing) return false;
   // Only what is held to the board (onBoard: fixed, placed by its pin). A phone's sheet is not: it sits on the screen's
@@ -155,6 +157,9 @@ const followCamera = () => {
     pin.style.left = `${x}px`;
     pin.style.top = `${y}px`;
     // A drawing is as big as the area it covers: its lines go with the zoom (Leo, 21 Nov: "zooming board and drawings doesnt work").
+    // An area's outline, shown while its pin is open or pointed at, goes with the zoom too (Leo, 26 Nov: "zoom with selection
+    // pin works weird": it kept its size on the screen while the frame under it grew or shrank).
+    if (at.zone && (S.openId === id || W.pinData.get(pin)?.hot)) zoneTo(W.layer.querySelector('.zone.saved'), at.zone);
     const svg = at.zone && (pin.querySelector(':scope > svg.ink') as SVGElement | null);
     if (svg && at.zone) [svg.style.width, svg.style.height] = [`${at.zone.width}px`, `${at.zone.height}px`];
     pin.style.visibility = at.clipped && S.openId !== id ? 'hidden' : '';
@@ -166,6 +171,7 @@ const followCamera = () => {
       const [dx, dy] = [at.left - scrollX - parseFloat(pin.style.left), at.top - scrollY - parseFloat(pin.style.top)];
       by(pin, dx, dy);
       by(W.layer.querySelector('.float:not(.out)') as HTMLElement | null, dx, dy);
+      if (at.zone) zoneTo(W.layer.querySelector('.zone.draft'), at.zone); // a new area's outline, as its comment box is written
     }
   }
   return true;
