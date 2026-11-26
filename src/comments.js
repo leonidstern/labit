@@ -890,7 +890,10 @@ import { bindKeys } from './widget/keys.ts';
   S.syncFlags = (/** @type {string[]} */ on, first = false) => {
     if (!first && Object.keys(FLAGS).every((n) => FLAGS[n] === on.includes(n))) return;
     for (const n in FLAGS) FLAGS[n] = on.includes(n);
-    for (const b of expRows) b.setAttribute('aria-checked', String(flag(b.dataset.flag))), b.replaceChildren(b.dataset.flag, el('kbd', { 'aria-hidden': 'true' }, flag(b.dataset.flag) ? 'on' : 'off'));
+    for (const b of expRows) {
+      b.setAttribute('aria-checked', String(flag(b.dataset.flag)));
+      b.replaceChildren(b.dataset.flag, el('kbd', { 'aria-hidden': 'true' }, flag(b.dataset.flag) ? 'on' : 'off'));
+    }
     if (!first) render();
   };
   S.syncFlags(Object.keys(FLAGS).filter(flag), true);
