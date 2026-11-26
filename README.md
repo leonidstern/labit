@@ -41,7 +41,7 @@ codex plugin marketplace add leonidstern/labit
 mkdir -p .opencode/plugins && curl -fsSL https://raw.githubusercontent.com/leonidstern/labit/main/hooks/agent.mjs -o .opencode/plugins/labit.js
 ```
 
-Each gives your agent the skill and two hooks, with no MCP: while the session works, the pins it claimed show a live "session activity" line, and a pin that lands after it stopped listening comes in as its next turn (Cursor when the turn ends, opencode when the session goes idle, Codex when the turn ends or with your next message, since Codex can't be woken while idle). Without the hooks the agent still answers with `wait` and `reply`, as below.
+Each gives your agent the skill and two hooks, with no MCP: pins it works on show a live activity line, and a pin it missed comes in as its next turn (Codex can't be woken while idle). Without the hooks the agent still answers with `wait` and `reply`, as below.
 
 **Any other agent:** tell it to run these in your project.
 
@@ -69,12 +69,10 @@ A lab for the people you work with, on your own Vercel: one address, a path per 
 - Settings (port, your dev server, keys, the quick-action buttons of the comment box, how long the lab waits…): `labit.json` in the project and `~/.config/labit/settings.json` for you (the `actions` list is set only there, not on the page). `labit settings` shows them all; [docs/settings.md](docs/settings.md) explains each.
 - Signing in through the lab: an app whose sign-in sends you back to an allowed address (OAuth, "Sign in with…") only knows the dev server's port, so the round trip from the lab's port fails. Sign in on the dev server's own address first (`localhost:3000`): browsers share cookies across ports on `localhost`, so the lab's page is signed in too. Or add the lab's address (`http://localhost:4400/…`) to the app's allowed callback URLs.
 - Git Bash on Windows turns `--page /spot/trade` into `C:/Program Files/Git/spot/trade`; labit stops and says so. Write the page without its first slash (`--page spot/trade`), or set `MSYS_NO_PATHCONV=1`.
-- A pin on a React, Vue, Next or Astro dev page also says which component drew it (`component:`) and where (`written at:`): React 18 file and line; Vue the file, no line; Next none (its built chunks are not source); Astro the file and line of what its compiler wrote. The agent never gets a guessed one.
+- A pin on a React, Vue, Next or Astro dev page also names the component that drew it and, where the framework tells, its file and line, never a guess.
 - Comments stay in `.lab/` in your project. Add it to `.gitignore`. `labit gc` lists every lab folder you have used, its `.lab` size and what could go; it only reports.
 - A click on the page pins a comment; the page's own links and buttons keep their clicks. Hold ⌥ to pin on anything, controls included.
 - No dependencies, Node 22+. `--help` lists everything else.
-
-Shared labs on a domain (comments from people you send a link to) come later.
 
 ## License
 
