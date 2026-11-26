@@ -108,6 +108,9 @@ button.pin.in::before { content: ''; position: absolute; inset: 0; border-radius
 /* Statuses. A pin: your initial, the stroke while the agent is on it, then a green tick. A "go" comment is a pin like any other. */
 button.pin.done { color: var(--_green-fg); }
 .pin:is(.resolved, .moved) { opacity: .5; } /* a done pin is as big as an open one, only faded (Leo, 18 Nov) */
+/* …and see-through: no white disc of its own over the page or a board's frame, only its edge and tick (Leo, 26 Nov: a done
+   pin on a board "white", "should be transparent"). Pointed at or open it is a plain pin again. */
+button.pin.resolved:not(:hover, .open) { background: transparent; box-shadow: 0 0 0 1px var(--_edge); }
 .pin.moved:not(.resolved) { scale: .8; }
 .pin.unsure:not(.resolved) { outline: 1.5px dashed var(--_amber); outline-offset: 2px; } /* a guess: look-alikes, or its words changed */
 /* The agent's ring sits on the same edge: both at once read as one half-amber, half-green ring, a loader that looks

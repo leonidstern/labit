@@ -61,9 +61,19 @@ try {
       const sent = posts[0];
       check(eng, 'a pin on frame b posts to the page with the board anchor', sent?.page === '/canvas' && sent.anchor?.kind === 'board' && sent.anchor.board === 'pricing' && sent.anchor.frame === 'b' && Math.abs(sent.anchor.fx - 60 / (b.w / 820)) < 3, JSON.stringify(sent));
       await sleep(300);
-      // the whole window over the page, with no half and no edge to drag (Leo, 23 Nov, #422)
       await p.keyboard.press('Escape'); // the draft (if any) goes first
       await sleep(200);
+      // A chat message sent with the board open says which board (Leo, 26 Nov: the agent read it as about the page alone).
+      await p.evaluate(() => [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.chat-btn')).shadowRoot.querySelector('.chat-btn').click());
+      await sleep(500);
+      await p.keyboard.type('the frames look alike');
+      await p.keyboard.press('Enter');
+      for (let i = 0; i < 30 && posts.length < 2; i++) await sleep(100);
+      const said = posts.find((x) => x.text === 'the frames look alike');
+      check(eng, 'a chat message sent with the board open names the board', said?.anchor?.kind === 'page' && said.anchor.board === 'pricing', JSON.stringify(said?.anchor));
+      await p.keyboard.press('Escape'); // the chat closes
+      await sleep(300);
+      // the whole window over the page, with no half and no edge to drag (Leo, 23 Nov, #422)
       const whole = await p.evaluate(() => { const v = document.querySelector('[data-lab-board-view]'); const r = v.getBoundingClientRect(); return { h: r.height, top: r.top, size: Boolean(v.shadowRoot.querySelector('.bv-size, .bv-grip')), back: v.shadowRoot.querySelector('.bv-close')?.textContent }; });
       check(eng, 'a board opens over the whole window, with back and no size controls', Math.abs(whole.h - 800) < 4 && whole.top === 0 && !whole.size && /back/.test(whole.back || ''), JSON.stringify(whole));
       await p.click('[data-lab-board-view] .bv-close');

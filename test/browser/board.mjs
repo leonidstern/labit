@@ -41,7 +41,10 @@ try {
       const inner = await p.evaluate(() => [...document.querySelector('[data-lab-board-view]').shadowRoot.querySelectorAll('iframe')].map((f) => f.contentDocument?.querySelectorAll('[data-lab-comments]').length));
       check(eng, 'no frame has a widget in it', inner.every((n) => n === 0), JSON.stringify(inner));
       const titleCard = await p.evaluate(() => [...document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelectorAll('#lab-board .f')].map((f) => f.querySelector('.c')?.textContent).filter(Boolean));
-      check(eng, 'a frame not alive is a title card: label, size, no count', titleCard.length === 2 && titleCard.every((t) => /\/pricing/.test(t) && /300 × 300/.test(t) && !/comment|pin|\d+ open/i.test(t)), JSON.stringify(titleCard));
+      check(eng, 'a frame not alive is a title card: its name, no size, no count', titleCard.length === 2 && titleCard.every((t) => /\/pricing/.test(t) && !/×/.test(t) && !/comment|pin|\d+ open/i.test(t)), JSON.stringify(titleCard));
+      // A page frame's name shows right away, with no size (Leo, 26 Nov: "show frame names right away, their resolution no needed to show at all").
+      const names = await p.evaluate(() => [...document.querySelector('[data-lab-board-view]').shadowRoot.querySelectorAll('#lab-board .f .t')].map((t) => [t.textContent, getComputedStyle(t).visibility]));
+      check(eng, 'every page frame shows its name, no size', names.length === 10 && names.every(([t, v]) => t === '/pricing' && v === 'visible'), JSON.stringify(names.slice(0, 3)));
       // ----- inputs
       const c0 = await cam();
       await p.mouse.move(600, 400);
