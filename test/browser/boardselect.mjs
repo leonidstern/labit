@@ -188,6 +188,45 @@ try {
       await sleep(250);
       const h2 = await cam();
       check(eng, 'the middle button drags the board too, with the hand, and picks nothing', Math.abs(h2.x - h1.x) > 20 && (await picked()) === '' && grabbing && places('sel') === moved, JSON.stringify([h1, h2, grabbing]));
+      // A side button (back, forward) drags it too, and its lift steps no page back (Leo, 26 Nov: "mouse side buttons to pan
+      // board"). Playwright's mouse has no side buttons: Chromium's own input does.
+      const xb = eng === 'chromium' ? await ctx.newCDPSession(p) : null;
+      if (xb) {
+        const url = p.url();
+        await p.evaluate(() => { history.pushState(null, '', location.href); addEventListener('popstate', () => (window.__steps = (window.__steps || 0) + 1)); }); // a step back to take
+        for (const button of ['back', 'forward']) {
+          const b0 = await cam();
+          const at = (type, x, y, buttons) => xb.send('Input.dispatchMouseEvent', { type, x, y, button, buttons, clickCount: 1 });
+          const bits = button === 'back' ? 8 : 16;
+          await at('mousePressed', 300, 600, bits);
+          for (let i = 1; i <= 6; i++) await at('mouseMoved', 300 + i * 10, 600 + i * 6, bits);
+          const hand = await p.evaluate((r) => document.querySelector(r).shadowRoot.querySelector('#lab-board').classList.contains('grabbing'), root);
+          check(eng, `the ${button} button shows the hand while it drags, as the middle one does`, hand);
+          await at('mouseReleased', 360, 636, 0);
+          await sleep(400);
+          const b1 = await cam();
+          check(eng, `the ${button} button drags the board, picks nothing and steps no page ${button}`, Math.abs(b1.x - b0.x) > 20 && (await picked()) === '' && p.url() === url && !(await p.evaluate(() => window.__steps)) && places('sel') === moved, JSON.stringify([b0, b1, p.url()]));
+        }
+        // In a frame opened to use it (a double-click), the middle and side buttons pan the board as well, and step nowhere.
+        const F = await rect('c');
+        await p.mouse.dblclick((F.x + 80), F.y + 200);
+        await p.waitForFunction((r) => document.querySelector(r).shadowRoot.querySelector('#lab-board .f.in'), root, { timeout: 4000 });
+        await sleep(300);
+        for (const [button, bits] of [['middle', 4], ['back', 8], ['forward', 16]]) {
+          const b0 = await cam();
+          const at = (type, x, y, buttons) => xb.send('Input.dispatchMouseEvent', { type, x, y, button, buttons, clickCount: 1 });
+          await at('mousePressed', (F.x + 80), F.y + 200, bits);
+          for (let i = 1; i <= 6; i++) await at('mouseMoved', (F.x + 80) - i * 10, F.y + 200 - i * 6, bits);
+          const hand = await p.frames().find((f) => f.name().startsWith('lab:c'))?.evaluate(() => getComputedStyle(document.documentElement).cursor);
+          check(eng, `in an opened frame the ${button} button shows the hand while it drags`, hand === 'grabbing', hand);
+          await at('mouseReleased', (F.x + 80) - 60, F.y + 164, 0);
+          await sleep(400);
+          const b1 = await cam();
+          check(eng, `in an opened frame the ${button} button pans the board and steps no page`, Math.hypot(b1.x - b0.x, b1.y - b0.y) > 20 && p.url() === url && !(await p.evaluate(() => window.__steps)), JSON.stringify([b0, b1, p.url()]));
+        }
+        await p.keyboard.press('Escape');
+        await sleep(300);
+      }
       await p.mouse.move(600, 600);
       await p.mouse.wheel(0, 100);
       await sleep(250);

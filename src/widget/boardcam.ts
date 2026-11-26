@@ -10,15 +10,27 @@ let W: any;
 let S: any; // the widget's state (W.S), read once at startup
 // A board in this page (src/board/overlay.ts, loaded when one is opened): its link, the address's #board=<name> (a
 // reload, a forward) or a board pin picked in the list opens it. Closing it lets go of a board pin that was open.
+// The host's data-board hides the page's pins (styles.css, .onp): set here from the moment it is asked for, so none
+// shows while its script loads; the view keeps it while it is open (overlay.ts).
+const board = (on: boolean) => W.host.toggleAttribute('data-board', on);
+let asked = false;
+/** A press on what opens a board (its link, its row in the bar): the page's pins go as it goes down, not after the
+ * click a press later (Leo, 26 Nov: "disappering can be even faster?"); back if it opened nothing (let go elsewhere). */
+export const pressBoard = () => {
+  if (globalThis.__LAB_CO__ || W.host.hasAttribute('data-board')) return;
+  asked = false;
+  board(true);
+  void W.part('boardview').catch(() => {}); // fetched while the button is down: the board comes up at the click
+  addEventListener('pointerup', () => setTimeout(() => asked || board(false), 60), { once: true });
+};
 export const showBoard = (name: string, of = '', push = true) => globalThis.__LAB_CO__ ? undefined :
-  W.part('boardview').then((m) => (W.host.setAttribute('data-board', ''), m.show(name, { page: S.page, of, push, onClose: () => {
-    W.host.removeAttribute('data-board');
+  ((asked = true), board(true), W.part('boardview').then((m) => m.show(name, { page: S.page, of, push, onClose: () => {
     sections(name);
     const open = S.comments.find((c) => c.id === S.openId);
     if (open?.anchor?.kind === 'board') S.openId = null;
     if (S.draft?.anchor?.kind === 'board') S.draft = null;
     W.render();
-  } })), () => W.say("the board couldn't load"));
+  } }), () => (board(false), W.say("the board couldn't load"))));
 /** A board pin taken back (undo, ⌘Z): its board went with it, so it is no longer one, and its view closes if open. */
 export const pinBoardGone = (id: string) => {
   if (globalThis.__LAB_CO__) return;
@@ -176,7 +188,8 @@ export function bindBoardCam(w: unknown) {
   addEventListener('lab-board-moved', (e) => {
     const d = (e as CustomEvent).detail;
     if (!S.on) return;
-    // The camera alone: no redraw (the page's own pins are all under the view, hidden).
+    // The camera alone: no redraw. (The page's own pins are hidden under the view all at once, by the host's
+    // data-board: styles.css, .onp.)
     if (d?.camera && followCamera()) return;
     S.moveFrame ||= requestAnimationFrame(() => ((S.moveFrame = 0), W.render()));
   });
