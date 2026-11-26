@@ -181,14 +181,20 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
   // ---------- labit update: this folder's lab moves onto the newer release its ⋯ menu offers ----------
   // The person pressed update (an "action: update labit to X" pin): this prints what changed, for the agent to say in
   // its reply, and the lab hands over to npx at that version on the same folder and port.
-  if (pos[0] === 'update') {
+  // `use`: this folder's lab starts again on the build this command runs from (lab: action use).
+  if (pos[0] === 'update' || pos[0] === 'use') {
     const lab = myLab();
     const res = await fetch(`http://localhost:${lab.server.port}/_lab/labs`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-lab-admin': lab.server.token },
-      body: JSON.stringify({ action: 'update', port: lab.server.port }),
+      body: JSON.stringify({ action: pos[0], port: lab.server.port, entry: path.resolve(process.argv[1]) }),
     }).catch(() => null);
     if (!res) die(`The lab server for ${lab.dir} isn't running.`);
+    if (pos[0] === 'use') {
+      if (!res.ok) die(`The lab didn't move`);
+      console.log(`Moving: same port, comments and listener.`);
+      process.exit(0);
+    }
     if (res.status === 409) die('This lab is on the newest labit: nothing to update.');
     if (!res.ok) die(`The lab didn't update: ${res.status} ${await res.text()}`);
     const { version, notes } = await res.json();
