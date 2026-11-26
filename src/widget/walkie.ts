@@ -774,23 +774,15 @@ function cut() {
   return fin;
 }
 
-// "sent ✓" on the bar's talk button for a moment, no line over the bar (Leo, 25 Nov); the button keeps its width.
-let back = 0;
-let was: Node[] | null = null;
+// "sent ✓" on the bar's talk button for a moment, no line over the bar (Leo, 25 Nov); as wide as it was, so the bar
+// doesn't move (the longer word takes some of the button's own padding).
 function sent() {
   const b = W.root.querySelector('.walkie-btn') as HTMLElement | null;
-  if (!b) return;
-  was ??= [...b.childNodes];
-  // as wide as it was (the bar doesn't move): the longer word takes some of the button's own padding
-  if (!b.style.width) b.style.width = `${b.getBoundingClientRect().width}px`;
-  Object.assign(b.style, { paddingInline: '0', justifyContent: 'center' });
+  if (!b || b.style.width) return; // already saying it
+  const was = [...b.childNodes];
+  b.style.cssText = `width:${b.getBoundingClientRect().width}px;padding:0;justify-content:center`;
   b.replaceChildren('sent ✓');
-  clearTimeout(back);
-  back = window.setTimeout(() => {
-    b.replaceChildren(...(was || []));
-    b.style.width = b.style.paddingInline = b.style.justifyContent = '';
-    was = null;
-  }, 1800);
+  setTimeout(() => (b.replaceChildren(...was), (b.style.cssText = '')), 1800);
 }
 
 // The whole walk goes to the page's chat as one message: each part with its spot (words + selector).
