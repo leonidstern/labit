@@ -2,7 +2,7 @@
 // words a person would leave on any page, so the same comments can be compared with comments left elsewhere (an
 // Artifact's comments). Saves the agent text a wait hands over to out/<id>.typed.txt.
 //   NODE_PATH=<folder with playwright-core>/node_modules node bench/drawings/typed.mjs
-import { cpSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
@@ -30,22 +30,30 @@ export const WORDS = {
   'arrow-li': 'move this into the Team plan',
   'circle-price': 'is this right?',
 };
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  // Something already on the port would answer the probe below in place of this lab.
+  if (await fetch(`http://localhost:${PORT}/`).then(() => true, () => false)) {
+    console.error(`port ${PORT} is taken: stop what runs there first`);
+    process.exit(1);
+  }
   rmSync(SITE, { recursive: true, force: true });
   mkdirSync(SITE, { recursive: true });
   for (const f of ['pricing.html', 'site.css']) cpSync(join(HERE, f), join(SITE, f));
   const lab = spawn('node', [join(ROOT, 'local.mjs'), '.', '--port', String(PORT), '--no-open', '--new'], { cwd: SITE, stdio: 'ignore' });
   process.on('exit', () => lab.kill());
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 40 && lab.exitCode === null; i++) {
     try {
       if ((await fetch(`http://localhost:${PORT}/pricing`)).ok) break;
     } catch {}
     await new Promise((r) => setTimeout(r, 250));
   }
+  if (lab.exitCode !== null) { console.error(`the lab exited (${lab.exitCode})`); process.exit(1); }
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
-  await page.addInitScript(() => localStorage.setItem('lab-name', 'leo'));
+  // The arrow mode: an Option-click pins there (in the comment mode it is the page's own click).
+  await page.addInitScript(() => { localStorage.setItem('lab-name', 'leo'); localStorage.setItem('lab-on', '1'); localStorage.setItem('lab-mode', 'use'); });
   const seen = new Set();
+  let missing = 0;
   for (const s of SCENARIOS) {
     await page.goto(`http://localhost:${PORT}/pricing`);
     await page.waitForTimeout(1200);
@@ -63,15 +71,20 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     await page.keyboard.up('Alt');
     await page.waitForTimeout(400);
     await page.keyboard.type(WORDS[s.id], { delay: 10 });
+    const saved = page.waitForResponse((r) => r.url().endsWith('/_lab/api/comments') && r.request().method() === 'POST', { timeout: 8000 }).catch(() => null);
     await page.keyboard.press('Enter');
-    await page.waitForTimeout(900);
+    await saved;
     const text = await (await fetch(`http://localhost:${PORT}/_lab/agent/pricing`)).text();
     const head = text.split(/\n## /)[0].split('\n').filter((x) => /^(page|file): /.test(x)).join('\n');
     const mine = text.split(/\n(?=## \d+\. )/).slice(1).find((x) => !seen.has(/id ([0-9a-f]{12})/.exec(x)?.[1])) || '';
     seen.add(/id ([0-9a-f]{12})/.exec(mine)?.[1]);
-    writeFileSync(join(HERE, 'out', `${s.id}.typed.txt`), mine ? `${head}\n\n${mine}` : '');
+    // No file for a pin that wasn't made: an empty one would go to an agent as an empty prompt.
+    const file = join(HERE, 'out', `${s.id}.typed.txt`);
+    if (mine) writeFileSync(file, `${head}\n\n${mine}`);
+    else { rmSync(file, { force: true }); missing++; }
     console.log(`${s.id.padEnd(16)} ${mine ? (/^element: (.*)$/m.exec(mine)?.[1] || '?') : 'MISSING'}`);
   }
   await browser.close();
   lab.kill();
+  if (missing) { console.error(`${missing} pins missing`); process.exit(1); }
 }

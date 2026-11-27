@@ -11,13 +11,17 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = join(HERE, 'out');
 const SCEN = JSON.parse(readFileSync(join(HERE, 'scenarios.json'), 'utf8'));
 const models = (process.argv[2] || 'haiku,sonnet').split(',');
+// A run that failed (exit code, timeout, is_error) comes back with error set: it is not graded.
 const claude = (args, cwd) =>
   new Promise((done) => execFile('claude', args, { cwd, timeout: 300000, maxBuffer: 1 << 24 }, (err, stdout) => {
+    let j;
     try {
-      done(JSON.parse(stdout));
+      j = JSON.parse(stdout);
     } catch {
-      done({ result: String(stdout || err) });
+      j = { result: String(stdout || '') };
     }
+    if (err || j.is_error) j.error = String(err?.message || j.result || 'failed').split('\n')[0];
+    done(j);
   }));
 const diffOf = (a, b) => {
   try {
@@ -53,11 +57,16 @@ const run = async ({ m, s, arm }) => {
   const j = await claude(['-p', prompt, '--output-format', 'json', '--model', m, '--permission-mode', 'acceptEdits', '--allowedTools', 'Read,Edit,Write,Grep,Glob'], dir);
   const s_ = Math.round((Date.now() - t0) / 100) / 10;
   const said = String(j.result || '').trim().split('\n').filter(Boolean).at(-1) || '';
+  if (j.error) {
+    results.push({ model: m, arm, id: s.id, kind: s.kind, mark: s.mark, text: s.text, verdict: 'error', unrelated: null, why: j.error, s: s_, api: 0, turns: j.num_turns, cost: j.total_cost_usd, changed: 0, said });
+    console.log(`error    ${m.padEnd(6)} ${arm} ${s.id.padEnd(26)} ${j.error}`.slice(0, 200));
+    return;
+  }
   const diff = diffOf(join(HERE, 'app.html'), join(dir, 'app.html'));
   const g = await claude(['-p', GRADE(s, diff, said), '--output-format', 'json', '--model', 'sonnet', '--allowedTools', ''], OUT);
   let grade = {};
   try {
-    grade = JSON.parse(/\{[\s\S]*\}/.exec(g.result || '')?.[0] || '{}');
+    if (!g.error) grade = JSON.parse(/\{[\s\S]*\}/.exec(g.result || '')?.[0] || '{}');
   } catch {}
   const changed = diff.split('\n').filter((l) => /^[+-][^+-]/.test(l)).length;
   results.push({ model: m, arm, id: s.id, kind: s.kind, mark: s.mark, text: s.text, verdict: grade.verdict || '?', unrelated: grade.unrelated ?? null, why: grade.why || '', s: s_, api: Math.round((j.duration_api_ms || 0) / 100) / 10, turns: j.num_turns, cost: j.total_cost_usd, changed, said });
@@ -73,5 +82,5 @@ for (const m of models)
   for (const arm of arms) {
     const r = results.filter((x) => x.model === m && x.arm === arm);
     const n = (v) => r.filter((x) => x.verdict === v).length;
-    console.log(`${m} ${arm}: right ${n('right')}, partial ${n('partial')}, wrong ${n('wrong')}, nothing ${n('nothing')} · ${avg(r.map((x) => x.s))} s · ${avg(r.map((x) => x.turns || 0))} calls · unrelated ${r.reduce((a, x) => a + (x.unrelated || 0), 0)} · lines changed ${avg(r.map((x) => x.changed))} · reply ${avg(r.map((x) => x.said.length))} chars`);
+    console.log(`${m} ${arm}: right ${n('right')}, partial ${n('partial')}, wrong ${n('wrong')}, nothing ${n('nothing')}, failed runs ${n('error')} · ${avg(r.map((x) => x.s))} s · ${avg(r.map((x) => x.turns || 0))} calls · unrelated ${r.reduce((a, x) => a + (x.unrelated || 0), 0)} · lines changed ${avg(r.map((x) => x.changed))} · reply ${avg(r.map((x) => x.said.length))} chars`);
   }

@@ -24,8 +24,10 @@ const run = ({ m, s }) =>
     const prompt = `You answer comments people leave on pages in a lab (labit). This folder is the site; the page /pricing is pricing.html. A new comment came in:\n\n${pin}\n\nDo the work it asks for in the files now (no one is around to answer questions). If it truly asks nothing you can do, change nothing. Then end with one short line: what you did.`;
     const t0 = Date.now();
     execFile('claude', ['-p', prompt, '--output-format', 'json', '--model', m, '--permission-mode', 'acceptEdits', '--allowedTools', 'Read,Edit,Write,Grep,Glob'], { cwd: dir, timeout: 240000, maxBuffer: 1 << 24 }, (err, stdout) => {
-      const html = readFileSync(join(dir, 'pricing.html'), 'utf8');
-      const ok = Boolean(s.check(html, original));
+      // A throw here would end the whole batch: a page the agent deleted is a fail of this run only.
+      let html = '';
+      try { html = readFileSync(join(dir, 'pricing.html'), 'utf8'); } catch {}
+      const ok = Boolean(html) && Boolean(s.check(html, original));
       let j = {};
       try { j = JSON.parse(stdout); } catch {}
       const said = String(j.result || stdout || err).trim().split('\n').filter(Boolean).at(-1) || '';
