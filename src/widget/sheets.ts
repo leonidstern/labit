@@ -76,7 +76,7 @@ export function leave(node: HTMLElement, ms = 0, sent = false, speed = 0) {
   // card, tied to the page) is held at its own top on the page: given the screen's, it jumped up by the page's scroll
   // before it left (iPad Pro 11 simulator, 27 Nov: 342 − 466 px on the first frame of a close).
   const cs = getComputedStyle(node);
-  const at = cs.position === 'fixed' ? top : parseFloat(cs.top);
+  const at = cs.position == 'fixed' ? top : parseFloat(cs.top) || top;
   if (ms) [dur, ease] = carry(way, speed, ms);
   // The bar comes up with the sheet: after a swipe at the same pace (the sheet's way left and its speed, in whole ways
   // and ways per ms, are the bar's too), settling where the sheet is gone; after a tap softly, from rest. The standard
@@ -84,7 +84,7 @@ export function leave(node: HTMLElement, ms = 0, sent = false, speed = 0) {
   const [bms, bease] = glide(ms ? way : 1, ms ? speed : 0, dur);
   leaveBar = `${bms}ms ${bease}`;
   const fade = getComputedStyle(W.scrim).opacity;
-  for (const [k, v] of [['top', `${Number.isFinite(at) ? at : top}px`], ['bottom', 'auto'], ['height', `${r.height}px`], ['max-height', 'none'], ['animation', 'none'],
+  for (const [k, v] of [['top', `${at}px`], ['bottom', 'auto'], ['height', `${r.height}px`], ['max-height', 'none'], ['animation', 'none'],
     ['transition', 'none'], ['transform', `translateY(${moved}px)`], ['pointer-events', 'none']]) node.style.setProperty(k, v, 'important');
   W.host.setAttribute('data-leaving', '');
   W.scrim.style.transition = 'none';
@@ -341,7 +341,7 @@ export function roomFor(top: number, lessOnly = false) {
 
  // CloseWatcher (not in TypeScript's DOM types yet)
 export function backCloses() {
-  const open = matchMedia('(pointer: coarse)').matches && W.host.hasAttribute('data-sheet');
+  const open = W.coarse && W.host.hasAttribute('data-sheet');
   if (!open && W.S.backWatcher) {
     const w = W.S.backWatcher;
     W.S.backWatcher = null;

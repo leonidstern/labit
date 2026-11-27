@@ -44,7 +44,7 @@ import { bindDrag, draftHasText, drawOnce, endDrag, inkSaid, offerSelection, sta
 import { boardStrip, bindBoardCam, newBoard, pinBoardGone, pressBoard, showBoard } from './widget/boardcam.ts';
 import { bindFramework, overFramework, scanForFramework } from './widget/framework.ts';
 import { bindKeys } from './widget/keys.ts';
-import { isTap, liftTarget } from './widget/lifttap.ts';
+import { followTap, liftTarget } from './widget/lifttap.ts';
 
 (() => {
   // colabit stays off on a page a labit lab serves (lib/colabit.ts): the lab's reload holder (window.__lab, first on a
@@ -325,27 +325,28 @@ import { isTap, liftTarget } from './widget/lifttap.ts';
   const host = document.createElement('div');
   host.setAttribute('data-lab-comments', '');
   const root = host.attachShadow({ mode: 'open' });
-  root.innerHTML = `
-    <style>${styles}</style>
-    <div class="scrim"></div>
-    <i class="fit" aria-hidden="true"></i>
-    <div class="layer"></div>
-    <div class="ui"><div class="hint" role="status" hidden></div>
-    <div class="list chatwin" hidden><div class="tabs"></div><div class="msgs"></div><div class="chat"></div></div>
-    <div class="left"><button class="secondary copy-all" type="button" hidden>copy link</button></div>
-    <div class="bar" hidden>
-      <button class="secondary fold" type="button" hidden aria-expanded="true"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M3.5 2l3 3-3 3"/></svg></button>
-      <button class="secondary chat-btn" type="button" hidden>chat</button>
-      <button class="secondary walkie-btn" type="button" hidden></button>
-      <button class="secondary list-btn" type="button" hidden>list</button>
-      <button class="secondary boards-btn" type="button" hidden aria-expanded="false" aria-controls="lab-more" title="this page's boards"></button>
-      <button class="secondary done-btn" type="button" hidden title="show or hide done pins on the page"></button>
-      <button class="secondary moved-btn" type="button" hidden title="pins whose spot is gone from the page: open one to drop it on a new spot, or close it"></button>
-      <span class="mode" hidden><button type="button" data-m="comment" data-t="comment, links and buttons too (⌥ click uses them)"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="body" d="M8 1.5a5 5 0 0 1 5 5c0 3.6-5 8-5 8s-5-4.4-5-8a5 5 0 0 1 5-5z"/><path class="plus" d="M8 4.5v4M6 6.5h4"/></svg></button><button type="button" data-m="use" data-t="use the page (⌥ click comments)"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="body" d="M4 2l8.5 7H8.3l2.4 4.6-1.6.8-2.4-4.6L4 12.6z"/></svg></button></span>
-      <button class="toggle" type="button"></button>
-      <button class="secondary more" type="button" hidden aria-label="more options" aria-expanded="false" aria-controls="lab-more">⋯</button>
-    </div>
-    <div class="more-menu" id="lab-more" hidden></div></div>`;
+  // One line of markup (each \ joins the next line): no whitespace text between the parts, nothing to ship.
+  root.innerHTML = `\
+<style>${styles}</style>\
+<div class="scrim"></div>\
+<i class="fit" aria-hidden="true"></i>\
+<div class="layer"></div>\
+<div class="ui"><div class="hint" role="status" hidden></div>\
+<div class="list chatwin" hidden><div class="tabs"></div><div class="msgs"></div><div class="chat"></div></div>\
+<div class="left"><button class="secondary copy-all" type="button" hidden>copy link</button></div>\
+<div class="bar" hidden>\
+<button class="secondary fold" type="button" hidden aria-expanded="true"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M3.5 2l3 3-3 3"/></svg></button>\
+<button class="secondary chat-btn" type="button" hidden>chat</button>\
+<button class="secondary walkie-btn" type="button" hidden></button>\
+<button class="secondary list-btn" type="button" hidden>list</button>\
+<button class="secondary boards-btn" type="button" hidden aria-expanded="false" aria-controls="lab-more" title="this page's boards"></button>\
+<button class="secondary done-btn" type="button" hidden title="show or hide done pins on the page"></button>\
+<button class="secondary moved-btn" type="button" hidden title="pins whose spot is gone from the page: open one to drop it on a new spot, or close it"></button>\
+<span class="mode" hidden><button type="button" data-m="comment" data-t="comment, links and buttons too (⌥ click uses them)"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="body" d="M8 1.5a5 5 0 0 1 5 5c0 3.6-5 8-5 8s-5-4.4-5-8a5 5 0 0 1 5-5z"/><path class="plus" d="M8 4.5v4M6 6.5h4"/></svg></button><button type="button" data-m="use" data-t="use the page (⌥ click comments)"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="body" d="M4 2l8.5 7H8.3l2.4 4.6-1.6.8-2.4-4.6L4 12.6z"/></svg></button></span>\
+<button class="toggle" type="button"></button>\
+<button class="secondary more" type="button" hidden aria-label="more options" aria-expanded="false" aria-controls="lab-more">⋯</button>\
+</div>\
+<div class="more-menu" id="lab-more" hidden></div></div>`;
   // The widget's own parts, which are always there: typed as HTML elements.
   /** @param {string} sel @param {ParentNode} [box] */
   const $ = (sel, box = root) => /** @type {HTMLElement} */ (box.querySelector(sel));
@@ -543,6 +544,7 @@ import { isTap, liftTarget } from './widget/lifttap.ts';
 
   // Where sheets take the screen's bottom (styles.css), phones upright or on their side: a new comment on selected words
   // grows into the sheet there.
+  const coarse = matchMedia('(pointer: coarse)').matches;
   const sheetMode = matchMedia('(pointer: coarse) and (max-width: 560px), (pointer: coarse) and (max-height: 500px)');
   // One way to pin (Leo, 20 Nov): a click pins, on a page or a board, the page's own links and buttons keep their
   // clicks, and holding Option pins on anything, controls too. There is no mode to switch.
@@ -906,8 +908,7 @@ import { isTap, liftTarget } from './widget/lifttap.ts';
   // the one there now, is.
   const FLAGS = JSON.parse(script?.dataset.flags || '{}');
   const flag = (name) => FLAGS[name] === true;
-  // (A phone: coarse, which is set further down.)
-  const expRows = matchMedia('(pointer: coarse)').matches ? [] : Object.keys(FLAGS).map((name) => {
+  const expRows = coarse ? [] : Object.keys(FLAGS).map((name) => {
     const b = el('button', { type: 'button', role: 'switch', 'data-flag': name });
     b.disabled = !adminToken;
     b.addEventListener('click', (e) => {
@@ -1520,7 +1521,6 @@ import { isTap, liftTarget } from './widget/lifttap.ts';
 
   // The open thread's card. New replies (Claude's too) are added to it in place, so the reply box keeps focus.
   S.openCard = null;
-  const coarse = matchMedia('(pointer: coarse)').matches;
 
   // ---------- events ----------
   const setOn = (value) => {
@@ -1698,7 +1698,7 @@ import { isTap, liftTarget } from './widget/lifttap.ts';
     S.menuShut = 0;
     const open = popMenu ? moreMenu.matches(':popover-open') : !moreMenu.hidden && !moreMenu.classList.contains('out');
     if (!open || e.composedPath().some((n) => n === moreMenu || n === moreBtn || n === boardsBtn)) return;
-    S.menuShut = Date.now();
+    S.menuShut = Date.now() + 1500;
     if (!popMenu) setMenu(false);
   }, true);
   addEventListener('keydown', (e) => {
@@ -1989,28 +1989,14 @@ import { isTap, liftTarget } from './widget/lifttap.ts';
   // to where it began): a scroll or a pull anywhere else in the widget (a thread, the chat) has nothing of this in its way.
   /** @param {TouchEvent} e */
   const liftFrom = (e) => {
-    const t = e.touches.length === 1 ? e.changedTouches[0] : null;
-    const at = t && liftTarget(e.composedPath());
-    if (!t || !at) return;
-    const down = { x: t.clientX, y: t.clientY, t: performance.now() };
-    const mine = (/** @type {TouchEvent} */ ev) => [...ev.changedTouches].find((x) => x.identifier === t.identifier);
-    const done = () => (at.removeEventListener('touchmove', move), at.removeEventListener('touchend', end), at.removeEventListener('touchcancel', done));
-    /** @param {TouchEvent} ev */
-    const move = (ev) => { const m = mine(ev); if (m && !isTap(down, m.clientX, m.clientY, down.t)) done(); };
-    /** @param {TouchEvent} ev */
-    const end = (ev) => {
-      const m = mine(ev);
-      if (!m) return;
-      done();
-      if (ev.touches.length || !at.isConnected || !ev.cancelable || !isTap(down, m.clientX, m.clientY, performance.now())) return;
-      ev.preventDefault();
+    const at = !e.touches[1] && liftTarget(e.composedPath());
+    if (at) followTap(e, at, (lift) => {
+      if (!at.isConnected || !lift.cancelable) return;
+      lift.preventDefault();
       // Its own click handler, and the page's click listeners, as for the click iOS would have sent; after the sheet's own
       // handling of this lift (a wobble it followed springs back first, sheets.ts swipeDown).
       setTimeout(() => at.isConnected && at.click(), 0);
-    };
-    at.addEventListener('touchmove', move, { passive: true });
-    at.addEventListener('touchend', end, { passive: false });
-    at.addEventListener('touchcancel', done, { passive: true });
+    });
   };
   scrim.addEventListener('touchstart', liftFrom, { passive: true });
   layer.addEventListener('touchstart', liftFrom, { passive: true }); // the pins
@@ -2019,32 +2005,15 @@ import { isTap, liftTarget } from './widget/lifttap.ts';
   // page (2 of 17 thread closes and 3 of 12 new comments did nothing, an empty column never got one: iPad Pro 11 simulator,
   // 27 Nov). The lift isn't stopped, so the page's own link or button under it still gets its click; that click, if it
   // comes, doesn't act on the widget a second time (S.outsideTapAt, onPageClick).
-  S.outsideTapAt = 0;
   if (coarse) addEventListener('touchstart', (/** @type {TouchEvent} */ e) => {
-    const t = e.touches.length === 1 ? e.changedTouches[0] : null;
-    if (!t || sheetMode.matches || !S.on || !(S.draft || S.openId) || boardShown() || e.composedPath().includes(host)) return; // a board takes its own taps (board/mount.ts)
-    const down = { x: t.clientX, y: t.clientY, t: performance.now() };
-    const openKey = () => (S.draft ? 'draft' : S.openId);
-    const open = openKey();
-    const mine = (/** @type {TouchEvent} */ ev) => [...ev.changedTouches].find((x) => x.identifier === t.identifier);
-    const done = () => (removeEventListener('touchmove', move, true), removeEventListener('touchend', end, true), removeEventListener('touchcancel', done, true));
-    /** @param {TouchEvent} ev */
-    const move = (ev) => { const m = mine(ev); if (m && !isTap(down, m.clientX, m.clientY, down.t)) done(); };
-    /** @param {TouchEvent} ev */
-    const end = (ev) => {
-      const m = mine(ev);
-      if (!m) return;
-      done();
-      // Not a hold that pinned (that lift is the new comment's), and what was open is still what is open.
-      if (ev.touches.length || S.pinnedByHold || openKey() !== open || !isTap(down, m.clientX, m.clientY, performance.now())) return;
-      S.outsideTapAt = Date.now();
-      S.draft = null; // as onPageClick: typed words stay as a draft
-      S.openId = null;
+    const open = S.draft || S.openId;
+    if (e.touches[1] || sheetMode.matches || !S.on || !open || boardShown() || e.composedPath().includes(host)) return; // a board takes its own taps (board/mount.ts)
+    followTap(e, window, () => {
+      if (S.pinnedByHold || (S.draft || S.openId) !== open) return; // a hold that pinned (that lift is the new comment's), or something else opened
+      S.outsideTapAt = Date.now() + 800; // until when its click may come
+      S.draft = S.openId = null; // as onPageClick: typed words stay as a draft
       render();
-    };
-    addEventListener('touchmove', move, { capture: true, passive: true });
-    addEventListener('touchend', end, { capture: true, passive: true });
-    addEventListener('touchcancel', done, { capture: true, passive: true });
+    }, { capture: true });
   }, { capture: true, passive: true });
   // Android's back gesture closes an open sheet first, like a native one, instead of leaving the page (CloseWatcher,
   // Chrome 120+; elsewhere back works as before). With something typed it nudges, as a tap on the dimmed page does.
@@ -2203,7 +2172,7 @@ import { isTap, liftTarget } from './widget/lifttap.ts';
   // drag over words it covered still selects them (a4c5ddc). The click that press makes only lets it go (Leo, 19 Nov:
   // "when comment still 'undo' clicking outside opening another comment"): no new pin there; the sent one stays, and the
   // next click pins as usual. A link or the page's own control still acts (onPageClick prevents nothing).
-  S.undoLetGo = 0; // when a press let a sent pin's undo card go: that press's click starts no pin
+  // S.undoLetGo: until when a press that let a sent pin's undo card go has its click to come; that click starts no pin.
   S.letUndoGo = (e, draw = true) => {
     if (S.draft || !S.undo || S.openId !== S.undo.id || S.undo.touched || e.composedPath().includes(host)) return false;
     S.undo = null;
@@ -2213,13 +2182,13 @@ import { isTap, liftTarget } from './widget/lifttap.ts';
   };
   document.addEventListener('pointerdown', (e) => {
     S.undoLetGo = 0;
-    if (S.letUndoGo(e)) S.undoLetGo = Date.now();
+    if (S.letUndoGo(e)) S.undoLetGo = Date.now() + 2000;
   }, true);
   function onPageClick(e, taken = false) {
     if (e.composedPath().includes(host)) return;
-    if (S.outsideTapAt && Date.now() - S.outsideTapAt < 800) return void (S.outsideTapAt = 0); // this tap's lift closed the card already (above)
-    if (S.undoLetGo && Date.now() - S.undoLetGo < 2000) return void (S.undoLetGo = 0); // this click let a sent pin's undo card go (above)
-    if (S.menuShut && Date.now() - S.menuShut < 1500) return void (S.menuShut = 0); // this click closed the ⋯ menu (above)
+    if (Date.now() < S.outsideTapAt) return void (S.outsideTapAt = 0); // this tap's lift closed the card already (above)
+    if (Date.now() < S.undoLetGo) return void (S.undoLetGo = 0); // this click let a sent pin's undo card go (above)
+    if (Date.now() < S.menuShut) return void (S.menuShut = 0); // this click closed the ⋯ menu (above)
     if (S.draft || S.openId) {
       // Typed text doesn't keep it open (Leo, 18 Nov): the click closes it and the words stay as a draft (the box saves them as
       // they are typed, and the spot is kept, so it comes back); Escape discards them.
