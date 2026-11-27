@@ -650,9 +650,9 @@ kbd::before { content: '('; } kbd::after { content: ')'; } /* read as a hint: ch
                              opacity: var(--lab-p, 0); pointer-events: none;
                              transition: transform var(--_t-base) var(--_ease-in), opacity calc(var(--_t-quick) / 2) var(--_ease-out); /* gone within a few frames of the sheet rising: it showed under the sheet's edge while it slid down (Leo, 21 Nov) */ }
   :host([data-sheet]) .bar button { pointer-events: none; }
-  /* A board open over the page is a sheet too: the bar and the pill step down under it (Leo, 21 Nov: the pill covered the
-     board's corner). Its own sheets (a pin's card on the board) bring them back as they close, as on a page. */
-  :host([data-board]:not([data-sheet])) :is(.bar, .listener, .left) { transform: translateY(calc(100% + 16px + env(safe-area-inset-bottom, 0px))); opacity: 0; pointer-events: none; }
+  /* A board open over the page keeps the bar and the pill (Leo, 27 Nov: "pill menu in board is not visible"): chat, new
+     and ⋯ stay in reach. They stepped down under it from 21 Nov, when the pill covered the board's corner; the board's
+     own controls are in its top bar now, and what is on the board pans out from under the pill. */
   /* A sheet stands apart from the page: the page dims behind it (a tap there closes it), and scrolling inside a
      sheet never scrolls the page. */
   :host([data-sheet]) .scrim { display: block; animation: lab-fade var(--_fade-base); }
