@@ -4,7 +4,7 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 
 ## Unreleased
 
-- **A pin stays on its element when an id on its path is renamed.** A pin the agent placed (`labit pin move`, a selector and nothing else) went lost when the page renamed an id its selector went through (`#video .sv-vid` after `#video` became `#motion`). It now takes the rest of the path after that id when it names one element only.
+- **Pins the agent placed stay on their element.** A pin placed with `labit pin move` (a selector and nothing else) whose selector had a space in it (`#motion .sv-vid`) was shown lost even though its selector found the element; it is on that element now. And when the page renames an id its selector goes through (`#video` became `#motion`), it takes the rest of the path after that id when that names one element only.
 - **A pin you delete stays deleted.** "delete comment?" stays asked when the agent's answer comes in meanwhile (the card used to put its buttons back, so the delete never went and the pin seemed to come back). An answer, question, progress line or resolve that reaches a pin after it was deleted is dropped, and `labit reply` says "Dropped: the person deleted that pin" instead of "Replied".
 - **A newer release reaches a lab that is already running.** A lab from npm looked for one only when it started, so a lab left up for days stayed on its version with no "update" in the ⋯ menu. It now looks again every 3 hours, and pages offer it on their next load.
 - **Agent pins on the spot.** The skill tells agents to pin the exact spot on an image or a big element with `--at x,y`, and `pin` says so when one lands in a picture's centre.

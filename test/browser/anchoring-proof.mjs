@@ -234,9 +234,11 @@ try {
         const b = n.getBoundingClientRect();
         const moved = { kind: 'element', selector: '#video .sv-vid', x: 0.5, y: 0.5, docX: (b.left + b.width / 2) / innerWidth, docY: b.top + scrollY + b.height / 2 };
         const person = pinOn('#video .sv-vid');
+        const before = A.findTarget(moved) === n;
         document.getElementById('video').id = 'motion';
-        return { moved: A.findTarget(moved) === n, person: A.findTarget(person) === n, why: [A.position(moved).why || '', A.position(person).why || ''] };
+        return { before, moved: A.findTarget(moved) === n, person: A.findTarget(person) === n, why: [A.position(moved).why || '', A.position(person).why || ''] };
       });
+      check(eng, 'a pin the agent placed on a path (#video .sv-vid): on its element', r.before, JSON.stringify(r));
       check(eng, 'an id renamed under a pin the agent placed: still on its element', r.moved, JSON.stringify(r));
       check(eng, "an id renamed under a person's pin: still on its element", r.person, JSON.stringify(r));
       await p.close();
