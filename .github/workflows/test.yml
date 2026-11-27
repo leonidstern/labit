@@ -73,9 +73,6 @@ jobs:
       contents: read
       actions: read # the newest reach map, from reach.yml
     outputs:
-      tests: ${{ steps.pick.outputs.tests }}
-      native: ${{ steps.pick.outputs.native }}
-      bench: ${{ steps.pick.outputs.bench }}
       jobs: ${{ steps.pick.outputs.jobs }}
       unit: ${{ steps.pick.outputs.unit }}
       unitShards: ${{ steps.pick.outputs.unitShards }}

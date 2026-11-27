@@ -15,8 +15,8 @@
 //   node ci/affected.mjs <base> <head>    prints {"tests":"all"|"a b c","native":bool,"bench":bool,"jobs":[…],"why":[…]}
 //   node ci/affected.mjs --main <before> <after>
 //   node ci/affected.mjs --all
-// In CI the same JSON goes to $GITHUB_OUTPUT as tests=…, native=…, bench=…, jobs=… (the browser matrix, engines from
-// $ENGINES, default webkit), and the reasons and shards to the job summary.
+// In CI the parts test.yml reads go to $GITHUB_OUTPUT: jobs=… (the browser matrix, engines from $ENGINES, default
+// webkit), unit=…, unitShards=…, unitShardCount=… and release=…; the reasons and shards go to the job summary.
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -502,7 +502,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   console.log(JSON.stringify(out, null, 2));
   if (process.env.GITHUB_OUTPUT) {
     const jobs = out.jobs.map(({ secs, ...j }) => j);
-    fs.appendFileSync(process.env.GITHUB_OUTPUT, `tests=${out.tests}\nnative=${out.native}\nbench=${out.bench}\njobs=${JSON.stringify(jobs)}\nunit=${out.unit}\nunitShards=${JSON.stringify(out.unitShards)}\nunitShardCount=${out.unitShards.length}\nrelease=${release}\n`);
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `jobs=${JSON.stringify(jobs)}\nunit=${out.unit}\nunitShards=${JSON.stringify(out.unitShards)}\nunitShardCount=${out.unitShards.length}\nrelease=${release}\n`);
   }
   if (process.env.GITHUB_STEP_SUMMARY) {
     const head = out.tests === 'all' ? 'Every browser test' : out.tests ? `Browser tests: ${out.tests}` : 'No browser tests';
