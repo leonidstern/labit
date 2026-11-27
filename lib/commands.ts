@@ -462,6 +462,8 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
         const asks = r.asked ? ` (asks: ${r.asked.choices.map((c, n) => `${letter(n)}) ${c}`).join('  ')}${r.asked.recommend !== undefined ? `; your pick: ${letter(r.asked.recommend)}` : ''})` : r.question ? ' (a question)' : '';
         ids.push(comment.id);
         console.log(`Pinned ${comment.id} on ${r.page}${r.selector ? ` at ${r.selector}` : ' on the board'}${words}${asks}.`);
+        // A pin on a picture with no --at sits in its centre, rarely the spot meant.
+        if (r.selector && r.anchor.kind === 'element' && r.anchor.x === 0.5 && r.anchor.y === 0.5 && /(^|[\s>+~])(img|canvas|svg|video|picture)\b[^\s>+~]*$/i.test(r.selector)) console.log(`  It sits in the middle of the ${r.selector.match(/(img|canvas|svg|video|picture)/i)?.[1].toLowerCase()}: to pin the spot you talk about, pin it again with --at x,y (shares of it, 0 to 1).`);
       }
       // The selector is checked by a browser: the page draws each pin and marks it when the selector matches nothing (or fills in
       // what is there). With a browser open this waits up to 3 s for that; a pin it has not answered is saved unchecked.
