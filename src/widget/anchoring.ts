@@ -611,7 +611,9 @@ function sameKind(node, tag) {
 // only a point, never a quote, so nothing is highlighted (Leo 18 Nov: "pin pointing on word highlighting word").
 // onto: the element the caller knows is there (selected words' own). Chrome now and then finds nothing but <html>
 // under a point for the moment after a double-click selects a word, and the pin went on <body>, its words not found.
-export function anchorAt(clickX, clickY, words = false, onto = null) {
+// later: the element's looks (its colours, named by the page's variables) are left for send to read (lookedUp): reading them
+// takes ~30 ms on a phone, inside the hold that shows the new comment's box (iOS 27 simulator, 27 Nov).
+export function anchorAt(clickX, clickY, words = false, onto = null, later = false) {
   let [clientX, clientY] = [clickX, clickY];
   const board = (window as unknown as { __labBoard?: { anchor?: (x: number, y: number, page?: boolean) => Anchor; contains?: (x: number, y: number) => boolean } }).__labBoard;
   if (board?.anchor && (!board.contains || board.contains(clientX, clientY))) return board.anchor(clientX, clientY, true); // on a board (its page, or a page's board view): the board says what is there, and on a page's frame what it is on in the page
@@ -656,7 +658,7 @@ export function anchorAt(clickX, clickY, words = false, onto = null) {
   if (shadowHost) anchor.shadow = openingTag(shadowHost);
   for (const [k, v] of Object.entries(componentAt(target))) if (v) anchor[k] = short(v, 200);
   if (target !== document.body) {
-    anchor.looks = looksOf(target);
+    if (!later) anchor.looks = looksOf(target);
     anchor.rules = rulesOf(target);
     anchor.box = boxOf(target);
     if (!anchor.source && astroSource(target)) anchor.source = short(astroSource(target), 200);
@@ -1084,6 +1086,11 @@ const proof = (a): Proof => {
 };
 
 export const findTarget = (anchor) => proof(anchor).node;
+/** The anchor with its element's looks, when anchorAt left them for later. */
+export const lookedUp = (anchor) => {
+  const n = !anchor.looks && anchor.selector && !anchor.kind && findTarget(anchor);
+  return n && n !== document.body ? { ...anchor, looks: looksOf(n) } : anchor;
+};
 
 // A pin kept at its old spot never sits below the page's end (the page got shorter, say after a cleanup): it moves up
 // to just above the end, so it doesn't make the page longer. The end is the page's own content, not the pins' layer.
