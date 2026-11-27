@@ -1,0 +1,21 @@
+/* Motion (motion.ts): the motion menu is the ⋯ menu's box and rows (.more-menu, styles.css); on a phone it is one of the
+   widget's sheets (.motion-sheet with .card / .list there). Here only what it adds: its place, the speed row, its line. */
+.motion-menu[popover] { right: auto; bottom: auto; } /* at the pointer (motion.ts sets inset), not where the ⋯ menu sits */
+.motion-menu hr { margin: 4px 10px; border: 0; border-top: var(--_hair); }
+.motion-speed { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 3px 4px 3px 10px; }
+.motion-speed span { display: flex; gap: 2px; }
+.more-menu .motion-speed button { padding: 4px 9px; justify-content: center; font-variant-numeric: tabular-nums; }
+.more-menu .motion-speed button[aria-pressed="true"] { background: var(--_fg); color: var(--_bg); }
+/* A pin's moment (Leo, 23 Nov, 4c): a quiet line under the first message, the time beside it; above the box of a comment
+   being written. A button where the page can go back to it. */
+.p.when { font-size: 11px; color: var(--_muted); font-variant-numeric: tabular-nums; margin-top: 2px; }
+.moment { all: unset; font: inherit; color: inherit; font-variant-numeric: tabular-nums; }
+button.moment { cursor: pointer; text-decoration: underline; text-decoration-color: var(--_line); text-underline-offset: 2px; }
+button.moment:hover { color: var(--_fg); }
+.float > .moment { display: block; margin: 0 0 6px; font-size: 11px; color: var(--_muted); }
+@media (pointer: coarse) {
+  .motion-sheet { padding: 8px 8px calc(10px + var(--_safe, 0px)); }
+  .motion-speed { padding: 3px 4px 3px 12px; font-size: 15px; letter-spacing: -.016em; } /* lines up with the sheet's rows */
+  .float > .moment { padding: 0 14px; }
+  .more-menu .motion-speed button { min-height: 44px; min-width: 44px; padding: 6px 11px; } /* 44 pt to tap (iOS) */
+}
