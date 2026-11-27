@@ -52,3 +52,14 @@ test('done after the correction was handed closes the pin as before', async () =
   await reply(comment.id, 'Done: footer is green', 'done');
   assert.equal((await thread(comment.id)).resolved, true);
 });
+
+test('done over two asks names both; a question after it reopens the pin', async () => {
+  const { comment } = await pin('is this button from our ds?');
+  await person(comment.id, 'propose another way for this card');
+  assert.match((await wait()).text, /propose another way/);
+  const out = await reply(comment.id, 'Done: it is the DS Button', 'done');
+  assert.deepEqual(JSON.parse(out.text).asks?.map((a) => a.text), ['is this button from our ds?', 'propose another way for this card'], 'both asks are said back');
+  assert.equal((await thread(comment.id)).resolved, true, 'an explicit done still closes it');
+  await reply(comment.id, 'Which way: A or B?', 'question');
+  assert.equal((await thread(comment.id)).resolved, false, 'asking on it reopens it');
+});

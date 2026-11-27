@@ -564,6 +564,9 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die, model }: Ctx):
       const out = await call('/_lab/api/comments', { page: hit.page, parent: hit.id, nonce: nonceOf(hit.page, hit.id, hit.to, said, words.join(' '), intent || '', JSON.stringify(asked || null)), ...(hit.to ? { to: hit.to } : {}), name: signed(), text: words.join(' '), ...(intent ? { intent } : {}), ...asked });
       if (out.status === 410) return dropped();
       if (out.status >= 300) die(`Could not reply: ${out.text}`);
+      // One done answer over more than one ask since you last spoke: name them all, so none is closed unread.
+      const asks = (JSON.parse(out.text) as { asks?: { id: string; text: string }[] }).asks;
+      if (asks?.length) console.log(`Note: this pin had ${asks.length} asks since you last answered it, and --done closes it:\n${asks.map((a) => `  - "${a.text}"`).join('\n')}\n  Answered each? If not, answer the rest now: a --question or --on-it reply reopens it.`);
       // The page tries each choice in place of the quoted words: a choice that reaches past them is said here.
       if (asked) for (const note of choiceSpills(data[hit.page]?.[hit.id]?.anchor?.quote, asked.choices)) console.log(`Note: ${note}`);
       // A note on no words (a spot or an element) has nothing to put them in: the choices show as rows, nothing is tried.
