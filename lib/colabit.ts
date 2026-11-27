@@ -7,7 +7,7 @@
 
 // The lab's own widget tag (a page made for the lab may load it itself; the lab adds its own) and colabit's, wherever
 // either is loaded from, with or without a query or hash on its address.
-const TAGS = /<script\b[^>]*\bsrc=["'][^"']*\/_lab\/(?:comments|co)\.js(?:[?#][^"']*)?["'][^>]*>\s*<\/script>\s*/gi;
+const TAGS = /<script\b[^>]*?\ssrc=["'][^"']*\/_lab\/(?:comments|co)\.js(?:[?#][^"']*)?["'][^>]*>\s*<\/script>\s*/gi;
 
 // The page without either tag.
 export const stripTags = (html: string): string => html.replace(TAGS, '');

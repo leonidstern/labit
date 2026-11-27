@@ -2,7 +2,7 @@
 // anyone on a page comments under a name they type; the owner's link (#lab-admin=<token>) may resolve, move and delete anyone's. New comments are limited per address and hour (CO_PER_HOUR, default 60).
 // Storage: Upstash Redis (Vercel's KV_REST_API_URL + KV_REST_API_TOKEN), one hash per page, as the lab keeps it in memory.
 // Env: LAB_COMMENTS_ADMIN_TOKEN (the owner's key).
-import { GET as list, POST as save, sameKey, useStore } from './_lib/comments-api.mjs';
+import { GET as list, POST as save, pagePath, sameKey, useStore } from './_lib/comments-api.mjs';
 
 // The owner's key (LAB_COMMENTS_ADMIN_TOKEN), sent by the owner's browser after their #lab-admin= link.
 const isOwner = (request) => {
@@ -13,7 +13,8 @@ const isOwner = (request) => {
 // data-site="lab": the colabit's own paths (/<name>/…, co/colabit.mjs), kept as they are. Any other data-site (or the
 // site's host, dots as dashes): a site of your own with the script on it, its pages kept under /co/<site>/<path>.
 const site = (request) => (request.headers.get('x-co-site') || '').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 63);
-const under = (s, page) => (typeof page !== 'string' || !page.startsWith('/') ? null : s === 'lab' ? page : `/co/${s}${page === '/' ? '' : page}`);
+// The page as the shared handler keys it (no trailing slash), so the store, the nonce and the handler all use one key.
+const under = (s, page) => (typeof page !== 'string' || !page.startsWith('/') ? null : pagePath(s === 'lab' ? page : `/co/${s}${page === '/' ? '' : page}`));
 
 const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type, x-lab-admin, x-co-site', 'access-control-max-age': '86400' };
 const withCors = (res) => {
