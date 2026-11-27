@@ -98,5 +98,6 @@
   "ipadclose": 12,
   "ipadtap": 14,
   "ipadchat": 10,
-  "deleteask": 4
+  "deleteask": 4,
+  "boarddraw": 20
 }
