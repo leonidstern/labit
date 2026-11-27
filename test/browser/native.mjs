@@ -227,11 +227,13 @@ try {
           await sleep(300);
         }
 
-        // A long chat: it opens at its newest message, laying out only those near the screen.
+        // A long chat: it opens at its newest message, laying out only those near the screen (each message is drawn once
+        // as it opens, so its real height is known before you scroll: chat.ts warmChat; then it is skipped while away).
         await p.evaluate(() => scrollTo(0, 0));
         await inRoot(p, (r) => r.querySelector('.chat-btn').click());
         await untilRoot(p, (r) => r.querySelectorAll('.msgs > .msg').length >= 80, null, 5000);
         await sleep(600);
+        await untilRoot(p, (r) => !r.querySelector('.msgs > .msg.warm'), null, 3000);
         const chat = await inRoot(p, (r) => {
           const box = r.querySelector('.msgs');
           const msgs = [...box.querySelectorAll(':scope > .msg')];

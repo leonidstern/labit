@@ -30,6 +30,57 @@ export const stamped = (bubble, stamp) => {
   bubble.append(stamp);
 };
 
+// A long chat lays out only the messages near the screen (styles.css: content-visibility), each held at a 64 px guess
+// until it is first drawn. Scrolling up the first time, each message drawn for the first time took its real height
+// above what you were reading, and Safari (no scroll anchoring) let all of it jump down: 38, 17, 80 px at a time (iOS 27
+// simulator, 27 Nov; Leo's phone: "open chat and scroll on top its like preloading", fine once scrolled through). So as
+// the chat opens, its messages are drawn once each, newest first, a batch a frame; each keeps that height when it is
+// away again (contain-intrinsic-size: auto). What a batch adds above the screen is added to the scroll in the same
+// frame, so nothing seen moves; and nothing is done while a finger is down or the list is still moving, since setting
+// the scroll then would stop it.
+const BATCH = 24;
+const warmed = new WeakSet<Element>(); // drawn once: a node kept across redraws keeps its height (drawChat's same())
+export function warmChat(box: HTMLElement) {
+  let held: HTMLElement[] = []; // drawn in full this frame: their real height is kept once the frame is drawn
+  let down = false;
+  let movedAt = 0;
+  const touch = (e: TouchEvent) => (down = e.type === 'touchstart' || e.touches.length > 0);
+  const moved = () => (movedAt = performance.now());
+  box.addEventListener('touchstart', touch, { passive: true });
+  box.addEventListener('touchend', touch, { passive: true });
+  box.addEventListener('touchcancel', touch, { passive: true });
+  box.addEventListener('scroll', moved, { passive: true });
+  const stop = () => {
+    for (const n of held) n.classList.remove('warm');
+    box.removeEventListener('touchstart', touch);
+    box.removeEventListener('touchend', touch);
+    box.removeEventListener('touchcancel', touch);
+    box.removeEventListener('scroll', moved);
+  };
+  const step = () => {
+    for (const n of held) n.classList.remove('warm'); // drawn once: its height is remembered
+    held = [];
+    if (W.chatEl.hidden) return stop();
+    if (down || performance.now() - movedAt < 120) return void requestAnimationFrame(step);
+    const cold = [...box.children].filter((n): n is HTMLElement => n instanceof HTMLElement && n.classList.contains('msg') && !warmed.has(n));
+    if (!cold.length) return stop();
+    held = cold.slice(-BATCH);
+    // The first message still in view is held where it is: if the browser didn't keep it there itself (Chrome anchors
+    // the scroll, Safari doesn't), the scroll takes up what moved it.
+    const top = box.getBoundingClientRect().top;
+    const seen = [...box.children].find((n) => n.getBoundingClientRect().bottom > top);
+    const was = seen?.getBoundingClientRect().top;
+    for (const n of held) {
+      n.classList.add('warm');
+      warmed.add(n);
+    }
+    const moved = seen && was !== undefined ? seen.getBoundingClientRect().top - was : 0; // laid out once, by this read
+    if (Math.abs(moved) >= 0.5) box.scrollTop += moved;
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
 export function drawChat() {
   const byId = new Map(W.S.comments.map((c) => [c.id, c]));
   // Only the chat's own messages (about the page as a whole) and the replies to them: pins live on the page and in the list.
@@ -68,7 +119,7 @@ export function drawChat() {
   const kept = new Map([...(box.children as HTMLCollectionOf<HTMLElement>)].filter((n) => n.dataset.id).map((n) => [n.dataset.id, n]));
   const same = (n) => {
     const old = kept.get(n.dataset?.id);
-    return old && old.outerHTML.replace(' fresh', '') === n.outerHTML ? old : n;
+    return old && old.outerHTML.replace(' fresh', '').replace(/ warm"/, '"') === n.outerHTML ? old : n; // (warm: warmChat's, for a frame)
   };
   const unfolded: Set<string> = (W.S.unfolded ||= new Set());
   const rootId = (m) => m.parent || m.id;
@@ -137,4 +188,5 @@ export function drawChat() {
     box.scrollTop = box.scrollHeight;
     W.S.stayAtEnd?.(box); // and stays at the newest while the sheet and its words settle (comments.js)
   }
+  if (opening) warmChat(box);
 }
