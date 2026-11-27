@@ -1418,7 +1418,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
         if (appear && !S.stepping) card.classList.add('in');
         // Reduced motion: the page's scroll to the pin is instant, so the card is drawn again within its fade: it keeps the fade (a fresh node has no class).
         if (appear) S.inAt = performance.now();
-        if (appear) noteOpened(c.id); // ⌥W walks back through these (list.ts)
+        if (appear) noteOpened(c.id); // ⌥⇧W walks back through these (list.ts)
         else if (still.matches && performance.now() - S.inAt < 200) card.classList.add('in');
         if (prevHeight) card.style.minHeight = `min(${prevHeight}px, var(--_thread-max))`;
         S.stepping = S.keepKeys = false;
@@ -1821,22 +1821,22 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
       e.preventDefault();
       return void undoLast();
     }
-    // ⌥W (Leo, 27 Nov) goes back to the comment read before; Control-D goes to the next new one. Both work from the
-    // widget's own text boxes too, where a plain W types a letter (Leo 18 Nov), and type nothing there. ⌥W is the next
-    // key's place with Option (actionOf: Option turns W into ∑ on a Mac, so the key's place, not its letter). Shift stays
-    // free: it selects text.
-    const backKey = e.altKey && !e.ctrlKey && actionOf(e) === 'next';
-    if (S.on && (backKey || (e.ctrlKey && !e.altKey && e.code === 'KeyD')) && !e.metaKey && !e.shiftKey && !(typing(e) && !e.composedPath().includes(host))) {
+    // ⌥W goes to the next new comment, ⌥⇧W back to the one read before (Leo, 27 Nov); Control-D is next too. They work
+    // from the widget's own text boxes too, where a plain W types a letter (Leo 18 Nov), and type nothing there. ⌥W is the
+    // next key's place with Option (actionOf: Option turns W into ∑ on a Mac, so the key's place, not its letter). Shift
+    // alone takes no W: it selects text.
+    const optKey = e.altKey && !e.ctrlKey && actionOf(e) === 'next';
+    if (S.on && (optKey || (e.ctrlKey && !e.altKey && !e.shiftKey && e.code === 'KeyD')) && !e.metaKey && !(typing(e) && !e.composedPath().includes(host))) {
       e.preventDefault();
       // Words typed in a reply box aren't thrown away: it nudges instead, send or clear them first.
       const typed = /** @type {HTMLTextAreaElement | null} */ (root.querySelector('.card textarea, .float textarea'));
       if (typed?.value.trim()) return shake(typed.closest('.card, .float'));
-      return backKey ? stepBack() : stepNew(1);
+      return optKey && e.shiftKey ? stepBack() : stepNew(1);
     }
     const act = actionOf(e);
     // The list's keys, with comments shown and nothing typed: L list, T chat, J/K next/previous, R reply, E resolve.
     // By the key's place, not its letter, so the keys work with any layout (Russian, Greek…): the C key is C (keyOf).
-    // The keys (Leo, 2026-11-15/16), marked in the bar's words: cha(t) (C was chat until 19 Nov), ne(w) (⌥W: back to the one read before, above),
+    // The keys (Leo, 2026-11-15/16), marked in the bar's words: cha(t) (C was chat until 19 Nov), ne(w) (⌥⇧W: back to the one read before, above),
     // P pause, M hide, E show/hide done. With a thread open: R reply, E resolve (done's own key).
     // Shift takes none of these (it selects text): ⇧D draws straight, ⇧B and the rest belong to the board.
     // H folds the bar into the rabbit or opens it (Leo, 26 Nov). Computers only.
