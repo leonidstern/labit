@@ -670,11 +670,11 @@ kbd::before { content: '('; } kbd::after { content: ')'; } /* read as a hint: ch
   .chatwin .msgs { padding: 4px 12px 8px; }
   .chatwin .tabs { padding: 18px 12px 0; } /* just the grab strip, as tall as a thread's */
   .chatwin .chat { padding: 6px 12px var(--_pb); }
-  /* Glass reply boxes (Leo, 15 Nov; iOS 26's look, Android too): the messages scroll on under the box and show
-     through it, blurred. Only the box's own strip overlaps; the new / resolve / delete row stays on the sheet. */
+  /* The messages scroll on under the reply box (Leo, 15 Nov). Only the box's own strip overlaps; the new / resolve /
+     delete row stays on the sheet. How they fade there, and the margins round the box: the block after lab-card-in. */
   .chatwin .msgs { margin-bottom: calc(-56px - var(--_pb)); padding-bottom: calc(64px + var(--_pb)); }
   .card > .body { margin-bottom: calc(-56px - var(--_pb)); padding-bottom: calc(64px + var(--_pb)); }
-  /* No fade where the messages meet the box: they run on, blurred, under its glass (Leo, 21 Nov: "its fading down there i hate it"; the 15 Nov fade is gone). */
+  /* 21 Nov the fade went ("its fading down there i hate it") for a glass box; 27 Nov a short fade into a solid box came back, as Telegram's (after lab-card-in). */
   .chatwin .chat, .card > .foot { position: relative; z-index: 1; background: none; }
   :host { --_box-bg: color-mix(in srgb, var(--_bg) 72%, transparent);
           --_box-edge: inset 0 0 0 .5px color-mix(in srgb, var(--_fg) 16%, transparent), 0 4px 18px rgba(0, 0, 0, .08); }
@@ -761,6 +761,32 @@ kbd::before { content: '('; } kbd::after { content: ')'; } /* read as a hint: ch
    frames the pill, the empty page and a small ghost of the sheet showed behind it (Leo, 21 Nov: "weird square placeholder
    behind", "menu pill weirdly glitching behind window"). */
 @keyframes lab-card-in { from { transform: translateY(28px) scale(.97); opacity: 0; } 60% { opacity: 1; } }
+/* Phones: the chat's and a thread's bottom, as Telegram's (Leo, 27 Nov: messages were cut hard by the box, an agent's
+   name and dots showed below it, and the margins round the box were "big holes"). The box sits 8 px (--_gap) in from the
+   sheet's sides and bottom, the home bar's inset kept below it (the sheet already stands --_gap off the screen's edge);
+   with the keyboard up, just --_gap. The last message ends 12 px above the box. Read back, the messages fade out over
+   the 32 px above the box and are gone 8 px into it, so nothing shows under it or below it; at the newest the fade
+   steps down out of the way over the last 32 px of scrolling (a short chat that doesn't scroll has it out of the way),
+   so the last message is never dimmed. The box is 50 px tall (36 px send, 7 px padding): its top is always
+   50 px + --_pb above the messages' bottom, however tall its text grows (the chat strip grows up from there). With
+   nothing under it, the box is solid, without the glass's blur (Leo picked this plain fade over a Telegram-like glass). */
+@media (pointer: coarse) and (max-width: 560px), (pointer: coarse) and (max-height: 500px) {
+  :is(.chatwin, .card) { --_pb: calc(var(--_gap) + max(0px, var(--_safe) - 2 * var(--_gap)) + var(--_kb)); }
+  :is(.chatwin .chat, .card > .foot) { padding-left: var(--_gap); padding-right: var(--_gap); }
+  :is(.chatwin .chat, .card > .foot) .box { border-radius: max(0px, calc(var(--_card-r) - 8px)); } /* --_gap in */
+  :is(.chatwin .msgs, .card > .body) { padding-bottom: calc(62px + var(--_pb));
+    mask: linear-gradient(#000 calc(100% - 82px - var(--_pb)), transparent calc(100% - 42px - var(--_pb))) 0 0 / 100% calc(100% + 32px) no-repeat; }
+  @supports (animation-timeline: scroll()) { /* and the top edge's fade as before (lab-scrolled-top) */
+    :is(.chatwin .msgs, .card > .body) {
+      mask: linear-gradient(transparent, #000 16px) 0 -16px / 100% calc(100% + 16px) no-repeat,
+            linear-gradient(#000 calc(100% - 82px - var(--_pb)), transparent calc(100% - 42px - var(--_pb))) 0 0 / 100% calc(100% + 32px) no-repeat;
+      mask-composite: intersect;
+      animation: lab-scrolled-top linear both, lab-scrolled-end linear both; animation-timeline: scroll(self), scroll(self);
+      animation-range: 0 16px, calc(100% - 32px) 100%; }
+  }
+  :is(.chatwin .chat, .card > .foot) .box { --_box-bg: var(--_bg); backdrop-filter: none; }
+}
+@keyframes lab-scrolled-end { from { mask-size: 100% calc(100% + 16px), 100% 100%; } to { mask-size: 100% calc(100% + 16px), 100% calc(100% + 32px); } }
 /* Feedback on an agent's answer (src/widget/thread.ts): the button under the answer, the bar over the reply box while
    writing it, and the rule the agent made of it, on the answer that saved it. */
 .msg .rule { display: block; margin-top: 6px; font-size: 12px; opacity: .8; letter-spacing: 0; line-height: 1.35; }
