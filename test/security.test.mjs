@@ -199,9 +199,10 @@ test('posts must come from the lab page itself, as JSON', async () => {
 
 test('a body over 256 KB is 413 and one that is not JSON is 400, not a 500 with the error in it', async () => {
   const headers = { 'content-type': 'application/json', origin: `http://localhost:${PORT}` };
+  const mac = { ...headers, 'x-lab-admin': fs.readFileSync(path.join(DIR, '.lab', 'key'), 'utf8').trim() }; // a rule is this computer's
   const big = JSON.stringify({ page: '/index', name: 'X', text: 'x'.repeat(300 * 1024) });
-  for (const p of ['/_lab/api/comments', '/_lab/rule', '/_lab/api/reads']) assert.equal((await raw(p, { method: 'POST', body: big, headers })).status, 413, p);
-  const bad = await raw('/_lab/rule', { method: 'POST', body: '{"page":', headers });
+  for (const p of ['/_lab/api/comments', '/_lab/rule', '/_lab/api/reads']) assert.equal((await raw(p, { method: 'POST', body: big, headers: p === '/_lab/rule' ? mac : headers })).status, 413, p);
+  const bad = await raw('/_lab/rule', { method: 'POST', body: '{"page":', headers: mac });
   assert.equal(bad.status, 400);
   assert.doesNotMatch(bad.text, /SyntaxError|at /);
   assert.equal((await raw('/')).status, 200, 'the lab is still there');

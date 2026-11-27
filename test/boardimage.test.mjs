@@ -210,3 +210,12 @@ test('board add reads a picture once, and says so when one is over 25 MB', async
   assert.equal(r.code, 1);
   assert.match(r.out, /huge\.png: a picture is at most 25 MB\./);
 });
+
+test('a JPEG whose frame says zero wide is refused at once, not read forever (lib/images.mjs and colabit\'s copy)', async () => {
+  const { imageInfo } = await import('../lib/images.mjs');
+  const { imageInfo: coInfo } = await import('../co/api/_lib/images.mjs');
+  // SOI, then a baseline frame header: length 17, 8 bits, 10 high, 0 wide.
+  const jpg = Buffer.from([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x00, 0x0a, 0x00, 0x00, 0x03, 0x01, 0x22, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01]);
+  assert.equal(imageInfo(jpg), null);
+  assert.equal(coInfo(jpg), null);
+});

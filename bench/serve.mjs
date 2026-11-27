@@ -27,7 +27,7 @@ http.createServer(async (req, res) => {
     const bench = url.pathname === AT || url.pathname.startsWith(AT + '/');
     const root = bench ? SITE : path.join(REPO, 'public');
     let file = path.join(root, decodeURIComponent(bench ? url.pathname.slice(AT.length) || '/' : url.pathname));
-    if (!file.startsWith(root)) { res.writeHead(403).end(); return; }
+    if (file !== root && !file.startsWith(root + path.sep)) { res.writeHead(403).end(); return; }
     if (fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, 'index.html');
     if (!fs.existsSync(file) && fs.existsSync(file + '.html')) file += '.html';
     if (!fs.existsSync(file)) { res.writeHead(404).end('not found'); return; }

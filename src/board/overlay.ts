@@ -282,8 +282,12 @@ function backTo(of: string) {
     const r = document.referrer && new URL(document.referrer);
     came = !!r && r.origin === location.origin && r.pathname === new URL(of, location.href).pathname && history.length > 1;
   } catch {}
-  if (came) history.back();
-  else location.href = of;
+  if (came) return history.back();
+  // Only a page of this lab: ?of= comes from the address, so a javascript: or another site's link goes nowhere.
+  try {
+    const to = new URL(of, location.href);
+    if (to.origin === location.origin) location.href = to.href;
+  } catch {}
 }
 
 /** The board called name at its own address (/_lab/board/<name>[?of=/page]): the view over the whole of an empty page.

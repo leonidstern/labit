@@ -25,9 +25,10 @@ export function imageInfo(buf) {
         const m = buf[i + 1];
         if (buf[i] !== 0xff || m === 0xff || m === 0) i++;
         else if (m >= 0xd0 && m <= 0xd9) i += 2;
-        else if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) [h, w] = [buf.readUInt16BE(i + 5), buf.readUInt16BE(i + 7)];
-        else i += 2 + buf.readUInt16BE(i + 2);
-        if (w) break;
+        else if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) {
+          [h, w] = [buf.readUInt16BE(i + 5), buf.readUInt16BE(i + 7)];
+          break; // the frame's size, read once: a zero there is checked below, not read again forever
+        } else i += 2 + buf.readUInt16BE(i + 2);
       }
     } else if (buf.length > 30 && at('RIFF', 0) && at('WEBP', 8)) {
       ext = 'webp';

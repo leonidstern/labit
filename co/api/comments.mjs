@@ -27,6 +27,7 @@ let redis = async (commands) => {
   const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) throw new Error('no store');
+  if (!/^https:\/\//i.test(url)) throw new Error('the store address must be https'); // the token goes with every call
   const res = await fetch(`${url.replace(/\/$/, '')}/pipeline`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify(commands) });
   const out = await res.json();
   if (!res.ok || !Array.isArray(out)) throw new Error(out?.error || `store ${res.status}`);
@@ -100,6 +101,8 @@ export async function POST(request) {
     return json({ error: 'bad json' }, 400);
   }
   if (!body || typeof body !== 'object' || body.action === 'progress') return json({ error: 'bad request' }, 400);
+  // The actions on a pin that is there; anything else would be saved as a new comment, which counts toward the limit.
+  if (body.action && !['resolve', 'reopen', 'delete', 'move'].includes(body.action)) return json({ error: 'bad request' }, 400);
   const page = under(site(request), body.page);
   if (!site(request) || !page) return json({ error: 'bad page' }, 400);
   const owner = isOwner(request);

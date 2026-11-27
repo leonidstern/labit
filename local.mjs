@@ -1071,7 +1071,8 @@ const forGuestText = (t) =>
     .split('\n')
     .filter((l) => !/^\s*(file|in file|written at|component used at|folder|Missing files):/.test(l))
     .join('\n')
-    .replace(/ \(file [^)\n]*\)/g, '');
+    .replace(/ \(file [^)\n]*\)/g, '')
+    .replace(/ \([^()\n]+\.html?:\d+\)/g, ''); // a drawing mark's own line: (pricing.html:30)
 function commentChangesSince(page, since) {
   const first = changeLog.find((e) => e.page === null)?.rev;
   // The oldest rev in the log may have lost some entries to the trim: only a page that already has it gets a delta.
@@ -2456,7 +2457,7 @@ const boardApi = async (req, res, url) => {
       const say = 'Say which page the board is about: labit board new "<topic>" --of /page (it is a pin on that page).';
       if (!b.of) return json(422, { error: say, text: say });
     }
-    const env = { root: ROOT, origin, proxied: Boolean(PROXY), open: (key) => commentsOf(key).filter((c) => !c.parent && !c.resolved).length, titleOf: (p) => { const f = fileFor(boardPage(p)); return f ? titleOf(path.join(ROOT, f)) : ''; }, fileOf: (p) => fileFor(boardPage(p)) };
+    const env = { root: ROOT, origin, proxied: Boolean(PROXY), guest: !isMac(req) && !isAgent(req), open: (key) => commentsOf(key).filter((c) => !c.parent && !c.resolved).length, titleOf: (p) => { const f = fileFor(boardPage(p)); return f ? titleOf(path.join(ROOT, f)) : ''; }, fileOf: (p) => fileFor(boardPage(p)) };
     const out = act.act(String(b.action), b, env);
     boardCache.clear();
     boardList = null;
@@ -2661,7 +2662,7 @@ const handler = async (req, res) => {
     // Keep, no, or undo a rule the agent offered (src/widget/thread.ts): out of replies.md, and the answer says so.
     if (pathname === '/_lab/rule' && req.method === 'POST') {
       // A rule goes into this computer's own replies.md and out to every agent in every lab: kept from this computer only.
-      if (!isLoopback(req)) return plain(res, 403, 'forbidden');
+      if (!isMac(req)) return plain(res, 403, 'forbidden');
       const b = await sent(req);
       const page = String(b.page || '');
       // keep / no: a rule the agent offered (--suggest-rule). Otherwise: undo a kept one.
@@ -3005,7 +3006,7 @@ const handler = async (req, res) => {
       // `labit use`: this lab moves onto the build the command ran from (a branch's clone, or the edge build again), on
       // its port with its comments and listener: a branch needs no lab of its own.
       if (action === 'use') {
-        if (!String(entry).endsWith('local.mjs') || !fs.existsSync(entry) || process.env.LAB_DEV) return res.writeHead(400).end('no');
+        if (path.basename(String(entry)) !== 'local.mjs' || !fs.existsSync(entry) || process.env.LAB_DEV) return res.writeHead(400).end('no');
         // Every session's pages would move with it: not while another session listens here, unless the person said so.
         if (!anyway && waiters.some((w) => w.sid !== sid)) return res.writeHead(409).end('another session listens on this lab: ask the person, then --new');
         handOver(process.execPath, [entry]);
@@ -3248,6 +3249,10 @@ const handler = async (req, res) => {
       if (!fs.existsSync(path.join(file, 'index.html'))) return listing(res, file, url.pathname);
       file = path.join(file, 'index.html');
     }
+    // The file picked last (a.html, a/index.html) may itself be a link out of the folder: checked again.
+    file = fs.realpathSync(file);
+    if (file !== base && !file.startsWith(base + path.sep)) return res.writeHead(403).end();
+    if (!lab && path.relative(base, file).split(path.sep).some((s) => s.startsWith('.'))) return plain(res, 404, 'not found');
     if (!lab && /\.html?$/i.test(file)) {
       return sendBody(req, res, 200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
         inject(withIcon(htmlOf(file)), widget(keyFor(path.relative(ROOT, file)), isLoopback(req), nameFor(req), inFrame(req), req)));
