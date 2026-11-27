@@ -195,11 +195,15 @@ const run = (task, arm, model, c) =>
           return [];
         }
       });
+      // A run where claude never started (nothing came back) is not scored: the untouched copy could pass.
       let score;
-      try {
-        score = task.score(dir, c);
-      } catch (e) {
-        score = { pass: 0, of: null, note: String(e.message || e).slice(0, 200) };
+      if (err && !lines.length) score = { pass: 0, of: null, note: 'claude did not run' };
+      else {
+        try {
+          score = task.score(dir, c);
+        } catch (e) {
+          score = { pass: 0, of: null, note: String(e.message || e).slice(0, 200) };
+        }
       }
       rmSync(dir, { recursive: true, force: true });
       done({ arm, ...(c.id ? { case: c.id } : {}), ...spendOf(lines), seconds: Math.round((Date.now() - t0) / 1000), score, ...(err && !lines.length ? { error: String(err.message).slice(0, 200) } : {}) });

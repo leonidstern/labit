@@ -4,11 +4,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
-const HERE = path.dirname(new URL(import.meta.url).pathname);
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 const MEDIA = path.join(HERE, 'situations/media');
 fs.mkdirSync(MEDIA, { recursive: true });
 
@@ -210,8 +211,10 @@ await shot('hero-desk.jpg', svgPage(2400, 1350, 2400, 1350, desk), { w: 2400, h:
 
 // Videos: one still per second, 10 frames each, piped as JPEGs into the ffmpeg that ships with Playwright
 // (it only encodes VP8 or VP9, depending on the build).
-const cache = path.join(os.homedir(), 'Library/Caches/ms-playwright');
-const ffmpeg = process.env.FFMPEG || fs.readdirSync(cache).filter((d) => d.startsWith('ffmpeg-')).sort().map((d) => path.join(cache, d, 'ffmpeg-mac')).filter((f) => fs.existsSync(f)).pop();
+// FFMPEG wins, then Playwright's (its cache on a Mac or Linux), then an ffmpeg on the PATH.
+const cache = process.env.PLAYWRIGHT_BROWSERS_PATH || path.join(os.homedir(), process.platform === 'darwin' ? 'Library/Caches/ms-playwright' : '.cache/ms-playwright');
+const cached = fs.existsSync(cache) ? fs.readdirSync(cache).filter((d) => d.startsWith('ffmpeg-')).sort().flatMap((d) => ['ffmpeg-mac', 'ffmpeg-linux'].map((f) => path.join(cache, d, f))).filter((f) => fs.existsSync(f)).pop() : undefined;
+const ffmpeg = process.env.FFMPEG || cached || 'ffmpeg';
 const { execFileSync } = await import('node:child_process');
 const encoder = /libvpx-vp9/.test(execFileSync(ffmpeg, ['-hide_banner', '-encoders'], { encoding: 'utf8' })) ? 'libvpx-vp9' : 'libvpx';
 async function video(name, w, h, seconds) {

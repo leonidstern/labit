@@ -14,7 +14,11 @@ export default function batch2({ lineOf, fit, mid, centreOf, field, has, HERE })
   const first = (b) => b.split('\n').find((l) => /^(on|text|element|element text|spot)\b/.test(l)) || '';
   const need = {
     // Words that are on the screen but not in the page's own text: are they in the block at all?
-    says: (words, what) => (b) => [what, b.includes(words), `${field(b, 'element')}${field(b, 'element text') ? ` · element text ${field(b, 'element text')}` : ''}`],
+    // got: the line that has them, else what the pin is on.
+    says: (words, what) => (b) => {
+      const line = b.split('\n').find((l) => l.includes(words));
+      return [what, Boolean(line), line ?? `${field(b, 'element')}${field(b, 'element text') ? ` · element text ${field(b, 'element text')}` : ''}`];
+    },
     chosen: (option) => (b) => ['it says which option of the list is chosen', field(b, 'element text') === `"${option}"` || new RegExp(`^(value|chosen|selected)[^:\\n]*: .*${option}`, 'm').test(b), `element text ${field(b, 'element text')}`],
     notOn: (part) => (b) => [`the pin is not on something else (${part})`, !field(b, 'element').includes(part), field(b, 'element')],
   };
@@ -211,7 +215,8 @@ export default function batch2({ lineOf, fit, mid, centreOf, field, has, HERE })
         async pin(w) {
           const f = 'src/calendar/reminders.ts';
           await w.click(...centreOf(await w.$('box', '#reminders .fold')), { alt: true });
-          return { expect: { file: f, lines: [lineOf(f, 'export function digest('), lineOf(f, 'return `Tomorrow:') + 1] }, needs: [has.codeLine(f, lineOf(f, 'export function digest('))] };
+          // The hidden lines only: after the line with the button, up to the last one in the fold.
+          return { expect: { file: f, lines: [lineOf(f, 'export function digest(') + 1, lineOf(f, 'return `Tomorrow:')] }, needs: [has.codeLine(f, lineOf(f, 'export function digest('))] };
         },
       },
     ],
