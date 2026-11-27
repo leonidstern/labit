@@ -48,7 +48,7 @@ const ids = (cs) => cs.map((c) => c.id).sort();
 const go = (p) => fetch(B + p, { redirect: 'manual' });
 
 test('a board about a page goes to that page: its own address redirects to the page with #board=', async () => {
-  await answers(`${B}/_lab/state`);
+  await answers(`${B}/_lab/pages`);
   const r = await go('/_lab/board/withpage');
   assert.equal(r.status, 302);
   assert.equal(r.headers.get('location'), '/pricing#board=withpage');
@@ -101,7 +101,7 @@ test('labit board list says the page address for a board about a page, its own f
 test('a restart changes nothing (no duplicates), and a pin that lands late on the old address is merged by the redirect, backup untouched', async () => {
   await stop(lab);
   lab = spawnLab(DIR, PORT);
-  await answers(`${B}/_lab/state`);
+  await answers(`${B}/_lab/pages`);
   assert.deepEqual(ids(await list('/pricing')), ['b1', 'b2', 'p1', 'r1']);
   const sent = await fetch(`${B}/_lab/api/comments`, { method: 'POST', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ page: '/_board/withpage', name: 'Leo', text: 'late pin', anchor: { kind: 'board', board: 'withpage', frame: 'b', fx: 1, fy: 2 } }) });
   assert.equal(sent.status, 201);
@@ -114,7 +114,7 @@ test('a restart changes nothing (no duplicates), and a pin that lands late on th
   assert.deepEqual(held(), original, 'the backup is the first one');
   await stop(lab);
   lab = spawnLab(DIR, PORT);
-  await answers(`${B}/_lab/state`);
+  await answers(`${B}/_lab/pages`);
   assert.equal((await list('/pricing')).length, 5, 'what was saved reads back whole');
 });
 

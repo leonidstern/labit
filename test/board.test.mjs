@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import http from 'node:http';
-import { LAB, claimPort, tmp, rm, spawnLab, sleep, up as answers, sseReader } from './harness.mjs';
+import { LAB, claimPort, tmp, rm, spawnLab, sleep, up as answers, sseReader, liveState } from './harness.mjs';
 
 const mk = (flags) => {
   const dir = fs.realpathSync(tmp('board'));
@@ -26,7 +26,7 @@ after(() => {
   upstream.close();
   rm([DIR, PX]);
 });
-const up = (port) => answers(`http://localhost:${port}/_lab/state`);
+const up = (port) => answers(`http://localhost:${port}/_lab/pages`);
 const put = (base, q, body, headers = {}) => fetch(`${base}/_lab/api/board?${q}`, { method: 'PUT', headers: { 'content-type': 'application/json', origin: base, ...headers }, body: JSON.stringify(body) });
 const get = (base, q) => fetch(`${base}/_lab/api/board?${q}`).then(async (r) => ({ status: r.status, body: await r.json() }));
 const live = (base) =>
@@ -351,7 +351,7 @@ test('a wait on a board is heard by its frames', async () => {
   let heard;
   for (let i = 0; i < 50 && !heard?.pages.includes(`/_board/${name}/b`); i++) {
     await settle(100);
-    heard = (await (await fetch(`${B}/_lab/state`)).json()).heard;
+    heard = (await liveState(B)).heard;
   }
   w.kill();
   assert.ok(heard.pages.includes(`/_board/${name}`) && heard.pages.includes('/pricing') && heard.pages.includes(`/_board/${name}/b`), JSON.stringify(heard));

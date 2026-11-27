@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import http from 'node:http';
-import { site, claimPort, tmp, rm, spawnLab, up as answers, sseReader } from './harness.mjs';
+import { site, claimPort, tmp, rm, spawnLab, up as answers, liveState } from './harness.mjs';
 import { VERSION } from '../lib/schema.mjs';
 
 const { DIR, PORT, B } = site('schema', 9200, 90);
@@ -26,16 +26,8 @@ server2.stderr.on('data', (d) => console.log('S2', String(d)));
 server2.stdout.on('data', (d) => console.log('S2', String(d)));
 procs.push(server, server2);
 after(() => { procs.forEach((p) => p.kill()); upstream.close(); rm([DIR]); });
-const up = async (base) => void (await answers(base + '/_lab/state'));
+const up = async (base) => void (await answers(base + '/_lab/pages'));
 const tagOf = (html) => [...html.matchAll(/<script\b[^>]*\/_lab\/comments\.js[^>]*>/g)].map((m) => m[0]);
-const sse = (base) => new Promise((resolve, reject) => {
-  const u = new URL(base + '/_lab/live');
-  const req = http.get({ host: '127.0.0.1', port: u.port, path: u.pathname, headers: { host: u.host } }, (res) => {
-    res.setEncoding('utf8');
-    res.on('data', sseReader((d) => { req.destroy(); resolve(JSON.parse(d)); }));
-  });
-  req.on('error', reject);
-});
 
 test('plain pages, nested pages, pages with their own tag, pages without body carry data-schema once', async () => {
   await up(B);
@@ -52,12 +44,8 @@ test('a page that loads the widget with a query string', async () => {
   assert.equal(t.filter((x) => /data-schema/.test(x)).length, 1);
 });
 
-test('state and stream carry the schema', async () => {
-  const s = await (await fetch(B + '/_lab/state')).json();
-  assert.equal(s.schema, VERSION);
-  const l = await sse(B);
-  assert.equal(l.schema, VERSION);
-  assert.equal(l.widget, s.widget);
+test('the stream carries the schema', async () => {
+  assert.equal((await liveState(B)).schema, VERSION);
 });
 
 test('listing page', async () => {

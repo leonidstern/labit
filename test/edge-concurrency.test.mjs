@@ -11,7 +11,7 @@ import net from 'node:net';
 import zlib from 'node:zlib';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { sseReader } from './harness.mjs';
+import { liveState, sseReader } from './harness.mjs';
 
 const LAB = fileURLToPath(new URL('../local.mjs', import.meta.url));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -51,7 +51,7 @@ const startLab = async () => {
     stop: (sig) => new Promise((r) => (proc.exitCode !== null || proc.signalCode ? r() : (proc.once('exit', r), proc.kill(sig)))) };
   labs.push(lab);
   for (let i = 0; i < 100 && proc.exitCode === null; i++) {
-    if ((await raw(PORT, '/_lab/state')).status === 200) return lab;
+    if ((await raw(PORT, '/_lab/pages')).status === 200) return lab;
     await sleep(100);
   }
   throw new Error(`the lab did not start: ${out}`);
@@ -85,7 +85,7 @@ const settled = async (page, n) => {
 test('50 pins sent at the same moment to one page: 50 answers, 50 ids, all in the list, the file, the delta and comments.md', async () => {
   // A change first (on another page), so the revision below is in the change log and the lab can answer with a delta.
   assert.equal((await pin('/kill', 'before the burst')).status, 201);
-  const rev0 = JSON.parse((await raw(PORT, '/_lab/state')).text).comments;
+  const rev0 = (await liveState(`http://localhost:${PORT}`)).comments;
   const got = await Promise.all(Array.from({ length: 50 }, (_, i) => pin('/index', `at once ${i}`)));
   assert.deepEqual([...new Set(got.map((r) => r.status))], [201]);
   const ids = got.map((r) => r.json.comment.id);

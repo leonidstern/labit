@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
+import { liveState } from './harness.mjs';
 import net from 'node:net';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -42,7 +43,7 @@ const startLab = async (dir, port) => {
     stop: () => new Promise((r) => (proc.exitCode !== null || proc.signalCode ? r() : (proc.once('exit', r), proc.kill()))) };
   labs.push(lab);
   for (let i = 0; i < 100 && proc.exitCode === null; i++) {
-    if ((await raw(port, '/_lab/state')).status === 200) return lab;
+    if ((await raw(port, '/_lab/pages')).status === 200) return lab;
     await sleep(100);
   }
   throw new Error(`the lab did not start: ${out}`);
@@ -179,7 +180,7 @@ test('a key is never written where others read: the list, the agent text, commen
   const places = {
     list: await read('/_lab/api/comments?page=/other'),
     'agent text': await read('/_lab/agent/other'),
-    state: await read('/_lab/state'),
+    state: JSON.stringify(await liveState(lab.B)),
     pages: await read('/_lab/pages'),
     changes: await read('/_lab/api/changes?page=/other&since=0'),
     'comments.md': fs.readFileSync(path.join(DIR, '.lab/comments.md'), 'utf8'),

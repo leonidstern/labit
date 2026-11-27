@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, execFile } from 'node:child_process';
-import { LAB, claimPort, tmp as folder, rm, sleep } from './harness.mjs';
+import { LAB, claimPort, tmp as folder, rm, sleep, liveState } from './harness.mjs';
 import { loadSettings, FLAGS } from '../lib/settings.ts';
 
 const dirs = [];
@@ -103,11 +103,11 @@ test('the experiments switch: owner only, saved in your settings, on the page an
   assert.deepEqual(saved(cfg), { talk: true }, 'in your own settings');
   assert.equal(fs.existsSync(path.join(dir, 'labit.json')), false, "the project's file is not touched");
   assert.deepEqual(flagsOf(await (await fetch(B + '/')).text()), { talk: true }, 'the next page load has it, no restart');
-  assert.deepEqual((await (await fetch(B + '/_lab/state')).json()).flags, ['talk'], 'open pages hear it');
+  assert.deepEqual((await liveState(B)).flags, ['talk'], 'open pages hear it');
 
   await post({ flag: 'talk', on: false });
   assert.deepEqual(saved(cfg), {}, 'off: none on');
-  assert.deepEqual((await (await fetch(B + '/_lab/state')).json()).flags, []);
+  assert.deepEqual((await liveState(B)).flags, []);
 });
 
 test('`labit settings` names the flags that are on', async () => {

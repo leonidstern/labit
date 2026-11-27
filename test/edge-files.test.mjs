@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
+import { liveState } from './harness.mjs';
 import net from 'node:net';
 import { spawn, execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -49,7 +50,7 @@ const startLab = async (dir, { wait = 10000 } = {}) => {
   labs.push(lab);
   const t = Date.now();
   while (Date.now() - t < wait && proc.exitCode === null) {
-    if ((await raw(port, '/_lab/state')).status === 200) return Object.assign(lab, { took: Date.now() - t });
+    if ((await raw(port, '/_lab/pages')).status === 200) return Object.assign(lab, { took: Date.now() - t });
     await sleep(50);
   }
   throw new Error(`the lab did not start in ${wait} ms: ${out}`);
@@ -61,7 +62,7 @@ after(async () => {
 });
 const pinOn = (lab, page, text) => raw(lab.port, '/_lab/api/comments', { method: 'POST', body: JSON.stringify({ page, name: 'Leo', text, anchor: { selector: 'h1', x: 0.5, y: 0.5 } }), headers: { 'content-type': 'application/json', origin: lab.B } });
 const listOn = async (lab, page) => (await raw(lab.port, `/_lab/api/comments?page=${encodeURIComponent(page)}`)).json?.comments;
-const stateOf = async (lab) => JSON.parse((await raw(lab.port, '/_lab/state')).text);
+const stateOf = (lab) => liveState(lab.B);
 const STACK = /\n\s+at .+:\d+:\d+\)?|Node\.js v\d+/;
 const widgets = (html) => html.split('/_lab/comments.js').length - 1;
 
@@ -157,7 +158,7 @@ test('a 10 MB page: served whole with the comment layer once, compressed too, wi
   assert.ok(plainMs < 5000, `plain: ${plainMs} ms`);
   // Compressed, with something else asked for meanwhile.
   t = Date.now();
-  const [br, state] = await Promise.all([raw(PORT, '/big', { headers: { 'accept-encoding': 'br, gzip' } }), sleep(20).then(async () => { const s = Date.now(); await raw(PORT, '/_lab/state'); return Date.now() - s; })]);
+  const [br, state] = await Promise.all([raw(PORT, '/big', { headers: { 'accept-encoding': 'br, gzip' } }), sleep(20).then(async () => { const s = Date.now(); await raw(PORT, '/_lab/pages'); return Date.now() - s; })]);
   const brMs = Date.now() - t;
   assert.equal(br.status, 200);
   assert.equal(br.headers['content-encoding'], 'br');

@@ -18,7 +18,7 @@ after(() => {
   lab.kill();
   rm([DIR]);
 });
-const key = async () => (await up(`${B}/_lab/state`), serverJson(DIR));
+const key = async () => (await up(`${B}/_lab/pages`), serverJson(DIR));
 const upload = async (body, { type = 'image/png', headers = {}, token = true } = {}) =>
   fetch(`${B}/_lab/api/image`, { method: 'POST', headers: { 'content-type': type, origin: B, ...(token ? { 'x-lab-admin': (await key()).token } : {}), ...headers }, body });
 const comment = (body) => fetch(`${B}/_lab/api/comments`, { method: 'POST', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ page: '/index', name: 'Leo', anchor: H1, ...body }) });
