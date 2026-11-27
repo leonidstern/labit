@@ -21,7 +21,7 @@ const B = `http://localhost:${PORT}`;
 const paras = Array.from({ length: 30 }, (_, i) => `<p id="p${i}">paragraph ${i} with some words to read on a phone</p>`).join('');
 fs.writeFileSync(path.join(DIR, 'index.html'), `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>P</title>
 <style>body{margin:0 20px;font:16px/1.5 sans-serif} #bar{position:sticky;top:0;background:#eee;padding:8px}</style>
-<body><header id="bar"><b>Sticky bar</b></header><main id="main" style="color: #111">${paras}</main><footer id="foot" style="transition-duration: 123ms !important; translate: 0 1px">The end.</footer></body>`);
+<body><header id="bar"><b>Sticky bar</b></header><main id="main" style="color: #111">${paras}</main><aside id="side" style="translate: 50px 0">Aside.</aside><footer id="foot" style="transition-duration: 123ms !important; translate: 0 1px">The end.</footer></body>`);
 const server = startLab(DIR, labEnv({}, { settings: false }), { root: '.', port: PORT });
 await labUp(B);
 const token = JSON.parse(fs.readFileSync(path.join(DIR, '.lab', 'server.json'), 'utf8')).token;
@@ -59,6 +59,7 @@ try {
       const LONG = ['translate', 'transition', 'transition-property', 'transition-duration', 'transition-timing-function', 'transition-delay', 'transition-behavior'];
       const footStyle = () => p.evaluate((LONG) => { const st = document.getElementById('foot').style; return { css: st.cssText, each: LONG.map((k) => `${k}=${st.getPropertyValue(k)}!${st.getPropertyPriority(k)}`) }; }, LONG);
       const footBefore = await footStyle();
+      const sideBefore = await p.evaluate(() => ({ inline: document.getElementById('side').style.translate, x: document.getElementById('side').getBoundingClientRect().left }));
 
       // A new comment held low on the page: the page moves so its pin shows above the sheet, held still by a shift.
       await p.evaluate(() => scrollTo(0, 0));
@@ -72,7 +73,7 @@ try {
         t.dispatchEvent(new PointerEvent('pointerup', at));
         return Math.round(scrollY);
       });
-      const during = await p.evaluate(() => ({ main: document.getElementById('main').style.translate, foot: document.getElementById('foot').style.translate, bar: document.getElementById('bar').style.translate, html: document.documentElement.getAttribute('style') || '' }));
+      const during = await p.evaluate(() => ({ main: document.getElementById('main').style.translate, foot: document.getElementById('foot').style.translate, side: getComputedStyle(document.getElementById('side')).translate, bar: document.getElementById('bar').style.translate, html: document.documentElement.getAttribute('style') || '' }));
       check(eng, 'a held new comment opens and moves the page', (await open()) === 'float' && hold > 0, `open ${await open()}, scrollY ${hold}`);
       check(eng, 'the page is held still by a translate on its own blocks (not the sticky bar), nothing on <html>', /px/.test(during.main) && !during.bar && !/--lab-shift/.test(during.html), JSON.stringify(during));
       check(eng, 'the commenting rules stay while the new comment is open', (await pinning()) === true, '');
@@ -84,6 +85,9 @@ try {
       check(eng, '<html> never got the shift (no custom property written there)', after.w.html.every((s) => !/--lab-shift/.test(s)), JSON.stringify(after.w.html));
       check(eng, 'the shift ran on the page\'s block', after.w.shifts.some((s) => /px/.test(s)), JSON.stringify(after.w.shifts));
       const footAfter = await footStyle();
+      const sideAfter = await p.evaluate(() => ({ inline: document.getElementById('side').style.translate, x: document.getElementById('side').getBoundingClientRect().left }));
+      check(eng, 'a block with its own translate 50px across keeps it while shifted (only its y gets the shift)', /^50px /.test(during.side) && /px$/.test(during.side) && during.side !== '50px', during.side);
+      check(eng, '... and after: the same inline translate, the same place across', sideAfter.inline === sideBefore.inline && Math.abs(sideAfter.x - sideBefore.x) < 0.5, `${JSON.stringify(sideBefore)} -> ${JSON.stringify(sideAfter)}`);
       check(eng, 'a block with only transition-duration !important and its own translate was shifted too', during.foot !== '0px 1px' && /px/.test(during.foot), during.foot);
       check(eng, '... and its inline style came back exactly as it was (each longhand, its !important)', JSON.stringify(footAfter) === JSON.stringify(footBefore) && /123ms/.test(footBefore.css), `${JSON.stringify(footBefore)} -> ${JSON.stringify(footAfter)}`);
 
@@ -167,6 +171,16 @@ try {
       else {
         check(eng, 'a 40 px pull on the dimmed page is not a tap: the sheet stays', afterPull === 'card', String(afterPull));
         check(eng, 'a tap that wobbles 3 px on the dimmed page closes the sheet', t2 === 'ok' && afterWobble === null, String(afterWobble));
+        // Pinch-zoomed 2x (the viewport's scale stood in for: headless engines don't pinch): a 4 page-px wobble is 8 px
+        // on the screen, still a tap by lifttap's 5 page px, and the sheet must not take it for a pull that eats the close.
+        await p.tap(pin1);
+        await sleep(800);
+        await p.evaluate(() => Object.defineProperty(visualViewport, 'scale', { configurable: true, get: () => 2 }));
+        const t3 = await touchOn(4);
+        await sleep(900);
+        const afterZoomed = await open();
+        await p.evaluate(() => delete visualViewport.scale);
+        check(eng, 'pinch-zoomed 2x, a tap that wobbles 4 page px on the dimmed page still closes the sheet', t3 === 'ok' && afterZoomed === null, String(afterZoomed));
       }
     } finally {
       await browser.close();

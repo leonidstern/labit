@@ -41,3 +41,23 @@ export const releaseFrom = (ts: number[]): number => {
   }
   return ts.findIndex((t) => last - t <= 100);
 };
+
+// A block's own translate with the page's shift (px down) added to it: its other axes stay as they were (`50px 0` held
+// 50 px across, not 0). `own` is its computed translate ('none', or 1 to 3 lengths, a calc() among them).
+export function withShift(own: string, px: number): string {
+  const parts: string[] = [];
+  let depth = 0;
+  let cur = '';
+  for (const ch of own.trim()) {
+    if (ch === '(') depth++;
+    else if (ch === ')') depth--;
+    if (/\s/.test(ch) && !depth) {
+      if (cur) parts.push(cur);
+      cur = '';
+    } else cur += ch;
+  }
+  if (cur) parts.push(cur);
+  if (!parts.length || parts[0] === 'none') return `0px ${px}px`;
+  const [x, y = '0px', z] = parts;
+  return `${x} calc(${y} + ${px}px)${z ? ` ${z}` : ''}`;
+}

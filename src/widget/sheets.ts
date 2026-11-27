@@ -174,14 +174,18 @@ let gen = 0; // each shift is the last one's end
 let easeSettle = ''; // a token: read once
 const WRITTEN = ['translate', 'transition-property', 'transition-duration', 'transition-timing-function', 'transition-delay', 'transition-behavior'];
 const kept = new Map<HTMLElement, [string, string][]>();
+const ownTranslate = new Map<HTMLElement, string>(); // a block's own (computed) translate: the shift is added to it
 const blocks = () => Array.from(document.body.children).filter((n): n is HTMLElement => n instanceof HTMLElement && n !== W.host && n.localName !== 'script' && n.localName !== 'style' && !n.hasAttribute('data-lab-board-view') && !n.hasAttribute('data-lab-still'));
 const shifted = (px: number, ms: number) => {
   gen++;
   easeSettle ||= getComputedStyle(W.host).getPropertyValue('--_ease-settle').trim() || 'ease';
   for (const n of kept.size ? kept.keys() : blocks()) {
     const st = n.style;
-    if (!kept.has(n)) kept.set(n, WRITTEN.map((k): [string, string] => [st.getPropertyValue(k), st.getPropertyPriority(k)]));
-    st.setProperty('translate', `0 ${px}px`, 'important');
+    if (!kept.has(n)) {
+      kept.set(n, WRITTEN.map((k): [string, string] => [st.getPropertyValue(k), st.getPropertyPriority(k)]));
+      ownTranslate.set(n, getComputedStyle(n).translate);
+    }
+    st.setProperty('translate', move.withShift(ownTranslate.get(n) || 'none', px), 'important');
     st.setProperty('transition', `translate ${ms}ms ${easeSettle}`, 'important');
   }
   const h = W.host.style;
@@ -199,6 +203,7 @@ const unshifted = () => {
     if (!n.getAttribute('style')) n.removeAttribute('style'); // a block that had none is left with none
   }
   kept.clear();
+  ownTranslate.clear();
   for (const k of ['--lab-shift', '--lab-shift-t', '--lab-shift-e']) W.host.style.removeProperty(k);
   W.host.removeAttribute('data-shift');
   for (const n of document.querySelectorAll('[data-lab-still]')) n.removeAttribute('data-lab-still');
@@ -469,8 +474,9 @@ export function swipeDown(node, close, grows = false) {
     if (fromScrim !== (e.currentTarget === W.scrim)) return;
     const was = mode;
     mode = null;
-    // A tap's wobble on the dimmed page (the sheet followed it a few px) is still a tap, which closes (lifttap.ts).
-    if (was === 'drag' && !(fromScrim && Math.abs(raw) <= TAP_SLOP)) W.S.sheetDraggedAt = performance.now();
+    // A tap's wobble on the dimmed page (the sheet followed it a few px) is still a tap, which closes (lifttap.ts). `raw` is
+    // in screen px (scaled by the pinch zoom), lifttap's slop in page px: pinch-zoomed, the slop is scaled the same.
+    if (was === 'drag' && !(fromScrim && Math.abs(raw) <= TAP_SLOP * (W.vv?.scale || 1))) W.S.sheetDraggedAt = performance.now();
     if (was !== 'drag') return;
     releasedAt = performance.now();
     // How fast the finger (v) and the sheet (vs, which a rubber band slows) were going at the end, px/ms, + down (over the

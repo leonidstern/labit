@@ -20,3 +20,14 @@ test('a short quick flick down closes, a slow short drag and any flick up do not
   assert.equal(goes(80, 0.1, 393), false);
   assert.equal(goes(-30, -2, 393), false);
 });
+
+const { withShift } = await import('../src/widget/sheetmove.ts');
+
+test("the page's shift is added to a block's own translate, its other axes kept", () => {
+  assert.equal(withShift('none', 120), '0px 120px');
+  assert.equal(withShift('', -40), '0px -40px');
+  assert.equal(withShift('50px', 120), '50px calc(0px + 120px)');
+  assert.equal(withShift('50px 0px', 120), '50px calc(0px + 120px)');
+  assert.equal(withShift('0px 1px', 30), '0px calc(1px + 30px)');
+  assert.equal(withShift('10% calc(2px + 1em) 3px', 5), '10% calc(calc(2px + 1em) + 5px) 3px');
+});
