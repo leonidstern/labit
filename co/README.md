@@ -8,7 +8,7 @@ Your own lab for the people you work with: one lab address, a path per person (`
 
 The button copies labit into a repository of yours, makes a Vercel project from its `co` folder, adds an Upstash Redis store for the comments and asks for `LAB_COMMENTS_ADMIN_TOKEN`: a long random string, your admin key. Then give the project a domain (`lab.yourstudio.com`).
 
-Nothing is built or installed on Vercel, and the `co` folder needs nothing outside it: the API and its few files are in `co/api`, with no dependencies, so a deploy is one function and a rewrite. **The widget updates itself**: `/_lab/co.js` is labit's own built file (`co/co.js` on labit's main, through jsDelivr), so a new widget reaches your colabit within minutes of being merged, with no deploy. To stay on one version, change `@main` in that rewrite in `co/vercel.json` to a release tag (`@v0.8.1`).
+Nothing is built or installed on Vercel, and the `co` folder needs nothing outside it: the API and its few files are in `co/api`, with no dependencies, so a deploy is one function and a rewrite. **The widget updates itself**: `/_lab/co.js` is labit's own built file (`co/co.js` in labit's latest release, through jsDelivr), so a new widget reaches your colabit within minutes of a labit release, with no deploy. Changes merged between releases don't reach it. To stay on one version, change `@latest` in that rewrite in `co/vercel.json` to a release tag (`@v0.8.5`); to follow every merge, `@main`.
 
 ## 2. Add a person
 

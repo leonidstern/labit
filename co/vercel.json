@@ -24,7 +24,7 @@
   "rewrites": [
     {
       "source": "/_lab/co.js",
-      "destination": "https://cdn.jsdelivr.net/gh/leonidstern/labit@main/co/co.js"
+      "destination": "https://cdn.jsdelivr.net/gh/leonidstern/labit@latest/co/co.js"
     },
     {
       "source": "/_lab/co/comments",

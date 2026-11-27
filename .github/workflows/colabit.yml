@@ -1,5 +1,6 @@
-# Colabits load the widget from labit's main through jsDelivr (co/vercel.json): when a merge changes it (co/co.js),
-# jsDelivr's copy is dropped at once, so every colabit has the new one within minutes instead of jsDelivr's 12 hours.
+# Colabits deployed before 0.8.6 load the widget from labit's main through jsDelivr (their co/vercel.json says @main;
+# new ones follow the latest release, publish.yml): when a merge changes it (co/co.js), jsDelivr's copy of main is dropped
+# at once, so those colabits have the new one within minutes instead of jsDelivr's 12 hours.
 name: colabit
 on:
   push:
