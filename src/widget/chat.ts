@@ -66,14 +66,14 @@ export function drawMsgs(w: unknown, msgs, byId: Map<unknown, any>, opening: boo
     // A reply shows what it answers, as in Telegram: the name and the start of that message; a tap there jumps to it.
     if (m.parent && root) {
       const q = W.el('div', { class: 'quote' });
-      q.append(W.el('b', {}, String(root.name || '').replace(/\s*·\s*session\s+\S+$/i, '')), document.createTextNode(root.text.replace(/\s+/g, ' ').slice(0, 90)));
+      q.append(W.nameLine(root.name), document.createTextNode(root.text.replace(/\s+/g, ' ').slice(0, 90)));
       q.addEventListener('click', (e) => {
         e.stopPropagation();
         const box = W.$('.msgs', W.chatEl);
         const to = W.$(`[data-id="${root.id}"]`, box);
         if (!to) return;
         box.scrollTo({ top: to.offsetTop - box.offsetTop - 12, behavior: W.still.matches ? 'auto' : 'smooth' });
-        to.animate?.([{ boxShadow: `0 0 0 2px ${getComputedStyle(to).getPropertyValue('--_green').trim()}` }, { boxShadow: '0 0 0 0 transparent' }], { duration: W.ms('hold') });
+        to.animate([{ boxShadow: `0 0 0 2px ${getComputedStyle(to).getPropertyValue('--_green').trim()}` }, { boxShadow: '0 0 0 0 transparent' }], { duration: W.ms('hold') });
       });
       b.append(q);
     }
@@ -106,16 +106,12 @@ export function drawMsgs(w: unknown, msgs, byId: Map<unknown, any>, opening: boo
         onSubmit: async (name, text, att) => {
           const { comment } = await W.send({ name, text, ...att, anchor: { kind: 'page', width: innerWidth, height: innerHeight, dpr: devicePixelRatio || 1, board: (window as unknown as { __labBoard?: { name?: string } }).__labBoard?.name } }); // sent with a board open: its name, so the agent knows (Leo, 26 Nov)
           W.addComment(comment, 1);
-          box.scrollTop = box.scrollHeight;
-          W.S.stayAtEnd?.(box);
+          W.S.stayAtEnd(box);
           W.render();
           return { keep: true }; // the same box stays, with the cursor in it: the phone's keyboard stays up
         },
       }),
     );
   if (opening) warmChat(box); // before it is put at its newest: the heights above it are real from the first frame
-  if (atEnd) {
-    box.scrollTop = box.scrollHeight;
-    W.S.stayAtEnd?.(box); // and stays at the newest while the sheet and its words settle (comments.js)
-  }
+  if (atEnd) W.S.stayAtEnd(box); // there, and stays at the newest while the sheet and its words settle (comments.js)
 }

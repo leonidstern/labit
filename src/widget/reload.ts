@@ -294,7 +294,7 @@ export function reloader({ W, reload, loaded, samePath, idOf, selDirty, board, s
         W.script.dataset.sum = tag.dataset.sum || ''; // this page now is that file
         aroundMorph(() => morphKids(document.body, doc.body)); // a choice tried in the page: its words back first (thread.ts)
         // The elements that changed are outlined for a moment (not for someone who asked for less motion).
-        if (!matchMedia('(prefers-reduced-motion: reduce)').matches) for (const e of [...touched].slice(0, 12)) if (e?.isConnected && e !== document.body) e.animate?.([{ outline: '2px solid Highlight' }, { outline: '2px solid transparent' }], 1200);
+        if (!matchMedia('(prefers-reduced-motion: reduce)').matches) for (const e of [...touched].slice(0, 12)) if (e?.isConnected && e !== document.body) e.animate([{ outline: '2px solid Highlight' }, { outline: '2px solid transparent' }], 1200);
         touched.clear();
         if (mark?.isConnected) {
           const moved = mark.getBoundingClientRect().top - markTop;

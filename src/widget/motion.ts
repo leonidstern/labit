@@ -61,6 +61,9 @@ const setItem = (el, stop, mine = false) => {
 // pinned element's own motion wins, the video or animation it is, holds or sits in, and of several the one under
 // the pin's own spot (else the nearest to it). Only a pin with no motion of its own (the page, a heading) takes the
 // paused thing most in view, nearest the screen's middle.
+// A point inside a box, and a box's area: the smallest thing under a point is the one meant.
+const inBox = (x: number, y: number, r: DOMRect) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+const area = (r: DOMRect) => r.width * r.height;
 const ownMotion = (anchor) => {
   let at = null;
   try {
@@ -68,13 +71,12 @@ const ownMotion = (anchor) => {
   } catch {}
   if (at === document.body || at === document.documentElement || (at && W.root.contains(at))) at = null;
   const things = [...new Set([...held, ...document.querySelectorAll('video'), ...pageAnims().map(targetOf)])].filter((el) => el?.isConnected && !W.root.contains(el));
-  const area = (r) => r.width * r.height;
   if (at) {
     const ar = at.getBoundingClientRect();
     const px = ar.left + (Number.isFinite(anchor.x) ? anchor.x : 0.5) * ar.width, py = ar.top + (Number.isFinite(anchor.y) ? anchor.y : 0.5) * ar.height;
     const own = things.filter((el) => at.contains(el) || el.contains(at));
     const box = (el) => el.getBoundingClientRect();
-    const under = own.filter((el) => { const r = box(el); return px >= r.left && px <= r.right && py >= r.top && py <= r.bottom; });
+    const under = own.filter((el) => inBox(px, py, box(el)));
     if (under.length) return under.sort((p, q) => area(box(p)) - area(box(q)))[0]; // the smallest under the spot: the thing itself, not what holds it
     const off = (el) => { const r = box(el); return Math.hypot(Math.max(r.left - px, 0, px - r.right), Math.max(r.top - py, 0, py - r.bottom)); };
     if (own.length) return own.sort((p, q) => off(p) - off(q))[0];
@@ -237,8 +239,7 @@ const thingAt = (x, y) => {
     const own = all.filter((t) => t.contains(n));
     if (own.length) return own.sort((a, b) => (a.contains(b) ? 1 : b.contains(a) ? -1 : 0))[0];
   }
-  const area = (r) => r.width * r.height;
-  return all.map((t) => [t, t.getBoundingClientRect()] as const).filter(([, r]) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom)
+  return all.map((t) => [t, t.getBoundingClientRect()] as const).filter(([, r]) => inBox(x, y, r))
     .sort((p, q) => area(p[1]) - area(q[1]))[0]?.[0] || null;
 };
 

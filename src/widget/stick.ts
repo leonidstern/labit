@@ -25,7 +25,7 @@ export function stickToEnd(list: HTMLElement, on = true) {
     if (fit()) return; // the list changed size: not a scroll of yours
     stick = list.scrollHeight - list.scrollTop - list.clientHeight < 48;
   }, { passive: true });
-  if ('ResizeObserver' in window) new ResizeObserver(fit).observe(list);
+  new ResizeObserver(fit).observe(list);
   return {
     /** Go to the newest and stay there. */
     pin() {

@@ -16,10 +16,11 @@ export const goTo = (c, keys = false) => {
   const a = c.anchor || {};
   const view = (window as unknown as { __labBoard?: { name?: string; look?: (a: unknown) => void }; __labBoardView?: { show: (n: string) => Promise<unknown> } });
   // On its board, open: the camera goes to it (a frame is drawn whole: the board moves, no frame scrolls).
-  if (a.kind === 'board' && view.__labBoard && (W.S.board || view.__labBoard.name === a.board)) return void (view.__labBoard.look?.(a), (W.S.openId = c.id), (W.S.draft = null), W.render());
+  const open = () => (view.__labBoard?.look?.(a), (W.S.openId = c.id), (W.S.draft = null), W.render());
+  if (a.kind === 'board' && view.__labBoard && (W.S.board || view.__labBoard.name === a.board)) return void open();
   if (a.kind === 'board' && !W.S.board) {
     const was = W.S.openId;
-    return void view.__labBoardView?.show(a.board).then(() => setTimeout(() => mine === going && W.S.openId === was && (view.__labBoard?.look?.(a), (W.S.openId = c.id), (W.S.draft = null), W.render()), 300));
+    return void view.__labBoardView?.show(a.board).then(() => setTimeout(() => mine === going && W.S.openId === was && open(), 300));
   }
   W.S.stepping = Boolean(W.S.openId);
   W.S.keepKeys = W.S.stepping && (keys || W.root.activeElement?.localName === 'textarea');

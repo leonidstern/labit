@@ -366,7 +366,7 @@ export function threadCard(c, fresh = new Set(), focus = false) {
     const to = item.to && [c, ...W.repliesOf(c.id)].find((x) => x.id === item.to); // the pin itself too: it may be the question
     if (to) {
       const q = W.el('span', { class: 'quote' });
-      q.append(W.el('b', {}, String(to.name || '').replace(/\s*·\s*session\s+\S+$/i, '')), document.createTextNode(to.text.replace(/\s+/g, ' ').slice(0, 90)));
+      q.append(W.nameLine(to.name), document.createTextNode(to.text.replace(/\s+/g, ' ').slice(0, 90)));
       q.addEventListener('click', () => card.querySelector(`.msg[data-id="${to.id}"]`)?.scrollIntoView({ block: 'center', behavior: W.still.matches ? 'auto' : 'smooth' }));
       box.append(q);
     }
@@ -426,6 +426,14 @@ export function threadCard(c, fresh = new Set(), focus = false) {
     body.append(itemEl(item));
     shown.add(item.id);
   }
+  // A reply put in after the last message, easing in (sync, below, and a reply sent here).
+  const addItem = (r) => {
+    const items = card.querySelectorAll('.item');
+    const added = itemEl(r);
+    added.classList.add('fresh');
+    items[items.length - 1].after(added);
+    shown.add(r.id);
+  };
   card.sync = () => {
     // A new question with choices, or a pick (from another device): the card is drawn again, so the rows are right.
     if (W.repliesOf(c.id).some((r) => !shown.has(r.id) && (r.choices || r.picked))) return W.render();
@@ -453,18 +461,11 @@ export function threadCard(c, fresh = new Set(), focus = false) {
     }
     for (const r of W.repliesOf(c.id)) {
       if (shown.has(r.id)) continue;
-      const items = card.querySelectorAll('.item');
-      const added = itemEl(r);
-      added.classList.add('fresh');
-      items[items.length - 1].after(added);
-      shown.add(r.id);
+      addItem(r);
       drawnAs.set(r.id, JSON.stringify(r));
       W.markSeen([r]);
     }
-    if (atEnd) { // at the newest: the new one comes into view, and stays while its words settle
-      body.scrollTop = body.scrollHeight;
-      W.S.stayAtEnd?.(body);
-    }
+    if (atEnd) W.S.stayAtEnd(body); // at the newest: the new one comes into view, and stays while its words settle
   };
   // Resolve: admins, and whoever started the thread (its key is kept in their browser). Delete: admins.
   const ownKey = W.store.get(`lab-edit:${c.id}`);
@@ -600,22 +601,15 @@ export function threadCard(c, fresh = new Set(), focus = false) {
           W.render();
           // The card is drawn again: keep it where you were, at the newest message, with the cursor in the box.
           const again = W.S.openCard?.querySelector('.body');
-          if (again) { again.scrollTop = again.scrollHeight; W.S.stayAtEnd?.(again); }
+          if (again) W.S.stayAtEnd(again);
           W.S.openCard?.querySelector('textarea')?.focus({ preventScroll: true });
           return { keep: true };
         }
         // Add the reply where it belongs instead of redrawing the card, so nothing on screen blinks
         // and the reply box keeps its focus for the next one.
         // (Unless the stream's copy of it was added already: sync, above, shows each reply once.)
-        if (!shown.has(comment.id)) {
-          shown.add(comment.id);
-          const items = card.querySelectorAll('.item');
-          const added = itemEl(comment);
-          added.classList.add('fresh');
-          items[items.length - 1].after(added);
-        }
-        body.scrollTop = body.scrollHeight; // the reply just sent is in view above the box
-        W.S.stayAtEnd?.(body);
+        if (!shown.has(comment.id)) addItem(comment);
+        W.S.stayAtEnd(body); // the reply just sent is in view above the box
         return { keep: true };
       },
     }),
@@ -667,26 +661,17 @@ function sendPick(c, ask, n: number, name: string) {
     },
   );
 }
+// The open thread card's live question rows (a computer's keys act on them; phones have none).
+type Live = { pick?: (n: number) => boolean; ticked?: () => boolean; move?: (d: 1 | -1) => boolean };
+const liveAsk = (): Live | undefined => (W.coarse || !W.S.openCard ? undefined : [...W.S.openCard.querySelectorAll('.choices.live')].pop());
 /** 1 to 6 on a computer: the choice's row of the open thread card's question, as a tap (the chat's rows have no keys, so 1 stays comment / pointer there). Whether it took the key. */
-export function pickByKey(n: number): boolean {
-  if (W.coarse) return false;
-  const live = W.S.openCard && ([...W.S.openCard.querySelectorAll('.choices.live')].pop() as { pick?: (n: number) => boolean } | undefined);
-  return Boolean(live?.pick?.(n - 1));
-}
+export const pickByKey = (n: number): boolean => Boolean(liveAsk()?.pick?.(n - 1));
 
 /** Enter on a computer: the ticked row of the open thread card's question, as a tap. False when no question is open or no row is ticked (the agent gave no pick), so Enter does what it did. */
-export function pickTicked(): boolean {
-  if (W.coarse) return false;
-  const live = W.S.openCard && ([...W.S.openCard.querySelectorAll('.choices.live')].pop() as { ticked?: () => boolean } | undefined);
-  return Boolean(live?.ticked?.());
-}
+export const pickTicked = (): boolean => Boolean(liveAsk()?.ticked?.());
 
 /** ArrowDown / ArrowUp on a computer: the ticked row of the open thread card's question moves one row (tried in the page), stopping at the ends. Whether it took the key (an open question is there). */
-export function moveTicked(dir: 1 | -1): boolean {
-  if (W.coarse) return false;
-  const live = W.S.openCard && ([...W.S.openCard.querySelectorAll('.choices.live')].pop() as { move?: (d: 1 | -1) => boolean } | undefined);
-  return Boolean(live?.move?.(dir));
-}
+export const moveTicked = (dir: 1 | -1): boolean => Boolean(liveAsk()?.move?.(dir));
 
 // The rows of a question, under it. Answered (or an older one): the rows as they were, the pick ticked. Open: rows to
 // try; a tap answers. host: the card of the thread (its tie is drawn again as words change), or the chat.

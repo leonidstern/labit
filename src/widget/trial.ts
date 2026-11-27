@@ -93,7 +93,7 @@ function quoteInView(c, card) {
     const r = (st.tried?.lit || quoteRangeOf(c.anchor))?.getBoundingClientRect();
     const room = card.isConnected ? card.getBoundingClientRect().top : 0;
     if (!r || !r.height || room <= 0) return;
-    if (r.top < 8 || r.bottom > room - 8) scrollBy({ top: r.top - Math.max(8, (room - r.height) / 2), behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    if (r.top < 8 || r.bottom > room - 8) scrollBy({ top: r.top - Math.max(8, (room - r.height) / 2), behavior: W.still.matches ? 'auto' : 'smooth' });
   });
 }
 

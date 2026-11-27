@@ -177,7 +177,7 @@ async function act(action: 'archive' | 'start' | 'archive-page' | 'unarchive-pag
 }
 
 const hit = (q: string, ...words: string[]) => !q || words.some((w) => (w || '').toLowerCase().includes(q));
-const short = (lab: Lab, p: Page) => p.title || p.path;
+const short = (p: Page) => p.title || p.path;
 /** "now", "5m", "3h", "2d", or a date for anything older than a week. */
 const ago = (iso?: string | null) => {
   if (!iso) return '';
@@ -262,7 +262,7 @@ function draw() {
     if (armed !== key && when) meta.append(` · ${when}`);
     meta.title = [`${lab.root || lab.name} · localhost:${lab.port}`, p.opened ? `opened ${new Date(p.opened).toLocaleString()}` : 'never opened', p.last ? `last comment ${new Date(p.last).toLocaleString()}` : ''].filter(Boolean).join('\n');
     // The title, and the page's path beside it (Leo 18 Nov: "Getting around your labs" didn't say it was /lab-navigation).
-    const t = el('span', { class: 'sw-t' }, short(lab, p));
+    const t = el('span', { class: 'sw-t' }, short(p));
     if (p.title) t.append(el('span', { class: 'sw-path' }, ` ${p.path}`));
     row.append(t, meta);
     goes(row, lab, p);
@@ -296,7 +296,7 @@ function draw() {
     // An archived page: ↵ still opens it; ⌥A puts it back in its lab.
     const shelvedRow = ({ lab, p }: { lab: Lab; p: Page }) => {
       const row = el('button', { type: 'button', class: 'sw-row parked', role: 'option', 'data-port': String(lab.port), 'data-kind': 'archived-page', 'data-page': p.path });
-      const t = el('span', { class: 'sw-t' }, short(lab, p));
+      const t = el('span', { class: 'sw-t' }, short(p));
       if (p.title) t.append(el('span', { class: 'sw-path' }, ` ${p.path}`));
       row.append(t, el('span', { class: 'sw-m' }, `${where(lab)} · archived ${since(p.archived)}`.trim()));
       goes(row, lab, p);

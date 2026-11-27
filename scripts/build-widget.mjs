@@ -43,7 +43,8 @@ const minifiedCss = {
 // (scripts/build-cli.mjs): it folds what esbuild leaves, 0.4 KB of the package's brotli (26 Nov). One pass, not the
 // command line's two: a second pass made the page script 0.12 KB bigger gzipped and 0.07 KB brotli (27 Nov). It writes some
 // constants out where they are used, which brotli takes in its stride and gzip doesn't: evaluate, sequences and join_vars
-// stay off, so the page script's gzip barely moves. pure_getters off: a property read
+// stay off, so the page script's gzip barely moves. inline 1: only simple functions are written in where called,
+// not ones with arguments or variables (14 B less of the page script gzipped, 27 Nov). pure_getters off: a property read
 // is never taken for free, so a read that only makes the browser lay out (el.offsetHeight) stays. ecma 2020: the source
 // already uses newer syntax, so what terser writes is no newer than what it is given.
 const shortNames = {
@@ -52,7 +53,7 @@ const shortNames = {
     const { format } = build.initialOptions;
     build.onEnd(async (result) => {
       for (const file of result.outputFiles || []) {
-        const { code } = await terser.minify(file.text, { ecma: 2020, compress: { passes: 1, pure_getters: false, evaluate: false, sequences: false, join_vars: false }, mangle: true, module: format === 'esm', format: { comments: /^!/, ascii_only: true } });
+        const { code } = await terser.minify(file.text, { ecma: 2020, compress: { passes: 1, pure_getters: false, evaluate: false, sequences: false, join_vars: false, inline: 1 }, mangle: true, module: format === 'esm', format: { comments: /^!/, ascii_only: true } });
         await fs.promises.mkdir(path.dirname(file.path), { recursive: true });
         await fs.promises.writeFile(file.path, code + '\n');
       }
@@ -82,7 +83,7 @@ const options = {
   outfile,
   write: false, // shortNames writes each file
   plugins: [minifiedCss, mapped ? asBuilt : shortNames],
-  define: { 'globalThis.__LAB_DEBUG__': 'false', 'globalThis.__LAB_CO__': String(co) },
+  define: { 'globalThis.__LAB_CO__': String(co) },
   metafile: true, // what each script is made of: code built into two of them is counted (bundles.json, below)
 };
 // Parts the page script loads only when they are used (part(name) in src/comments.js): each one an ES module beside

@@ -114,7 +114,6 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
     get boardsBtn() { return boardsBtn; },
     drawList,
     get el() { return el; },
-    get pageStyle() { return pageStyle; },
     goTo,
     get headers() { return headers; },
     get host() { return host; },
@@ -139,7 +138,6 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
     stickToEnd,
     get pinData() { return pinData; },
     get pinsById() { return pinsById; },
-    get pinCursorStyle() { return pinCursorStyle; },
     placeBar,
     position,
     get placeOf() { return placeOf; },
@@ -315,14 +313,13 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
   // An unsent comment is kept whole — the words (composer.ts) and the spot they were pinned to — so a page that
   // reloads under you, a dev server rebuilding it most of all, gives both back instead of eating them.
   const spotKey = () => `lab-spot:${S.page}`;
-  // Kept with it: whether it is on selected words (the dialog, not the plain box) and the action picked. An older
-  // spot, the bare anchor, comes back as a plain box.
+  // Kept with it: whether it is on selected words (the dialog, not the plain box) and the action picked.
   const keepSpot = (anchor) => store.set(spotKey(), anchor ? JSON.stringify({ anchor }) : '');
   // The unsent comment kept (words and spot), as a draft that comes back with no motion; none when nothing was typed.
   const keptDraft = () => {
     try {
       const k = JSON.parse(store.get(spotKey()) || 'null');
-      return k && store.get(`lab-typing:${S.page}:new`) ? { ...(k.anchor ? k : { anchor: k }), back: true } : null;
+      return k?.anchor && store.get(`lab-typing:${S.page}:new`) ? { ...k, back: true } : null;
     } catch {
       return null;
     }
@@ -412,7 +409,8 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
   bindFramework(W);
   // The message box and a message's small pieces (src/widget/composer.ts, messages.ts). Arrows, so helpers defined
   // further down are read when called.
-  bindComposer({ el, store, root, ms, ease, refreshPinCursor: () => refreshPinCursor(), syncReads: () => syncReads(), rememberMe, whileWriting: () => setPinning(), part });
+  const still = matchMedia('(prefers-reduced-motion: reduce)');
+  bindComposer({ el, store, root, still, ms, ease, refreshPinCursor: () => refreshPinCursor(), syncReads: () => syncReads(), rememberMe, whileWriting: () => setPinning(), part });
   bindMessages({ el, mine: (c) => mine(c), repliesOf: (id) => repliesOf(id), lineUp, ord, render: () => render(), S, root });
 
   // Puts `next` into `box` in order, touching only what changed: nodes already in place stay (a node taken out and put
@@ -442,7 +440,9 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
   S.loaded = false;
   // A box has the cursor (not a pin: a pin now stays the same element across redraws, so in Chrome, where a clicked
   // button keeps focus, a clicked pin held every later redraw back).
-  const typed = () => /^(textarea|input)$/.test(root.activeElement?.localName || '') || Boolean(/** @type {HTMLElement | null} */ (root.activeElement)?.isContentEditable) || [...root.querySelectorAll('textarea')].some((t) => t.value.trim());
+  /** A text field: a text box, a select or editable text. @param {unknown} n @returns {n is HTMLElement} */
+  const field = (n) => n instanceof HTMLElement && (n.isContentEditable || /^(input|textarea|select)$/.test(n.localName));
+  const typed = () => field(root.activeElement) || [...root.querySelectorAll('textarea')].some((t) => t.value.trim());
   let loads = 0; // a load that answers after a newer one (the app moved on to another page, or back) is dropped
   async function load() {
     const mine = ++loads;
@@ -589,14 +589,14 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
     const stop = () => (until = 0);
     box.addEventListener('touchstart', stop, { once: true, passive: true });
     box.addEventListener('wheel', stop, { once: true, passive: true });
-    const end = () => (performance.now() < until ? (box.scrollTop = at()) : ro?.disconnect());
-    const ro = 'ResizeObserver' in window ? new ResizeObserver(end) : null;
-    ro?.observe(box);
-    for (const k of box.children) ro?.observe(k);
+    const end = () => (performance.now() < until ? (box.scrollTop = at()) : ro.disconnect());
+    const ro = new ResizeObserver(end);
+    ro.observe(box);
+    for (const k of box.children) ro.observe(k);
     const timer = setTimeout(() => cancel(), 1100); // done: it leaves `stays` too
     const cancel = () => {
       stop();
-      ro?.disconnect();
+      ro.disconnect();
       clearTimeout(timer);
       box.removeEventListener('touchstart', stop);
       box.removeEventListener('wheel', stop);
@@ -604,6 +604,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
     };
     staying.set(box, cancel);
     stays.add(cancel);
+    end(); // there now, and kept there
     requestAnimationFrame(() => requestAnimationFrame(end));
   }
   S.stayAtEnd = stayAtEnd;
@@ -1073,7 +1074,6 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
   // appear, not on every re-render, and a card that closes to nothing can fade out.
   S.shown = null;
   S.posted = null;
-  const still = matchMedia('(prefers-reduced-motion: reduce)');
   const pinsById = new Map(); // the pins on the layer now, by thread id, for movePins()
   S.faces = new Map(); // each pin's last drawn state, so a change can ease in
   S.rings = new Map(); // and its state with the agent, for the ring
@@ -1189,7 +1189,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
     if (S.openId !== seekedFor) {
       seekedFor = S.openId;
       const m = S.openId ? S.comments.find((/** @type {any} */ x) => x.id === S.openId)?.anchor?.moment : null;
-      if (m?.kind === 'video') void (mo ? Promise.resolve(mo) : loadMotion()).then((x) => x?.showMoment(m));
+      if (m?.kind === 'video') void loadMotion().then((x) => x?.showMoment(m));
     }
     S.grabbing = false; // a pin being dragged is replaced: its drag ends here
     S.dropDrag?.();
@@ -1202,8 +1202,9 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
     // messages; Leo, 17 Nov: "message scrolled up" on a phone).
     const prevAtEnd = prevBody ? prevBody.scrollHeight - prevBody.scrollTop - prevBody.clientHeight < 48 : false;
     // Every pin's place is read before anything is written, so the page lays out once per render, not once per pin.
-    const places = new Map(S.on ? threads().filter(pinPlaced).map((c) => [c.id, placeOf(c)]) : []);
-    readPins(threads().filter(pinPlaced).map((c) => (c.anchor?.kind === 'board' ? frameBox(c.anchor) : c.anchor && c.anchor.kind !== 'page' && !places.get(c.id)?.moved ? findTarget(c.anchor) : null)));
+    const pinned = threads().filter(pinPlaced);
+    const places = new Map(S.on ? pinned.map((c) => [c.id, placeOf(c)]) : []);
+    readPins(pinned.map((c) => (c.anchor?.kind === 'board' ? frameBox(c.anchor) : c.anchor && c.anchor.kind !== 'page' && !places.get(c.id)?.moved ? findTarget(c.anchor) : null)));
     // A pin that is still there stays the same element, updated in place, so what runs on it (the agent's ring, a pop, a
     // swap, a hover or open transition) carries on instead of starting again (Leo, 18 Nov: clicking or leaving a pin
     // "reloads" its animation). Everything else on the layer (cards, outlines, drafts) is drawn anew, as before; a pin
@@ -1422,7 +1423,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
           S.menuAt = Date.now();
           const c = pinData.get(pin).c;
           const m = c.anchor?.moment;
-          if (m?.kind === 'video') void (mo ? Promise.resolve(mo) : loadMotion()).then((x) => x?.showMoment(m)); // the video back to its frame, as before (Leo, 24 Nov)
+          if (m?.kind === 'video') void loadMotion().then((x) => x?.showMoment(m)); // the video back to its frame, as before (Leo, 24 Nov)
           const open = () => S.openId === c.id || pin.click();
           const rows = [[S.openId === c.id ? 'close' : 'open', () => pin.click()],
             ['reply', () => (open(), setTimeout(() => /** @type {HTMLElement | null} */ (root.querySelector('.card textarea'))?.focus({ preventScroll: true }), 60)), KEYS.reply]];
@@ -1439,7 +1440,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
           // Phones: opening it goes through goTo, which moves the page so the pin sits above its sheet, not under it.
           if (coarse && S.openId !== c.id) return goTo(c);
           // A pin on a video: each click, the one that closes it too, takes the video back to its frame (Leo, 24 Nov).
-          if (S.openId === c.id && c.anchor?.moment?.kind === 'video') void (mo ? Promise.resolve(mo) : loadMotion()).then((x) => x?.showMoment(c.anchor.moment));
+          if (S.openId === c.id && c.anchor?.moment?.kind === 'video') void loadMotion().then((x) => x?.showMoment(c.anchor.moment));
           S.openId = S.openId === c.id ? null : c.id;
           S.draft = null;
           render();
@@ -1487,8 +1488,8 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
         // the first message).
         if (!appear && prevScroll != null) {
           const body = card.querySelector('.body');
-          body.scrollTop = prevAtEnd ? body.scrollHeight : prevScroll;
           if (prevAtEnd) stayAtEnd(body); // a new message at the end stays in view while its words settle
+          else body.scrollTop = prevScroll;
         }
         else if (appear) {
           // Computers: at the first new message when there is one. Phones: already at the end when it shows, the last
@@ -1499,7 +1500,6 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
           const asks = openAsk(c) ? [...body.querySelectorAll('.msg.asks')].pop() : null;
           const first = asks || (coarse ? null : body.querySelector('.fresh, .newline'));
           const at = first ? () => !first.isConnected ? body.scrollTop : first.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop - 8 : undefined;
-          body.scrollTop = at ? at() : body.scrollHeight;
           stayAtEnd(body, at); // the end or the first new message, kept while it settles
         }
         if (coarse && S.cardFull) card.classList.add('full'); // stays pulled up while you step from comment to comment
@@ -1556,8 +1556,9 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
       float.append(box);
       swipeDown(float, () => ((S.draft = null), keepSpot(null), render()));
       next.push(float);
+      const bx = zone ? null : besideVideo(anchor);
       if (zone) placeCard(float, left + 14, zone.top + zone.height);
-      else if (besideVideo(anchor) != null) placeBeside(float, besideVideo(anchor) - 36, top, null); // 10a: on a video, past its edge
+      else if (bx != null) placeBeside(float, bx - 36, top, null); // 10a: on a video, past its edge
       else placeBeside(float, left, top, nativeTie() && anchor.kind !== 'board' ? layer.querySelector(':scope > .pin.draft') : null);
       if (!sheetMode.matches) onBoard(float, anchor);
       draft.back = false;
@@ -1833,8 +1834,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
     e.preventDefault();
     e.stopImmediatePropagation();
   }, true);
-  const typing = (e) =>
-    e.composedPath().some((n) => n instanceof HTMLElement && (n.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName)));
+  const typing = (e) => e.composedPath().some(field);
   const onDocKey = (e) => {
     const inOtherWidget = document.activeElement?.localName.includes('-') && document.activeElement !== host; // e.g. an input in a closed shadow root
     const bare = !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey; // no modifier held
@@ -1933,7 +1933,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
   // (⌘K, the page's shortcuts, the board's Esc).
   const inWidgetBox = (e) => {
     const t = e.composedPath()[0];
-    return t instanceof HTMLElement && t.getRootNode() === root && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+    return field(t) && t.getRootNode() === root;
   };
   for (const type of ['keydown', 'keypress', 'keyup']) {
     host.addEventListener(type, (/** @type {KeyboardEvent} */ e) => {
@@ -2021,7 +2021,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
     render();
   };
   // Unsent words: the card or sheet shakes sideways ("no") instead of closing, on a computer (⌥W) and a phone alike.
-  const shake = (/** @type {Element | null | undefined} */ node) => node?.animate?.([{ transform: 'none' }, { transform: 'translateX(-6px)' }, { transform: 'translateX(6px)' }, { transform: 'none' }], { duration: ms('base'), easing: ease() });
+  const shake = (/** @type {Element | null | undefined} */ node) => node?.animate([{ transform: 'none' }, { transform: 'translateX(-6px)' }, { transform: 'translateX(6px)' }, { transform: 'none' }], { duration: ms('base'), easing: ease() });
   // Text typed in a thread or a new comment would be lost, so the sheet stays and shakes instead; the chat's box keeps
   // its text when closed, so the chat always closes.
   const closeOrNudge = () => {
@@ -2197,8 +2197,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
     const measure = () => {
       if (!row.isConnected || !row.clientWidth) return void (tries++ < 10 && requestAnimationFrame(measure));
       const over = () => row.scrollWidth > row.clientWidth + 1;
-      for (let shown = chips.length; over() && shown; ) chips[--shown].remove();
-      [...row.children].forEach((b, n) => b.setAttribute('data-n', String(n + 1)));
+      for (let shown = chips.length; over() && shown; ) chips[--shown].remove(); // from the end: the others keep their numbers
     };
     queueMicrotask(measure);
     // ⌥ + 1…4 (by the key's place, so Option's own characters don't matter) runs the nth button; holding ⌥ shows the numbers.
@@ -2295,7 +2294,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
       // A board pin on a frame: tied to the frame's box by its share of it, so the board's camera carries it (pinhold.ts).
       // Its size from the board, not the box (t: as tall as its page, h: as stored, what an area's shares are of): reading the box after the last pin was written lays the page out again, once per pin.
       const B = /** @type {any} */ (window).__labBoard;
-      const box = a.frame && a.fx !== undefined ? B?.box?.(a.frame) : null;
+      const box = frameBox(a);
       const size = box && B.size(a.frame);
       const [fx, fy] = (box && B.at?.(a)) || [a.fx, a.fy || 0]; // on its element in the frame's page, when it has one there
       // (an area's pin is at the corner where the drag ended)
@@ -2416,7 +2415,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
       // Keep an open composer's text: a new comment's box (and a drag) is not drawn again; neither is a reply box with
       // the cursor in it (its card follows in place).
       if (S.draft || S.grabbing || isTrying()) return; // words tried in place: the pins stay put
-      const box = /^(textarea|input)$/.test(root.activeElement?.localName || '') || Boolean(/** @type {HTMLElement | null} */ (root.activeElement)?.isContentEditable);
+      const box = field(root.activeElement);
       if (box && !(S.openId && followOpen())) return;
       reflowAll = false;
       if (!box) movePins(scrolledOnly);
@@ -2431,7 +2430,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
   const navigated = () => {
     if (!host.isConnected && document.body) {
       document.body.append(host);
-      sized?.observe(document.body); // a new <body>: its size is the one to follow now
+      sized.observe(document.body); // a new <body>: its size is the one to follow now
       fit();
       writingIn?.focus({ preventScroll: true }); // the words being written go on where they were
     }
@@ -2477,8 +2476,8 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && !S.draft && !root.activeElement) load();
   });
-  const sized = 'ResizeObserver' in window ? new ResizeObserver(reflow) : null;
-  sized?.observe(document.body);
+  const sized = new ResizeObserver(reflow);
+  sized.observe(document.body);
 
   // The rules that act on the page itself (the pinning cursor, a drag's no-select, a sheet's overscroll), not on the
   // widget: a stylesheet in the document's head, since the widget's own live in its shadow root. The font is the system's
@@ -2570,28 +2569,47 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
       // one is the pen's tip (Leo, 23 Nov: "need cursor for drawing"). The widget's own parts keep theirs.
       `html.lab-pen.lab-drawn, html.lab-pen.lab-drawn body, html.lab-pen.lab-drawn body *:not([data-lab-comments], ${top}) { cursor: none !important; } html.lab-pen [data-lab-comments] { cursor: auto !important; }`;
   }
-  // Computers, comments on: a click or drag doesn't select the page's text; hold Shift to select (and quote) words.
-  // Fields and editable text stay selectable.
-  pageStyle.textContent += `@media (pointer: fine) { html:has([data-lab-pinning]):not(.lab-shift, .lab-lit) body > :not([data-lab-comments]), html:has([data-lab-pinning]):not(.lab-shift, .lab-lit) body > :not([data-lab-comments]) :not(input, textarea, select, [contenteditable], [contenteditable] *) { -webkit-user-select: none; user-select: none; } }`;
-  // Pictures and videos are never selected by a press in comment mode, even with ⌥ or ⇧ held: Safari painted a clicked
-  // video as selected, blue over the frame you were pinning (Leo, 23 Nov: "clicking on 4.1 s selecting it").
-  pageStyle.textContent += '@media (pointer: fine) { html:has([data-lab-comments]) :is(video, img, canvas, picture) { -webkit-user-select: none; user-select: none; } }';
+  // The page's own rules, in one stylesheet.
+  pageStyle.textContent =
+    // Computers, comments on: a click or drag doesn't select the page's text; hold Shift to select (and quote) words.
+    // Fields and editable text stay selectable.
+    `@media (pointer: fine) { html:has([data-lab-pinning]):not(.lab-shift, .lab-lit) body > :not([data-lab-comments]), html:has([data-lab-pinning]):not(.lab-shift, .lab-lit) body > :not([data-lab-comments]) :not(input, textarea, select, [contenteditable], [contenteditable] *) { -webkit-user-select: none; user-select: none; } }` +
+    // Pictures and videos are never selected by a press in comment mode, even with ⌥ or ⇧ held: Safari painted a clicked
+    // video as selected, blue over the frame you were pinning (Leo, 23 Nov: "clicking on 4.1 s selecting it").
+    '@media (pointer: fine) { html:has([data-lab-comments]) :is(video, img, canvas, picture) { -webkit-user-select: none; user-select: none; } }' +
+    'html.lab-dragging, html.lab-dragging * { user-select: none !important; -webkit-user-select: none !important; cursor: crosshair !important; }' +
+    // While a sheet is open, a swipe down is the sheet's, not the browser's pull-to-refresh.
+    'html.lab-sheet, html.lab-sheet body { overscroll-behavior-y: none; }' +
+    // The agent's ring draws its arc in (lab C2): an arc length that can animate has to be registered on the page itself.
+    '@property --lab-arc { syntax: "<percentage>"; inherits: false; initial-value: 66%; }' +
+    // The room a phone's sheet made below the page's end (see goTo) stays after the sheet closes, so the page doesn't jump
+    // up at the end of the slide; it shrinks away as you scroll back up.
+    // Registered as not inherited: set on <html> as plain custom property, every element of the page inherited it, and each
+    // change restyled all of it (22 ms on the labit homepage, iOS 27 simulator, 27 Nov). html's own ::after takes it.
+    '@property --lab-room { syntax: "<length>"; inherits: false; initial-value: 0px; }' +
+    "html.lab-room::after { --lab-room: inherit; content: ''; display: block; height: var(--lab-room); }" +
+    // While a phone's sheet moves the page (scrolled, then held where it was by --lab-shift), the browser must not move it
+    // too: Safari's scroll anchoring took the shift for the page's content moving and scrolled as much again, so a new pin
+    // went off screen (Leo's iPhone, 25 Nov, a page with a tall product picture: scrolled 988 for 494).
+    'html.lab-sheet, html.lab-moved, html.lab-room { overflow-anchor: none; }' +
+    // Phones: and the page behind stays put, even when the part of the sheet you drag on has nothing to scroll.
+    // On the one element whose overflow is the screen's: body when the page leaves html's alone (the browser takes body's for
+    // the screen, and body is laid out as before), else html. On both, body got an overflow of its own and its first
+    // child's top margin stopped collapsing through it: the whole page moved down by that margin (21 px under an h1) each
+    // time a sheet opened and back up when it closed (Leo, 21 Nov: the page jumps when the chat opens or closes).
+    '@media (pointer: coarse) { html.lab-hold-b body, html.lab-hold-h { overflow: hidden; } }' +
+    // Holding a finger on a link pins it (see Phones above): no link preview while comments are on.
+    `html:has([data-lab-pinning]) body, html:has([data-lab-pinning]) body * { -webkit-touch-callout: none; }` +
+    // Phones: with comments on, a hold is labit's (a pin), not the start of a text selection: iOS would cancel the touch
+    // for its selection, and the lift that lets the box open the keyboard would never come. Only while a finger is down
+    // (lab-press): Safari paints the quoted words' green (::highlight) over whole blocks of text that can't be selected,
+    // so with the page unselectable all the time an open comment tinted half the page (iOS 27 simulator, 17 Nov).
+    // Nor the start of a drag: iOS lifts a held link or image to drag it, which cancels the touch the same way.
+    // On a phone there is no Shift, so its text is never selected (Leo, 21 Nov: "text selection only with shift remember";
+    // a hold with a sheet open, or on the dimmed page, still selected it): all the time, but for the frames a quote is lit
+    // in (lab-lit, as on a computer) and never while a finger is down.
+    `@media (pointer: coarse) { html:has([data-lab-pinning]):not(.lab-lit) body > :not([data-lab-comments]), html:has([data-lab-pinning]).lab-press body > :not([data-lab-comments]) { -webkit-user-select: none; user-select: none; } html:has([data-lab-pinning]) body > :not([data-lab-comments]), html:has([data-lab-pinning]) body > :not([data-lab-comments]) * { -webkit-user-drag: none; } }`;
   bindKeys(W);
-  pageStyle.textContent += 'html.lab-dragging, html.lab-dragging * { user-select: none !important; -webkit-user-select: none !important; cursor: crosshair !important; }';
-  // While a sheet is open, a swipe down is the sheet's, not the browser's pull-to-refresh.
-  pageStyle.textContent += 'html.lab-sheet, html.lab-sheet body { overscroll-behavior-y: none; }';
-  // The agent's ring draws its arc in (lab C2): an arc length that can animate has to be registered on the page itself.
-  pageStyle.textContent += '@property --lab-arc { syntax: "<percentage>"; inherits: false; initial-value: 66%; }';
-  // The room a phone's sheet made below the page's end (see goTo) stays after the sheet closes, so the page doesn't jump
-  // up at the end of the slide; it shrinks away as you scroll back up.
-  // Registered as not inherited: set on <html> as plain custom property, every element of the page inherited it, and each
-  // change restyled all of it (22 ms on the labit homepage, iOS 27 simulator, 27 Nov). html's own ::after takes it.
-  pageStyle.textContent += '@property --lab-room { syntax: "<length>"; inherits: false; initial-value: 0px; }';
-  pageStyle.textContent += "html.lab-room::after { --lab-room: inherit; content: ''; display: block; height: var(--lab-room); }";
-  // While a phone's sheet moves the page (scrolled, then held where it was by --lab-shift), the browser must not move it
-  // too: Safari's scroll anchoring took the shift for the page's content moving and scrolled as much again, so a new pin
-  // went off screen (Leo's iPhone, 25 Nov, a page with a tall product picture: scrolled 988 for 494).
-  pageStyle.textContent += 'html.lab-sheet, html.lab-moved, html.lab-room { overflow-anchor: none; }';
   // Once the scroll rests, not on each scroll event: each new value restyles the whole page (roomFor), and the room is below
   // the window's bottom while you scroll up, so nothing shows it going a moment later.
   /** @type {ReturnType<typeof setTimeout> | undefined} */
@@ -2601,23 +2619,6 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
     clearTimeout(roomRest);
     roomRest = setTimeout(() => !host.hasAttribute('data-sheet') && roomFor(scrollY, true), 150);
   }, { passive: true });
-  // Phones: and the page behind stays put, even when the part of the sheet you drag on has nothing to scroll.
-  // On the one element whose overflow is the screen's: body when the page leaves html's alone (the browser takes body's for
-  // the screen, and body is laid out as before), else html. On both, body got an overflow of its own and its first
-  // child's top margin stopped collapsing through it: the whole page moved down by that margin (21 px under an h1) each
-  // time a sheet opened and back up when it closed (Leo, 21 Nov: the page jumps when the chat opens or closes).
-  pageStyle.textContent += '@media (pointer: coarse) { html.lab-hold-b body, html.lab-hold-h { overflow: hidden; } }';
-  // Holding a finger on a link pins it (see Phones above): no link preview while comments are on.
-  pageStyle.textContent += `html:has([data-lab-pinning]) body, html:has([data-lab-pinning]) body * { -webkit-touch-callout: none; }`;
-  // Phones: with comments on, a hold is labit's (a pin), not the start of a text selection: iOS would cancel the touch
-  // for its selection, and the lift that lets the box open the keyboard would never come. Only while a finger is down
-  // (lab-press): Safari paints the quoted words' green (::highlight) over whole blocks of text that can't be selected,
-  // so with the page unselectable all the time an open comment tinted half the page (iOS 27 simulator, 17 Nov).
-  // Nor the start of a drag: iOS lifts a held link or image to drag it, which cancels the touch the same way.
-  // On a phone there is no Shift, so its text is never selected (Leo, 21 Nov: "text selection only with shift remember";
-  // a hold with a sheet open, or on the dimmed page, still selected it): all the time, but for the frames a quote is lit
-  // in (lab-lit, as on a computer) and never while a finger is down.
-  pageStyle.textContent += `@media (pointer: coarse) { html:has([data-lab-pinning]):not(.lab-lit) body > :not([data-lab-comments]), html:has([data-lab-pinning]).lab-press body > :not([data-lab-comments]) { -webkit-user-select: none; user-select: none; } html:has([data-lab-pinning]) body > :not([data-lab-comments]), html:has([data-lab-pinning]) body > :not([data-lab-comments]) * { -webkit-user-drag: none; } }`;
 
   const start = () => {
     document.head.append(pageStyle, pinCursorStyle);
@@ -2642,16 +2643,14 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
   // colabit has no boards and no live stream: the build leaves both out (globalThis.__LAB_CO__ is its constant).
   if (!globalThis.__LAB_CO__) bindBoardCam(W);
   if (!globalThis.__LAB_CO__) startLive();
-  // colabit has no live stream: others' comments come in every 15 s while the page is in view, and when it comes back.
-  if (globalThis.__LAB_CO__) {
-    setInterval(() => document.hidden || load(), 15000);
-    document.addEventListener('visibilitychange', () => document.hidden || load());
-  }
+  // colabit has no live stream: others' comments come in every 15 s while the page is in view (and when it comes back,
+  // as in the lab: visibilitychange, above).
+  if (globalThis.__LAB_CO__) setInterval(() => document.hidden || load(), 15000);
   // ⌘K / Control-K from anywhere but a field of the page's own (where it may mean "add a link"): the first press loads
   // labs & pages and opens it once it is there.
   if (LABS) document.addEventListener('keydown', (e) => {
     if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || (e.key || '').toLowerCase() !== 'k') return;
-    const typing = e.composedPath().some((n) => n instanceof HTMLElement && (n.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName)) && n.getRootNode() !== root);
+    const typing = e.composedPath().some((n) => field(n) && n.getRootNode() !== root);
     if (typing) return;
     e.preventDefault();
     void switcher().then((m) => m && (m.switcherSheet() ? m.closeSwitcher() : m.openSwitcher()));

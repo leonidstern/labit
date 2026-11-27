@@ -21,7 +21,7 @@ const scrollerIn = (e, node) =>
 // How long a sheet's transition takes to be over, with a frame or two of slack, before its inline style is cleared.
 const settled = () => W.ms('slow') + W.ms('quick') / 3;
 
-// The motion's rules (sheetmove.ts, the board drawer's too), with this widget's token lengths.
+// The motion's rules (sheetmove.ts), with this widget's token lengths.
 const glide = (dist: number, speed: number, cap = 1e9): [number, string] => move.glide(dist, speed, W.ms('slow'), W.ms('quick'), cap, 'var(--_ease-settle)');
 const carry = (dist: number, speed: number, cap: number) => move.carry(dist, speed, cap, W.ms('quick'));
 let leaveBar = ''; // how the bar rises as the last leave() goes (slideAway)
@@ -659,60 +659,5 @@ export function startSheets() {
     afterGlide = () => (zoomFit(), fit());
     addEventListener('pointerdown', (e) => (tap = { x: e.clientX, y: e.clientY, at: performance.now() }), { capture: true, passive: true });
     fit();
-    // ?kbdebug on the page's address: every frame for 1.5 s after the keyboard is asked for or let go, where the open
-    // sheet sits on the screen and what Safari reports, sent to the page's chat as "kb-log" 2 s after letting go. For
-    // tuning the keyboard slide on a real phone (a simulator's keyboard doesn't move like one).
-    // Only with ?kbdebug in the address; nothing runs otherwise.
-    if (globalThis.__LAB_DEBUG__ !== false && /[?&]kbdebug\b/.test(location.search)) {
-      let lines = [];
-      let t0 = performance.now();
-      let sendTimer: any = 0;
-      const row = (what) => {
-        const open = W.openSheet();
-        const r = open?.getBoundingClientRect();
-        lines.push(`${Math.round(performance.now() - t0)} ${what} h${Math.round(W.vv.height)} top${Math.round(W.vv.offsetTop)} in${innerHeight} kb${W.host.hasAttribute('data-kb') ? 1 : 0}` +
-          (r ? ` sheet${Math.round(r.top)}/${Math.round(r.height)}${open.getAnimations().length ? ' anim' : ''}` : '') +
-          // What is moving anywhere (the page, the pins, the dimming): for a flicker that isn't the keyboard.
-          ` [${[...document.getAnimations(), ...W.root.getAnimations()].map((a) => (a as any).animationName || (a as any).transitionProperty || 'js').slice(0, 6).join(',')}]` +
-          ` scrim${getComputedStyle(W.scrim).opacity.slice(0, 4)} scroll${Math.round(scrollY)}`);
-      };
-      const watch = (what) => {
-        row(what);
-        const end = performance.now() + 1500;
-        let prev = '';
-        const f = () => {
-          const before = lines.length;
-          row('f');
-          const last = lines[lines.length - 1].replace(/^\d+ f /, '');
-          if (last === prev) lines.length = before; // only frames where something moved
-          prev = last;
-          if (performance.now() < end) requestAnimationFrame(f);
-        };
-        requestAnimationFrame(f);
-      };
-      W.root.addEventListener('focusin', () => ((t0 = performance.now()), watch('focus')));
-      // Sent 2 s after the last thing that moved (a keyboard, Safari's address bar), so one run is one message.
-      const sendSoon = () => {
-        clearTimeout(sendTimer);
-        sendTimer = setTimeout(async () => {
-          const text = lines.join('\n');
-          lines = [];
-          for (let i = 0; i < text.length; i += 1900) {
-            await W.send({ name: 'kb-log', text: text.slice(i, i + 1900), anchor: { kind: 'page', selector: 'body', x: 0, y: 0, docX: 0, docY: 0, width: innerWidth } }).catch(() => {});
-          }
-        }, 2000);
-      };
-      W.root.addEventListener('focusout', () => {
-        lines.push('--- let go');
-        t0 = performance.now();
-        watch('blur');
-        sendSoon();
-      });
-      // The address bar growing or shrinking resizes the view too: each resize is followed for 1.5 s like a keyboard.
-      W.vv.addEventListener('resize', () => {
-        watch('resize');
-        if (lines.length > 1) sendSoon();
-      });
-    }
   }
 }

@@ -133,14 +133,13 @@ export function foldStatus(msgs: any[], rootOf: (m: any) => string, openKeys: Se
 // it opens).
 export const foldRow = (slot: Extract<Slot, { fold: string }>, unfolded: Set<string>, inPlace?: (open: boolean) => void): HTMLElement => {
   const label = (open: boolean) => `${slot.n} update${slot.n === 1 ? '' : 's'} ${open ? '‹' : '›'}`;
-  const b = d.el('button', { class: `updates${slot.open ? ' open' : ''}`, type: 'button', 'data-id': slot.fold, 'aria-expanded': String(slot.open) }, label(slot.open));
+  const b = d.el('button', { class: 'updates', type: 'button', 'data-id': slot.fold, 'aria-expanded': String(slot.open) }, label(slot.open));
   b.addEventListener('click', (e) => {
     e.stopPropagation();
     const open = !unfolded.has(slot.fold);
     if (open) unfolded.add(slot.fold);
     else unfolded.delete(slot.fold);
     if (inPlace) {
-      b.classList.toggle('open', open);
       b.setAttribute('aria-expanded', String(open));
       b.textContent = label(open);
       return inPlace(open);

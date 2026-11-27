@@ -467,9 +467,9 @@ export function startLive() {
           if (first) after();
         }
         commentsRev ??= W.S.rev ?? null; // the list's own version: what was written since it was read is fetched below, not lost
-        // One version on and it names the pages it changed, none of them this one: nothing to fetch. (An older lab sends
-        // no commentPages; more than one version on, the pages in between aren't known.)
-        const elsewhere = v.comments === commentsRev + 1 && Array.isArray(v.commentPages) && !v.commentPages.includes(W.S.page);
+        // One version on and it names the pages it changed, none of them this one: nothing to fetch. (More than one version
+        // on, the pages in between aren't known.)
+        const elsewhere = v.comments === commentsRev + 1 && !v.commentPages.includes(W.S.page);
         // The version moves on only once its changes are in: one that failed (and its whole-list fallback with it) is
         // asked for again on the next state, not skipped (a reply would never show).
         if (commentsRev !== null && v.comments !== commentsRev && !elsewhere) {
@@ -484,14 +484,14 @@ export function startLive() {
           readsAt = v.reads;
           W.syncReads();
         }
-        // Experiments switched on or off (the ⋯ menu here or in another tab). An older lab sends no flags.
-        if (Array.isArray(v.flags)) W.S.syncFlags?.(v.flags);
+        // Experiments switched on or off (the ⋯ menu here or in another tab). (A board's frame has none.)
+        W.S.syncFlags?.(v.flags);
         // listening: a wait is open · working: Claude got comments and is on them · away: nobody will hear a comment now.
         const s = v.session;
         // A lab with listeners can still have none for this page (a wait with --page for another one): this page says
-        // so, instead of "talking to Claude" while its pins wait for nobody. An older lab doesn't send heard.
+        // so, instead of "talking to Claude" while its pins wait for nobody.
         const h = v.heard;
-        const here = !h || h.pages.includes(W.S.page) || (h.all && !h.except.includes(W.S.page));
+        const here = h.pages.includes(W.S.page) || (h.all && !h.except.includes(W.S.page));
         // The session listening here was handed pins and answered none of them (local.mjs silentNow): the pill says
         // "Claude isn't answering" instead of "talking to Claude", until it answers anything.
         const quiet = (v.silent || []).find((q) => !q.pages || q.pages.includes(W.S.page));
