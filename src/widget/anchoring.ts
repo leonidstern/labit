@@ -1099,8 +1099,13 @@ function prove(a): Proof {
     } catch {}
   }
   let ex = fp.h ? saying(tag, fp.h) : [];
-  // Wrapped in a box of its own kind (a card put in a new div): the box says its words too; it is the one inside.
-  if (fp.u < 2 && ex.length > 1) ex = ex.filter((n) => !ex.some((d) => d !== n && n.contains(d)));
+  const cls = / class="([^"]+)"/.exec(a.element || '')?.[1].trim().split(/\s+/) || [];
+  // A box of its kind around it or in it says its words too (a card put in a new div, a label put in the card): the
+  // one with its classes, else the one inside.
+  if (fp.u < 2 && ex.length > 1) {
+    const mine = ex.filter((n) => cls.every((c) => n.classList.contains(c)));
+    ex = mine.length === 1 ? mine : ex.filter((n) => !ex.some((d) => d !== n && n.contains(d)));
+  }
   const set = fp.x ? ex.filter(co) : ex;
   const apart = set.filter((n) => beside(n) === fp.b);
   // Its exact words. Only it said them, and one element says them now: that one, wherever it went. Several say them (it
@@ -1116,15 +1121,15 @@ function prove(a): Proof {
   if (byWords && byWords.node) return byWords;
   const found = tag && tag !== 'body' && tag !== 'html' ? search(a, fp, at, tag, co) : { node: at };
   if (found.node || fp.u > 1) return found;
-  const cls = / class="([^"]+)"/.exec(a.element || '')?.[1].trim().split(/\s+/);
   // Its words rewritten where it stood (a status, a button's label): the element at its path, of its kind, with its
   // classes, between the same neighbours, shown as changed: it follows the change (Leo, 27 Nov).
-  if (at && (cls || []).every((c) => at.classList.contains(c)) && co(at)) return guess(at);
+  if (at && cls.every((c) => at.classList.contains(c)) && co(at)) return guess(at);
   // Its tag changed (a div made an article, a p a div) with too few words to tell: the one element of another tag with
   // all its classes (in its company, among several), shown as changed, so the pin follows it (Leo, 27 Nov).
-  let like = cls ? [...document.querySelectorAll(cls.map((c) => '.' + CSS.escape(c)).join(''))].filter((n) => n.localName !== tag && !host.contains(n)) : [];
-  if (like.length > 1) like = like.filter(co);
-  if (like.length === 1) return guess(like[0]);
+  const like = cls.length ? [...document.querySelectorAll(cls.map((c) => '.' + CSS.escape(c)).join(''))].filter((n) => n.localName !== tag && !host.contains(n)) : [];
+  const company2 = like.filter(co); // in its company, else in its section: never only because its classes are rare
+  const there = company2.length ? company2 : like.filter((n) => a.section && inSection(n, a.section));
+  if (there.length === 1) return guess(there[0]);
   // Nothing else, and its words came to stand on several elements (a copy): the one nearest to where it was, told as unsure.
   return guess(near(set.length ? set : ex), true);
 }
