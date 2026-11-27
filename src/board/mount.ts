@@ -11,7 +11,7 @@ import type { Cam, Box } from './camera.ts';
 
 type Frame = { id: string; src: string; auto?: boolean; ow?: number; oh?: number; kind?: string; file?: string; iw?: number; ih?: number; pv?: number[]; guest?: boolean; w: number; h: number; x: number; y: number; label?: string; state?: string; variantOf?: string };
 type Board = { rev: number; frames: Frame[]; of?: string } & Record<string, unknown>;
-type Card = { s: Frame; f: Frame; box: HTMLElement; inner: HTMLElement; frame?: HTMLIFrameElement; seen: number; pv?: HTMLImageElement; at?: number };
+type Card = { s: Frame; f: Frame; box: HTMLElement; inner: HTMLElement; frame?: HTMLIFrameElement; pending?: HTMLIFrameElement; seen: number; pv?: HTMLImageElement; at?: number };
 type Spot = { left: number; top: number; zone: { left: number; top: number; width: number; height: number } | null; clipped?: boolean };
 
 type MountOpts = {
@@ -350,11 +350,18 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     fr.name = `lab:${c.f.id}`;
     fr.title = c.f.label || c.f.src;
     fr.style.height = `${c.s.h}px`; // laid out in its device's height first: what 100vh is (grow, below)
+    // Saved again while the last save's frame still loads: the newer one takes its place (one waits per card, the newest).
+    if (again) {
+      c.pending?.remove();
+      c.pending = fr;
+    }
     fr.addEventListener('load', () => {
+      if (!fr.isConnected) return; // a newer save took its place, or the frame was put to sleep
+      if (c.pending === fr) c.pending = undefined;
       grow(c, fr);
       fr.dataset.ready = '1';
       fr.style.visibility = '';
-      for (const n of Array.from(c.inner.children)) if (n !== fr) n.remove(); // the card it covered (taken out after, not before: an iframe moved in the page loads again)
+      for (const n of Array.from(c.inner.children)) if (n !== fr && n !== c.pending) n.remove(); // the card or old frame it covered (taken out after, not before: an iframe moved in the page loads again), never a newer one still loading
       c.frame = fr;
       if (entered === c.f.id) focusIn(c);
       wake(); // the next one may load now
@@ -369,7 +376,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   }
   function sleep(c: Card) {
     c.frame?.remove();
-    c.frame = undefined;
+    c.frame = c.pending = undefined;
     c.inner.replaceChildren(card(c));
   }
 
@@ -507,7 +514,8 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     pickFrames(picks);
     world.querySelector('.none')?.remove();
     measure(); // the box as it is now, for the fit
-    const hash = opts.hash ? /^#(-?\d+),(-?\d+),([\d.]+)$/.exec(location.hash) : null;
+    const m = opts.hash ? /^#(-?\d+),(-?\d+),([\d.]+)$/.exec(location.hash) : null;
+    const hash = m && +m[3] > 0 ? m : null; // (a zoom of "." or 0 is none: the camera is fitted instead)
     const was = !moved && !hash ? keptCam() : null; // where it was when last closed here
     if (hash && !moved) cam = { x: +hash[1], y: +hash[2], z: +hash[3] };
     else if (was) [cam, moved] = [was, true];
@@ -524,14 +532,20 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     wake();
   }
   const api = (more = '') => `/_lab/api/board?name=${name}${of ? `&page=${encodeURIComponent(of)}` : ''}${more}`;
+  // Reads can cross (a save's read and the lab's "it changed"): only the newest one started is shown, so an older board never
+  // replaces a newer one (its rev would be written back next).
+  let reads = 0;
   const load = async () => {
+    const n = ++reads;
     const res = await fetch(api()).catch(() => null);
-    if (signal.aborted) return;
-    if (!res?.ok) {
+    const b = res?.ok ? await res.json().catch(() => null) : null;
+    if (signal.aborted || n !== reads) return;
+    if (!b) {
+      if (res?.ok && latest) return note('The board could not be read again.'); // (its answer cut off) the board as last read stays
       text('div', res?.status === 404 ? `There is no board called ${name}.` : 'The board could not be read.', world).className = 'none';
       return reveal();
     }
-    show(await res.json());
+    show(b);
     // Shown with its frames' pages in them, all at once: frame by frame as each loaded, one stood there blank and white for a
     // moment beside another that already had its page (Leo, 21 Nov: "one thing not flicker second thing there flickering").
     // A frame that takes longer than that moment shows its card, then its page.
@@ -630,6 +644,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   type Down = { x: number; y: number; id: string; far: boolean; at: number; t: number; held?: boolean; hand?: boolean; mid?: boolean; shift?: boolean; mode?: 'marq' | 'move'; base?: Set<string>; start?: Map<string, { x: number; y: number }> };
   let down: Down | null = null;
   let holdTimer = 0;
+  let late = 0; // a hold's comment, opened 150 ms after the lift when no click comes
   // A phone comments by holding, as on a page (Leo, 19 Nov: "can't leave a comment" on the board): a finger that stays
   // put for 400 ms with comments on drops a pin there; moving first is a pan or a swipe, as before.
   const boardWidget = () => (window as unknown as { __labBoardWidget?: { dismiss?: () => boolean; pinning: () => boolean; drawing?: () => boolean; holding?: () => boolean; hold?: (x: number, y: number) => void; place: (x: number, y: number) => void } }).__labBoardWidget;
@@ -812,8 +827,8 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
       // After the click the lift still sends (it takes the focus off the comment box that opens, and the box closes on that):
       // the comment is opened by that click (below), or after 150 ms if none comes.
       if (w && e.type === 'pointerup') {
-        const open = () => ((afterClick = null), clearTimeout(late), (w.hold || w.place)(d.x, d.y));
-        const late = window.setTimeout(open, 150);
+        const open = () => ((afterClick = null), clearTimeout(late), signal.aborted || (w.hold || w.place)(d.x, d.y));
+        late = window.setTimeout(open, 150);
         afterClick = () => setTimeout(open, 0);
       }
       return;
@@ -956,22 +971,29 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   // (a move, a frame or more taken off the board and ⌘Z). Taken off (archived: the file stays) and moved are the owner's (this
   // computer's browser, or a device with a pass). A frame drawn in the lab's rows stays in them unless it is put somewhere:
   // a move puts every frame where it is drawn now, so the ones that were not touched don't move to fill its place.
-  let saving: Promise<void> = Promise.resolve();
-  const write = (patch: (f: Frame) => Partial<Frame> | undefined, undo?: Undo) => (saving = saving.then(async () => {
-    if (!latest || signal.aborted) return;
-    const frames = latest.frames.map((f) => {
-      const p = patch(f);
-      return { ...f, ...p, ...(!p && f.auto ? { x: undefined, y: undefined } : {}) };
+  // Gives whether it was written. A step that throws never stops the ones after it.
+  let saving: Promise<unknown> = Promise.resolve();
+  const write = (patch: (f: Frame) => Partial<Frame> | undefined, undo?: Undo) => {
+    const run = saving.then(async () => {
+      if (!latest || signal.aborted) return false;
+      const frames = latest.frames.map((f) => {
+        const p = patch(f);
+        return { ...f, ...p, ...(!p && f.auto ? { x: undefined, y: undefined } : {}) };
+      });
+      const res = await fetch(api(), { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...latest, frames }) }).catch(() => null);
+      if (res?.ok) {
+        if (undo) taken.push({ ...undo, at: Date.now() });
+      } else note(res?.status === 409 ? 'The board changed meanwhile: look, then try again.' : "Only the board's owner can do that.");
+      try {
+        await load(); // the frames as they are now (a move that failed: put back)
+      } catch (e) {
+        console.warn('[lab] board', e);
+      }
+      return Boolean(res?.ok);
     });
-    const res = await fetch(api(), { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...latest, frames }) }).catch(() => null);
-    if (res?.ok) {
-      if (undo) taken.push({ ...undo, at: Date.now() });
-      await load();
-    } else {
-      note(res?.status === 409 ? 'The board changed meanwhile: look, then try again.' : "Only the board's owner can do that.");
-      await load(); // the frames as they are (a move put them back)
-    }
-  }));
+    saving = run.catch(() => {});
+    return run;
+  };
   // Every frame as drawn, but the ones in at (their new places).
   const placed = (at: { id: string; x?: number; y?: number }[]) => (f: Frame): Partial<Frame> | undefined => {
     const to = at.find((p) => p.id === f.id);
@@ -994,13 +1016,15 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
         void write((f) => (ids.has(f.id) ? { state: 'archived' } : undefined), { items, archived: true });
         return;
       }
+      // Taken off the list now (a second ⌘Z meanwhile is the one before), and back on it if the write fails (a 409): ⌘Z tries it again.
       const last = taken.pop()!;
+      const keep = (ok: boolean) => ok || void taken.push(last);
       if (last.archived) {
         void write((f) => {
           const was = last.items.find((i) => i.id === f.id);
           return was && { state: 'live', x: was.x, y: was.y };
-        }).then(() => pickFrames(last.items.map((i) => i.id))); // …and picked again, as they were
-      } else void write(placed(last.items));
+        }).then((ok) => (keep(ok), ok && pickFrames(last.items.map((i) => i.id)))); // …and picked again, as they were
+      } else void write(placed(last.items)).then(keep);
     });
   }
   // One picture to the board at a world point (its centre; corner: its top left), a ghost there while it goes; the board is
@@ -1026,6 +1050,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   // Pictures one after another, the first centred where asked and each next one beside the one before, in the order given,
   // tops in line (Leo, 23 Nov: pasted pictures "pile up"). The first error stops it.
   const putAll = async (files: Blob[], at?: { x: number; y: number }, pin = false) => {
+    if (!files.length) return; // (a dropped file that is no picture)
     measure();
     const [wx, wy] = at ? [(at.x - ox) / cam.z - cam.x, (at.y - oy) / cam.z - cam.y] : [view.w / 2 / cam.z - cam.x, view.h / 2 / cam.z - cam.y];
     let prev = await put(files[0], wx, wy, pin);
@@ -1253,6 +1278,8 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     cancelAnimationFrame(drawFrame);
     clearTimeout(still);
     clearTimeout(holdTimer);
+    clearTimeout(late);
+    afterClick = null;
     handLayer?.remove();
     if (entered) leave();
     for (const c of cards) c.frame?.remove();

@@ -167,9 +167,17 @@ try {
       const gone = file('sel').frames.map((f) => [f.id, f.state]);
       check(eng, 'Delete archives all the picked frames', JSON.stringify(gone) === JSON.stringify([['a', 'archived'], ['b', 'archived'], ['c', 'live']]), JSON.stringify(gone));
       check(eng, 'the board shows only the third, and nothing is picked', (await shownCount()) === 1 && (await picked()) === '');
+      // The first ⌘Z's write is refused (another writer got in first, 409): it stays on the list, and the next ⌘Z does it.
+      let refused = 0;
+      const once = (route) => (route.request().method() === 'PUT' && !refused++ ? route.fulfill({ status: 409, contentType: 'application/json', body: '{"error":"rev"}' }) : route.fallback());
+      await p.route('**/_lab/api/board?*', once);
       await p.keyboard.press('Control+KeyZ');
       await sleep(900);
-      check(eng, 'one ⌘Z brings both back, in their places', places('sel') === moved, places('sel'));
+      await p.unroute('**/_lab/api/board?*', once);
+      check(eng, 'a ⌘Z whose write is refused changes nothing', refused === 1 && (await shownCount()) === 1 && file('sel').frames.filter((f) => f.state === 'archived').length === 2, JSON.stringify([refused, places('sel')]));
+      await p.keyboard.press('Control+KeyZ');
+      await sleep(900);
+      check(eng, 'one ⌘Z brings both back, in their places (the refused one tried again)', places('sel') === moved, places('sel'));
       check(eng, 'and they are picked again', (await picked()) === 'ab', await picked());
 
       // ----- the hand: Space + drag, the middle button and the wheel pan, and pick nothing

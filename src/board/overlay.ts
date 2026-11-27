@@ -14,6 +14,7 @@ type Opts = { page: string; of?: string; push?: boolean; onClose?: () => void; o
 type Open = { name: string; view: HTMLElement; destroy: () => void; onClose?: () => void; restoration: ScrollRestoration; pushed: boolean };
 let cur: Open | null = null;
 let lastOpts: Opts | null = null; // a forward to #board=<name> opens it as the last one was
+let restoreTo: ScrollRestoration | null = null; // what a closed view puts back a moment later: a view opened before then takes it over
 
 // The view is a shadow host (like the comment widget, src/widget/styles.css): the board, its bar and its frames' labels are
 // drawn inside it, so no rule of the page's (div, button, *, all: unset, !important) reaches them. !important on :host beats
@@ -44,7 +45,8 @@ export function show(name: string, o: Opts) {
   if (cur) teardown();
   const pushed = o.push !== false;
   if (pushed) history.pushState({ ...(history.state && typeof history.state === 'object' ? history.state : {}), labBoard: name }, '', `${location.pathname}${location.search}#board=${name}`);
-  const restoration = history.scrollRestoration;
+  const restoration = restoreTo ?? history.scrollRestoration; // (another board just closed: the page's own, not its 'manual')
+  restoreTo = null;
   history.scrollRestoration = 'manual'; // back from #board=… keeps the page where it is now, not where it was when the view opened
 
   const view = document.createElement('div');
@@ -210,7 +212,11 @@ function teardown() {
   const hold = () => y !== null && Math.abs(scrollY - y) > 1 && scrollTo({ top: y, behavior: 'instant' as ScrollBehavior });
   hold();
   requestAnimationFrame(() => (hold(), requestAnimationFrame(hold)));
-  setTimeout(() => (history.scrollRestoration = c.restoration), 0);
+  restoreTo = c.restoration;
+  setTimeout(() => {
+    if (restoreTo && !cur) history.scrollRestoration = restoreTo;
+    restoreTo = null;
+  }, 0);
   c.onClose?.();
   moved();
 }
@@ -245,7 +251,8 @@ function close() {
     closing = true;
     // The page's pins come back as it starts to leave, not once it is gone (Leo, 26 Nov: "appearing with lag now").
     document.querySelector('[data-lab-comments]')?.removeAttribute('data-board');
-    return void setTimeout(() => ((closing = false), now()), slide(cur.view));
+    const was = cur;
+    return void setTimeout(() => ((closing = false), cur === was && now()), slide(cur.view)); // (not a board opened meanwhile)
   }
   now();
 }
