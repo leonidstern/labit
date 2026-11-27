@@ -14,6 +14,7 @@
   "pagecss": 25,
   "livereload": 28,
   "devroutes": 6,
+  "proxyreload": 12,
   "remount": 16,
   "selection": 24,
   "board": 46,
