@@ -311,7 +311,12 @@ export function reloader({ W, reload, loaded, samePath, idOf, selDirty, board, s
     if (of('html').some((p) => !p || p.replace(/\.html?$/i, '').toLowerCase() === here)) morphPage();
     else if (of('html').some((p) => loaded(p, /fetch|xml/))) reload(); // a page a script fetched
     // A picture only a stylesheet shows (a CSS background): its addresses in the CSS get a new version; when none is found but the page loaded it, it reloads.
-    if (of('img').length && !swapImages(of('img')) && !restyle(of('img')) && of('img').some((p) => loaded(p))) reload();
+    // Both run: one picture can be an <img> and a CSS background at once.
+    if (of('img').length) {
+      const swapped = swapImages(of('img'));
+      const restyled = restyle(of('img'));
+      if (!swapped && !restyled && of('img').some((p) => loaded(p))) reload();
+    }
     if (of('css').length) swapCss(of('css')); // after the pictures: one that was restyled makes this a reload
     if (of('font').length) reloadFonts(of('font'));
   };
