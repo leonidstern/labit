@@ -37,8 +37,11 @@ const kept: Record<string, unknown[]> = {};
 /** True while any box on the page holds words nobody has sent. A box that has left the page doesn't count, even before
  *  it has let go of its hold: a stale entry used to keep comment mode off (the page's own pointer) until the page next changed. */
 export const anyWriting = () => [...writing].some((t) => t.isConnected);
+// Boxes seen to have left the page (sweep, below). One that is still off the page holds nothing: a sync after it left (a
+// send that ended after a redraw) put it back, and the reload waited with nothing left to sweep it out again.
+const left = new WeakSet<HTMLTextAreaElement>();
 const saysWriting = (field: HTMLTextAreaElement, pics = 0) => {
-  if (field.value.trim() || pics) writing.add(field);
+  if ((field.value.trim() || pics) && (field.isConnected || !left.has(field))) writing.add(field);
   else writing.delete(field);
   holdReloads(writing.size);
   d?.whileWriting?.(); // the page's own pointer comes back while you are writing (comments.js)
@@ -58,7 +61,9 @@ const sweep = () => {
     if (!box) boxes.delete(ref);
     else if (!box.isConnected) {
       gone = true;
-      writing.delete(textOf.get(box) as HTMLTextAreaElement);
+      const t = textOf.get(box) as HTMLTextAreaElement;
+      if (t) left.add(t);
+      writing.delete(t);
     }
   }
   if (!gone) return;
@@ -91,7 +96,7 @@ export function composer({ placeholder, onSubmit, autofocus = false, opened = fa
   placeholder: string;
   // Sent when nothing is typed (a drawing: what it reads as). Without it, an empty box doesn't send.
   empty?: string;
-  onSubmit: (name: string, text: string, att?: { attachments: string[] }) => Promise<unknown>;
+  onSubmit: (name: string, text: string, att?: { attachments: string[]; nonce?: string }) => Promise<unknown>;
   /** A pasted or dropped picture goes with the comment (the new pin's box and a thread's reply; not the chat). */
   attach?: boolean;
   autofocus?: boolean;
@@ -267,23 +272,25 @@ export function composer({ placeholder, onSubmit, autofocus = false, opened = fa
     try {
       const sent = onSubmit.bind(null, name.value.trim(), said);
       const result = (await (pics.length ? d.part('attach').then((m) => m.send(wrap, pics, sent)) : sent())) as { keep?: boolean } | undefined;
-      // It went: the kept draft goes with it.
+      // It went: the kept draft goes with it. Words typed while it was on its way stay in the box (they were wiped).
+      const rest = text.value === words ? '' : text.value.startsWith(words) ? text.value.slice(words.length).trimStart() : text.value;
       dropDraft();
       if (draftKey) sending.delete(draftKey);
       clearTimeout(slow);
       error.textContent = '';
       error.classList.remove('wait');
-      if (result?.keep) {
-        text.value = '';
+      if (rest || result?.keep) {
+        text.value = rest;
+        keepDraft();
         sync();
       }
     } catch (e) {
       clearTimeout(slow);
       error.classList.remove('wait');
       error.textContent = e.message;
-      // It did not go: the words are yours again, kept as they were.
+      // It did not go: the words are yours again, kept as they were (or as you changed them while it was on its way).
       if (draftKey) sending.delete(draftKey);
-      text.value = words;
+      if (!text.value.trim()) text.value = words;
       keepDraft();
       sync();
     }

@@ -87,9 +87,17 @@ export function drawChat() {
   // A message already on screen that hasn't changed keeps its own node: a redraw for one new message used to rebuild
   // every bubble (a phone showed the chat blink as messages arrived).
   const kept = new Map([...(box.children as HTMLCollectionOf<HTMLElement>)].filter((n) => n.dataset.id).map((n) => [n.dataset.id, n]));
+  // A message's pictures go in after it is drawn (the attach part, a moment later): read without them, a message with
+  // pictures is the same message, and a picture opened in it stays open (it was built again, closed, on every draw).
+  const html = (n: HTMLElement) => {
+    if (!n.querySelector(':scope > [data-pics]')) return n.outerHTML;
+    const c = n.cloneNode(true) as HTMLElement;
+    c.querySelector(':scope > [data-pics]')!.remove();
+    return c.outerHTML;
+  };
   const same = (n) => {
     const old = kept.get(n.dataset?.id);
-    return old && old.outerHTML.replace(' fresh', '').replace(/ warm"/, '"') === n.outerHTML ? old : n; // (warm: warmChat's, for a frame)
+    return old && html(old).replace(' fresh', '').replace(/ warm"/, '"') === n.outerHTML ? old : n; // (warm: warmChat's, for a frame)
   };
   const unfolded: Set<string> = (W.S.unfolded ||= new Set());
   const rootId = (m) => m.parent || m.id;
@@ -118,7 +126,7 @@ export function drawChat() {
       b.append(q);
     }
     b.append(...W.readable(m.text));
-    if (m.images) W.part('attach').then((a) => a.show(b.appendChild(W.el('div')), m)); // pictures, as in a thread (thread.ts)
+    if (m.images) W.part('attach').then((a) => a.show(b.appendChild(W.el('div', { 'data-pics': '' })), m)); // pictures, as in a thread (thread.ts)
     // The agent's question with choices: its rows under it, as in a thread's card (thread.ts), nothing tried in the page.
     if (m.session && Array.isArray(m.choices) && m.choices.length && root) {
       b.classList.add('asks');

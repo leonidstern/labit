@@ -7,7 +7,7 @@ type Ink = { mark: string; from?: string; to?: string; pts: number[][]; w?: numb
 type Read = { mark: string; from?: string; to?: string; box: { l: number; t: number; r: number; b: number }; lines: P[][]; marks?: string[]; cut?: number; head?: number; whole?: boolean };
 
 // The drawing as an area comment: the area (at least min each way), plus the lines as 0–1000 across and down it, to a
-// tenth (whole steps moved points of a wide drawing by up to 3 px as it landed).
+// tenth (whole steps moved points of a wide drawing by up to 3 px as it landed). Kept inside 0–1000, as the lab keeps them.
 export function inkAnchor({ mark, from, to, box, lines, marks, cut, whole }: Read, min: number) {
   for (const [a, b] of [['l', 'r'], ['t', 'b']] as const) {
     if (box[b] - box[a] >= min) continue;
@@ -15,7 +15,7 @@ export function inkAnchor({ mark, from, to, box, lines, marks, cut, whole }: Rea
     [box[a], box[b]] = [mid - min / 2, mid + min / 2];
   }
   const anchor = zoneAnchor({ x0: box.l, y0: box.t, x1: box.r, y1: box.b });
-  const fit = (v: number, a: number, b: number) => Math.round(((v - a) / (b - a)) * 10000) / 10;
+  const fit = (v: number, a: number, b: number) => Math.min(1000, Math.max(0, Math.round(((v - a) / (b - a)) * 10000) / 10));
   anchor.ink = { mark, from, to, pts: lines.map((s) => s.flatMap((p) => [fit(p.x, box.l, box.r), fit(p.y, box.t, box.b)])) };
   // The pen's width at each point, in tenths of a px (pressure with a pen, speed otherwise): Leo's pick 4, 20 Nov.
   if (marks?.length) anchor.ink.marks = marks;

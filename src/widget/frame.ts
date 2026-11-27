@@ -39,9 +39,11 @@ export function startFrame(script: HTMLScriptElement | null) {
   // The middle or a side button pans the board here too, as on its canvas, and a side button's lift steps no page back or
   // forward (Leo, 26 Nov: "mouse side buttons to pan board", "and wheel down too"). Screen px: the frame is zoomed.
   let pan: { x: number; y: number } | null = null;
+  let cursor = ''; // the page's own, put back when the pan ends
   addEventListener('pointerdown', (e) => {
     if (e.pointerType === 'touch' || ![1, 3, 4].includes(e.button)) return;
     e.preventDefault();
+    if (!pan) cursor = document.documentElement.style.cursor;
     pan = { x: e.screenX, y: e.screenY };
     document.documentElement.style.cursor = 'grabbing'; // the hand, as on the board (Leo, 26 Nov: "show hand on all three")
     document.documentElement.setPointerCapture?.(e.pointerId);
@@ -51,7 +53,13 @@ export function startFrame(script: HTMLScriptElement | null) {
     board()?.pan?.(e.screenX - pan.x, e.screenY - pan.y);
     pan = { x: e.screenX, y: e.screenY };
   }, true);
-  for (const t of ['pointerup', 'pointercancel', 'mouseup']) addEventListener(t, (e) => ((pan = null), document.documentElement.style.removeProperty('cursor'), (e as MouseEvent).button > 2 && e.preventDefault()), true);
+  // Only a pan's end puts the cursor back: every other lift cleared a cursor the page had set on itself.
+  for (const t of ['pointerup', 'pointercancel', 'mouseup'])
+    addEventListener(t, (e) => {
+      if (pan) document.documentElement.style.cursor = cursor;
+      pan = null;
+      if ((e as MouseEvent).button > 2) e.preventDefault();
+    }, true);
   // What the board may ask of this page: a pin on this frame is on an element of the page, found again the way a page's
   // own pins are (anchoring.ts, here, on this page): when the page changes (a frame showing only its section, an edit), the
   // pin goes with its element, not left at the px it was put at (Leo, 26 Nov: "points on boards doesnt find their location
