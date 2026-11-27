@@ -19,8 +19,8 @@ test('a changed browser test runs itself; one CI never runs (a helper) runs ever
   assert.equal(run(['test/browser/port.mjs']).tests, 'all');
 });
 
-test('a mapped widget module runs its tests, the build beside it adds nothing, and the native check follows', () => {
-  const r = run(['src/widget/ink.ts', 'public/_lab/comments.js']);
+test('a mapped widget module runs its tests, and the native check follows', () => {
+  const r = run(['src/widget/ink.ts']);
   assert.equal(r.tests, 'ink selection');
   assert.equal(r.native, true);
   assert.equal(run(['src/board/mount.ts']).tests, 'board boardpins'); // 'gone' is in no group
@@ -32,7 +32,7 @@ test('the core, the server, the build, package.json and unknown paths run everyt
   for (const f of ['src/comments.js', 'src/widget/styles.css', 'local.mjs', 'lib/settings.ts', 'package.json', 'scripts/build-widget.mjs', 'ci/affected.mjs', 'src/widget/new.ts', 'new/thing.js']) {
     assert.equal(run([f]).tests, 'all', f);
   }
-  // A built file changed without its source: a hand edit, so everything.
+  // A built file is not kept in git; one that turns up anyway is unknown, so everything.
   assert.equal(run(['public/_lab/comments.js']).tests, 'all');
 });
 

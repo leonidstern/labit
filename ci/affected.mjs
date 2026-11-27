@@ -6,8 +6,6 @@
 //   workflows other than test.yml. Nothing runs for these.
 // - A browser test that CI runs (listed in ci/browser-tests.json): that test.
 // - A widget module with a known reach (REACH below): the tests listed for it.
-// - public/_lab/*.js built from src/: nothing of its own when the PR also changes src/ (it is the build of those
-//   files, and the size gate's staleBuild check already holds it to them); everything when it changes alone.
 // - Everything else, including anything not listed here: every test. So src/comments.js, styles.css, the server
 //   (local.mjs, lib/), package.json, the build script, test.yml, this file, test helpers, and new folders all run the
 //   full set. Unknown means all: a missed test costs more than a run.
@@ -52,37 +50,26 @@ const REACH = {
   'src/widget/actions.ts': ['actions'],
   'src/widget/walkie.ts': ['walkie'],
   'src/widget/walkie.css': ['walkie'],
-  'src/widget/chat.ts': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'boardclose', 'connection', 'fluid', 'native', 'progress', 'shortcuts', 'update', 'updbadge', 'zoom'],
+  'src/widget/chat.ts': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'boardclose', 'connection', 'native', 'progress', 'shortcuts', 'update', 'updbadge', 'zoom'],
   'src/widget/draw.ts': ['draw', 'edge-draw1', 'edge-draw2', 'edge-draw3', 'edge-draw4', 'native', 'nativepins', 'shiftkeys'],
-  'src/widget/fluid.ts': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'fluid', 'nativepins', 'select', 'selection', 'shortcuts'],
   'src/widget/frame.ts': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardhome', 'boardmode', 'boardpins', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard'],
   'src/widget/ink.ts': ['draw', 'edge-draw1', 'edge-draw2', 'edge-draw3', 'edge-draw4', 'native', 'nativepins', 'shiftkeys'],
-  'src/widget/messages.ts': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'boardclose', 'boardcanvas', 'boardpins', 'connection', 'draw', 'edge-draw2', 'fluid', 'moment', 'native', 'progress', 'selection', 'shortcuts', 'undo', 'update', 'updbadge', 'zoom'],
-  'src/widget/pinhold.ts': ['actions', 'behaviours', 'behaviours-choices', 'behaviours-questions', 'boardclose', 'boardcanvas', 'boardpins', 'boardview', 'boxfits', 'connection', 'draw', 'edge-draw1', 'edge-draw2', 'edge-draw3', 'edge-draw4', 'fluid', 'moment', 'moved', 'native', 'nativeboard', 'nativepins', 'progress', 'select', 'selection', 'shortcuts', 'undo'],
-  'src/widget/select.ts': ['select'],
-  'src/widget/stick.ts': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'boardclose', 'boardcanvas', 'boardpins', 'connection', 'draw', 'edge-draw2', 'fluid', 'moment', 'native', 'progress', 'selection', 'shortcuts', 'undo', 'update', 'updbadge', 'zoom'],
-  'src/widget/switcher.ts': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'boardcanvas', 'boardmode', 'moved', 'native', 'select', 'shortcuts', 'update', 'updbadge'],
-  'src/widget/switcher.css': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'boardcanvas', 'boardmode', 'moved', 'native', 'select', 'shortcuts', 'update', 'updbadge'],
+  'src/widget/messages.ts': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'boardclose', 'boardcanvas', 'boardpins', 'connection', 'draw', 'edge-draw2', 'moment', 'native', 'progress', 'selection', 'shortcuts', 'undo', 'update', 'updbadge', 'zoom'],
+  'src/widget/pinhold.ts': ['actions', 'behaviours', 'behaviours-choices', 'behaviours-questions', 'boardclose', 'boardcanvas', 'boardpins', 'boardview', 'boxfits', 'connection', 'draw', 'edge-draw1', 'edge-draw2', 'edge-draw3', 'edge-draw4', 'moment', 'moved', 'native', 'nativeboard', 'nativepins', 'progress', 'selection', 'shortcuts', 'undo'],
+  'src/widget/stick.ts': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'boardclose', 'boardcanvas', 'boardpins', 'connection', 'draw', 'edge-draw2', 'moment', 'native', 'progress', 'selection', 'shortcuts', 'undo', 'update', 'updbadge', 'zoom'],
+  'src/widget/switcher.ts': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'boardcanvas', 'boardmode', 'moved', 'native', 'shortcuts', 'update', 'updbadge'],
+  'src/widget/switcher.css': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'boardcanvas', 'boardmode', 'moved', 'native', 'shortcuts', 'update', 'updbadge'],
   'src/widget/trial.ts': ['anchoring', 'behaviours', 'behaviours-choices', 'behaviours-questions', 'native', 'progress', 'selection', 'shortcuts'],
   'src/widget/tryout.ts': ['anchoring', 'behaviours', 'behaviours-choices', 'behaviours-questions', 'native', 'progress', 'selection', 'shortcuts'],
-  'public/_lab/tryout.js': ['anchoring', 'behaviours', 'behaviours-choices', 'behaviours-questions', 'native', 'progress', 'selection', 'shortcuts'],
   'src/widget/goto.ts': ['links', 'pagecss'],
-  'public/_lab/goto.js': ['links', 'pagecss'],
   'src/board/camera.ts': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardhome', 'boardmode', 'boardpins', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard'],
   'src/board/mount.ts': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardhome', 'boardimage', 'phonepins', 'boardmode', 'boardpins', 'boardzones', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard'],
   'src/board/overlay.ts': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardhome', 'boardimage', 'phonepins', 'boardmode', 'boardpins', 'boardzones', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard'],
-  'public/_lab/boardview.js': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardhome', 'boardimage', 'phonepins', 'boardmode', 'boardpins', 'boardzones', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard'],
-  'public/_lab/draw.js': ['draw', 'edge-draw1', 'edge-draw2', 'edge-draw3', 'edge-draw4', 'native', 'nativepins', 'shiftkeys'],
-  'public/_lab/motion.js': ['motionreach', 'moment', 'update'],
   'src/widget/attach.ts': ['attach'],
   'src/widget/attach.css': ['attach'],
-  'public/_lab/attach.js': ['attach'],
   'src/widget/reload.ts': ['livereload', 'hotrace', 'morphstate', 'reloadstate', 'remount', 'boardreload', 'pagecss'],
-  'public/_lab/reload.js': ['livereload', 'hotrace', 'morphstate', 'reloadstate', 'remount', 'boardreload', 'pagecss'],
   'src/widget/pics.ts': ['attach', 'boardimage'],
-  'public/_lab/pics.js': ['attach', 'boardimage'],
-  'public/_lab/switcher.js': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'boardcanvas', 'boardmode', 'moved', 'native', 'select', 'shortcuts', 'update', 'updbadge'],
-  'lib/actions.ts': ['actions', 'behaviours', 'behaviours-choices', 'behaviours-questions', 'fluid', 'nativepins', 'select', 'selection', 'shortcuts'],
+  'lib/actions.ts': ['actions', 'behaviours', 'behaviours-choices', 'behaviours-questions', 'nativepins', 'selection', 'shortcuts'],
   'lib/agents.ts': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'connection', 'edge-draw1', 'edge-draw2', 'edge-draw3', 'edge-draw4', 'moment', 'moved', 'native', 'progress', 'shortcuts', 'updbadge'],
   'lib/board.ts': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardhome', 'boardmode', 'boardpins', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard'],
   'lib/boardact.ts': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardhome', 'boardmode', 'boardpins', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard'],
@@ -413,10 +400,6 @@ export function affected(files, { tests = groupTests(), reach = REACH, diffOf = 
     if (reach[f] && reach[f].some((r) => tests.has(r))) {
       for (const r of reach[f]) if (tests.has(r)) pick.add(r);
       why.push(`${f}: runs ${reach[f].filter((r) => tests.has(r)).join(' ')}`);
-      continue;
-    }
-    if (/^public\/_lab\/[^/]+\.js$/.test(f) && srcChanged) {
-      why.push(`${f}: the build of the src/ files changed here`);
       continue;
     }
     all = true;
