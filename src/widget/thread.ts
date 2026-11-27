@@ -310,9 +310,6 @@ export function threadCard(c, fresh = new Set(), focus = false) {
   const body = W.el('div', { class: 'body' });
   const foot = W.el('div', { class: 'foot' });
   card.append(W.el('div', { class: 'handle' }), body, foot);
-  // A board pin (+board): its board, as a strip with Open, above its messages (boardcam.ts).
-  const board = W.boardStrip(c);
-  if (board) card.insertBefore(board, body);
   // Why its pin is not plainly on its spot, in one line.
   const why = { lost: 'its spot is gone', hidden: 'hidden right now: its spot is not shown', unsure: 'unsure: it may not be the spot it was made on', changed: 'its words changed: check it still fits' }[W.placeOf(c).why as string];
   if (why && !c.resolved) card.insertBefore(W.el('div', { class: 'spotnote' }, why), body);

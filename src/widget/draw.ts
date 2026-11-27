@@ -250,7 +250,7 @@ export function readInk(strokes: P[][], say: (e: Element | null) => string | und
   }
   // What is under a point on the page itself: labit's own bars and layers (data-lab-comments) are skipped.
   // Over a board: the board's own frame there (its view keeps its frames in a shadow root, so the page's lookup stops at the
-  // view's box: an arrow on a board named "board pin-…" at both ends; Leo's drawings, 21 Nov).
+  // view's box: an arrow read as on "board …" at both ends; Leo's drawings, 21 Nov).
   // On a board's own page the board says which frame is there (the page's lookup found the board's dialog: each mark of a
   // drawing was "on" it, issue 423); between frames, the board itself.
   const board = (window as unknown as { __labBoard?: { anchor?: (x: number, y: number) => { frame?: string }; box?: (id: string) => HTMLElement | null; contains?: (x: number, y: number) => boolean } }).__labBoard;

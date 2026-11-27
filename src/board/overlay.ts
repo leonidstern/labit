@@ -256,8 +256,6 @@ function close() {
   }
   now();
 }
-/** Close the view if it shows this board (its pin was taken back, so the board is gone). */
-export const hide = (name: string) => void (cur?.name === name && close());
 // Closing leaves the page where it is now, wherever it was scrolled to under the view: never back at the board's section
 // (Leo, 21 Nov: "closing board by clicking on canvas after scrolled a bit should not return to board section").
 let keepY: number | null = null;
@@ -303,43 +301,3 @@ export function own(name: string) {
   show(name, { page: '', of: new URLSearchParams(location.search).get('of') || '', push: false, own: true });
 }
 
-// A board as a section of the page (<lab-board name>, put there by +board, src/widget/boardcam.ts): a strip of what is on it, the page itself
-// left out. A tap opens the board over the page. Outside the lab the tag is an empty element, and shows nothing.
-// In the page's own colours (its text colour; borders and fills from it), so it reads on a dark page as on a light one;
-// straight under <body> it keeps off the screen's edges (in the shadow: what is on <lab-board> itself is the file's).
-const STRIP = `:host{display:block!important;box-sizing:border-box!important;margin:16px 0!important;font:13px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:inherit}
-.edge{margin:0 16px}
-.box{border:1px solid color-mix(in srgb,currentColor 16%,transparent);border-radius:var(--_radius,12px);padding:10px;background:color-mix(in srgb,rgb(52,199,89) 7%,transparent)}
-.top{display:flex;align-items:center;gap:8px;margin:0 2px 8px}
-.top b{font-weight:600}.top span{opacity:.65;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.top button{font:inherit;border:0;border-radius:var(--_radius,12px);padding:4px 11px;cursor:pointer;background:rgba(52,199,89,.18);color:inherit}
-.row{display:flex;gap:8px;overflow-x:auto;scrollbar-width:thin}
-.row>*{flex:none;height:120px;border-radius:var(--_r-s,6px);background:color-mix(in srgb,currentColor 6%,transparent)}
-img{display:block;max-width:240px;object-fit:cover}
-.page{width:160px;padding:10px;box-sizing:border-box;overflow:hidden;opacity:.8}
-.none{opacity:.65;padding:4px 2px}`;
-const el = (tag: string, props: object = {}, ...kids: (Node | string)[]) => {
-  const n = Object.assign(document.createElement(tag), props);
-  n.append(...kids);
-  return n;
-};
-/** A board as a section of the page: <lab-board name> (src/widget/boardcam.ts), filled with a strip of what is on the board. */
-export const section = async (host: HTMLElement, o: { page: string }) => {
-  const name = host.getAttribute('name') || '';
-  if (!/^[a-z0-9][a-z0-9_-]*$/.test(name)) return;
-  const root = host.shadowRoot || host.attachShadow({ mode: 'open' });
-  const b = await fetch(`/_lab/api/board?name=${name}`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null), () => null);
-  // No board to show here (it is gone, can't be read, or is about another page: a copied file): nothing, never an empty
-  // box (Leo, 21 Nov: "no stray board on pages without access to them").
-  if (!b || String(b.of || '').split('#')[0] !== o.page) return void root.replaceChildren(); // an empty shadow: nothing shows
-  const frames = (b?.frames || []).filter((f: { state?: string; src: string }) => f.state !== 'archived' && f.src.split(/[?#]/)[0] !== o.page);
-  const thumb = (f: { kind?: string; src: string; label?: string; id: string }) => (f.kind === 'image' ? el('img', { src: f.src, alt: f.label || '', loading: 'lazy' }) : el('div', { className: 'page' }, f.label || (f.src.startsWith('/_lab/board/') ? `variant ${f.id}` : f.src)));
-  const said = String(b.title || '');
-  root.replaceChildren(
-    el('style', {}, STRIP),
-    el('div', { className: host.parentElement === document.body ? 'box edge' : 'box' },
-      el('div', { className: 'top' }, el('b', {}, 'Board'), el('span', {}, [`${frames.length || 'nothing'} on it`, b.status === 'needs your reply' ? 'board needs your reply' : b.status, said.slice(0, 60)].filter(Boolean).join(' · ')), el('button', {}, 'Open')),
-      frames.length ? el('div', { className: 'row' }, ...frames.map(thumb)) : el('div', { className: 'none' }, 'Open it to add pictures and pages for the agent.'),
-    ),
-  );
-};

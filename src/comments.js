@@ -41,7 +41,7 @@ import { holdWhileOpen } from './widget/hold.ts';
 import { inkSvg } from './widget/ink.ts';
 import { bindActions } from './widget/actions.ts';
 import { bindDrag, draftHasText, drawOnce, endDrag, inkSaid, offerSelection, startDrag } from './widget/drag.ts';
-import { boardStrip, bindBoardCam, newBoard, pinBoardGone, pressBoard, showBoard } from './widget/boardcam.ts';
+import { bindBoardCam, newBoard, pressBoard, showBoard } from './widget/boardcam.ts';
 import { bindFramework, overFramework, scanForFramework } from './widget/framework.ts';
 import { bindKeys } from './widget/keys.ts';
 import { followTap, liftTarget } from './widget/lifttap.ts';
@@ -95,7 +95,6 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
     begin,
     offerSelection,
     drawOnce: () => (drawOnce(), void part('draw')),
-    boardStrip,
     sendDrawing,
     get addComment() { return addComment; },
     get bar() { return bar; },
@@ -698,13 +697,8 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
   }
   const placed = [];
   const placedAt = new Map(); // id -> when it was placed: a board's newer move is what ⌘Z takes back first (Leo, 23 Nov)
-  // Where a thread's pin goes (anchoring.ts). A board pin whose element is not shown (a closed menu or tab) would leave its
-  // board out of reach with it, so it goes to the ⋯ menu as a moved pin until its element is back (Leo, 23 Nov: "be sure
-  // board pin wont became stray out of viewport").
-  const placeOf = (c) => {
-    const at = /** @type {any} */ (position(c.anchor || {}));
-    return at.why === 'hidden' && S.pinBoards?.has(c.id) ? { ...at, moved: true, why: 'lost' } : at;
-  };
+  // Where a thread's pin goes (anchoring.ts).
+  const placeOf = (c) => /** @type {any} */ (position(c.anchor || {}));
   // Undo, 3 s after a new pin is sent (Leo, 19 Nov): its card opens with "undo" in the resolve key's place (thread.ts).
   // A tap deletes it (this computer as admin, anyone else with the pin's own key, which the lab takes for a fresh pin
   // nobody answered) and closes the card: no comment box, no words kept anywhere.
@@ -716,7 +710,6 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
     await send({ action: 'delete', id: c.id, ...(ownKey && !S.isAdmin ? { edit: ownKey } : {}) });
     S.undo = null;
     S.comments = S.comments.filter((x) => x.id !== c.id && x.parent !== c.id);
-    pinBoardGone(c.id); // a board pin's board went with it (the lab drops it): its view closes
     if (ownKey) store.set(`lab-edit:${c.id}`, '');
     const at = placed.indexOf(c.id);
     if (at >= 0) placed.splice(at, 1);
@@ -729,27 +722,19 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
   }
   // Command-Z (Control-Z elsewhere), not in a text box: the last pin or go placed from this tab goes away. This
   // computer deletes it; a guest, who can't delete, resolves it (it steps aside).
-  // This computer takes a thread away for good (⌘Z on the last one placed, a pin's right-click menu): its replies and a
-  // board pin's board go with it.
+  // This computer takes a thread away for good (⌘Z on the last one placed, a pin's right-click menu): its replies go with it.
   const dropThread = async (id) => {
     await send({ action: 'delete', id });
     S.comments = S.comments.filter((x) => x.id !== id && x.parent !== id);
-    pinBoardGone(id);
   };
   async function undoLast() {
     const id = placed.pop();
     const c = id && S.comments.find((x) => x.id === id);
     if (!c) return;
     const ownKey = store.get(`lab-edit:${id}`);
-    // A board pin past its first seconds (the undo key's) holds what was put on its board: ⌘Z closes it, and its
-    // board stays, as a guest's ⌘Z does (issue 422: deleting it took the board and its pictures).
-    const keep = S.pinBoards?.has(id) && S.undo?.id !== id;
     try {
-      if (S.isAdmin && !keep) await dropThread(id);
-      else if (S.isAdmin) {
-        const { comment } = await send({ action: 'resolve', id });
-        Object.assign(c, comment);
-      } else if (ownKey) {
+      if (S.isAdmin) await dropThread(id);
+      else if (ownKey) {
         const { comment } = await send({ action: 'resolve', id, edit: ownKey });
         Object.assign(c, comment);
       } else return void placed.push(id);
@@ -1278,15 +1263,9 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
       }
       const ink = zone && c.anchor.ink; // a drawing is its own pin: its lines, no marker (draw.ts)
       if (S.openId === c.id && !ink) add(drawZone(zone, `saved${anim}`)); // a drawn area shows its outline while open
-      // A board pin (+board) wears its board's news too: the open threads on its board, their unread messages and where the
-      // agent stands with them (asking, then working), when its own thread has nothing to say (Leo, 23 Nov, issue 422).
-      const boardThreads = S.pinBoards?.has(c.id) ? S.comments.filter((x) => !x.parent && !x.resolved && x.anchor?.kind === 'board' && x.anchor.board === `pin-${c.id}`) : [];
-      const news = [...unread(c), ...boardThreads.flatMap((x) => unread(x))];
+      const news = unread(c);
       const movable = !zone && (S.isAdmin || store.get(`lab-edit:${c.id}`));
-      const own = lineUp().get(c.id) || { s: null, n: 0, at: '', line: '' }; // where it stands with the agent: sent, got (picked up), now (working), wait, stale, asks or done
-      const pick = (st) => boardThreads.map((x) => [x, lineUp().get(x.id)]).find(([x, g]) => g?.s === st && (st !== 'asks' || unread(x).length))?.[1];
-      const busy = pick('asks') || (own.s === 'now' ? null : pick('now') || pick('stale'));
-      const sg = busy || own;
+      const sg = lineUp().get(c.id) || { s: null, n: 0, at: '', line: '' }; // where it stands with the agent: sent, got (picked up), now (working), wait, stale, asks or done
       // A question you've read goes back to a plain pin: amber is for one still unread (Leo, 20 Nov: "orange pin after
       // opening should become regular").
       const state = sg.s === 'asks' && !news.length ? null : sg.s;

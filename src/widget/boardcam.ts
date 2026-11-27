@@ -9,7 +9,7 @@ import { anchorAt, position } from './anchoring.ts';
 let W: any;
 let S: any; // the widget's state (W.S), read once at startup
 // A board in this page (src/board/overlay.ts, loaded when one is opened): its link, the address's #board=<name> (a
-// reload, a forward) or a board pin picked in the list opens it. Closing it lets go of a board pin that was open.
+// reload, a forward) or a board picked in the list opens it.
 // The host's data-board hides the page's pins (styles.css, .onp): set here from the moment it is asked for, so none
 // shows while its script loads; the view keeps it while it is open (overlay.ts).
 const board = (on: boolean) => W.host.toggleAttribute('data-board', on);
@@ -28,80 +28,38 @@ export const pressBoard = () => {
 };
 export const showBoard = (name: string, of = '', push = true) => globalThis.__LAB_CO__ ? undefined :
   ((asked = true), board(true), W.part('boardview').then((m) => m.show(name, { page: S.page, of, push, onClose: () => {
-    sections(name);
     const open = S.comments.find((c) => c.id === S.openId);
     if (open?.anchor?.kind === 'board') S.openId = null;
     if (S.draft?.anchor?.kind === 'board') S.draft = null;
     W.render();
   } }), () => (board(false), W.say("the board couldn't load"))));
-/** A board pin taken back (undo, ⌘Z): its board went with it, so it is no longer one, and its view closes if open. */
-export const pinBoardGone = (id: string) => {
-  if (globalThis.__LAB_CO__) return;
-  if (!S.pinBoards?.delete(id)) return;
-  void W.part('boardview').then((m) => m.hide(`pin-${id}`), () => {});
-};
 // This page's boards, read from the lab's list: the bar's "boards" part lists them (Leo, 23 Nov, S5: every board of a
-// page in one place, no hidden ones). Pins that hold a board (pin-<id>, made by +board before) still show it in their card.
+// page in one place, no hidden ones).
 type Listed = { name: string; of?: string; title?: string; frames: number };
-const loadPinBoards = () =>
+const loadBoards = () =>
   fetch('/_lab/api/board', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null), () => null).then((d) => {
     if (!d?.boards) return;
     const mine = (d.boards as Listed[]).filter((b) => (b.of || '').split('#')[0] === S.page);
-    const ids = mine.filter((b) => b.name.startsWith('pin-') && b.of === `${S.page}#${b.name}`).map((b) => b.name.slice(4));
-    const was = JSON.stringify([...S.pinBoards, S.pageBoards]);
-    S.pinBoards = new Set(ids);
+    const was = JSON.stringify(S.pageBoards);
     S.pageBoards = mine;
-    if (JSON.stringify([...S.pinBoards, S.pageBoards]) !== was) W.render();
+    if (JSON.stringify(mine) !== was) W.render();
   });
 /** "+ New board" in the boards list: a board of this page, named after it, and it opens. */
 export const newBoard = async () => {
   if (globalThis.__LAB_CO__) return;
   const made = await fetch('/_lab/api/board', { method: 'POST', headers: W.headers(), body: JSON.stringify({ action: 'new', of: S.page }) }).then((r) => (r.ok ? r.json() : null), () => null);
   if (!made?.board) return W.say("the board couldn't be made");
-  void loadPinBoards();
+  void loadBoards();
   return showBoard(made.board.name);
 };
-/** A board pin's card holds its board: the strip of what is on it and Open (the strip a board section had, overlay.ts). */
-export const boardStrip = (c: { id: string }) => {
-  if (globalThis.__LAB_CO__) return null;
-  if (!S.pinBoards?.has(c.id)) return null;
-  const name = `pin-${c.id}`;
-  const host = W.el('div', { class: 'pinboard', name });
-  // Open: the card closes as the board comes up over the page (one Esc then closes the board, not a card under it).
-  host.addEventListener('click', (e: Event) => {
-    if (!e.composedPath().some((n) => n instanceof HTMLButtonElement)) return;
-    S.openId = null;
-    W.render();
-    void showBoard(name);
-  });
-  void W.part('boardview').then((m) => m.section(host, { page: S.page }), () => {});
-  return host;
-};
-// A board as a section of the page (<lab-board name>, put there by +board), drawn by the board's part (src/board/overlay.ts).
-const fillSection = (host: HTMLElement) =>
-  W.part('boardview').then((m) => m.section(host, { page: S.page }), () => {});
-// Drawn again after the board changed (it closed here, or the lab says it changed).
-const sections = (name?: string) => document.querySelectorAll<HTMLElement>(name ? `lab-board[name="${name}"]` : 'lab-board').forEach((n) => void fillSection(n));
-const defineSection = () => {
-  if (customElements.get('lab-board')) return;
-  customElements.define('lab-board', class extends HTMLElement {
-    connectedCallback() {
-      if (!this.shadowRoot) {
-        // The click is the board's, never a pin on the page (onPageClick in comments.js listens on the document).
-        // Only its Open button opens it, not the whole strip (Leo, 21 Nov: "open board on click on open not on whole thing").
-        this.addEventListener('click', (e) => e.composedPath().some((n) => n instanceof HTMLButtonElement) && (e.stopPropagation(), void showBoard(this.getAttribute('name') || '')));
-        void fillSection(this);
-      }
-    }
-  });
+// The lab says a board changed: this page's list is read again.
+const watchBoards = () => {
   let rev = -1;
   addEventListener('lab-state', (e) => {
     const d = (e as CustomEvent).detail;
     if (typeof d?.boards !== 'number' || d.boards === rev) return;
-    const first = rev < 0;
+    if (rev >= 0) void loadBoards(); // the first is the one read at startup
     rev = d.boards;
-    if (!first) for (const n of d.boardNames || [null]) sections(n || undefined);
-    if (!first) void loadPinBoards();
   });
 };
 // A tap on the board outside an open comment or the chat closes it, as a click outside one does on a page (onPageClick,
@@ -184,11 +142,10 @@ export function bindBoardCam(w: unknown) {
   S = W.S;
   // A board page (src/board/): a tap in comment mode puts a pin on the board (anchoring.ts asks the board where a point is
   // and where a pin sits), and the pins move with the camera.
-  S.pinBoards = new Set<string>();
   S.pageBoards = [] as Listed[];
   if (!S.board && self === top && !globalThis.__LAB_CO__) { // colabit has no boards
-    defineSection();
-    void loadPinBoards();
+    watchBoards();
+    void loadBoards();
     Object.assign(window, { __labBoardView: { show: showBoard } });
     const bn = /^#board=([a-z0-9][a-z0-9_-]*)/i.exec(location.hash)?.[1];
     if (bn) showBoard(bn, '', false);

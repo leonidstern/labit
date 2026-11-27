@@ -711,8 +711,6 @@ kbd::before { content: '('; } kbd::after { content: ')'; } /* read as a hint: ch
 .quick button { border: 0; border-radius: var(--_r-s); padding: 5px 8px; background: var(--_soft); font-size: 12px; letter-spacing: 0; cursor: pointer; }
 .quick button:hover { background: var(--_hover); }
 .quick button.on { background: var(--_fg); color: var(--_bg); font-weight: 600; }
-.quick button.own { margin-left: auto; background: color-mix(in srgb, var(--_green) 14%, transparent); color: var(--_green-fg); } /* +board: labit's own action, not one of your list */
-.quick button.own:hover { background: color-mix(in srgb, var(--_green) 24%, transparent); }
 .quick.alt button::after { content: attr(data-n); margin-left: 6px; opacity: .55; font-variant-numeric: tabular-nums; } /* ⌥ held: the key for each */
 .float .quick button, .float .box { border-radius: max(0px, calc(var(--_radius) - 8px)); }
 .chatwin .chat .box { border-radius: max(0px, calc(var(--_radius) - 6px)); } /* the chat's box sits 6 px in from the window: outer minus gap */
