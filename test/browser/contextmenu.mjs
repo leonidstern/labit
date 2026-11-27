@@ -96,14 +96,18 @@ try {
       await sleep(400);
       check(eng, 'R in the open menu opens the thread, the reply box focused', await p.evaluate(`Boolean(${R}.activeElement?.closest?.('.card'))`));
       await esc(p);
-      await p.keyboard.down('Control');
-      await p.mouse.click(...pinAt);
-      await p.keyboard.up('Control');
-      await sleep(400);
-      const ctl = await rows(p);
-      await pick(p, '/^open/');
-      await sleep(400);
-      check(eng, '⌃ click opens the menu and does not click the pin: open then opens it', ctl.startsWith('open|') && (await has(p, '.card')), ctl);
+      // ⌃ click is a right-click on macOS only, where the browser fires contextmenu for it; on Linux (CI's Chromium)
+      // and Windows it is a plain click, so there is no menu to check.
+      if (process.platform === 'darwin') {
+        await p.keyboard.down('Control');
+        await p.mouse.click(...pinAt);
+        await p.keyboard.up('Control');
+        await sleep(400);
+        const ctl = await rows(p);
+        await pick(p, '/^open/');
+        await sleep(400);
+        check(eng, '⌃ click opens the menu and does not click the pin: open then opens it', ctl.startsWith('open|') && (await has(p, '.card')), ctl);
+      }
       await esc(p);
       await right(p, pinAt);
       await pick(p, '/^resolve/');
