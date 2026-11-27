@@ -19,8 +19,10 @@ after(() => {
   rm([HOME, DIR]);
 });
 const cli = (...args) => command(args, { cwd: DIR, env });
+// This computer's browser key (.lab/key): keeping or undoing a rule needs it.
+const admin = () => fs.readFileSync(path.join(DIR, '.lab', 'key'), 'utf8').trim();
 const post = async (body, url = '/_lab/api/comments') => {
-  const r = await fetch(B + url, { method: 'POST', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ page: '/bar', ...body }) });
+  const r = await fetch(B + url, { method: 'POST', headers: { 'content-type': 'application/json', origin: B, ...(url === '/_lab/rule' && { 'x-lab-admin': admin() }) }, body: JSON.stringify({ page: '/bar', ...body }) });
   return { status: r.status, json: r.status === 204 ? null : await r.json().catch(() => null) };
 };
 const thread = async () => (await (await fetch(`${B}/_lab/api/comments?page=/bar`)).json()).comments;

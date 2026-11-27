@@ -77,7 +77,7 @@ export const frameLine = (b: Board, f: Frame, file?: string | null) => {
 
 // ---------- the changes ----------
 type Ask = { name?: string; topic?: string; of?: string; variants?: number; widths?: string; flow?: string; target?: string; label?: string; width?: number; after?: string; first?: boolean; frame?: string; frames?: string[] };
-type Env = { root: string; origin: string; open: (key: string) => number; titleOf: (page: string) => string; fileOf: (page: string) => string | null; proxied: boolean };
+type Env = { root: string; origin: string; open: (key: string) => number; titleOf: (page: string) => string; fileOf: (page: string) => string | null; proxied: boolean; guest?: boolean };
 export type Done = { text: string; board?: Board; picked?: Frame; error?: string };
 
 const no = (error: string): Done => ({ text: error, error });
@@ -164,6 +164,16 @@ export function act(action: string, a: Ask, e: Env): Done {
     const f: Frame = { id, src: '', w: w ?? 1280, h: 0, state: 'live', ...(a.label ? { label: one(a.label, 80) } : {}) };
     // /cart is a path on this lab, below the lab's folder (path.resolve would read it from the disk's root: "/" always exists there).
     const file = t.startsWith('/') ? path.join(e.root, t) : path.resolve(e.root, t);
+    // A phone with a pass adds only what is in the lab's folder: ../ or a link out of it reads nothing on this computer.
+    const outside = () => {
+      try {
+        const rel = path.relative(fs.realpathSync(e.root), fs.realpathSync(file));
+        return rel.startsWith('..') || path.isAbsolute(rel);
+      } catch {
+        return false;
+      }
+    };
+    if (e.guest && t && outside()) return no(`${t}: only a file in the lab's folder.`);
     const isFile = Boolean(t) && fs.existsSync(file) && fs.statSync(file).isFile();
     // A picture: its bytes say what it is (never the name), read once. The lab copies it into the board's folder as a frame of its own.
     const size = isFile ? fs.statSync(file).size : 0;

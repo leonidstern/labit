@@ -10,8 +10,14 @@
     "ask": [
       "Bash(* --wifi *)",
       "Bash(* --wifi)",
+      "Bash(npx @leonidstern/labit invite)",
       "Bash(npx @leonidstern/labit invite *)",
-      "Bash(npx @leonidstern/labit@latest invite *)"
+      "Bash(npx @leonidstern/labit@latest invite)",
+      "Bash(npx @leonidstern/labit@latest invite *)",
+      "Bash(npx -y @leonidstern/labit invite)",
+      "Bash(npx -y @leonidstern/labit invite *)",
+      "Bash(npx -y @leonidstern/labit@latest invite)",
+      "Bash(npx -y @leonidstern/labit@latest invite *)"
     ]
   }
 }

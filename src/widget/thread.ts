@@ -329,7 +329,7 @@ export function threadCard(c, fresh = new Set(), focus = false) {
     star.innerHTML = STAR;
     b.append(star);
     b.addEventListener('click', async () => {
-      const r = await fetch('/_lab/rule', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ page: W.S.page, id: ans.id, action: 'keep' }) }).catch(() => null);
+      const r = await fetch('/_lab/rule', { method: 'POST', headers: W.headers(), body: JSON.stringify({ page: W.S.page, id: ans.id, action: 'keep' }) }).catch(() => null);
       if (!r?.ok) return void (b.lastChild!.textContent = 'failed, try again');
       ans.suggest.state = 'kept';
       for (const n of card.querySelectorAll(`.msg[data-id="${mine.id}"] .offering`)) n.classList.remove('offering');
@@ -343,7 +343,7 @@ export function threadCard(c, fresh = new Set(), focus = false) {
     if (item.suggest.state === 'undone') return line.append(W.el('b', {}, 'rule removed')), line;
     const undo = W.el('button', { class: 'btn', type: 'button' }, 'undo');
     undo.addEventListener('click', async () => {
-      const r = await fetch('/_lab/rule', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ page: W.S.page, id: item.id }) }).catch(() => null);
+      const r = await fetch('/_lab/rule', { method: 'POST', headers: W.headers(), body: JSON.stringify({ page: W.S.page, id: item.id }) }).catch(() => null);
       if (!r?.ok) return void (undo.textContent = 'failed, try again');
       item.suggest.state = 'undone';
       line.replaceWith(ruleLine(item));
