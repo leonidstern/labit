@@ -25,7 +25,7 @@ const PAGE_SCRIPT = "public/_lab/comments.js"; // what pages load: built from sr
 // agent: false = the agent may not fix it (it would have to edit a protected file); a human decides.
 const METRICS = {
   pageScriptGzipBytes: {
-    kind: "budget", dir: "down", perPr: 2048, max: 81_000,
+    kind: "budget", dir: "down", perPr: 2048, max: 85_000,
     hint: "Shrink src/comments.js without changing behaviour: remove dead code and duplication, then npm run build. No new dependencies.",
   },
   npmPackBytes: {

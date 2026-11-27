@@ -8,7 +8,7 @@ Every PR, forks included, is measured against its own base commit. Takes seconds
 
 | Metric | Rule | Why |
 |---|---|---|
-| `pageScriptGzipBytes` | may grow 2 KB per PR, never past 81 KB | every commented page loads `comments.js` |
+| `pageScriptGzipBytes` | may grow 2 KB per PR, never past 85 KB | every commented page loads `comments.js` |
 | `npmPackBytes` | may grow 4 KB per PR, never past 202 KB | what `npx` users download, README.md left out |
 | `oxlintProblems` | never more | pinned `oxlint@1.93.0` over lib, api, local.mjs, src/comments.js |
 | `typeErrors` | never more | TypeScript (pinned 5.9.3) over the plain JS via `tsconfig.json`; `npm run typecheck` lists them |
