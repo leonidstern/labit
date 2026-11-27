@@ -1979,18 +1979,18 @@ import { isTap, liftTarget } from './widget/lifttap.ts';
   // that animates, a pin's tip on :hover): 3 taps in 60 did nothing (iOS 27 simulator, 27 Nov: touchend, then mouseover,
   // and no mousedown or click). The lift's default is stopped, so no click follows to do it a second time.
   S.liftTap = null;
-  root.addEventListener('touchstart', (e) => {
+  root.addEventListener('touchstart', /** @param {TouchEvent} e */ (e) => {
     const t = e.touches.length === 1 ? e.changedTouches[0] : null;
     const at = t && liftTarget(e.composedPath());
     S.liftTap = at ? { at, x: t.clientX, y: t.clientY, t: performance.now(), id: t.identifier } : null;
   }, { passive: true, capture: true });
-  root.addEventListener('touchmove', (e) => {
+  root.addEventListener('touchmove', /** @param {TouchEvent} e */ (e) => {
     const p = S.liftTap;
     const t = p && [...e.changedTouches].find((x) => x.identifier === p.id);
     if (t && !isTap(p, t.clientX, t.clientY, p.t)) S.liftTap = null;
   }, { passive: true, capture: true });
   root.addEventListener('touchcancel', () => (S.liftTap = null), { passive: true, capture: true });
-  root.addEventListener('touchend', (e) => {
+  root.addEventListener('touchend', /** @param {TouchEvent} e */ (e) => {
     const p = S.liftTap;
     S.liftTap = null;
     const t = p && !e.touches.length && [...e.changedTouches].find((x) => x.identifier === p.id);
