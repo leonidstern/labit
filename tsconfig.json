@@ -1,0 +1,18 @@
+{
+  // TypeScript checks labit's plain JavaScript: no .ts files, no build, nothing emitted.
+  // Types come from JSDoc comments, e.g. /** @type {HTMLTextAreaElement} */ (el).
+  // The gate counts the errors and lets the count only go down (npm run typecheck lists them).
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
+    "target": "es2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["es2023", "dom", "dom.iterable"],
+    "types": ["node"]
+  },
+  "include": ["src/**/*", "local.mjs", "lib/**/*.mjs", "lib/**/*.ts"]
+}

@@ -1,0 +1,12 @@
+{
+  "name": "labit",
+  "version": "0.8.5",
+  "description": "Read and answer labit pin comments in a local lab (wait, fix, reply on the pin).",
+  "author": {
+    "name": "leonidstern",
+    "url": "https://github.com/LeonidStern"
+  },
+  "homepage": "https://github.com/leonidstern/labit",
+  "repository": "https://github.com/leonidstern/labit",
+  "license": "PolyForm-Small-Business-1.0.0"
+}

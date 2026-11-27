@@ -1,0 +1,14 @@
+{
+  "name": "leonidstern",
+  "owner": {
+    "name": "leonidstern",
+    "url": "https://github.com/LeonidStern"
+  },
+  "plugins": [
+    {
+      "name": "labit",
+      "source": "./",
+      "description": "Read and answer labit pin comments in a local lab."
+    }
+  ]
+}

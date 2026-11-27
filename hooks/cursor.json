@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [{ "command": "node \"$CURSOR_PLUGIN_ROOT/hooks/agent.mjs\" start", "timeout": 5 }],
+    "postToolUse": [{ "command": "node \"$CURSOR_PLUGIN_ROOT/hooks/agent.mjs\" progress", "timeout": 5 }],
+    "stop": [{ "command": "node \"$CURSOR_PLUGIN_ROOT/hooks/agent.mjs\" wake", "timeout": 5, "loop_limit": null }]
+  }
+}

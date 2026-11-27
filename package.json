@@ -1,0 +1,65 @@
+{
+  "name": "@leonidstern/labit",
+  "version": "0.8.5",
+  "description": "Pin comments on pages, read by your agent as plain text. Local mode: comment on pages on your computer and Claude answers on the pins.",
+  "type": "module",
+  "bin": {
+    "labit": "dist/local.mjs"
+  },
+  "files": [
+    "dist/local.mjs",
+    "public/_lab/comments.js.br",
+    "public/_lab/components.js.br",
+    "public/_lab/switcher.js.br",
+    "public/_lab/draw.js.br",
+    "public/_lab/motion.js.br",
+    "public/_lab/boardview.js.br",
+    "public/_lab/pics.js.br",
+    "public/_lab/attach.js.br",
+    "public/_lab/reload.js.br",
+    "public/_lab/walkie.js.br",
+    "public/_lab/lab.css.br",
+    "public/_lab/favicon.svg",
+    "skills/",
+    ".claude-plugin/"
+  ],
+  "scripts": {
+    "build": "npx --yes -p esbuild@0.25.12 -p terser@5.44.0 node scripts/build-widget.mjs --outfile=public/_lab/comments.js",
+    "build:co": "npx --yes -p esbuild@0.25.12 -p terser@5.44.0 node scripts/build-widget.mjs --co --outfile=co/co.js",
+    "build:watch": "npm run build -- --watch",
+    "dev": "node scripts/dev.mjs",
+    "build:cli": "npx --yes -p esbuild@0.25.12 -p terser@5.44.0 node scripts/build-cli.mjs",
+    "prepack": "npm run build && npm run build:cli && node scripts/readme-npm.mjs strip",
+    "postpack": "node scripts/readme-npm.mjs restore",
+    "typecheck": "node ci/metrics.mjs types",
+    "deadcode": "npx --yes knip@5.66.0 --include files,exports,types --no-progress",
+    "reuse": "node ci/reuse.mjs",
+    "classes": "node ci/classes.mjs",
+    "waste": "npm run --silent build && npx --yes -p esbuild@0.25.12 -p typescript@5.9.3 node ci/waste.mjs",
+    "pretest": "node -e \"import('./lib/build.ts').then((m) => process.exit(m.ensureBuilt('.') ? 0 : 1))\"",
+    "test": "node --import ./test/setup.mjs --test test/*.test.mjs",
+    "check": "node ci/pr-check.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "comments",
+    "feedback",
+    "review",
+    "claude",
+    "agent",
+    "astro"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/leonidstern/labit.git"
+  },
+  "homepage": "https://github.com/leonidstern/labit#readme",
+  "bugs": "https://github.com/leonidstern/labit/issues",
+  "author": "leonidstern (https://github.com/LeonidStern)",
+  "license": "PolyForm-Small-Business-1.0.0",
+  "publishConfig": {
+    "access": "public"
+  }
+}

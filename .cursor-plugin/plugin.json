@@ -1,0 +1,11 @@
+{
+  "name": "labit",
+  "displayName": "labit",
+  "version": "0.8.5",
+  "description": "Pin comments on pages; your agent reads them as plain text and answers on the pins. Skill: wait, fix, reply on the pin.",
+  "author": { "name": "leonidstern", "url": "https://github.com/LeonidStern" },
+  "license": "PolyForm-Small-Business-1.0.0",
+  "keywords": ["comments", "feedback", "review", "pins"],
+  "skills": "./skills/",
+  "hooks": "./hooks/cursor.json"
+}
