@@ -4,6 +4,7 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 
 ## Unreleased
 
+- **A done answer over two asks says so.** When a pin got more than one message since the agent last answered (a follow-up sent seconds after the pin), `reply --done` lists them all, so none is closed unread. And the agent asking (`--question`, `--choice`) or starting (`--on-it`) on a done pin reopens it.
 - **A newer release reaches a lab that is already running.** A lab from npm looked for one only when it started, so a lab left up for days stayed on its version with no "update" in the ⋯ menu. It now looks again every 3 hours, and pages offer it on their next load.
 - **Agent pins on the spot.** The skill tells agents to pin the exact spot on an image or a big element with `--at x,y`, and `pin` says so when one lands in a picture's centre.
 
