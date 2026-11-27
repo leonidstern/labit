@@ -51,9 +51,19 @@ const thaw = (node: HTMLElement) => {
   node.style.left = node.style.top = '';
 };
 const settled = (e: AnimationEvent) => e.target === e.currentTarget && rest(e.currentTarget as HTMLElement);
+// A card or box taken off the page (closed, drawn again) is let go: it stayed in rests and watched, one more for each.
+const forget = (node: HTMLElement) => {
+  rests.delete(node);
+  watching?.unobserve(node);
+};
 function followPin(node: HTMLElement, tie: Tie) {
   rests.set(node, tie);
-  (watching ??= new ResizeObserver((es) => es.forEach((e) => lay(e.target as HTMLElement) || rest(e.target as HTMLElement)))).observe(node);
+  (watching ??= new ResizeObserver((es) =>
+    es.forEach((e) => {
+      const n = e.target as HTMLElement;
+      if (!n.isConnected) return forget(n);
+      lay(n) || rest(n);
+    }))).observe(node);
   node.addEventListener('animationstart', settled);
 }
 // Where a card goes, in the window's own px: want's cx / cy are its corner below its pin, ay its bottom above it. In
@@ -123,7 +133,7 @@ function bindThreadScroll() {
     'scroll',
     () =>
       rests.forEach((at, node) => {
-        if (!node.isConnected) return rests.delete(node);
+        if (!node.isConnected) return forget(node);
         if (at.frozen || at.rel) return;
         // Not measured yet (the page scrolled right after the card was drawn, as a reload putting the scroll back
         // does): measured now, or it would be held at no offset at all, on top of its pin.
@@ -139,7 +149,7 @@ function bindThreadScroll() {
 function tieToPin(node: HTMLElement, pin: HTMLElement | null | undefined, kind: 'card' | 'beside', want?: Want) {
   node.classList.remove('tied-card', 'tied-beside');
   node.removeAttribute('data-held'); // set below once the browser carries it with its pin (comments.js: no redraw for it)
-  rests.delete(node);
+  forget(node);
   node.style.removeProperty('position-try-fallbacks'); // a scroll's hold (bindThreadScroll) ends with the tie
   if (!pin || !want) {
     letBox(node);
@@ -386,7 +396,10 @@ export function threadCard(c, fresh = new Set(), focus = false) {
     return box;
   };
   const shown = new Set();
+  // Each reply as it was drawn: an edited one is drawn again in its place by card.sync, a deleted one taken out.
+  const drawnAs = new Map<string, string>();
   const all = [c, ...W.repliesOf(c.id)];
+  for (const r of all) drawnAs.set(r.id, JSON.stringify(r));
   const firstNew = all.find((x) => fresh.has(x.id));
   // The agent's "on it" messages fold into one muted row ("2 updates ›") once an answer follows them; the latest stays
   // while there is no answer yet. A tap opens them in place (Leo, 20 Nov).
@@ -424,6 +437,23 @@ export function threadCard(c, fresh = new Set(), focus = false) {
     const written = [...card.querySelectorAll('textarea')].some((t) => (t as HTMLTextAreaElement).value.trim());
     if (!written && W.repliesOf(c.id).some((r) => !shown.has(r.id) && r.session && W.repliesOf(c.id).some((x) => W.isStatus(x)))) return W.render();
     const atEnd = body.scrollHeight - body.scrollTop - body.clientHeight < 48;
+    // Replies deleted or edited since: out of the card, or drawn again where they are (only new ones were put in).
+    const now = new Map<string, unknown>(W.repliesOf(c.id).map((r) => [r.id, r]));
+    for (const id of [...shown] as string[]) {
+      if (id === c.id) continue;
+      const r = now.get(id);
+      const sig = r && JSON.stringify(r);
+      if (sig === drawnAs.get(id)) continue;
+      const n = body.querySelector(`:scope > .item[data-id="${CSS.escape(id)}"]`);
+      if (r) {
+        n?.replaceWith(itemEl(r));
+        drawnAs.set(id, sig);
+      } else {
+        n?.remove();
+        shown.delete(id);
+        drawnAs.delete(id);
+      }
+    }
     for (const r of W.repliesOf(c.id)) {
       if (shown.has(r.id)) continue;
       const items = card.querySelectorAll('.item');
@@ -431,6 +461,7 @@ export function threadCard(c, fresh = new Set(), focus = false) {
       added.classList.add('fresh');
       items[items.length - 1].after(added);
       shown.add(r.id);
+      drawnAs.set(r.id, JSON.stringify(r));
       W.markSeen([r]);
     }
     if (atEnd) { // at the newest: the new one comes into view, and stays while its words settle
@@ -490,7 +521,7 @@ export function threadCard(c, fresh = new Set(), focus = false) {
         return failed(yes);
       }
       W.S.comments = W.S.comments.filter((x) => x.id !== c.id && x.parent !== c.id);
-      W.S.openId = null;
+      if (W.S.openId === c.id) W.S.openId = null; // another thread opened while it was deleted stays open
       W.render();
     });
     // Undo (Leo, 19 Nov): for 3 s after this tab sent the thread (W.S.undo, src/comments.js), "undo" sits in the
@@ -755,7 +786,7 @@ export function choicesEl(c, ask, host, chat = false) {
     return true;
   };
   (box as unknown as { ticked: () => boolean }).ticked = () => {
-    if (cur < 0 || cur >= ask.choices.length) return false;
+    if (!rows.some((r) => r.n === cur)) return false; // the page's own words ("· now", -1) are a row too: Enter keeps them
     answer(cur);
     return true;
   };

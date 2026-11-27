@@ -80,9 +80,12 @@ export const endDrag = (e) => {
   }
   // Holding D, a press that hardly moved is no click (it opened an empty box, and the next D typed a "d" into it, which
   // then kept every stroke after it from drawing; issue 423): the drawing waits on, as after a stroke.
-  if (d.ink && !d.active && e.type !== 'pointercancel') {
-    S.afterDrag = true;
-    setTimeout(() => (S.afterDrag = false), 0);
+  // Cancelled (the system took the pointer), it waits on too: the press had stopped the drawing's send (startDrag).
+  if (d.ink && !d.active) {
+    if (e.type !== 'pointercancel') {
+      S.afterDrag = true;
+      setTimeout(() => (S.afterDrag = false), 0);
+    }
     if (S.inking) S.inkTimer = setTimeout(endInk, 1000);
     return;
   }
@@ -132,8 +135,9 @@ export const endDrag = (e) => {
   for (const [a, b] of [['x0', 'x1'], ['y0', 'y1']]) {
     if (Math.abs(d[b] - d[a]) >= ZONE_MIN) continue;
     const mid = (d[a] + d[b]) / 2;
-    d[a] = mid - ZONE_MIN / 2;
-    d[b] = mid + ZONE_MIN / 2;
+    const way = d[b] < d[a] ? -1 : 1; // drawn up or to the left, it still ends there: the pin goes to that corner (pinX, pinY)
+    d[a] = mid - (way * ZONE_MIN) / 2;
+    d[b] = mid + (way * ZONE_MIN) / 2;
   }
   W.showAgain();
   S.openId = null;

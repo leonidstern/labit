@@ -59,9 +59,11 @@ export function restore(wrap: HTMLElement, list: Pic[]) {
   synced(wrap);
 }
 
-/** The send, with the pictures: waits for their uploads, and if that or the send fails, uploads them again once and sends again. */
-export async function send<T>(wrap: HTMLElement, list: Pic[], fn: (att: { attachments: string[] }) => Promise<T>): Promise<T> {
-  const go = async () => fn({ attachments: await Promise.all(list.map((p) => p.token)) });
+/** The send, with the pictures: waits for their uploads, and if that or the send fails, uploads them again once and sends again.
+ *  Both tries carry one nonce: a first try the lab saved but whose answer was lost is not saved twice. */
+export async function send<T>(wrap: HTMLElement, list: Pic[], fn: (att: { attachments: string[]; nonce: string }) => Promise<T>): Promise<T> {
+  const nonce = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const go = async () => fn({ attachments: await Promise.all(list.map((p) => p.token)), nonce });
   const out = await go().catch(() => {
     for (const p of list) p.token = upload(p.file);
     return go();
@@ -97,7 +99,11 @@ export function show(box: HTMLElement, item: { id: string; images?: (Image & { w
       pics = Object.assign(document.createElement('div'), { className: 'att-pics' });
       for (const i of ok) {
         const src = new URL(`/_lab/attachments/${item.id}-${i.n}.${i.type}`, import.meta.url).href;
-        pics.append(Object.assign(document.createElement('img'), { src, decoding: 'async', alt: `picture ${i.w || ''}×${i.h || ''}`, width: i.w || undefined, height: i.h || undefined }));
+        // Its size only when the record has one: width = undefined is a width of 0, a picture nobody sees.
+        const img = Object.assign(document.createElement('img'), { src, decoding: 'async', alt: `picture ${i.w || ''}×${i.h || ''}` });
+        if (i.w) img.width = i.w;
+        if (i.h) img.height = i.h;
+        pics.append(img);
       }
       line.after(pics);
     }

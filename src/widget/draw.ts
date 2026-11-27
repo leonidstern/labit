@@ -60,9 +60,10 @@ const boxOf = (s: P[]) => {
   const ys = s.map((p) => p.y);
   return { l: Math.min(...xs), t: Math.min(...ys), r: Math.max(...xs), b: Math.max(...ys) };
 };
+// Two lines that pass through each other: an end that only touches the other line (a T) is no X.
 const cross = (a: P, b: P, c: P, d: P) => {
   const side = (p: P, q: P, r: P) => Math.sign((q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x));
-  return side(a, b, c) !== side(a, b, d) && side(c, d, a) !== side(c, d, b);
+  return side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0;
 };
 // The letter under a point, when there is one: underlines and strikes are read against it.
 const letterAt = (x: number, y: number) => {
@@ -216,7 +217,7 @@ export function readInk(strokes: P[][], say: (e: Element | null) => string | und
       const on = through[0]?.on;
       if (on && through.length * 2 > hits.length) {
         out.mark = 'crossed out (likely: remove this)';
-        [box.t, box.b] = [on.top, on.bottom];
+        [box.t, box.b] = [Math.min(on.top, box.t), Math.max(on.bottom, box.b)]; // the letters' height, and the whole line in it
       } else {
         out.mark = 'underlined';
         for (let up = 4; up <= 18; up += 4) {

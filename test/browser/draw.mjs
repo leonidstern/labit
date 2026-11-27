@@ -17,7 +17,7 @@ const PAGE = '<!doctype html><meta charset="utf-8"><title>d</title><style>body{m
 const WIDE = { cjk: '这是一个很长的中文句子用来测试笔画的位置', emoji: 'ab 🎧🎧🎧🎧🎧🎧🎧🎧🎧🎧🎧🎧 cd', wide: 'WWWWWWWWWWWWWWWWWWWW MMMMMMMMMMMMMMMMMMMM' };
 // Each engine on a lab of its own: the drawings the one before sent stay on its pages.
 const L = freshLab('labit-draw-', (dir) => {
-  for (const n of ['circle', 'x', 'arrow', 'under', 'strike', 'box', 'caret', 'side', 'scribble']) fs.writeFileSync(path.join(dir, `${n}.html`), PAGE);
+  for (const n of ['circle', 'x', 'tee', 'arrow', 'under', 'strike', 'box', 'caret', 'side', 'scribble']) fs.writeFileSync(path.join(dir, `${n}.html`), PAGE);
   for (const [n, t] of Object.entries(WIDE)) fs.writeFileSync(path.join(dir, `${n}.html`), PAGE.replace(/<p id="a">.*?<\/p>/, `<p id="a">${t}</p>`));
   fs.writeFileSync(path.join(dir, 'labit.json'), JSON.stringify({ port: PORT }));
 }, { base: B });
@@ -93,6 +93,13 @@ try {
       const a = await box(p, 'a');
       const x = await draw(p, 'x', [[[a.l + 10, a.t - 10], [a.l + 140, a.b + 10]], [[a.l + 140, a.t - 10], [a.l + 10, a.b + 10]]]);
       check(eng, 'two crossing strokes while D is held make one drawing: an X', /drawn: X drawn over it/.test(x.text) && (x.text.match(/^## /gm) || []).length === 1, x.text.split('\n').find((l) => l.startsWith('drawn')));
+
+      // A T: the second stroke ends on the first, it doesn't pass through it. Not an X (draw.ts cross).
+      await go('tee');
+      const ta = await box(p, 'a');
+      const [tl, ty] = [Math.round(ta.l), Math.round(ta.t) - 10];
+      const tee = await draw(p, 'tee', [[[tl + 10, ty], [tl + 150, ty]], [[tl + 80, ty - 110], [tl + 80, ty]]]);
+      check(eng, 'a T (one stroke ending on the other) is no X', /type: drawing/.test(tee.text) && !/drawn: X drawn over it/.test(tee.text), tee.text.split('\n').find((l) => l.startsWith('drawn')));
 
       await go('arrow');
       const hh = await box(p, 'h');
