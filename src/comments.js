@@ -36,7 +36,6 @@ import { bindChat, drawChat, stamped } from './widget/chat.ts';
 import { bindThread, grab, openAsk, moveTicked, pickByKey, pickTicked, placeBeside, placeCard, threadCard } from './widget/thread.ts';
 import { isTrying, pauseTry, relight } from './widget/trial.ts';
 import { bindLive, startLive, MARK_PATHS } from './widget/live.ts';
-import { inFrame, startFrame } from './widget/frame.ts';
 import { holdWhileOpen } from './widget/hold.ts';
 import { inkSvg } from './widget/ink.ts';
 import { bindActions } from './widget/actions.ts';
@@ -180,8 +179,16 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
   bindThread(W);
   bindSheets(W);
   const script = /** @type {HTMLScriptElement | null} */ (document.currentScript);
-  // In a board's frame the widget draws nothing and binds nothing (src/widget/frame.ts).
-  if (!globalThis.__LAB_CO__ && inFrame()) return startFrame(script); // colabit has no boards
+  // In a board's frame the widget draws nothing and binds nothing (src/widget/frame.ts, its own file beside this script).
+  // A board's frame: the name the board gave it, and a board on top (the name alone could be anyone's frame).
+  const inFrame = () => {
+    try {
+      return window.name.startsWith('lab:') && Boolean(/** @type {any} */ (top).__labBoard);
+    } catch {
+      return false;
+    }
+  };
+  if (!globalThis.__LAB_CO__ && inFrame()) return void import(new URL('frame.js', script?.src || location.href).href).then((m) => m.startFrame(script, { bindLive, startLive, anchorAt, bindAnchoring, position })); // colabit has no boards
   // colabit (npm run build:co, co/README.md): this widget on a site of your own, with no lab and no
   // agent: anyone on the page comments under a name they type. The owner's link (#lab-admin=<token>) leaves the
   // admin key in this browser: resolve, move and delete anyone's.

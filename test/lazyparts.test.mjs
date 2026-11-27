@@ -1,5 +1,5 @@
-// The motion menu, live reload, a choice tried in the page and going to a block named in a message are their own files
-// (public/_lab/motion.js, reload.js, tryout.js, goto.js), loaded only when
+// The motion menu, live reload, a choice tried in the page, going to a block named in a message and a page in a board's
+// frame are their own files (public/_lab/motion.js, reload.js, tryout.js, goto.js, frame.js), loaded only when
 // the page uses them: the page script (comments.js) must not carry their code, and each file must carry its own.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -14,6 +14,7 @@ const PARTS = {
   'reload.js': ['data-lab-swap', 'lab-v=', 'startViewTransition'],
   'tryout.js': ['intersectsNode'],
   'goto.js': ['offset:.7', 'border-radius:3px;background:color-mix'],
+  'frame.js': ['__labSpot'],
 };
 
 test('the page script carries none of its parts\' code', () => {

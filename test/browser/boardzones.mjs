@@ -104,6 +104,7 @@ try {
       const share = () => p.evaluate((r) => { const svg = new Function(`return ${r}`)().querySelector('.pin.ink svg'); return svg && window.__labBoard.box('b') ? svg.getBoundingClientRect().width / window.__labBoard.box('b').getBoundingClientRect().width : 0; }, widget);
       // …and where it sits on the frame stays where it was drawn (it landed beside it, by its own size, after a zoom: 21 Nov)
       const place = () => p.evaluate((r) => { const svg = new Function(`return ${r}`)().querySelector('.pin.ink svg'); const f = window.__labBoard.box('b')?.getBoundingClientRect(); const q = svg?.getBoundingClientRect(); return q && f ? [Math.round(((q.x - f.x) / f.width) * 100) / 100, Math.round(((q.y - f.y) / f.height) * 100) / 100] : null; }, widget);
+      await until(share); // its pin is drawn a moment after the lab has it
       const where0 = await place();
       const before = await share();
       const zb = await rect('b');

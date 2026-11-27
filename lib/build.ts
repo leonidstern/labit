@@ -6,7 +6,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 /** The built files, as scripts/build-widget.mjs writes them (lab.css from src/lab.css). */
-const BUILT = ['comments.js', 'components.js', 'switcher.js', 'draw.js', 'motion.js', 'boardview.js', 'pics.js', 'attach.js', 'reload.js', 'walkie.js', 'tryout.js', 'goto.js', 'lab.css'];
+const BUILT = ['comments.js', 'components.js', 'switcher.js', 'draw.js', 'motion.js', 'boardview.js', 'pics.js', 'attach.js', 'reload.js', 'walkie.js', 'tryout.js', 'goto.js', 'frame.js', 'lab.css'];
 /** The files of lib/ the page script is built with (src/ imports them): a change to one makes it stale too. */
 const SHARED = ['lib/ids.ts', 'lib/moment.mjs', 'lib/schema.mjs', 'lib/status.mjs'];
 

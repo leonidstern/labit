@@ -2,22 +2,16 @@
 // binds nothing. No bar, no pill, no pins, no menu, no listeners of the widget's own. The board is the one widget.
 // What it keeps: the page's live updates (a save patches or reloads this frame, never the board), reading the lab's
 // state from the board's stream and not opening its own, and a way to pass keys on to the board.
-import { bindLive, startLive } from './live.ts';
-import { anchorAt, bindAnchoring, position } from './anchoring.ts';
-
-/** True in a board's frame: the name the board gave it, and a board on top (the name alone could be anyone's frame). */
-export const inFrame = (): boolean => {
-  try {
-    return window.name.startsWith('lab:') && Boolean((top as unknown as { __labBoard?: unknown }).__labBoard);
-  } catch {
-    return false;
-  }
-};
+// Its own file (public/_lab/frame.js), loaded only in a frame: the page script hands it its live stream and anchoring, so
+// they are not built in twice.
+type Live = typeof import('./live.ts');
+type Anchoring = typeof import('./anchoring.ts');
+type Given = Pick<Live, 'bindLive' | 'startLive'> & Pick<Anchoring, 'anchorAt' | 'bindAnchoring' | 'position'>;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Board = { busy?: () => boolean; key?: (k: Record<string, unknown>) => unknown } & Record<string, any>;
 
-export function startFrame(script: HTMLScriptElement | null) {
+export function startFrame(script: HTMLScriptElement | null, { bindLive, startLive, anchorAt, bindAnchoring, position }: Given) {
   const board = () => (top as unknown as { __labBoard: Board }).__labBoard;
   // live.ts runs on this: what it touches of the widget is a detached stand-in that is never put on the page.
   const host = document.createElement('div');
@@ -84,6 +78,8 @@ export function startFrame(script: HTMLScriptElement | null) {
     return at;
   };
   Object.assign(window, { __labSpot: { clear: () => getSelection()?.removeAllRanges(), anchor: (x: number, y: number) => anchorAt(x, y), spot } });
+  // This file comes after the frame has loaded (the board drew its pins then, with no spots here): they are found again now.
+  board()?.changed?.();
   // A key heard here goes to the board unless the page used it or is typing in it: the board's keys work in a focused frame.
   addEventListener('keydown', (e) => {
     const t = e.target as HTMLElement | null;
