@@ -22,8 +22,8 @@
 //   Added in 2, nothing to upgrade (23 Nov): a thread's progress line { text, at } may carry said, when the agent itself
 //     last wrote it; the plugin's renewals move only at (#425). A line without said counts as the agent's unless its text
 //     is the renewal's own ("session activity").
-//   Added in 2, nothing to upgrade (23 Nov): an agent's done answer may carry checked, one line on how it looked at the
-//     result (labit reply --done --checked "…"). A done answer without it was not checked; older ones read so too (#425).
+//   Added in 2 (23 Nov), dropped 27 Nov: an agent's done answer could carry checked (labit reply --done --checked "…").
+//     Nothing reads it now: a record with it loads as before, the field ignored.
 //   Added in 2, nothing to upgrade: images, the pictures a message carries (a pasted or dropped image in the comment box):
 //     [{ n: 1..4, type: 'png'|'jpg'|'webp'|'gif', w, h, size }], their files .lab/attachments/<comment id>-<n>.<type>.
 //     A record never holds a path: the name is built from the id and the entry (imageName), and an entry that doesn't

@@ -557,15 +557,11 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die, model }: Ctx):
       if (asked && intent && intent !== 'question') die(`A reply with --choice is a question; leave out --${intent === 'working' ? 'on-it' : intent}.`);
       if (asked && opts.resolve) die('A reply with --choice waits for the person to pick; leave out --resolve.');
       if (asked) intent = 'question';
-      // --checked "<how>": the agent looked at what it did (the page at a width, a test run); a done answer without it shows
-      // as not checked (#425). Only with --done: on it, a question or a pick isn't a result.
-      if (opts.checked !== undefined && (typeof opts.checked !== 'string' || !opts.checked.trim())) die('--checked takes how you looked: --checked "opened /pricing at 390 px"');
-      if (opts.checked !== undefined && intent !== 'done') die('--checked goes with --done: it says how you checked the result.');
       const said = Object.values(((data as Record<string, object>)[hit.page] || {}) as Record<string, { id: string; parent?: string; session?: unknown; createdAt: string }>)
         .filter((c) => (c.id === hit.id || c.parent === hit.id) && !c.session)
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
         .pop()?.id;
-      const out = await call('/_lab/api/comments', { page: hit.page, parent: hit.id, nonce: nonceOf(hit.page, hit.id, hit.to, said, words.join(' '), intent || '', opts.checked ?? '', JSON.stringify(asked || null)), ...(hit.to ? { to: hit.to } : {}), name: signed(), text: words.join(' '), ...(intent ? { intent } : {}), ...(typeof opts.checked === 'string' ? { checked: opts.checked } : {}), ...asked });
+      const out = await call('/_lab/api/comments', { page: hit.page, parent: hit.id, nonce: nonceOf(hit.page, hit.id, hit.to, said, words.join(' '), intent || '', JSON.stringify(asked || null)), ...(hit.to ? { to: hit.to } : {}), name: signed(), text: words.join(' '), ...(intent ? { intent } : {}), ...asked });
       if (out.status === 410) return dropped();
       if (out.status >= 300) die(`Could not reply: ${out.text}`);
       // The page tries each choice in place of the quoted words: a choice that reaches past them is said here.

@@ -10,6 +10,7 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 - **A newer release reaches a lab that is already running.** A lab from npm looked for one only when it started, so a lab left up for days stayed on its version with no "update" in the ⋯ menu. It now looks again every 3 hours, and pages offer it on their next load.
 - **Agent pins on the spot.** The skill tells agents to pin the exact spot on an image or a big element with `--at x,y`, and `pin` says so when one lands in a picture's centre.
 - **`labit preview` is gone.** It wrote a "lab" entry into `.claude/launch.json` for the Claude desktop app's preview pane; the skill now opens pages there by their URL. A "lab" entry it wrote before still works.
+- **`reply --done --checked` is gone.** The page stopped showing how an agent checked its work on 23 Nov; now the agent text no longer says "(checked: …)" or "(not checked)" either. An agent on an older skill that still passes `--checked` keeps its reply (the flag is ignored), and saved answers that carry it load as before.
 
 ## 0.8.5 · 2026-11-26
 

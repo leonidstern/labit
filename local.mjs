@@ -77,7 +77,7 @@ const HELP = `labit ${VERSION}: comment on local pages; your agent answers on th
 
 For the agent:
   labit wait [--bg] [--timeout 1500] [--pages /a,/b] [--name project] [--model model]
-  labit reply <id> "text" [--done [--checked how]|--on-it|--question] [--resolve] [--wait] [--page /path]
+  labit reply <id> "text" [--done|--on-it|--question] [--resolve] [--wait] [--page /path]
   labit reply <id> --progress "status" | "question" --choice A [--hint why] --choice B [--recommend B]
   labit resolve <id> [--page /path]
   labit thread <id>   one thread whole, every message, resolved too
@@ -1940,7 +1940,7 @@ async function unseen(scope = pages(), who = '') {
   // hears, and again only when the lab restarts or the session changes; after that, one line.
   const standing = full
     ? `\n\n${REQUESTS} Read each thread whole (every message and reply, not only the newest) before answering; the page, URL or #section is where a pin sits, not what it asks.` +
-      `\n\nAnswer each: ${CMD} reply <id> --done "what you did" (or --question "…" when blocked, which leaves it open), run in ${ROOT}; add --wait --bg to the last one to listen again in the same command, in the background. Looked at the result (the page, a test)? Add --checked "<how>" to --done; without it the page says not checked.` +
+      `\n\nAnswer each: ${CMD} reply <id> --done "what you did" (or --question "…" when blocked, which leaves it open), run in ${ROOT}; add --wait --bg to the last one to listen again in the same command, in the background.` +
       // The person sees nothing between "picked up" and the answer: a batch an agent worked through for 13 minutes looked
       // lost (Leo, 18 Nov). A --progress line first turns the ring and the pill at once, without a message (Leo, 20 Nov: less noise).
       `\nIf it will take more than about a minute (a build, a restart, a PR): send one ${CMD} reply <id> --progress "<what you're doing>" on each first (a status line, not a message), then start, and a new one when the step changes (about 3 minutes after your last, the page says no update; with the labit plugin, about 10 while this session keeps working); a quick ask needs none (an answer within 2 minutes counts). A plain "go" gets no words: resolve it when done.` +
