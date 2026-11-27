@@ -20,12 +20,15 @@ permissions:
 
 jobs:
   publish:
+    if: github.ref == 'refs/heads/main' # "Run workflow" on another branch publishes nothing
     concurrency:
       group: publish
       cancel-in-progress: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the commit that set the version, for its tag
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -40,6 +43,9 @@ jobs:
           if npm view "$name@$version" version >/dev/null 2>&1; then release=0; else release=1; fi
           echo "release=$release" >> "$GITHUB_OUTPUT"
           echo "release: $([ $release = 1 ] && echo "$version → latest" || echo "none, $version is on npm")" >> "$GITHUB_STEP_SUMMARY"
+          # The tag apart from npm: a tag push that failed after the publish is made on the next run (a rerun).
+          if git ls-remote --exit-code --tags origin "v$version" >/dev/null; then tag=1; else tag=0; fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       # No tests here: a release is tested whole in its release PR (both engines, Node 22/24/26), and main's rule
       # merges it only green (Leo, 27 Nov: fast releases). The merge goes to npm in about a minute.
@@ -48,11 +54,16 @@ jobs:
         if: steps.v.outputs.release == '1'
         run: npx --yes npm@11.6.2 publish --access public --provenance
 
+      # On the commit that set the version (the release's merge), not on a later merge that reran this.
       - name: Tag the release
-        if: steps.v.outputs.release == '1'
+        id: tag
+        if: steps.v.outputs.tag == '0'
         env:
           V: v${{ steps.v.outputs.version }}
-        run: git tag "$V" && git push origin "$V" || echo "tag $V already exists"
+        run: |
+          c=$(git log -1 --format=%H -G'^[[:space:]]*"version":' -- package.json)
+          git tag "$V" "$c"
+          git push origin "$V"
 
       # Colabits load the widget from labit's latest release through jsDelivr (co/vercel.json): its copy of
       # @latest is dropped at once, so every colabit has the new one within minutes instead of jsDelivr's 12 hours.
@@ -61,7 +72,7 @@ jobs:
         run: curl -fsS https://purge.jsdelivr.net/gh/leonidstern/labit@latest/co/co.js || echo "couldn't purge jsDelivr (colabits update within 12 hours)"
 
       - name: Waste check on the tag
-        if: steps.v.outputs.release == '1'
+        if: steps.tag.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run waste.yml --ref "v${{ steps.v.outputs.version }}" || echo "couldn't start waste.yml (the release itself is out)"

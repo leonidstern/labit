@@ -24,6 +24,8 @@ test('a mapped widget module runs its tests, the build beside it adds nothing, a
   assert.equal(r.tests, 'ink selection');
   assert.equal(r.native, true);
   assert.equal(run(['src/board/mount.ts']).tests, 'board boardpins'); // 'gone' is in no group
+  // A module none of whose tests CI runs: nothing would guard it, so every test.
+  assert.equal(affected(['src/widget/select.ts'], { tests, reach: { 'src/widget/select.ts': ['select'] } }).tests, 'all');
 });
 
 test('the core, the server, the build, package.json and unknown paths run everything', () => {
@@ -105,6 +107,10 @@ test('reach map: a changed line runs the tests that ran it; one no test ran runs
   assert.equal(on(['src/widget/x.ts'], [3]).tests, 'fluid ink'); // ink failed while the map was made: it always runs
   assert.equal(on(['src/widget/x.ts'], [3, 25]).tests, 'board fluid ink');
   assert.equal(on(['src/widget/x.ts'], [15]).tests, 'all'); // no test ran it: maybe only WebKit does
+  assert.equal(on(['src/widget/x.ts'], [3, 15]).tests, 'all'); // the same beside a line a test ran
+  // A blank or comment line is in no test's lines: it doesn't count.
+  const comment = (f) => (l) => l !== 15;
+  assert.equal(affected(['src/widget/x.ts'], { tests, reach, map, linesOf: () => [3, 15], isCode: comment }).tests, 'fluid ink');
   assert.equal(on(['src/widget/x.ts'], null).tests, 'all'); // can't be placed
   assert.equal(on(['local.mjs'], [5]).tests, 'board fluid ink');
   assert.equal(on(['local.mjs'], [100]).tests, ''); // a server line no browser test runs: the unit tests' part
@@ -116,6 +122,11 @@ test('reach map: a changed line runs the tests that ran it; one no test ran runs
   assert.deepEqual([3, 6, 8, 12, 13].map((l) => backTo([l], diff)), [[3], [5, 6], [6], [10, 11], [12]]);
   assert.deepEqual(touched('@@ -4,2 +4,3 @@\n@@ -9,0 +11,1 @@'), [4, 5, 9, 10]);
   assert.deepEqual(classesAt('.a{color:red}\n:host{--x:1}\n@media (x){\n  .b .c,\n  .d {\n    margin:0;\n  }\n}', [1, 2, 6]), ['a', 'b', 'c', 'd']);
+  // A changed line that styles no class (@font-face beside a .pin rule): no class to go by, so every test.
+  const { classesOrNull } = await import('../ci/affected.mjs');
+  const css = '.pin {\n  color: red;\n}\n\n/* fonts */\n@font-face {\n  font-family: x;\n}';
+  assert.deepEqual(classesOrNull(css, [2, 4, 5]), ['pin']); // blank and comment lines don't count
+  assert.equal(classesOrNull(css, [2, 7]), null);
 });
 
 test('unit tests: a changed line runs the files that ran it; a test file runs itself; setup and package.json run all', async () => {
@@ -133,4 +144,18 @@ test('unit tests: a changed line runs the files that ran it; a test file runs it
   assert.equal(on(['docs/x.md']), '');
   assert.equal(on(['package.json']), 'all');
   assert.equal(unitAffected(['lib/a.ts'], { all, source }).unit, 'all'); // no map
+  // A file the map has no lines for (new) or that failed while it was made: it runs for any code change, even one no
+  // mapped file runs.
+  const partial = { unit: { ack: { 'lib/a.ts': '1-5' } }, unitFailed: ['board'] };
+  assert.equal(unitAffected(['lib/a.ts'], { map: partial, linesOf: () => [30], all, source }).unit, 'board skill sync');
+  assert.equal(unitAffected(['docs/x.md'], { map: partial, linesOf: () => [30], all, source }).unit, '');
+});
+
+test('reach map lines: a branch not taken on a line that ran keeps the line; a function never called is not run', async () => {
+  const { linesRan } = await import('../ci/reach.mjs');
+  const src = 'a();\nif (x) { b(); } else { c(); }\nfunction f() {\n  d();\n}\n';
+  const els = src.indexOf('{ c();');
+  const fn = src.indexOf('function f');
+  const functions = [{ ranges: [{ startOffset: 0, endOffset: src.length, count: 1 }] }, { ranges: [{ startOffset: els, endOffset: els + 8, count: 0 }] }, { ranges: [{ startOffset: fn, endOffset: src.length - 1, count: 0 }] }];
+  assert.deepEqual(linesRan(src, functions), [1, 2]);
 });

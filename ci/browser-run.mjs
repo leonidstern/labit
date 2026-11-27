@@ -15,6 +15,10 @@ import { spawn } from 'node:child_process';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const flaky = JSON.parse(fs.readFileSync(path.join(ROOT, 'ci/flaky.json'), 'utf8'));
+const times = JSON.parse(fs.readFileSync(path.join(ROOT, 'ci/browser-tests.json'), 'utf8'));
+// A run that hangs is stopped: several times its usual length (ci/browser-tests.json, a part its share), at least 3 min,
+// so a stuck file fails with its name instead of holding the job until its own timeout.
+const deadline = (file, part) => Math.max(180, 5 * Math.round((times[file] ?? 60) / (part ? Number(part.split('/')[1]) || 1 : 1)));
 const inCI = Boolean(process.env.GITHUB_ACTIONS);
 const say = (line) => inCI && console.log(line);
 // Workflow commands take one line: newlines and % escaped as GitHub documents.
@@ -31,6 +35,19 @@ function once(name, live = JOBS === 1) {
     const env = part ? { ...process.env, TEST_PART: part } : process.env;
     const child = spawn(process.execPath, [path.join('test/browser', `${file}.mjs`)], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';
+    let late = 0;
+    // SIGTERM first, so the test can close its browsers and labs; SIGKILL if it doesn't end.
+    const limit = deadline(file, part);
+    const kill = setTimeout(() => {
+      late = limit;
+      child.kill('SIGTERM');
+      setTimeout(() => {
+        if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+        // A lab it started may still hold the pipes open: close our ends, so 'close' comes.
+        child.stdout.destroy();
+        child.stderr.destroy();
+      }, 10_000).unref();
+    }, limit * 1000);
     const take = (to) => (d) => {
       out += d;
       if (live) to.write(d);
@@ -38,11 +55,13 @@ function once(name, live = JOBS === 1) {
     child.stdout.on('data', take(process.stdout));
     child.stderr.on('data', take(process.stderr));
     child.on('close', (code) => {
+      clearTimeout(kill);
+      if (late) out += `\nFAIL ${name}: no end after ${late} s, stopped\n`;
       if (!live) process.stdout.write(`${inCI ? `::group::${name}\n` : ''}${out}${inCI ? '::endgroup::\n' : ''}`);
       const fails = out.split('\n').filter((l) => l.startsWith('FAIL'));
       // A crash says no FAIL line: its last lines say what went wrong.
       const why = fails.length ? fails : out.trim().split('\n').slice(-6);
-      resolve({ ok: code === 0, secs: Math.round((Date.now() - started) / 1000), why });
+      resolve({ ok: code === 0 && !late, secs: Math.round((Date.now() - started) / 1000), why });
     });
   });
 }
@@ -74,7 +93,7 @@ for (const name of names) {
   console.log(`${name} took ${first.get(name).secs} s: ${result}`);
   if (result === 'failed') {
     const file = name.split('@')[0];
-    if (flaky[file]) {
+    if (Object.hasOwn(flaky, file)) {
       result = 'failed (quarantined)';
       say(`::warning file=test/browser/${file}.mjs,title=${name} failed, quarantined::${esc(`${flaky[file]}\n${run.why.join('\n')}`)}`);
     } else {
