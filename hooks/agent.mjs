@@ -28,18 +28,20 @@ const MAX_LABS = 4;
 const PROGRESS_MS = 60000; // a pin's status line is renewed once a minute at most
 const WORKING_MS = 15000; // the list of claimed pins is kept this long before the lab is asked again
 const LINE = 'session activity'; // the whole status line: a command is not an answer, and helpers' commands are other work
-const TRIES = 2; // wakes for one set of pins, at most: a stop hook that blocks again and again would never let the session stop
+const TRIES = 3; // wakes for one set of pins, at most (as wake.ts): a stop hook that blocks again and again would never let the session stop
 
-// The lab's address and the agent's key, from .lab/server.json in a folder or one above it (a lab whose process is gone
-// left its file behind: its port may be another folder's lab by now).
+// ~/.labit (or LABIT_HOME): the registry of running labs is its servers/ folder.
+const servers = () => path.join(process.env.LABIT_HOME || path.join(os.homedir(), '.labit'), 'servers');
+// The lab's address and the agent's key, from .lab/server.json in a folder or one above it. Only while that lab runs:
+// its registry file (servers/<port>.json, written while it runs, removed as it stops) names the same pid, as in wake.ts
+// (#627). A server.json a lab left behind (it was killed) would send its key to whatever answers on that port now.
 function labAt(dir, port) {
   for (;;) {
     try {
       const s = JSON.parse(fs.readFileSync(path.join(dir, '.lab/server.json'), 'utf8'));
       if (Number(s?.port) && (!port || Number(s.port) === port)) {
-        let live = true;
-        try { process.kill(s.pid, 0); } catch (e) { live = e.code === 'EPERM' || !Number.isInteger(s.pid); }
-        if (live) return { port: Number(s.port), key: String(s.agent || s.token || '') };
+        const r = JSON.parse(fs.readFileSync(path.join(servers(), `${Number(s.port)}.json`), 'utf8'));
+        return Number(r?.pid) > 0 && Number(r.pid) === Number(s.pid) ? { port: Number(s.port), key: String(s.agent || s.token || '') } : null;
       }
     } catch {}
     const up = path.dirname(dir);
@@ -54,7 +56,7 @@ function labsFor(cwd, me) {
   const here = cwd && labAt(path.resolve(cwd));
   if (here) labs.push(here);
   try {
-    const dir = path.join(process.env.LABIT_HOME || path.join(os.homedir(), '.labit'), 'servers');
+    const dir = servers();
     for (const f of fs.readdirSync(dir).filter((n) => /^\d+\.json$/.test(n)).slice(0, 40)) {
       try {
         const r = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));

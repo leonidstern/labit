@@ -3,6 +3,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import http from 'node:http';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -76,7 +77,7 @@ test('progress: the hook stops renewing a pin the agent said nothing on for a wh
   assert.ok((await pending()).working.some((p) => p.id === id), 'a new line of its own claims it again');
 });
 
-test('wake: the session that listened last, at most twice per set of pins, no page named; Codex blocks the stop, Cursor follows up', async () => {
+test('wake: the session that listened last, at most three times per set of pins, no page named; Codex blocks the stop, Cursor follows up', async () => {
   await post('while you were away', '/other');
   assert.equal((await pending()).listening, false);
   assert.equal(await hook('wake', codex('S2', { hook_event_name: 'Stop' })), '', 'another session is not woken');
@@ -85,6 +86,7 @@ test('wake: the session that listened last, at most twice per set of pins, no pa
   assert.match(out.reason, /^labit: A new pin \(http:\/\/localhost:\d+\) while you weren't listening\. Run `.*wait --timeout 5`/);
   assert.doesNotMatch(out.reason, /\/other/);
   assert.match(JSON.parse(await hook('wake', codex('S1', { hook_event_name: 'Stop' }))).reason, /A new pin/, 'still unhanded at the next stop: once more (#420)');
+  assert.match(JSON.parse(await hook('wake', codex('S1', { hook_event_name: 'Stop' }))).reason, /A new pin/, 'three wakes in all, as the Claude Code hook');
   assert.equal(await hook('wake', codex('S1', { hook_event_name: 'Stop' })), '', 'then never again for the same pins');
   await post('and another', '/other');
   const next = JSON.parse(await hook('wake', cursor('S1', { hook_event_name: 'stop', status: 'completed' })));
@@ -100,6 +102,25 @@ test('the session is found from any folder through the lab registry', async () =
     assert.match(out.reason, /new pin/);
   } finally {
     rm([elsewhere]);
+  }
+});
+
+// A server.json a killed lab left behind, its pid now some other live process: the registry names no lab on its port,
+// so its key goes nowhere (#627, as wake.ts).
+test('a left-behind server.json whose port the registry has no lab on is not asked', async () => {
+  const asked = [];
+  const other = http.createServer((q, r) => (asked.push(q.url), r.end('{}'))).listen(0);
+  await new Promise((r) => other.once('listening', r));
+  const stale = tmp('stale');
+  try {
+    fs.mkdirSync(path.join(stale, '.lab'));
+    fs.writeFileSync(path.join(stale, '.lab/server.json'), JSON.stringify({ port: other.address().port, pid: process.pid, agent: 'f'.repeat(32) }));
+    assert.equal(await hook('wake', { session_id: 'S7', cwd: stale, hook_event_name: 'Stop' }), '');
+    assert.equal(await hook('progress', { session_id: 'S7', cwd: stale, hook_event_name: 'PostToolUse' }), '');
+    assert.deepEqual(asked, [], 'nothing was sent to whatever answers on that port');
+  } finally {
+    other.close();
+    rm([stale]);
   }
 });
 
@@ -145,6 +166,10 @@ test("Codex: a background wait doesn't confirm its hand-off, so the pin comes ba
 // opencode 2 (seen on 2.3.2): the plugin is { id, setup(ctx) }, the shells carry OPENCODE_SESSION_ID, and an idle
 // session gets the wake as a new message through ctx.session.prompt.
 test('opencode 2: the plugin loads as { id, setup }, and an idle session that listened last is sent its pins', async () => {
+  // The plugin runs in this process: it finds the lab by the registry the lab writes (LABIT_HOME, as an agent's shell has it).
+  const was = process.env.LABIT_HOME;
+  process.env.LABIT_HOME = home;
+  after(() => { process.env.LABIT_HOME = was; });
   const plugin = (await import(HOOK + '?opencode')).default;
   assert.equal(plugin.id, 'labit');
   const hooks = {};

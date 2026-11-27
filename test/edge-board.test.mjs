@@ -47,7 +47,7 @@ const startLab = async (name) => {
     stop: () => new Promise((r) => (proc.exitCode !== null || proc.signalCode ? r() : (proc.once('exit', r), proc.kill()))) };
   labs.push(lab);
   for (let i = 0; i < 100 && proc.exitCode === null; i++) {
-    if ((await raw(port, '/_lab/state')).status === 200) return lab;
+    if ((await raw(port, '/_lab/pages')).status === 200) return lab;
     await sleep(100);
   }
   throw new Error(`the lab did not start: ${out}`);

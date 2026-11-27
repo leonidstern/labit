@@ -5,7 +5,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { site, tmp, rm, spawnLab, stop, sleep, up, serverJson, agentCall, pinPost, openTab } from './harness.mjs';
+import { site, tmp, rm, spawnLab, stop, sleep, up, serverJson, agentCall, pinPost, openTab, liveState } from './harness.mjs';
 
 const { DIR, PORT, B } = site('unanswered', 8800, 90);
 fs.writeFileSync(path.join(DIR, 'design.html'), '<!doctype html><title>design</title><h1>design</h1>');
@@ -27,7 +27,7 @@ const waitAcked = async (who, o) => {
 };
 const post = (text) => pinPost(B)(text, '/design');
 const find = async (id) => ((await fetch(`${B}/_lab/api/comments?page=/design`, { headers: { origin: B } }).then((r) => r.json())).comments || []).find((c) => c.id === id);
-const state = () => fetch(`${B}/_lab/state`).then((r) => r.json());
+const state = () => liveState(B);
 
 test('start', async () => {
   await up(B + '/', { fail: false });

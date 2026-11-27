@@ -23,7 +23,7 @@ after(() => {
   upstream.close();
   rm([DIR]);
 });
-const up = () => answers(B + '/_lab/state');
+const up = () => answers(B + '/_lab/pages');
 
 test('a proxied page can be framed; other files keep their headers', async () => {
   await up();

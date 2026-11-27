@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
+import { liveState } from './harness.mjs';
 import net from 'node:net';
 import { spawn, execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -48,7 +49,7 @@ const startLab = async (name) => {
     stop: () => new Promise((r) => (proc.exitCode !== null || proc.signalCode ? r() : (proc.once('exit', r), proc.kill()))) };
   labs.push(lab);
   for (let i = 0; i < 100 && proc.exitCode === null; i++) {
-    if ((await raw(port, '/_lab/state')).status === 200) return lab;
+    if ((await raw(port, '/_lab/pages')).status === 200) return lab;
     await sleep(100);
   }
   throw new Error(`the lab did not start: ${out}`);
@@ -213,7 +214,7 @@ test('odd waits over the API: a timeout below zero ends at once, odd page lists 
   for (const o of open) o.req.destroy();
   await sleep(300);
   assert.equal((await pending(lab)).listening, false, 'dropped waits are gone');
-  assert.equal(JSON.parse((await raw(lab.port, '/_lab/state')).text).mode, 'away');
+  assert.equal((await liveState(lab.B)).mode, 'away');
   assert.equal((await raw(lab.port, '/')).status, 200);
 });
 
@@ -227,7 +228,7 @@ test('a wait with nothing to hear ends on time, says so and exits 0', async () =
   assert.equal(r.code, 0, r.out);
   assert.match(r.out, /^No new comments yet\. Run wait again to keep listening\.\s*$/);
   assert.ok(Date.now() - t < 5000);
-  assert.equal(JSON.parse((await raw(W.port, '/_lab/state')).text).session?.id, 'sess-a', 'the lab knows who listened');
+  assert.equal((await liveState(W.B)).session?.id, 'sess-a', 'the lab knows who listened');
 });
 
 test('a wait with 150 pins on three pages gets every one, once, and says how many; the next wait gets none', async () => {

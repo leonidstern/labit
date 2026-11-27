@@ -24,7 +24,7 @@ export function windowsPagePath(opts: Opts): string | null {
 }
 // One list of flags for every command: anything else starting with -- is refused, so a typo
 // (`reply abc "Done" --resolv`) stops instead of landing in the reply's text. After a bare --, all is words.
-const SWITCHES = ['--wifi', '--no-wifi', '--no-open', '--resolve', '--wait', '--new', '--all', '--bg', '--dev', '--fast', '--no-fast', '--done', '--on-it', '--question', '--first', '--no-check'];
+const SWITCHES = ['--wifi', '--no-wifi', '--no-open', '--resolve', '--wait', '--new', '--all', '--bg', '--dev', '--done', '--on-it', '--question', '--first', '--no-check'];
 /** What an agent's reply is, from its flag (reply --done / --on-it / --question): the thread's state is read from it.
  *  undefined when none is given; an error when more than one is. */
 export function replyIntent(opts: Opts): 'done' | 'working' | 'question' | undefined | Error {
@@ -110,7 +110,6 @@ export function waitSeconds(opts: Opts, isTTY = false): { seconds: number; cappe
   return { seconds: Math.min(asked, FOREGROUND_CAP), capped: asked > FOREGROUND_CAP };
 }
 
-// --fast / --no-fast switched the quick model, removed 15 Nov: still accepted, so older scripts keep working; they do nothing.
 // How answers should read, said with every pin (the page shows short blocks and '- ' lists as such).
 export const WRITE_SHORT = "Write answers short: they're read in a small window, often on a phone. One point per line or two, a blank line between points, '- ' lines for lists.";
 // Where a new version of something goes: beside the one it follows, so nobody hunts for it at the page's end (Leo, 23 Nov).

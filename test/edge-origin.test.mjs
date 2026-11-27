@@ -57,7 +57,7 @@ const startLab = async (dir, env = {}) => {
     stop: () => new Promise((r) => (proc.exitCode !== null || proc.signalCode ? r() : (proc.once('exit', r), proc.kill()))) };
   labs.push(lab);
   for (let i = 0; i < 100 && proc.exitCode === null; i++) {
-    if ((await raw(port, '/_lab/state')).status === 200) return lab;
+    if ((await raw(port, '/_lab/pages')).status === 200) return lab;
     await sleep(100);
   }
   throw new Error(`the lab did not start: ${out}`);
@@ -84,7 +84,7 @@ test('Host: only names of this computer get an answer, on every kind of path', a
     'localhost@evil.example', 'evil.example#localhost', `evil.example/localhost:${PORT}`, `0.0.0.0:${PORT}`, '0.0.0.0', `127.0.0.2:${PORT}`, '127.1', '2130706433', '0x7f.0.0.1',
     `[::ffff:127.0.0.1]:${PORT}`, `[::]:${PORT}`, 'localhost.', `127.0.0.1.:${PORT}`, 'localhost, evil.example', `${os.hostname()}`, 'lab'];
   for (const host of refused) {
-    for (const p of ['/', '/_lab/api/comments?page=/index', '/_lab/agent/index', '/_lab/comments.js', '/_lab/state', '/_lab/pages']) {
+    for (const p of ['/', '/_lab/api/comments?page=/index', '/_lab/agent/index', '/_lab/comments.js', '/_lab/pages']) {
       const r = await raw(PORT, p, { host });
       assert.ok(r.status === 403 || r.status === 400, `Host ${JSON.stringify(host)} ${p} → ${r.status}`);
       assert.doesNotMatch(r.text, /<h1>index|"comments"|"root"/, `Host ${host} ${p}`);
@@ -143,7 +143,7 @@ test('a write is taken from the lab\'s own page only: Origin, Host and Sec-Fetch
 });
 
 test('reads are not opened to other sites: no CORS headers, and a preflight is refused', async () => {
-  for (const p of ['/_lab/api/comments?page=/index', '/_lab/agent/index', '/_lab/state', '/_lab/pages', '/_lab/api/board', '/']) {
+  for (const p of ['/_lab/api/comments?page=/index', '/_lab/agent/index', '/_lab/pages', '/_lab/api/board', '/']) {
     const r = await raw(PORT, p, { headers: { origin: 'https://evil.example' } });
     assert.equal(r.status, 200, `${p} answered (a failed request has no headers to check)`);
     for (const h of ['access-control-allow-origin', 'access-control-allow-credentials', 'access-control-allow-headers']) assert.equal(r.headers[h], undefined, `${p} sends no ${h}`);

@@ -206,7 +206,7 @@ export class Lab {
     proc.once('exit', (c, s) => (code = c ?? s ?? 0));
     for (const end = Date.now() + ms; Date.now() < end; await sleep(25)) {
       if (code !== null) return { ok: false, exited: true, code };
-      const r = await rq(this, { path: '/_lab/state', timeout: 1000 }).catch(() => null);
+      const r = await rq(this, { path: '/_lab/pages', timeout: 1000 }).catch(() => null);
       if (r?.status !== 200) continue;
       // The lab moves to the next port when its own is taken: then it isn't where this case talks to it.
       let on = 0;
@@ -346,6 +346,12 @@ export function openLive(lab, { from = 'local', tab, cookie, onState, onEnd } = 
   };
   return s;
 }
+
+/** What the lab tells its pages now: the first state on its live stream, which is closed again at once. */
+export const liveState = (lab) =>
+  new Promise((resolve, reject) => {
+    const s = openLive(lab, { onState: (st) => (s.close(), resolve(st)), onEnd: (code) => reject(new Error(`the live stream ended (${code})`)) });
+  });
 
 // ---------- a device ----------
 // A page of the lab held open by one browser, spoken as a raw client: the same requests the widget makes, by the same

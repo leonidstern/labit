@@ -19,9 +19,9 @@ after(() => {
   lab.kill();
   rm([DIR]);
 });
-const key = async () => (await up(`${B}/_lab/state`), serverJson(DIR));
+const key = async () => (await up(`${B}/_lab/pages`), serverJson(DIR));
 const put = async (name, frames = [{ id: 'a', src: '/pricing', w: 1440, h: 900 }]) =>
-  (await up(`${B}/_lab/state`), fetch(`${B}/_lab/api/board?name=${name}`, { method: 'PUT', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ frames }) }));
+  (await up(`${B}/_lab/pages`), fetch(`${B}/_lab/api/board?name=${name}`, { method: 'PUT', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ frames }) }));
 const post = async (q, body, { type = 'image/png', headers = {}, token = true } = {}) =>
   fetch(`${B}/_lab/api/image?${q}`, { method: 'POST', headers: { 'content-type': type, origin: B, ...(token ? { 'x-lab-admin': (await key()).token } : {}), ...headers }, body });
 const board = async (name) => (await fetch(`${B}/_lab/api/board?name=${name}`)).json();

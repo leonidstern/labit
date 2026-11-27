@@ -19,7 +19,7 @@ after(() => {
   procs.forEach((p) => p.kill());
   rm([ON]);
 });
-const up = (port) => answers(`http://localhost:${port}/_lab/state`);
+const up = (port) => answers(`http://localhost:${port}/_lab/pages`);
 
 test('the board page is a shell: the one board (boardview.js) first, then the widget under the board key', async () => {
   await up(base);

@@ -60,7 +60,7 @@ const attempt = async (dir, args = [], { env = {}, port, wait = 6000 } = {}) => 
         if (s.pid === proc.pid) p = s.port;
       } catch {}
     }
-    if (p && (await raw(p, '/_lab/state')).status === 200) at = p;
+    if (p && (await raw(p, '/_lab/pages')).status === 200) at = p;
     else await sleep(100);
   }
   if (gone()) await sleep(50); // the last of its output

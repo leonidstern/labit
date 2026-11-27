@@ -101,5 +101,18 @@ export const sseReader = (on) => {
   };
 };
 
+/** What the lab tells its pages now: the first state on its live stream, which is closed again at once. `base` is the
+    lab's address (http://localhost:<port>). */
+export const liveState = (base) =>
+  new Promise((resolve, reject) => {
+    const u = new URL(base + '/_lab/live');
+    const req = http.get({ host: '127.0.0.1', port: u.port, path: u.pathname, headers: { host: u.host } }, (res) => {
+      res.on('error', () => {});
+      res.setEncoding('utf8');
+      res.on('data', sseReader((d) => { req.destroy(); resolve(JSON.parse(d)); }));
+    });
+    req.on('error', reject);
+  });
+
 /** A page held open (tab t1): its live stream, read and thrown away. destroy() closes the page. */
 export const openTab = (port) => http.get({ host: '127.0.0.1', port, path: '/_lab/live?tab=t1', headers: { host: `localhost:${port}` } }, (r) => r.resume());

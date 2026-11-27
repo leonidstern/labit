@@ -50,7 +50,7 @@ test('a folder\'s page made for a colabit gets the lab\'s widget only', async ()
 });
 
 test('a dev server\'s page made for a colabit gets the lab\'s widget only; a script\'s fetch is left as it is', async () => {
-  await up(B2 + '/_lab/state');
+  await up(B2 + '/_lab/pages');
   const t = await page(B2, '/co');
   assert.equal(colabits(t), 0, 'no colabit tag');
   assert.equal(widgets(t), 1, 'one lab widget');

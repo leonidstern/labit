@@ -90,10 +90,11 @@ test('the hook wakes A for its pin, not a session that never listened; A\'s wait
   assert.equal((await pending('A')).fresh, 0);
 });
 
-test('a wake not acted on is sent once more at the next stop, then not again', async () => {
+test('a wake not acted on is sent again at the next stops, three in all (as the Claude Code hook), then not again', async () => {
   await post('bigger button', '/pricing');
   assert.match(JSON.parse(await stop('A')).reason, /A new pin/);
   assert.match(JSON.parse(await stop('A')).reason, /A new pin/, 'the pin is still unhanded: one more wake');
+  assert.match(JSON.parse(await stop('A')).reason, /A new pin/, 'and a third');
   assert.equal(await stop('A'), '', 'bounded: no stop-hook loop');
   await post('and the header', '/pricing');
   assert.match(JSON.parse(await stop('A')).reason, /^labit: 2 new pins/, 'a new pin is a new set: woken again');

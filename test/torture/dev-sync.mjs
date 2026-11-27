@@ -14,7 +14,7 @@ import http from 'node:http';
 import net from 'node:net';
 import zlib from 'node:zlib';
 import { spawn } from 'node:child_process';
-import { Lab, LAB, rq, agentRq, sleep, until, oddText, storeName, diffComments } from './lib.mjs';
+import { Lab, LAB, rq, liveState, agentRq, sleep, until, oddText, storeName, diffComments } from './lib.mjs';
 
 export const name = 'dev-sync';
 const PAGES = ['/index', '/sub/deep/page', '/a_b-c'];
@@ -208,7 +208,7 @@ export async function run(plan, ctx, opts) {
 
   // ----- writers -----
   if (plan.kind === 'writers') {
-    let rev0 = (await rq(lab, { path: '/_lab/state' })).json().comments;
+    let rev0 = (await liveState(lab)).comments;
     let base = []; // what the lab listed at rev0
     let restarted = false;
     const step = async ([op, i]) => {
@@ -281,7 +281,7 @@ export async function run(plan, ctx, opts) {
         if (!(await lab.start()).ok) throw new Error(`the lab did not start again: ${lab.log.slice(-300)}`);
         restarted = true;
         await check('after-a-restart');
-        rev0 = (await rq(lab, { path: '/_lab/state' })).json().comments;
+        rev0 = (await liveState(lab)).comments;
         base = await everything();
       }
     };
@@ -459,7 +459,7 @@ export async function run(plan, ctx, opts) {
       p.once('exit', (c) => (o.code = c ?? -1));
       return o;
     };
-    const answers = (port) => rq({ port }, { path: '/_lab/state', timeout: 800 }).then((r) => r.status === 200, () => false);
+    const answers = (port) => rq({ port }, { path: '/_lab/pages', timeout: 800 }).then((r) => r.status === 200, () => false);
     if (op.how === 'while-running') {
       const b = start(ctx.port());
       await until(() => b.code !== null, 12000 * opts.slow, 50);

@@ -10,7 +10,7 @@
 // check is skipped.
 import fs from 'node:fs';
 import path from 'node:path';
-import { Lab, Device, rq, agentRq, runCli, sleep, until, oddText, PEOPLE, diffComments, LAN } from './lib.mjs';
+import { Lab, Device, rq, liveState, agentRq, runCli, sleep, until, oddText, PEOPLE, diffComments, LAN } from './lib.mjs';
 
 export const name = 'agent-sync';
 const PAGES = ['/index', '/other'];
@@ -605,10 +605,10 @@ export async function run(plan, ctx, opts) {
   const tSettle = Date.now();
   const settled = await until(async () => {
     for (const d of devices) await d.idle(300);
-    const now = (await rq(lab, { path: '/_lab/state' })).json();
+    const now = await liveState(lab);
     return devices.every((d) => !d.busy && d.commentsRev === now.comments && d.state?.mode === now.mode);
   }, BOUND, 40);
-  const now = (await rq(lab, { path: '/_lab/state' })).json();
+  const now = await liveState(lab);
   for (const p of PAGES) truth[p] = await ask(p, 'local');
   for (const d of devices) {
     const where = { device: d.kind, ...(d.jitter ? { held: 'answers-held' } : {}), ...tags };

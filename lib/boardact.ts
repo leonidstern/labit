@@ -1,17 +1,17 @@
-// What the board commands do (labit board new / add / move / pick / list), on the stored board. Loaded by local.mjs when
-// one is run, so a lab that only serves boards does not read it.
+// What the board commands do (labit board new / add / move / pick / list), on the stored board.
 import fs from 'node:fs';
 import path from 'node:path';
 import { imageInfo, MAX_IMAGE } from './images.mjs';
-import { MAX_FRAMES, NAME, addImage, check, counted, heightFor, insert, nextId, labPath, names, nameOf, one, read, save, frameFile, writeAtomic, type Board, type Frame } from './board.ts';
+import { writeAtomic } from './files.ts';
+import { MAX_FRAMES, NAME, addImage, check, counted, heightFor, insert, nextId, labPath, names, nameOf, one, read, save, frameFile, type Board, type Frame } from './board.ts';
 
-export const MAX_VARIANTS = 6;
+const MAX_VARIANTS = 6;
 /** The query parameter that tells a live page which variant it is drawing (boards of a page that cannot be copied). */
-export const VARIANT = 'lab-variant';
+const VARIANT = 'lab-variant';
 const live = (f: Frame) => new RegExp(`[?&]${VARIANT}=`).test(f.src);
 const LIVE_SAID = `Each variant frame is the live page with ?${VARIANT}=<frame>; branch on new URLSearchParams(location.search).get('${VARIANT}') in the page's source (frame a is the page as it is: leave it). Remove the branching when one is picked.`;
 /** The text a person gave, as a board name: "Pricing hero" is pricing-hero. */
-export const slug = (t: string) => dashed(t).slice(0, 60) || 'board';
+const slug = (t: string) => dashed(t).slice(0, 60) || 'board';
 /** Lowercase letters and digits, joined by dashes (a published page's folder name too, lib/commands.ts). */
 export const dashed = (t: string) => t.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const route = (name: string, id: string) => `/_lab/board/${name}/${id}`;
@@ -36,7 +36,7 @@ export const shown = (b: Board, f: Frame) => (f.kind === 'image' ? `pasted image
 /** A frame's size: a picture says its file's own pixels first. */
 export const sized = (f: Frame) => `${f.kind === 'image' ? `${f.iw}×${f.ih} px shown at ` : ''}${f.w}×${f.h}`;
 /** Where a board is opened: over its page when it is about one this lab has (one set of pins, the page's), else at its own address. */
-export const where = (origin: string, b: Board, home?: boolean) => (home && b.of ? `${origin}${b.of.split('#')[0]}#board=${b.name}` : `${origin}/_lab/board/${b.name}`);
+const where = (origin: string, b: Board, home?: boolean) => (home && b.of ? `${origin}${b.of.split('#')[0]}#board=${b.name}` : `${origin}/_lab/board/${b.name}`);
 /** The board as plain text: one line per frame, in order. `pins(frame)` is its open pins. */
 export function text(b: Board, o: { origin: string; file?: string | null; json?: boolean; home?: boolean; pins?: (f: Frame) => number }): string {
   const lines = [`# Board ${b.name}${b.title ? ` · ${b.title}` : ''}`, `url: ${where(o.origin, b, o.home)}${o.home ? ' (the board opens over its page: its pins are that page\'s)' : ''}`];
@@ -78,7 +78,7 @@ export const frameLine = (b: Board, f: Frame, file?: string | null) => {
 // ---------- the changes ----------
 type Ask = { name?: string; topic?: string; of?: string; variants?: number; widths?: string; flow?: string; target?: string; label?: string; width?: number; after?: string; first?: boolean; frame?: string; frames?: string[] };
 type Env = { root: string; origin: string; open: (key: string) => number; titleOf: (page: string) => string; fileOf: (page: string) => string | null; proxied: boolean; guest?: boolean };
-export type Done = { text: string; board?: Board; picked?: Frame; error?: string };
+type Done = { text: string; board?: Board; picked?: Frame; error?: string };
 
 const no = (error: string): Done => ({ text: error, error });
 const frameOf = (b: Board, id: unknown) => b.frames.find((f) => f.id === id);
@@ -94,13 +94,10 @@ export function act(action: string, a: Ask, e: Env): Done {
   }
   if (action === 'new') {
     const topic = one(a.topic, 80);
-    const name = a.name || (a.of && !topic ? nameOf(a.of.split('#')[0]) : slug(topic));
+    const name = a.of && !topic ? nameOf(a.of.split('#')[0]) : slug(topic);
     if (!NAME.test(name)) return no('Give the board a topic: labit board new "Pricing hero" --of /pricing --variants 3');
-    // A board asked for by its name (a pin's own, made from its card) that is already there is that board, never a new one over it.
-    const had = a.name ? read(e.root, a.name) : null;
-    if (had) return { text: view(had, had.of ? e.fileOf(had.of.split('#')[0]) : null), board: had };
     let into = name;
-    for (let n = 2; read(e.root, into) && !a.name; n++) into = `${name}-${n}`;
+    for (let n = 2; read(e.root, into); n++) into = `${name}-${n}`;
     const of = a.of ? one(a.of, 200) : '';
     const page = of.split('#')[0];
     if (of && !labPath(page)) return no(`--of is a page of this lab, like /pricing (got ${of.slice(0, 60)})`);
