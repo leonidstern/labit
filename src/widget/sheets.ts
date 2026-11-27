@@ -470,10 +470,10 @@ export function swipeDown(node, close, grows = false) {
     if (was === 'drag' && !(fromScrim && Math.abs(raw) <= TAP_SLOP)) W.S.sheetDraggedAt = performance.now();
     if (was !== 'drag') return;
     releasedAt = performance.now();
-    // How fast the finger (v) and the sheet (vs, which a rubber band slows) were going over the last ~100 ms, px/ms, + down;
-    // 0 if it held still before letting go.
+    // How fast the finger (v) and the sheet (vs, which a rubber band slows) were going at the end, px/ms, + down (over the
+    // last 50 ms, or 100 when the touches came seldom: move.releaseFrom); 0 if it held still before letting go.
     const lastMove = samples[samples.length - 1];
-    const from = samples.find((q) => lastMove.t - q.t <= 100);
+    const from = samples[move.releaseFrom(samples.map((q) => q.t))];
     const span = lastMove.t - from.t;
     const quick = e.timeStamp - lastMove.t > 80 || span < 8 ? 0 : 1;
     const v = quick * ((lastMove.y - from.y) / (span || 1));
