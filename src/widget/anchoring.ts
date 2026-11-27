@@ -846,10 +846,17 @@ let watch: MutationObserver | null = null;
 // What names an element that has no words (a field, an icon button, a picture: with its file's name).
 const NAMING = ['alt', 'aria-label', 'placeholder', 'name', 'title', 'for', 'href', 'type'];
 const WATCH: MutationObserverInit = { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: NAMING };
+// The widget's own stylesheets in the page's head (data-lab-own: the held pins' rules, the page style, the pointer) say
+// nothing about the page's words: their changes keep what was read. The held pins' sheet is written as pins are drawn, and
+// each write threw the whole read away (every pin's words and proof read again: ~20 ms a drawing on a phone, 27 Nov).
+const ownNode = (n: Node | null) => (n instanceof Element ? n : n?.parentElement)?.hasAttribute('data-lab-own') === true;
+const pageChanged = (l: MutationRecord[]) => l.some((m) => !ownNode(m.target));
 const read = (): Read => {
-  watch ||= new MutationObserver(() => (seen = null));
+  watch ||= new MutationObserver((l) => {
+    if (pageChanged(l)) seen = null;
+  });
   if (!seen) watch.observe(document, WATCH);
-  else if (watch.takeRecords().length) seen = null;
+  else if (pageChanged(watch.takeRecords())) seen = null;
   return (seen ||= { words: new Map(), tags: new Map(), said: new Map(), got: new WeakMap(), lead: new Map() });
 };
 const words = (n: Element): string => {

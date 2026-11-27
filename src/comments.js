@@ -798,6 +798,11 @@ import { bindKeys } from './widget/keys.ts';
   // A declaration, not a const: on a board page the live state arrives while the widget is still setting up, and the
   // pill's line reads the threads then (it threw "Cannot access 'threads' before initialization" and the board stopped).
   function threads() { return (S.comments || []).filter((c) => !c.parent); }
+  // The threads whose spot is looked for when the pins are drawn: not one about the page as a whole, nor a resolved one
+  // that isn't shown (done ones hidden, nothing new in it, not open), which neither shows a pin nor counts as moved
+  // (list.ts movedPins). Finding a spot can mean reading the page's words; a lab collects resolved threads by the dozen.
+  /** @param {any} c */
+  const pinPlaced = (c) => c.anchor?.kind !== 'page' && (S.showDone || !c.resolved || S.openId === c.id || unread(c).length > 0);
   const isPage = (c) => c.anchor?.kind === 'page'; // about the page as a whole: no pin; it lives in the chat
   // prev / next / J / K: the thread swaps in place, no slide; the keyboard stays as it was (up stays up, down stays down).
   S.stepping = false;
@@ -1127,8 +1132,8 @@ import { bindKeys } from './widget/keys.ts';
     // messages; Leo, 17 Nov: "message scrolled up" on a phone).
     const prevAtEnd = prevBody ? prevBody.scrollHeight - prevBody.scrollTop - prevBody.clientHeight < 48 : false;
     // Every pin's place is read before anything is written, so the page lays out once per render, not once per pin.
-    const places = new Map(S.on ? threads().filter((c) => c.anchor?.kind !== 'page').map((c) => [c.id, placeOf(c)]) : []);
-    readPins(threads().map((c) => (c.anchor?.kind === 'board' ? frameBox(c.anchor) : c.anchor && c.anchor.kind !== 'page' && !places.get(c.id)?.moved ? findTarget(c.anchor) : null)));
+    const places = new Map(S.on ? threads().filter(pinPlaced).map((c) => [c.id, placeOf(c)]) : []);
+    readPins(threads().filter(pinPlaced).map((c) => (c.anchor?.kind === 'board' ? frameBox(c.anchor) : c.anchor && c.anchor.kind !== 'page' && !places.get(c.id)?.moved ? findTarget(c.anchor) : null)));
     // A pin that is still there stays the same element, updated in place, so what runs on it (the agent's ring, a pop, a
     // swap, a hover or open transition) carries on instead of starting again (Leo, 18 Nov: clicking or leaving a pin
     // "reloads" its animation). Everything else on the layer (cards, outlines, drafts) is drawn anew, as before; a pin
@@ -1198,10 +1203,14 @@ import { bindKeys } from './widget/keys.ts';
     if (!walkieBtn.firstChild) walkieBtn.append(keyLabel('talk', KEYS.walkie));
     host.toggleAttribute('data-labs', Boolean(!coarse && S.labsOpen)); // the page dims behind labs & pages (the widget's .scrim)
     host.toggleAttribute('data-sheet', Boolean((coarse && (S.labsOpen || S.motionOpen)) || (S.on && (S.draft || S.openId || S.chatOpen)))); // phones: the sheet has the screen's bottom
-    if (coarse && appear && now) { // a sheet opening slides in once its first frame is drawn (see data-opening in styles.css)
+    // The first sheet after the page loads slides in once its first frame is drawn (see data-opening in styles.css): laying
+    // it out took 130 ms and ate the slide. Later ones start with their first frame, a frame sooner: their layout is quick
+    // (iOS 27 simulator, 27 Nov: 10-20 ms) and waiting two frames only made the tap feel slower.
+    if (coarse && appear && now && !S.sheetShown) {
       host.setAttribute('data-opening', '');
       requestAnimationFrame(() => requestAnimationFrame(() => host.removeAttribute('data-opening')));
     }
+    if (coarse && appear && now) S.sheetShown = true;
     if (coarse && host.hasAttribute('data-sheet') !== document.documentElement.classList.contains('lab-sheet')) holdPage(host.hasAttribute('data-sheet'));
     document.documentElement.classList.toggle('lab-sheet', host.hasAttribute('data-sheet'));
     holdWhileOpen(host.hasAttribute('data-sheet')); // a dev server's reload waits until the chat, thread or list is closed
@@ -2242,7 +2251,7 @@ import { bindKeys } from './widget/keys.ts';
     if (!S.on || (S.openId && !(scrolled && openHeld()))) return render();
     newPass();
     viewW = winW();
-    const all = threads().filter((c) => c.anchor?.kind !== 'page');
+    const all = threads().filter(pinPlaced);
     const skip = (c) => scrolled && heldPin(pinsById.get(c.id));
     const read = all.filter((c) => !skip(c)).map((c) => [pinsById.get(c.id), placeOf(c), c]);
     watchLost(new Set(read.filter(([, at]) => at.moved || at.why === 'hidden').map(([, , c]) => c.id)));
@@ -2363,12 +2372,14 @@ import { bindKeys } from './widget/keys.ts';
   // widget: a stylesheet in the document's head, since the widget's own live in its shadow root. The font is the system's
   // own, so nothing downloads.
   const pageStyle = document.createElement('style');
+  pageStyle.setAttribute('data-lab-own', ''); // anchoring.ts: its changes are not the page's
 
   // A comment pin as the pointer over everything you can comment on (links and controls keep theirs): the white
   // teardrop with a +, clicking at its point. Holding Shift gives the text cursor back for selecting words.
   // It looks like your own pin: the white teardrop with your initial (a + before you've given a name). It points (bottom
   // left) where the click lands.
   const pinCursorStyle = document.createElement('style');
+  pinCursorStyle.setAttribute('data-lab-own', '');
   // The pointer itself is drawn (an element styled with CSS that follows the mouse), not an image: so it changes
   // smoothly, and fades out where the system pointer takes over (links, fields, the widget, Shift). Mice only; touch and
   // pens keep what they had.
@@ -2469,9 +2480,14 @@ import { bindKeys } from './widget/keys.ts';
   // Phones: the page is scrolled in one step for a new comment's pin and drawn where it was, then let go as the keyboard
   // comes (sheets.ts revealDraft): its own blocks, not what it holds to the screen itself, nor the widget or a board's view.
   pageStyle.textContent += 'html.lab-moved body > :not([data-lab-comments], [data-lab-board-view], [data-lab-still]) { translate: 0 var(--lab-shift, 0px) !important; transition: translate var(--lab-shift-t, 0s) var(--lab-shift-e, ease) !important; }';
+  // Once the scroll rests, not on each scroll event: each new value restyles the whole page (roomFor), and the room is below
+  // the window's bottom while you scroll up, so nothing shows it going a moment later.
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  let roomRest;
   addEventListener('scroll', () => {
     if (!document.documentElement.classList.contains('lab-room') || host.hasAttribute('data-sheet')) return;
-    roomFor(scrollY, true);
+    clearTimeout(roomRest);
+    roomRest = setTimeout(() => !host.hasAttribute('data-sheet') && roomFor(scrollY, true), 150);
   }, { passive: true });
   // Phones: and the page behind stays put, even when the part of the sheet you drag on has nothing to scroll.
   // On the one element whose overflow is the screen's: body when the page leaves html's alone (the browser takes body's for
