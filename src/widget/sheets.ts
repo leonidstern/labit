@@ -378,6 +378,7 @@ export function swipeDown(node, close, grows = false) {
   // doesn't press what lands there or pop the keyboard (Vaul's 100 ms and 200 ms).
   let scrolledAt = -1e9;
   let releasedAt = -1e9;
+  let settles = 0; // the newest settle: an older one's end leaves the sheet to it
   node.addEventListener('scroll', () => (scrolledAt = performance.now()), { capture: true, passive: true });
   node.addEventListener('click', (e) => {
     if (performance.now() - releasedAt < 200) {
@@ -495,12 +496,17 @@ export function swipeDown(node, close, grows = false) {
       }
       const [ms, curve] = glide(way, Math.max(0, toward));
       node.style.transition = `transform ${ms}ms ${curve}, height ${ms}ms ${curve}`;
+      // Full to half: the half sheet's max-height (its half height) is not animated, so it cut the height to half at once
+      // while the finger's offset still played out: the sheet dropped past half and rose back to it (iOS 18 Pro simulator,
+      // 27 Nov: 696 to 393 px in one frame, its top at 488 and back up to 313). The cap waits until the height is there.
+      if (full === false) node.style.maxHeight = 'none';
+      const mine = ++settles;
       if (full !== undefined) node.classList.toggle('full', full);
       W.scrim.style.transition = `opacity ${ms}ms var(--_ease-out)`;
       node.style.transform = W.scrim.style.opacity = '';
       W.bar.style.transition = '';
       W.host.style.removeProperty('--lab-p'); // springing back: the bar goes back down with it
-      setTimeout(() => (node.style.transition = W.scrim.style.transition = ''), settled());
+      setTimeout(() => mine === settles && ((node.style.transition = W.scrim.style.transition = ''), (node.style.maxHeight = '')), settled());
     };
     if (grows && !node.classList.contains('full') && (raw < -40 || v < -0.4)) return node.classList.contains('card') && (W.S.cardFull = true), settle(true, -vs);
     if (grows && node.classList.contains('full') && v < 1.2 && (raw > 60 || v > 0.4)) return node.classList.contains('card') && (W.S.cardFull = false), settle(false, vs);
