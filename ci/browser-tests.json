@@ -94,5 +94,8 @@
   "colabitoff": 4,
   "boardfull": 35,
   "quirkspage": 40,
-  "boarddone": 15
+  "boarddone": 15,
+  "ipadclose": 12,
+  "ipadtap": 14,
+  "ipadchat": 10
 }

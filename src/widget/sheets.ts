@@ -70,8 +70,13 @@ export function leave(node: HTMLElement, ms = 0, sent = false, speed = 0) {
   let moved = 0; // a finger may have it part way down already
   try { moved = new DOMMatrixReadOnly(getComputedStyle(node).transform).m42 || 0; } catch {}
   const r = node.getBoundingClientRect();
-  const top = r.top - moved;
+  const top = r.top - moved; // on the screen
   const way = Math.max(r.height, floor() - top) + OFF - moved; // to under the screen's bottom, and past its shadow and Safari's see-through bar
+  // Where it is held: a phone's sheet is fixed to the screen, so its top there is the screen's. A tablet's card (a computer's
+  // card, tied to the page) is held at its own top on the page: given the screen's, it jumped up by the page's scroll
+  // before it left (iPad Pro 11 simulator, 27 Nov: 342 − 466 px on the first frame of a close).
+  const cs = getComputedStyle(node);
+  const at = cs.position === 'fixed' ? top : parseFloat(cs.top);
   if (ms) [dur, ease] = carry(way, speed, ms);
   // The bar comes up with the sheet: after a swipe at the same pace (the sheet's way left and its speed, in whole ways
   // and ways per ms, are the bar's too), settling where the sheet is gone; after a tap softly, from rest. The standard
@@ -79,7 +84,7 @@ export function leave(node: HTMLElement, ms = 0, sent = false, speed = 0) {
   const [bms, bease] = glide(ms ? way : 1, ms ? speed : 0, dur);
   leaveBar = `${bms}ms ${bease}`;
   const fade = getComputedStyle(W.scrim).opacity;
-  for (const [k, v] of [['top', `${top}px`], ['bottom', 'auto'], ['height', `${r.height}px`], ['max-height', 'none'], ['animation', 'none'],
+  for (const [k, v] of [['top', `${Number.isFinite(at) ? at : top}px`], ['bottom', 'auto'], ['height', `${r.height}px`], ['max-height', 'none'], ['animation', 'none'],
     ['transition', 'none'], ['transform', `translateY(${moved}px)`], ['pointer-events', 'none']]) node.style.setProperty(k, v, 'important');
   W.host.setAttribute('data-leaving', '');
   W.scrim.style.transition = 'none';
@@ -428,7 +433,9 @@ export function swipeDown(node, close, grows = false) {
     const t = e.touches[0];
     // Scrolling the messages up to their top and pulling on in the same move hands the sheet to the finger, as iOS
     // sheets do (it used to take a second swipe). Only while the browser still lets the move be taken over.
-    if (mode === 'off' && box && box.localName !== 'textarea' && e.touches.length === 1 && e.cancelable && box.scrollTop <= 0 && t.clientY > last.y + 1) {
+    // A tablet's card or chat (a computer's window, not a sheet: W.sheetMode) is only taken by a pull that starts with its
+    // messages at their top (below).
+    if (mode === 'off' && W.sheetMode.matches && box && box.localName !== 'textarea' && e.touches.length === 1 && e.cancelable && box.scrollTop <= 0 && t.clientY > last.y + 1) {
       mode = 'drag';
       y0 = t.clientY;
       samples = [{ t: e.timeStamp, y: y0, d: 0 }];
@@ -443,7 +450,10 @@ export function swipeDown(node, close, grows = false) {
       const sideways = Math.abs(across) > Math.abs(down);
       // The sheet's top quarter pulls it down too, messages and all, as does the dimmed page above it (Leo, 15 Nov);
       // below that a pull scrolls the messages until they reach their top.
-      const nearTop = !sideways && down > 0 && y0 - node.getBoundingClientRect().top < node.offsetHeight * 0.25;
+      // Phones only: on a tablet the card and the chat are windows, not sheets, and a pull down on their messages scrolled
+      // up through them never got there: it closed the chat, and the next pulls went to the page, which Safari reloaded
+      // (iPad Pro 11 simulator, 27 Nov).
+      const nearTop = W.sheetMode.matches && !sideways && down > 0 && y0 - node.getBoundingClientRect().top < node.offsetHeight * 0.25;
       if (fromScrim) mode = sideways ? 'hold' : 'drag';
       else if (grabArea(e.target)) mode = sideways && e.target.closest('.tabs') ? 'off' : 'drag'; // the list's tabs scroll sideways
       else if (nearTop && box?.localName !== 'textarea') mode = 'drag';

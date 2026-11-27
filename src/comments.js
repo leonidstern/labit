@@ -103,6 +103,7 @@ import { isTap, liftTarget } from './widget/lifttap.ts';
     get chatEl() { return chatEl; },
     get closeOrNudge() { return closeOrNudge; },
     get coarse() { return coarse; },
+    get sheetMode() { return sheetMode; },
     composer,
     get contentEnd() { return contentEnd; },
     get control() { return control; },
@@ -2013,6 +2014,38 @@ import { isTap, liftTarget } from './widget/lifttap.ts';
   };
   scrim.addEventListener('touchstart', liftFrom, { passive: true });
   layer.addEventListener('touchstart', liftFrom, { passive: true }); // the pins
+  // Tablets (a coarse pointer with a computer's cards: no dimmed page to tap): a tap on the page outside an open thread or new
+  // comment closes it on the finger's lift, as a click there does on a computer. iOS often sends no click for a tap on the
+  // page (2 of 17 thread closes and 3 of 12 new comments did nothing, an empty column never got one: iPad Pro 11 simulator,
+  // 27 Nov). The lift isn't stopped, so the page's own link or button under it still gets its click; that click, if it
+  // comes, doesn't act on the widget a second time (S.outsideTapAt, onPageClick).
+  S.outsideTapAt = 0;
+  if (coarse) addEventListener('touchstart', (/** @type {TouchEvent} */ e) => {
+    const t = e.touches.length === 1 ? e.changedTouches[0] : null;
+    if (!t || sheetMode.matches || !S.on || !(S.draft || S.openId) || boardShown() || e.composedPath().includes(host)) return; // a board takes its own taps (board/mount.ts)
+    const down = { x: t.clientX, y: t.clientY, t: performance.now() };
+    const openKey = () => (S.draft ? 'draft' : S.openId);
+    const open = openKey();
+    const mine = (/** @type {TouchEvent} */ ev) => [...ev.changedTouches].find((x) => x.identifier === t.identifier);
+    const done = () => (removeEventListener('touchmove', move, true), removeEventListener('touchend', end, true), removeEventListener('touchcancel', done, true));
+    /** @param {TouchEvent} ev */
+    const move = (ev) => { const m = mine(ev); if (m && !isTap(down, m.clientX, m.clientY, down.t)) done(); };
+    /** @param {TouchEvent} ev */
+    const end = (ev) => {
+      const m = mine(ev);
+      if (!m) return;
+      done();
+      // Not a hold that pinned (that lift is the new comment's), and what was open is still what is open.
+      if (ev.touches.length || S.pinnedByHold || openKey() !== open || !isTap(down, m.clientX, m.clientY, performance.now())) return;
+      S.outsideTapAt = Date.now();
+      S.draft = null; // as onPageClick: typed words stay as a draft
+      S.openId = null;
+      render();
+    };
+    addEventListener('touchmove', move, { capture: true, passive: true });
+    addEventListener('touchend', end, { capture: true, passive: true });
+    addEventListener('touchcancel', done, { capture: true, passive: true });
+  }, { capture: true, passive: true });
   // Android's back gesture closes an open sheet first, like a native one, instead of leaving the page (CloseWatcher,
   // Chrome 120+; elsewhere back works as before). With something typed it nudges, as a tap on the dimmed page does.
   S.backWatcher = null;
@@ -2184,6 +2217,7 @@ import { isTap, liftTarget } from './widget/lifttap.ts';
   }, true);
   function onPageClick(e, taken = false) {
     if (e.composedPath().includes(host)) return;
+    if (S.outsideTapAt && Date.now() - S.outsideTapAt < 800) return void (S.outsideTapAt = 0); // this tap's lift closed the card already (above)
     if (S.undoLetGo && Date.now() - S.undoLetGo < 2000) return void (S.undoLetGo = 0); // this click let a sent pin's undo card go (above)
     if (S.menuShut && Date.now() - S.menuShut < 1500) return void (S.menuShut = 0); // this click closed the ⋯ menu (above)
     if (S.draft || S.openId) {
