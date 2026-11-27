@@ -18,7 +18,11 @@ fs.writeFileSync(path.join(CFG, 'labit', 'settings.json'), JSON.stringify({ flag
 fs.writeFileSync(path.join(DIR, 'walk.html'), `<!doctype html><meta charset="utf-8"><title>t</title><link rel="stylesheet" href="/_lab/lab.css">
 <body><h1>Orders</h1><p>Some words to read.</p>
 <button id="a" style="margin:40px;padding:20px 40px" onclick="window.pressed = (window.pressed || 0) + 1">Export</button>
-<button id="b" style="margin:40px 40px 40px 400px;padding:20px 40px">New order</button></body>`);
+<button id="b" style="margin:40px 40px 40px 400px;padding:20px 40px">New order</button>
+<ul><li id="v">Apple</li></ul>
+<div id="fw" style="position:relative;width:400px;height:150px;margin:20px 40px">
+<iframe id="fr" srcdoc="<p id=inner style='margin:0;padding:60px 20px'>Inside words</p>" style="width:400px;height:150px;border:0;pointer-events:none"></iframe>
+<button id="over" style="position:absolute;left:10px;top:10px;padding:10px 20px">Over</button></div></body>`);
 const server = startLab(DIR, labEnv({ XDG_CONFIG_HOME: CFG }), { port: PORT });
 await labUp(B);
 
@@ -117,6 +121,90 @@ try {
       await sleep(800);
       const s3 = await state();
       check(eng, 'Esc drops the walk: nothing sent, the bar is back', posted.length === before && !s3.pill && s3.bar && !s3.off, JSON.stringify(s3));
+
+      const send = async () => {
+        await p.keyboard.press(process.platform === 'darwin' ? 'Meta+Enter' : 'Control+Enter');
+        await sleep(1200);
+        return posted.filter((m) => /^Walkie-talkie, /.test(m.text || '')).pop()?.text || '';
+      };
+      const lineWith = (text, re) => text.split('\n').find((l) => re.test(l)) || '';
+
+      // A button over a frame is what is pointed at, not the frame's page under it; the frame's own words still are.
+      await p.keyboard.press('k');
+      await sleep(300);
+      const ov = await mid('#over');
+      const fr = await p.evaluate(() => { const r = document.querySelector('#fr').getBoundingClientRect(); return { x: r.right - 60, y: r.top + 80 }; });
+      await p.mouse.move(ov.x, ov.y, { steps: 8 });
+      await sleep(500);
+      await speak('this button sits on top');
+      await sleep(300);
+      await p.mouse.click(fr.x, fr.y);
+      await sleep(300);
+      await speak('and this is the frame');
+      await sleep(400);
+      const fm = await send();
+      const top = lineWith(fm, /sits on top/), under = lineWith(fm, /the frame$/);
+      check(eng, 'a button over a frame is the spot, not the frame\'s page under it; the frame\'s own text still is', /\(#over,/.test(top) && !/frame/.test(top.split(':')[0]) && /frame \/walk\.html › #inner/.test(under), fm);
+
+      // The spot is told as it was when pointed at (a virtual list reuses its rows); a word taken out of the box doesn't
+      // move the times of the words after it; the page's own data-lab-off on its body stays.
+      await p.evaluate(() => document.body.setAttribute('data-lab-off', ''));
+      await p.keyboard.press('k');
+      await sleep(300);
+      const v = await mid('#v');
+      await p.mouse.move(v.x, v.y, { steps: 8 });
+      await sleep(500);
+      await speak('make this bold');
+      await sleep(300);
+      await p.mouse.click(b.x, b.y);
+      await sleep(300);
+      await speak('and this one green');
+      await p.evaluate(() => {
+        document.querySelector('#v').textContent = 'Pear';
+        const ta = document.querySelector('[data-lab-comments]').shadowRoot.querySelector('.walkie textarea');
+        ta.value = ta.value.replace(/^make /, '');
+        ta.dispatchEvent(new Event('input'));
+      });
+      await sleep(400);
+      const vm = await send();
+      const kept = await p.evaluate(() => document.body.hasAttribute('data-lab-off'));
+      await p.evaluate(() => document.body.removeAttribute('data-lab-off'));
+      const lv = lineWith(vm, /#v\b/), lb = lineWith(vm, /#b\b/);
+      check(eng, 'the spot as it was when pointed at, not as it is at send', /"Apple"/.test(lv) && !/Pear/.test(vm), vm);
+      check(eng, 'a word taken out of the box keeps the words after it on their own times', /: this bold$/.test(lv) && /: and this one green$/.test(lb), vm);
+      check(eng, 'the page\'s own data-lab-off on its body stays after the walk', kept);
+
+      // Words that came in bursts: the timing line counts them as they came, not as spread over the walk.
+      await p.keyboard.press('k');
+      await sleep(300);
+      await p.mouse.move(a.x, a.y, { steps: 8 });
+      await sleep(500);
+      for (const burst of ['please make this', 'button a lot', 'bigger and bolder']) {
+        await say(burst);
+        await sleep(400);
+      }
+      const bm = await send();
+      check(eng, 'words that came in bursts are not counted as live', /timing: 0% of words came live/.test(bm), bm);
+
+      // A walk the lab didn't take is kept: the button says retry, and the next press sends the same walk.
+      let refused = 0;
+      await p.route('**/_lab/api/comments**', (r) => (r.request().method() === 'POST' && !refused ? (refused++, r.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"test: lab said no"}' })) : r.continue()));
+      await p.keyboard.press('k');
+      await sleep(300);
+      await p.mouse.move(a.x, a.y, { steps: 8 });
+      await sleep(500);
+      await speak('keep this one');
+      const n0 = posted.length;
+      await send();
+      const failed = await after();
+      await p.keyboard.press('k');
+      await sleep(1000);
+      const resent = await after();
+      const tries = posted.slice(n0);
+      const same = tries.length === 2 && tries[0].text === tries[1].text && tries[0].nonce && tries[0].nonce === tries[1].nonce && /keep this one/.test(tries[0].text);
+      const s4 = await state();
+      check(eng, 'a refused walk is kept: "retry" on the button, the next press sends the same walk, no new walk starts', refused === 1 && failed.btn === 'retry' && resent.btn === 'sent ✓' && same && !s4.pill && Math.abs(failed.width - resent.width) < 0.5, JSON.stringify([refused, failed, resent, tries.map((t) => t.text)]));
+      await p.unroute('**/_lab/api/comments**');
     } finally {
       await browser.close();
     }

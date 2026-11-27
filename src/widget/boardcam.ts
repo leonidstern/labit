@@ -21,7 +21,10 @@ export const pressBoard = () => {
   asked = false;
   board(true);
   void W.part('boardview').catch(() => {}); // fetched while the button is down: the board comes up at the click
-  addEventListener('pointerup', () => setTimeout(() => asked || board(false), 60), { once: true });
+  // (a press the browser takes back, a scroll or a gesture, ends in pointercancel: the pins come back then too)
+  const ac = new AbortController();
+  const off = () => (ac.abort(), setTimeout(() => asked || board(false), 60));
+  for (const t of ['pointerup', 'pointercancel']) addEventListener(t, off, { signal: ac.signal });
 };
 export const showBoard = (name: string, of = '', push = true) => globalThis.__LAB_CO__ ? undefined :
   ((asked = true), board(true), W.part('boardview').then((m) => m.show(name, { page: S.page, of, push, onClose: () => {
