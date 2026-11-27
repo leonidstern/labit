@@ -1,4 +1,5 @@
-// The motion menu and live reload are their own files (public/_lab/motion.js, reload.js), loaded only when
+// The motion menu, live reload, a choice tried in the page and going to a block named in a message are their own files
+// (public/_lab/motion.js, reload.js, tryout.js, goto.js), loaded only when
 // the page uses them: the page script (comments.js) must not carry their code, and each file must carry its own.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,6 +12,8 @@ const read = (f) => fs.readFileSync(path.join(DIR, f), 'utf8');
 const PARTS = {
   'motion.js': ['motion-speed', 'motion-menu', 'pick on page', '.moment{'],
   'reload.js': ['data-lab-swap', 'lab-v=', 'startViewTransition'],
+  'tryout.js': ['intersectsNode'],
+  'goto.js': ['offset:.7', 'border-radius:3px;background:color-mix'],
 };
 
 test('the page script carries none of its parts\' code', () => {

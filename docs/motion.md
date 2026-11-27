@@ -95,7 +95,7 @@ in `:host`, so `--bv-o` is stepped per frame). The half / full toggle is one ste
 | composer glide (`composer.ts`) | height; the arrow's transform | base | standard | the box growing, the arrow sliding |
 | `.pane` (the dialog's insides) | opacity | quick out; base in after base | out | one pane fading for the other |
 | shake (`comments.js`) | transform | base | standard | unsent words: the card (⌥W) or the sheet (closing on a phone) won't close; one sideways shake for both |
-| `goToBlock` (anchoring.ts) | outline (`--_green`) | 2 × hold | linear | a block named in a message |
+| `goToBlock` (goto.ts) | outline (`--_green`) | 2 × hold | linear | a block named in a message |
 | quote jump (`chat.ts`) | box-shadow (`--_green`) | hold | linear | the message you jumped to |
 
 `lab.css` has no transitions or animations; it only defines the tokens.

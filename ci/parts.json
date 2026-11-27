@@ -32,7 +32,9 @@
     "switcher.ts": "labs & pages (⌘K): a box on a computer, one of the sheets on a phone; built as its own file (public/_lab/switcher.js), loaded on the first ⌘K or ⋯ open",
     "switcher.css": "the styles of switcher.ts, which brings them with it",
     "thread.ts": "a pin's thread card",
-    "trial.ts": "a question's choices tried in the sentence: the differing words swapped in place, the block's height held, the page put back exactly",
+    "trial.ts": "a question's choices tried in the sentence: which row is tried, kept over a redraw and put back; the swap itself is tryout.ts",
+    "tryout.ts": "the swap of trial.ts: the differing words swapped in place, the block's height held, the page put back exactly; its own file (public/_lab/tryout.js), loaded as a card with rows to try in place is drawn",
+    "goto.ts": "a block named in a message (#id): scrolled into view and marked for a moment; its own file (public/_lab/goto.js), loaded on the first such link followed",
     "types.d.ts": "types shared by the modules",
     "walkie.ts": "Walkie-talkie: talk while you point, with the computer's own dictation (no microphone); the pointer, clicks, circles, shakes and selected words are matched to the words and sent to the chat as one message; its own file (public/_lab/walkie.js), loaded on the bar's walkie-talkie or K",
     "walkie.css": "the styles of walkie.ts, which brings them with it"

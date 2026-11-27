@@ -14,7 +14,6 @@ import {
   foundAt,
   fillAt,
   spotChanged,
-  goToBlock,
   inPage,
   ease,
   findTarget,
@@ -200,8 +199,8 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
   // styles with it. Asked for once; a module that can't load leaves the rest of the widget as it is.
   const parts = {};
   /** @param {string} name */
-  // colabit is one script: the parts it has (drawing, motion) are built into it; the rest it does without.
-  const part = (name) => (parts[name] ??= globalThis.__LAB_CO__ ? (name === 'draw' ? import('./widget/draw.ts') : name === 'motion' ? import('./widget/motion.ts') : Promise.reject(new Error('not in colabit'))) : import(new URL(`${name}.js`, script?.src || location.href).href));
+  // colabit is one script: the parts it has (drawing, motion, going to a block) are built into it; the rest it does without.
+  const part = (name) => (parts[name] ??= globalThis.__LAB_CO__ ? (name === 'draw' ? import('./widget/draw.ts') : name === 'motion' ? import('./widget/motion.ts') : name === 'goto' ? import('./widget/goto.ts') : Promise.reject(new Error('not in colabit'))) : import(new URL(`${name}.js`, script?.src || location.href).href));
   // Shortcuts, action → key: these defaults, with what a project or you changed (labit.json or your settings.json
   // `shortcuts`, passed by the lab as data-keys; docs/settings.md).
   const KEYS = { toggle: 'm', chat: 't', next: 'w', pause: 'p', slow: 's', draw: 'd', done: 'e', reply: 'r', walkie: 'k', pinTool: 'c', arrowTool: 'v', fold: 'h' };
@@ -1758,7 +1757,8 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
     store.set('lab-on', '1');
   };
   copyBtn.addEventListener('click', () => copy(agentLink()));
-  // A #block link in a message: go to that block on the page. A phone's sheet covers the page, so it closes first.
+  // A #block link in a message: go to that block on the page (src/widget/goto.ts, its own file, loaded on the first
+  // one). A phone's sheet covers the page, so it closes first.
   addEventListener('lab-goto', (e) => {
     const to = /** @type {CustomEvent} */ (e).detail;
     const target = document.getElementById(to);
@@ -1768,7 +1768,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
       S.chatOpen = false;
       render();
     }
-    setTimeout(() => goToBlock(target), coarse ? 60 : 0); // after the sheet has started closing
+    setTimeout(() => void part('goto').then((m) => m.goToBlock(target, host, ms('hold', 2)), () => {}), coarse ? 60 : 0); // after the sheet has started closing
   });
   listBtn.addEventListener('click', () => stepNew(1));
   walkieBtn.addEventListener('click', () => {

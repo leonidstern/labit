@@ -1507,42 +1507,9 @@ export const quoteRangeOf = (anchor) =>
   quoteRange(anchor) || (anchor?.quote?.exact && /^<(body|html)[\s>]/.test(anchor.element || '') ? quoteRange(anchor, document.body, true) : null);
 // A message's name. An agent's session id ("Claude · session 8a296ba1") is left off.
 export const nameLine = (name) => el('b', {}, String(name || '').replace(/\s*·\s*session\s+\S+$/i, ''));
-// A block named in a message: its heading in view with room above, and outlined for a moment. On the element itself
-// (the widget's layer is redrawn as comments arrive, which would drop an outline drawn there).
-export function goToBlock(e: Element) {
-  const r = e.getBoundingClientRect();
-  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  scrollTo({ top: Math.max(0, r.top + scrollY - 24), behavior: still ? 'auto' : 'smooth' });
-  // A heading wears the half ink of words for a moment, not a box (Leo, 19 Nov: "green ink on
-  // header not green box after click"): a band under the lower 44 % of each line of its words, green at 30 % (45 % on
-  // dark), corners 3 px. In the page's own coordinates, so it scrolls with the heading; gone when it has faded.
-  if (/^H[1-6]$/.test(e.tagName)) {
-    const range = document.createRange();
-    range.selectNodeContents(e);
-    const dark = matchMedia('(prefers-color-scheme: dark)').matches;
-    const green = getComputedStyle(host).getPropertyValue('--_green-fg').trim();
-    const ink = document.createElement('div'); // in the widget's shadow root: a page's i, div or * rules don't reach it
-    ink.setAttribute('aria-hidden', 'true');
-    ink.style.cssText = 'position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;z-index:2147483646';
-    for (const l of range.getClientRects()) {
-      if (!l.width || !l.height) continue;
-      const b = document.createElement('i');
-      b.style.cssText = `position:absolute;left:${l.left + scrollX}px;top:${l.top + scrollY + l.height * 0.526}px;width:${l.width}px;height:${l.height * 0.44}px;border-radius:3px;background:color-mix(in srgb, ${green} ${dark ? 45 : 30}%, transparent)`;
-      ink.append(b);
-    }
-    if (ink.childElementCount) {
-      host.shadowRoot!.append(ink);
-      const a = ink.animate([{ opacity: 1 }, { opacity: 1, offset: 0.7 }, { opacity: 0 }], { duration: ms('hold', 2) });
-      a.onfinish = a.oncancel = () => ink.remove();
-      return;
-    }
-  }
-  const ring = `2px solid ${getComputedStyle(host).getPropertyValue('--_green').trim()}`;
-  e.animate([{ outline: ring, outlineOffset: '4px' }, { outline: ring, outlineOffset: '4px', offset: 0.7 }, { outline: '2px solid transparent', outlineOffset: '4px' }], { duration: ms('hold', 2) });
-}
 // Messages show web addresses as links that open in a new tab, and #some-id, when the page has an element with that
 // id, as a link that goes to it there (an agent names the block it placed: "#speed-deeper").
-// The widget listens for lab-goto and scrolls (src/comments.js, goToBlock).
+// The widget listens for lab-goto and scrolls (src/comments.js, goto.ts).
 // An address of this lab (localhost, 127.0.0.1, [::1] or this page's own host, on this page's own port) opens on the
 // reader's own origin, whatever the writer's machine called it: "http://localhost:4401/x" works on a phone. One with the
 // page's own path and a #id is that same shortcut: no reload, no address.
