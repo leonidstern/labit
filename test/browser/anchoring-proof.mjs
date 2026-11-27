@@ -223,6 +223,31 @@ try {
       });
       check(eng, 'rewritten in place: changed; a copy appeared next to it: unsure', r.changed === 'changed' && r.copy === 'unsure', JSON.stringify(r));
       await p.close();
+
+      // 13. The id its selector goes through renamed (the agent renamed a section, #video to #motion: Leo, 27 Nov), the
+      // element itself unchanged: the pin stays on it. A pin the agent placed (labit pin move: a selector and a spot,
+      // nothing else) and a person's pin. With two such elements left, nothing tells them apart: not silently on one.
+      const SECTIONS = '<section id="intro"><h2>Intro</h2><p>Some words first.</p></section><section id="video"><h2>Videos and animations</h2><div class="sv"><div class="sv-vid" style="width:200px;height:120px;background:#ddd"><i class="sv-ball"></i></div><p class="sv-cap">A ball that bounces</p></div></section><section id="end"><h2>End</h2><p>The last words.</p></section>';
+      p = await open(ctx, SECTIONS);
+      r = await p.evaluate(() => {
+        const n = document.querySelector('.sv-vid');
+        const b = n.getBoundingClientRect();
+        const moved = { kind: 'element', selector: '#video .sv-vid', x: 0.5, y: 0.5, docX: (b.left + b.width / 2) / innerWidth, docY: b.top + scrollY + b.height / 2 };
+        const person = pinOn('#video .sv-vid');
+        document.getElementById('video').id = 'motion';
+        return { moved: A.findTarget(moved) === n, person: A.findTarget(person) === n, why: [A.position(moved).why || '', A.position(person).why || ''] };
+      });
+      check(eng, 'an id renamed under a pin the agent placed: still on its element', r.moved, JSON.stringify(r));
+      check(eng, "an id renamed under a person's pin: still on its element", r.person, JSON.stringify(r));
+      await p.close();
+      p = await open(ctx, SECTIONS + '<section id="more"><div class="sv-vid"></div></section>');
+      r = await p.evaluate(() => {
+        const moved = { kind: 'element', selector: '#video .sv-vid', x: 0.5, y: 0.5, docX: 0.5, docY: 200 };
+        document.getElementById('video').id = 'motion';
+        return { node: Boolean(A.findTarget(moved)) };
+      });
+      check(eng, 'an id renamed with two such elements on the page: not silently on either', !r.node, JSON.stringify(r));
+      await p.close();
       await ctx.close();
     } finally {
       await browser.close();
