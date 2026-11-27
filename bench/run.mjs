@@ -79,8 +79,10 @@ await browser.close();
 // What the agent gets from the link: no login, no browser.
 const res = await fetch(`${BASE}/_lab/agent${PAGE}`);
 const text = await res.text();
-fs.mkdirSync(new URL('./results/', import.meta.url), { recursive: true });
-fs.writeFileSync(new URL('./results/lab-agent-text.txt', import.meta.url), text);
+// Each run's own text and checks go to out/ (not kept in git); results/ keeps the dated ones the README cites.
+const OUT = new URL('./out/', import.meta.url);
+fs.mkdirSync(OUT, { recursive: true });
+fs.writeFileSync(new URL('lab-agent-text.txt', OUT), text);
 
 // Can each spot be found from the text alone? The same checks run on any link's text.
 const src = fs.readFileSync(new URL('./site/src/button.ts', import.meta.url), 'utf8').split('\n');
@@ -124,7 +126,7 @@ function score(text) {
 const checks = score(text);
 const bytes = Buffer.byteLength(text);
 const summary = { link: `${BASE}/_lab/agent${PAGE}`, bytes, approxTokens: Math.round(bytes / 4), passed: checks.filter((c) => c.ok).length, total: checks.length, checks };
-fs.writeFileSync(new URL('./results/lab-checks.json', import.meta.url), JSON.stringify(summary, null, 2) + '\n');
+fs.writeFileSync(new URL('lab-checks.json', OUT), JSON.stringify(summary, null, 2) + '\n');
 for (const c of checks) console.log(c.ok ? 'ok  ' : 'FAIL', c.name, '·', c.got);
 
 // Optional: the same page as a shared Claude artifact, fetched the way an agent without your login would.
@@ -137,7 +139,7 @@ if (process.env.ARTIFACT_URL) {
   const art = score(visible);
   const comments = Object.values(truth).filter((t) => visible.includes(t.ask)).length;
   const result = { link: process.env.ARTIFACT_URL, status: r.status, bytes: Buffer.byteLength(html), visibleText: visible.slice(0, 200), commentsFound: comments, passed: art.filter((c) => c.ok).length, total: art.length, checks: art };
-  fs.writeFileSync(new URL('./results/artifact-checks.json', import.meta.url), JSON.stringify(result, null, 2) + '\n');
+  fs.writeFileSync(new URL('artifact-checks.json', OUT), JSON.stringify(result, null, 2) + '\n');
   console.log(`artifact: ${result.passed}/${result.total} · ${result.bytes} bytes · ${comments}/3 comments in the response · text: "${result.visibleText}"`);
 }
 console.log(`${summary.passed}/${summary.total} · ${bytes} bytes (~${summary.approxTokens} tokens) · ${summary.link}`);
