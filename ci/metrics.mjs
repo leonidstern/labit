@@ -19,6 +19,7 @@ const OXLINT = "oxlint@1.93.0"; // pinned, so the count only changes when the co
 const TYPES = ["typescript@5.9.3", "@types/node@22.20.5"]; // pinned for the same reason
 const LINTED = "lib local.mjs src"; // the commented sources (JS and TS); the shipped file is generated
 const PAGE_SCRIPT = "public/_lab/comments.js"; // what pages load: built from src/comments.js by npm run build
+const CO_SCRIPT = "co/co.js"; // what colabits load: built from the same source by npm run build:co, kept in git
 
 // ratchet: may never get worse. budget: may grow by perPr per PR, never past max.
 // ALLOW_GROWTH=1 (the size-approved label) lifts perPr; raising max means editing this file.
@@ -46,7 +47,7 @@ const METRICS = {
   },
   staleBuild: {
     kind: "ratchet", dir: "down", ideal: 0,
-    hint: "public/_lab/comments.js doesn't match a fresh build of src/comments.js. Run npm run build (the built files are not kept in git).",
+    hint: "public/_lab/comments.js doesn't match a fresh build of src/comments.js (npm run build; those files are not kept in git), or co/co.js doesn't match a fresh npm run build:co (it is kept in git: run it and commit co/co.js).",
   },
   sharedScriptCopies: {
     kind: "ratchet", dir: "down", ideal: 0,
@@ -137,6 +138,15 @@ function collect() {
     // …and so must the parts it loads later, built beside it (public/_lab/<part>.js).
     const parts = readdirSync(dirname(fresh)).filter((f) => f !== "comments.js");
     m.staleBuild = [readFileSync(fresh).equals(readFileSync(PAGE_SCRIPT)), ...parts.map((f) => existsSync(join(dirname(PAGE_SCRIPT), f)) && readFileSync(join(dirname(fresh), f)).equals(readFileSync(join(dirname(PAGE_SCRIPT), f))))].every(Boolean) ? 0 : 1;
+  }
+  // Colabit's one script is kept in git (colabits load it from a release), so main's copy must be what npm run build:co
+  // makes from the same source, byte for byte.
+  const buildCo = read("package.json").scripts?.["build:co"] ?? "";
+  if (existsSync(CO_SCRIPT) && buildCo.includes(`--outfile=${CO_SCRIPT}`)) {
+    const fresh = join(mkdtempSync(join(tmpdir(), "build-co-")), "co.js");
+    const b = run(buildCo.replace(`--outfile=${CO_SCRIPT}`, `--outfile=${fresh}`));
+    if (b.status !== 0 || !existsSync(fresh)) fail(`npm run build:co failed:\n${b.out}${b.err}`);
+    if (!readFileSync(fresh).equals(readFileSync(CO_SCRIPT))) m.staleBuild = 1;
   }
 
   // Code built into more than one shipped script (scripts/build-widget.mjs writes bundles.json as it builds).
