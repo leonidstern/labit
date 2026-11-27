@@ -168,16 +168,19 @@ export function slideAway(node, close, ms = 0, speed = 0) {
 let gen = 0; // each shift is the last one's end
 // The shift is written on the page's own blocks (inline) and on the widget's host, never as custom properties on <html>:
 // one there is inherited by every element, so each write restyled the whole page (17-21 ms a write, four or five writes
-// a new comment: iOS 27 simulator, 27 Nov). A block's own translate and transition are put back as they were.
+// a new comment: iOS 27 simulator, 27 Nov). A block's own translate and transition are put back as they were, longhand by
+// longhand with their !important: a block with only transition-duration inline reads as no `transition` at all, and putting
+// that "" back wiped its duration.
 let easeSettle = ''; // a token: read once
-const kept = new Map<HTMLElement, string[]>();
+const WRITTEN = ['translate', 'transition-property', 'transition-duration', 'transition-timing-function', 'transition-delay', 'transition-behavior'];
+const kept = new Map<HTMLElement, [string, string][]>();
 const blocks = () => Array.from(document.body.children).filter((n): n is HTMLElement => n instanceof HTMLElement && n !== W.host && n.localName !== 'script' && n.localName !== 'style' && !n.hasAttribute('data-lab-board-view') && !n.hasAttribute('data-lab-still'));
 const shifted = (px: number, ms: number) => {
   gen++;
   easeSettle ||= getComputedStyle(W.host).getPropertyValue('--_ease-settle').trim() || 'ease';
   for (const n of kept.size ? kept.keys() : blocks()) {
     const st = n.style;
-    if (!kept.has(n)) kept.set(n, [st.getPropertyValue('translate'), st.getPropertyPriority('translate'), st.getPropertyValue('transition'), st.getPropertyPriority('transition')]);
+    if (!kept.has(n)) kept.set(n, WRITTEN.map((k): [string, string] => [st.getPropertyValue(k), st.getPropertyPriority(k)]));
     st.setProperty('translate', `0 ${px}px`, 'important');
     st.setProperty('transition', `translate ${ms}ms ${easeSettle}`, 'important');
   }
@@ -191,9 +194,8 @@ const shifted = (px: number, ms: number) => {
 const unshifted = () => {
   gen++;
   document.documentElement.classList.remove('lab-moved');
-  for (const [n, [t, tp, tr, trp]] of kept) {
-    n.style.setProperty('translate', t, tp);
-    n.style.setProperty('transition', tr, trp);
+  for (const [n, was] of kept) {
+    WRITTEN.forEach((k, i) => (was[i][0] ? n.style.setProperty(k, was[i][0], was[i][1]) : n.style.removeProperty(k)));
     if (!n.getAttribute('style')) n.removeAttribute('style'); // a block that had none is left with none
   }
   kept.clear();

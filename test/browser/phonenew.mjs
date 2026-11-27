@@ -21,7 +21,7 @@ const B = `http://localhost:${PORT}`;
 const paras = Array.from({ length: 30 }, (_, i) => `<p id="p${i}">paragraph ${i} with some words to read on a phone</p>`).join('');
 fs.writeFileSync(path.join(DIR, 'index.html'), `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>P</title>
 <style>body{margin:0 20px;font:16px/1.5 sans-serif} #bar{position:sticky;top:0;background:#eee;padding:8px}</style>
-<body><header id="bar"><b>Sticky bar</b></header><main id="main" style="color: #111">${paras}</main><footer id="foot">The end.</footer></body>`);
+<body><header id="bar"><b>Sticky bar</b></header><main id="main" style="color: #111">${paras}</main><footer id="foot" style="transition-duration: 123ms !important; translate: 0 1px">The end.</footer></body>`);
 const server = startLab(DIR, labEnv({}, { settings: false }), { root: '.', port: PORT });
 await labUp(B);
 const token = JSON.parse(fs.readFileSync(path.join(DIR, '.lab', 'server.json'), 'utf8')).token;
@@ -52,6 +52,14 @@ try {
       const open = () => p.evaluate(`${root}.querySelector('.card:not(.out), .float:not(.out)')?.className.split(' ')[0] || null`);
       const pinning = () => p.evaluate(() => document.querySelector('[data-lab-comments]').hasAttribute('data-lab-pinning'));
 
+      // A block with only part of a transition inline (a longhand, !important) and its own translate: the shift writes
+      // both and must give back exactly what was there (read as a whole `transition`, it was "" and the restore wiped it).
+      // Compared as the browser reads it back (cssText, each longhand and its priority): the attribute's own text is
+      // reserialized by any style write ("0 1px" becomes "0px 1px").
+      const LONG = ['translate', 'transition', 'transition-property', 'transition-duration', 'transition-timing-function', 'transition-delay', 'transition-behavior'];
+      const footStyle = () => p.evaluate((LONG) => { const st = document.getElementById('foot').style; return { css: st.cssText, each: LONG.map((k) => `${k}=${st.getPropertyValue(k)}!${st.getPropertyPriority(k)}`) }; }, LONG);
+      const footBefore = await footStyle();
+
       // A new comment held low on the page: the page moves so its pin shows above the sheet, held still by a shift.
       await p.evaluate(() => scrollTo(0, 0));
       await sleep(300);
@@ -64,7 +72,7 @@ try {
         t.dispatchEvent(new PointerEvent('pointerup', at));
         return Math.round(scrollY);
       });
-      const during = await p.evaluate(() => ({ main: document.getElementById('main').style.translate, bar: document.getElementById('bar').style.translate, html: document.documentElement.getAttribute('style') || '' }));
+      const during = await p.evaluate(() => ({ main: document.getElementById('main').style.translate, foot: document.getElementById('foot').style.translate, bar: document.getElementById('bar').style.translate, html: document.documentElement.getAttribute('style') || '' }));
       check(eng, 'a held new comment opens and moves the page', (await open()) === 'float' && hold > 0, `open ${await open()}, scrollY ${hold}`);
       check(eng, 'the page is held still by a translate on its own blocks (not the sticky bar), nothing on <html>', /px/.test(during.main) && !during.bar && !/--lab-shift/.test(during.html), JSON.stringify(during));
       check(eng, 'the commenting rules stay while the new comment is open', (await pinning()) === true, '');
@@ -75,6 +83,33 @@ try {
       check(eng, 'dropped: the page is back where it was and its blocks\' own style is as it was', !after.main.translate && !after.main.transition && after.main.color === 'rgb(17, 17, 17)' && after.y === 0, JSON.stringify(after));
       check(eng, '<html> never got the shift (no custom property written there)', after.w.html.every((s) => !/--lab-shift/.test(s)), JSON.stringify(after.w.html));
       check(eng, 'the shift ran on the page\'s block', after.w.shifts.some((s) => /px/.test(s)), JSON.stringify(after.w.shifts));
+      const footAfter = await footStyle();
+      check(eng, 'a block with only transition-duration !important and its own translate was shifted too', during.foot !== '0px 1px' && /px/.test(during.foot), during.foot);
+      check(eng, '... and its inline style came back exactly as it was (each longhand, its !important)', JSON.stringify(footAfter) === JSON.stringify(footBefore) && /123ms/.test(footBefore.css), `${JSON.stringify(footBefore)} -> ${JSON.stringify(footAfter)}`);
+
+      // Taps with the browser's own clicks let through: each tap on a pin and on the dimmed page acts once, though both
+      // the lift and the click the browser makes of the tap could act. What each engine covers: in Chromium (touch through
+      // its devtools) and in Playwright's WebKit the tap is real touches (trusted touchstart/touchend, so the lift acts)
+      // followed, unless the lift's default is stopped, by a real click: the control below holds both to that, so a lift
+      // that acted and let the click through counts 2 here (with the lift's preventDefault taken out, both engines fail:
+      // trusted + lift on the pin). Neither engine holds the click back as iOS does: the scenario after this one fakes that.
+      await p.evaluate(() => {
+        const c = (window.__c = { all: [], on: null });
+        c.on = (e) => c.all.push((e.isTrusted ? 'trusted ' : 'lift ') + (e.composedPath()[0]?.className?.split?.(' ')[0] || e.composedPath()[0]?.id || e.composedPath()[0]?.localName));
+        addEventListener('click', c.on, true);
+      });
+      const clicksSince = async (fn) => { await p.evaluate(() => (window.__c.all = [])); await fn(); await sleep(900); return p.evaluate(() => window.__c.all); };
+      await p.evaluate(() => scrollTo(0, 0));
+      await sleep(300);
+      const control = await clicksSince(() => p.tap('#p2'));
+      check(eng, 'control: a tap on the page\'s own words gets the browser\'s click (so a lift that let it through would show)', control.length === 1 && /^trusted/.test(control[0]), JSON.stringify(control));
+      const pinClicks = await clicksSince(() => p.tap(pin1));
+      const pinOpen = await open();
+      const scrimClicks = await clicksSince(() => p.tap('body', { position: { x: 200, y: 20 } }));
+      const scrimOpen = await open();
+      await p.evaluate(() => removeEventListener('click', window.__c.on, true));
+      check(eng, 'clicks let through: a tap on a pin acts once and its thread is open', pinClicks.length === 1 && pinOpen === 'card', `${JSON.stringify(pinClicks)}, open ${pinOpen}`);
+      check(eng, 'clicks let through: a tap on the dimmed page acts once and the sheet is closed', scrimClicks.length === 1 && scrimOpen === null, `${JSON.stringify(scrimClicks)}, open ${scrimOpen}`);
 
       // A thread opened and closed by taps, the browser holding back every real click (as iOS does when something on
       // the page appears meanwhile): the lift opens and closes it, once.
