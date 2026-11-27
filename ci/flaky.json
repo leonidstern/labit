@@ -1,4 +1,0 @@
-{
-  "motionreduce": "Records an animation frame by frame: GitHub's 3-core macOS runners start recording late and drop frames, so the ramp it checks is missed (passes on a fast Mac). Fails as a warning.",
-  "sheetrelease": "Checks a sheet's first frame moves under 20% of the way: on GitHub's macOS runners the first recorded frame is already halfway (passes on a fast Mac). Fails as a warning."
-}
