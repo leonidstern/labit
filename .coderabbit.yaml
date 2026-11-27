@@ -1,0 +1,46 @@
+# CodeRabbit reviews every PR here (free for public repos). Calm reviews: real bugs and broken rules, not style
+# nits the gates already check (size, lint, dead code, reuse, classes). It never blocks a merge by itself.
+language: en-US
+early_access: false
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  high_level_summary_in_walkthrough: true
+  collapse_walkthrough: true
+  review_status: true
+  poem: false
+  sequence_diagrams: false
+  suggested_labels: false
+  suggested_reviewers: false
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    - '!co/co.js' # built from src/ (npm run build:co)
+    - '!ci/browser-tests.json' # test times, refreshed by hand
+    - '!**/*.png'
+    - '!**/*.svg'
+    - '!bench/situations/media/**'
+    - '!bench/site/media/**'
+  path_instructions:
+    - path: 'src/**'
+      instructions: >-
+        The widget that runs on people's pages (Safari first, then Chrome; phones too). Look for layout jumps,
+        listeners added on every redraw, work on every frame, and anything that breaks on touch or with reduced
+        motion. Design rules are in docs/design-rules.md, motion in docs/motion.md. labit has zero runtime
+        dependencies: flag any new one.
+    - path: '{local.mjs,lib/**}'
+      instructions: >-
+        The local lab server. Look for path traversal, unchecked request bodies, ports and files left behind when a
+        lab stops, and Windows paths.
+    - path: 'test/**'
+      instructions: >-
+        Browser tests run in WebKit on macOS and Chromium on Linux in CI: flag checks that depend on the platform
+        or on timing without a reason.
+    - path: '.github/workflows/**'
+      instructions: >-
+        Keep jobs fast and secrets out of pull_request runs. main's rule requires the checks gate, checks, windows,
+        unit and browser: renaming one of them breaks merging.
+chat:
+  auto_reply: true
