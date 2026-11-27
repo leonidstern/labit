@@ -250,6 +250,34 @@ try {
       });
       check(eng, 'an id renamed with two such elements on the page: not silently on either', !r.node, JSON.stringify(r));
       await p.close();
+
+      // 14. Same words, more boxes: a label put inside the pinned card stays the card's; a pinned badge deleted while a
+      // badge of another tag with other words stays elsewhere: lost, not on that one because its class is rare.
+      p = await open(ctx, '<section id="s"><h2>Orders</h2><div class="card">Pending</div><p>Other words here.</p></section><section id="t"><h2>Admin</h2><div class="tools"><b class="badge">Admin tools</b></div></section>');
+      r = await p.evaluate(() => {
+        const card = document.querySelector('.card');
+        const a = pinOn('.card');
+        card.innerHTML = '<div class="label">Pending</div>';
+        const inner = A.findTarget(JSON.parse(JSON.stringify(a))) === card;
+        document.getElementById('s').insertAdjacentHTML('beforeend', '<span class="badge">Paid</span>');
+        const b = pinOn('#s .badge');
+        document.querySelector('#s .badge').remove();
+        return { inner, badge: A.findTarget(JSON.parse(JSON.stringify(b)))?.outerHTML || null };
+      });
+      check(eng, 'a label put inside the pinned card: the pin stays on the card', r.inner, JSON.stringify(r));
+      check(eng, 'a pinned badge deleted, a badge of another tag elsewhere: lost, not on it', r.badge === null, JSON.stringify(r));
+      await p.close();
+      p = await open(ctx, '<section id="s"><h2>Orders</h2><div id="target" class="card">Pending</div><p>Other words here.</p></section>');
+      r = await p.evaluate(() => {
+        const t = document.getElementById('target');
+        const a = pinOn('#target');
+        t.insertAdjacentHTML('afterend', '<div class="card">Pending</div>');
+        t.className = 'tile';
+        const n = A.findTarget(JSON.parse(JSON.stringify(a)));
+        return { onCopy: Boolean(n) && n !== t };
+      });
+      check(eng, 'a copy of the pinned card beside it, the original restyled: not silently on the copy', !r.onCopy, JSON.stringify(r));
+      await p.close();
       await ctx.close();
     } finally {
       await browser.close();

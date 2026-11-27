@@ -1043,7 +1043,9 @@ function search(a, fp: Fp, at: Element | null, tag: string, co: (n: Element) => 
   if (fp.t.length > 3 && !ranked.some((r) => (r.T ?? 0) >= 0.9 && !r.veto && (u < 2 || r.X === 1))) {
     const bound = fp.t.length < 80 ? 2 * fp.t.length + 24 : Infinity;
     let more = [...document.body.querySelectorAll('*')].filter((c) => c.localName !== tag && !host.contains(c) && words(c).length < bound && alike(fp.t, words(c).slice(0, Math.max(80, fp.t.length))) >= 0.8);
-    more = more.filter((c) => !more.some((d) => d !== c && c.contains(d)));
+    // The innermost, unless one has all its classes (a callout made an article: not the paragraph in it).
+    const own = want.length ? more.filter((c) => want.every((x) => c.classList.contains(x))) : [];
+    more = own.length ? own : more.filter((c) => !more.some((d) => d !== c && c.contains(d)));
     if (more.length && more.length < 40) ranked = [...ranked, ...rank(more)].sort((x, y) => y.s - x.s);
   }
   const cls = (c: Element) => want.filter((x) => c.classList.contains(x)).length;
@@ -1096,7 +1098,14 @@ function prove(a): Proof {
       if (l.length === 1 && !host.contains(l[0])) return sure(l[0]);
     } catch {}
   }
-  const ex = fp.h ? saying(tag, fp.h) : [];
+  let ex = fp.h ? saying(tag, fp.h) : [];
+  const cls = / class="([^"]+)"/.exec(a.element || '')?.[1].trim().split(/\s+/) || [];
+  // A box of its kind around it or in it says its words too (a card put in a new div, a label put in the card): the
+  // one with its classes, else the one inside.
+  if (fp.u < 2 && ex.some((n) => ex.some((d) => d !== n && n.contains(d)))) {
+    const mine = ex.filter((n) => cls.every((c) => n.classList.contains(c)));
+    ex = mine.length === 1 ? mine : ex.filter((n) => !ex.some((d) => d !== n && n.contains(d)));
+  }
   const set = fp.x ? ex.filter(co) : ex;
   const apart = set.filter((n) => beside(n) === fp.b);
   // Its exact words. Only it said them, and one element says them now: that one, wherever it went. Several say them (it
@@ -1111,8 +1120,17 @@ function prove(a): Proof {
     : guess(ex.length === fp.u ? ex[fp.k] : ex.find((n) => n === at), true);
   if (byWords && byWords.node) return byWords;
   const found = tag && tag !== 'body' && tag !== 'html' ? search(a, fp, at, tag, co) : { node: at };
+  if (found.node || fp.u > 1) return found;
+  // Its words rewritten where it stood (a status, a button's label): the element at its path, of its kind, with its
+  // classes, between the same neighbours, shown as changed: it follows the change (Leo, 27 Nov).
+  if (at && cls.every((c) => at.classList.contains(c)) && co(at) && beside(at) === (fp.b || '')) return guess(at);
+  // Its tag changed (a div made an article, a p a div) with too few words to tell: the one element of another tag with
+  // all its classes (in its company, among several), shown as changed, so the pin follows it (Leo, 27 Nov).
+  const like = cls.length ? [...document.querySelectorAll(cls.map((c) => '.' + CSS.escape(c)).join(''))].filter((n) => n.localName !== tag && !host.contains(n)) : [];
+  const there = like.filter(co); // in its company: never only because its classes are rare, or share its section
+  if (there.length === 1) return guess(there[0]);
   // Nothing else, and its words came to stand on several elements (a copy): the one nearest to where it was, told as unsure.
-  return found.node || fp.u > 1 ? found : guess(near(set.length ? set : ex), true);
+  return guess(near(set.length ? set : ex), true);
 }
 const proof = (a): Proof => {
   const got = read().got;

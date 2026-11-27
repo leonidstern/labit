@@ -471,19 +471,21 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
   const looked = new Set();
   const found = (quick = false) => {
     for (const c of document.readyState === 'complete' ? threads() : []) {
-      if (quick === true && !(c.session && !c.anchor?.element)) continue;
+      const bare = !c.anchor?.element; // a pin from a selector alone: the agent's (labit pin), or one it placed (pin move)
+      if (quick === true && !bare) continue;
       const edit = store.get(`lab-edit:${c.id}`) || undefined;
-      if (c.resolved || looked.has(c.id) || !(S.isAdmin || edit) || !c.anchor?.selector || c.anchor.gone || c.anchor.kind === 'board') continue; // (a board pin's element is in its frame's page, not this one)
-      looked.add(c.id);
-      const anchor = foundAt(c.anchor);
+      if ((c.resolved && !bare) || looked.has(c.id + c.anchor?.selector + c.resolved) || !(S.isAdmin || edit) || !c.anchor?.selector || c.anchor.gone || c.anchor.kind === 'board') continue; // (a board pin's element is in its frame's page, not this one)
+      looked.add(c.id + c.anchor.selector + c.resolved); // a pin moved to a new selector (pin move) or reopened is looked at again
+      const anchor = !c.resolved && foundAt(c.anchor);
       // Its words or element were changed or taken away (the agent's edit): the lab says so on the pin's next wait.
-      const changed = spotChanged(c.anchor);
+      const changed = !c.resolved && spotChanged(c.anchor);
       if (anchor || changed) send({ action: 'move', id: c.id, found: true, ...(anchor ? { anchor } : {}), ...(changed ? { changed } : {}), edit }).then(({ comment }) => Object.assign(c, comment), () => {});
-      // An agent's pin made from a selector (labit pin): it learns what a person's pin carries, once, so it survives edits;
-      // or, when its selector finds nothing, it says so (the agent is told), and fills in when it is found later.
-      if (c.session && !anchor && !c.anchor.element) {
+      // A bare pin learns what a person's pin carries, once, so it survives edits (done ones too: a placed pin went to
+      // the next card when one before it was deleted, Leo 27 Nov); an agent's open one whose selector finds nothing says
+      // so (the agent is told), and fills in when it is found later.
+      if (bare && !anchor) {
         const fill = fillAt(c.anchor);
-        if (fill || !c.unmatched) send({ action: 'move', id: c.id, anchor: fill || c.anchor, [fill ? 'fill' : 'unmatched']: true, edit }).then(({ comment }) => Object.assign(c, comment), () => {});
+        if (fill || (c.session && !c.resolved && !c.unmatched)) send({ action: 'move', id: c.id, anchor: fill || c.anchor, [fill ? 'fill' : 'unmatched']: true, was: c.anchor.selector, edit }).then(({ comment }) => Object.assign(c, comment), () => {});
       }
     }
   };

@@ -160,7 +160,7 @@ test('5: ticked pins are told once in the next wait: "ticked: N of your M pins"'
   assert.doesNotMatch((await cli(S, 'wait', '--bg', '--timeout', '5')).out, /ticked:/);
 });
 
-test('3: a browser fills an agent pin made from a bare selector (move with fill); a person\'s pin takes none', async () => {
+test('3: a browser fills an agent pin made from a bare selector (move with fill), and a pin the agent placed (pin move); a pin with its element takes none', async () => {
   const bare = await cli(S, 'pin', '#t', 'bare', '--page', '/index', '--no-check');
   const id = idOf(bare.out);
   const filled = await api({ page: '/index', action: 'move', id, fill: true, anchor: { selector: '#t', docX: 0.1, docY: 40, eh: 30, element: '<h1 id="t">', section: 'Plans', inside: '#plans', text: 'Pricing', kind: 'image', x: 0.9 } });
@@ -170,8 +170,18 @@ test('3: a browser fills an agent pin made from a bare selector (move with fill)
   assert.equal(filled.comment.movedAt, undefined, 'a fill is no move');
   const again = await api({ page: '/index', action: 'move', id, fill: true, anchor: { selector: '#t', element: '<h2>', section: 'Other' } });
   assert.deepEqual([again.comment.anchor.element, again.comment.anchor.section], ['<h1 id="t">', 'Plans'], 'kept');
-  const theirs = (await api({ page: '/index', text: 'mine', anchor: { kind: 'element', selector: '#t', x: 0.5, y: 0.5 } })).comment;
-  assert.equal((await api({ page: '/index', action: 'move', id: theirs.id, fill: true, anchor: { selector: '#t', element: '<h1>' } })).status, 400);
+  const theirs = (await api({ page: '/index', text: 'mine', anchor: { kind: 'element', selector: '#t', x: 0.5, y: 0.5, element: '<h1 id="t">' } })).comment;
+  assert.equal((await api({ page: '/index', action: 'move', id: theirs.id, fill: true, anchor: { selector: '#t', element: '<h2>' } })).status, 400);
+  assert.equal((await api({ page: '/index', action: 'move', id: theirs.id, unmatched: true, anchor: { selector: '#t' } })).status, 400, "unmatched is the agent's own pins' only");
+  // A person's pin the agent placed (pin move: a selector, nothing else), done: filled when a browser draws it, so the
+  // next edit (a card before it deleted) can't move it to the next one in silence (Leo, 27 Nov).
+  assert.equal((await cli(S, 'pin', 'move', theirs.id, '#t', '--page', '/index')).code, 0);
+  await api({ page: '/index', action: 'resolve', id: theirs.id });
+  const stale = await api({ page: '/index', action: 'move', id: theirs.id, fill: true, was: '#elsewhere', anchor: { selector: '#t', element: '<h1 id="t">' } });
+  assert.equal(stale.status, 400, 'a fill looked for at a selector it no longer has adds nothing');
+  const placed = await api({ page: '/index', action: 'move', id: theirs.id, fill: true, was: '#t', anchor: { selector: '#t', element: '<h1 id="t">', text: 'Pricing', fp: { h: 'abc123', t: 'Pricing', u: 1, k: 0, x: '', l: 1, o: [0, 1] } } });
+  assert.equal(placed.status, 200, JSON.stringify(placed));
+  assert.deepEqual([placed.comment.anchor.element, placed.comment.anchor.fp?.t, placed.comment.resolved], ['<h1 id="t">', 'Pricing', true]);
 });
 
 test('7: --file pins many at once: all are made ready first, then saved, every id printed', async () => {

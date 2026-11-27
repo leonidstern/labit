@@ -96,6 +96,20 @@ try {
       check(eng, 'after the page is edited the pin is still on its own paragraph', pinAt && pinAt.y > where.top - 30 && pinAt.y < where.bottom + 30, JSON.stringify([pinAt, where]));
       await p.close();
 
+      // A person's pin the agent placed with labit pin move (a selector, nothing else) and resolved: drawn once, it is filled
+      // in too, so an edit later (a card before it deleted) can't move it to the next one in silence (Leo, 27 Nov).
+      fs.writeFileSync(path.join(DIR, 'fill.html'), PAGE());
+      await wipe('/fill');
+      const theirs = (await (await fetch(B + '/_lab/api/comments', { method: 'POST', headers: { 'content-type': 'application/json', origin: B, 'x-lab-admin': keys().token }, body: JSON.stringify({ page: '/fill', name: 'leo', text: 'this line', anchor: { kind: 'element', selector: 'h1', x: 0.5, y: 0.5, element: '<h1>' } }) })).json()).comment;
+      await fetch(B + '/_lab/api/comments', { method: 'POST', headers: { 'content-type': 'application/json', origin: B, 'x-lab-admin': keys().agent, 'x-lab-agent': '1' }, body: JSON.stringify({ page: '/fill', action: 'move', id: theirs.id, anchor: { kind: 'element', selector: '#plans .blurb', x: 0.5, y: 0.5 } }) });
+      await fetch(B + '/_lab/api/comments', { method: 'POST', headers: { 'content-type': 'application/json', origin: B, 'x-lab-admin': keys().agent, 'x-lab-agent': '1' }, body: JSON.stringify({ page: '/fill', action: 'resolve', id: theirs.id }) });
+      ({ p, sh } = await open('/fill'));
+      c = null;
+      for (let i = 0; i < 30 && !c?.anchor.fp; i++) { await sleep(150); c = (await list('/fill')).find((x) => x.id === theirs.id); }
+      check(eng, 'a done pin the agent placed (pin move) is filled in when drawn', c?.anchor.element === '<p class="blurb">' && c.anchor.fp?.t === 'Pick a plan that fits your team' && c.resolved === true && !c.unmatched, JSON.stringify(c?.anchor));
+      await p.close();
+      await wipe('/fill');
+
       // The browser is the check: a bare pin whose selector matches nothing is marked on the server; `labit pin` waits for
       // that answer (up to 3 s) and names it, and says nothing for one that matches (it is filled in instead).
       await wipe('/fill');
