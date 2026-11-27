@@ -156,9 +156,12 @@ test('pins are saved while another program keeps reading the files (a virus scan
     }
   })();
   const ids = [];
-  for (let round = 0; round < 6; round++) ids.push(...(await Promise.all(Array.from({ length: 5 }, (_, i) => post(`pin ${round}-${i}`)))).map((r) => r.comment?.id));
-  scanning = false;
-  await scanner;
+  try {
+    for (let round = 0; round < 6; round++) ids.push(...(await Promise.all(Array.from({ length: 5 }, (_, i) => post(`pin ${round}-${i}`)))).map((r) => r.comment?.id));
+  } finally {
+    scanning = false;
+    await scanner;
+  }
   assert.equal(ids.filter(Boolean).length, 30, 'every pin was taken');
   assert.equal(p.exitCode, null, `the lab still runs:\n${p.out}`);
   assert.doesNotMatch(p.out, /EPERM|EACCES|EBUSY/);

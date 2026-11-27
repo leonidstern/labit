@@ -102,8 +102,10 @@ test('the widget version follows the packed scripts', async () => {
   const first = await rev();
   assert.match(first, /^[0-9a-f]{10}$/);
   fs.writeFileSync(path.join(pkg, 'public/_lab/draw.js.br'), zlib.brotliCompressSync(Buffer.from(`${SCRIPT}//changed\n`)));
-  for (let i = 0; i < 30 && (await rev()) === first; i++) await new Promise((r) => setTimeout(r, 100));
-  assert.notEqual(await rev(), first, 'a changed part changes the version, so open pages reload');
+  let now = first;
+  for (let i = 0; i < 30 && now === first; i++) await new Promise((r) => setTimeout(r, 100)), (now = await rev());
+  assert.match(now, /^[0-9a-f]{10}$/, 'still a version after the change');
+  assert.notEqual(now, first, 'a changed part changes the version, so open pages reload');
 });
 
 test('a checkout keeps serving the plain built file', async () => {

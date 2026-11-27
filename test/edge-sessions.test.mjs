@@ -24,6 +24,7 @@ const raw = (port, p, { method = 'GET', headers = {}, body } = {}) =>
     const req = http.request({ host: '127.0.0.1', port, path: p, method, headers: { host: `localhost:${port}`, ...headers } }, (res) => {
       const parts = [];
       res.on('data', (d) => parts.push(d));
+      res.on('error', (e) => done({ status: 0, text: String(e), json: null, headers: {} })); // cut after the headers
       res.on('end', () => {
         const text = Buffer.concat(parts).toString();
         let json = null;
@@ -57,6 +58,7 @@ after(async () => {
   for (const p of running) p.kill('SIGKILL');
   for (const l of labs) await l.stop();
   for (const d of dirs) fs.rmSync(d, { recursive: true, force: true, maxRetries: 5 });
+  fs.rmSync(ENV.LABIT_HOME, { recursive: true, force: true, maxRetries: 5 });
 });
 // A labit command as session `who` runs it, in the lab's folder: its exit code and everything it printed.
 const cli = (lab, who, ...args) => {
@@ -93,8 +95,8 @@ test('two sessions answer the same pin at the same moment: both answers are kept
   assert.deepEqual([a.code, b.code], [0, 0], a.out + b.out);
   const all = await list(lab, '/index');
   const replies = all.filter((c) => c.parent === p.id);
-  assert.deepEqual(replies.map((c) => c.text).sort(), ['Done by A', 'Done by B']);
-  assert.deepEqual(replies.map((c) => c.session?.id).sort(), ['sess-a', 'sess-b']);
+  // Each answer with the session that sent it, as pairs: sorted apart, swapped names would pass.
+  assert.deepEqual(replies.map((c) => [c.text, c.session?.id]).sort(), [['Done by A', 'sess-a'], ['Done by B', 'sess-b']]);
   assert.equal(new Set(replies.map((c) => c.id)).size, 2);
   const thread = all.find((c) => c.id === p.id);
   assert.deepEqual([thread.resolved, thread.resolvedBy], [true, 'agent']);
@@ -138,19 +140,23 @@ test('an answer to a thread that was deleted is dropped with a plain word, and l
 
 test('a delete racing a reply, 40 times: no reply is ever left without its thread, and the lab never answers 500', async () => {
   const codes = new Set();
+  const roots = [];
   for (let i = 0; i < 40; i++) {
     const p = await pin(lab, '/third', `race ${i}`);
-    const both = await Promise.all([
+    roots.push(p.id);
+    const [leo, del, claude] = await Promise.all([
       send(lab, { page: '/third', parent: p.id, name: 'Leo', text: `reply ${i}` }),
       send(lab, { page: '/third', action: 'delete', id: p.id }, owner(lab)),
       send(lab, { page: '/third', parent: p.id, name: 'Claude', text: `Done ${i}`, intent: 'done' }, asAgent(lab, 'racer')),
     ]);
-    for (const r of both) codes.add(r.status);
+    assert.equal(del.status, 200, `race ${i}: the delete went through (${del.text.slice(0, 120)})`);
+    for (const r of [leo, claude]) codes.add(r.status);
   }
-  assert.ok([...codes].every((c) => [200, 201, 404, 410].includes(c)), [...codes].join(' ')); // 410: the agent's answer after the delete, dropped
+  assert.ok([...codes].every((c) => [201, 404, 410].includes(c)), [...codes].join(' ')); // 410: the agent's answer after the delete, dropped
   const left = await list(lab, '/third');
   const ids = new Set(left.map((c) => c.id));
   assert.deepEqual(left.filter((c) => c.parent && !ids.has(c.parent)).map((c) => c.text), [], 'replies whose thread is gone');
+  assert.deepEqual(left.filter((c) => roots.includes(c.id) || roots.includes(c.parent)).map((c) => c.text), [], 'every raced thread is gone, replies and all');
   assert.equal((await raw(lab.port, '/_lab/agent/third')).status, 200);
 });
 

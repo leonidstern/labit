@@ -22,6 +22,7 @@ const raw = (port, p, { method = 'GET', headers = {}, body } = {}) =>
     const req = http.request({ host: '127.0.0.1', port, path: p, method, headers: { host: `localhost:${port}`, ...headers } }, (res) => {
       const parts = [];
       res.on('data', (d) => parts.push(d));
+      res.on('error', (e) => done({ status: 0, text: String(e), json: null, headers: {} })); // cut after the headers
       res.on('end', () => {
         const text = Buffer.concat(parts).toString();
         let json = null;
@@ -50,6 +51,7 @@ const DIR = tmp('keys');
 after(async () => {
   for (const l of labs) await l.stop();
   fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
+  fs.rmSync(ENV.LABIT_HOME, { recursive: true, force: true, maxRetries: 5 });
 });
 for (const n of ['index', 'other']) fs.writeFileSync(path.join(DIR, `${n}.html`), `<!doctype html><title>${n}</title><h1>${n}</h1>`);
 const PORT = await freePort();
@@ -167,12 +169,19 @@ test('a key is never written where others read: the list, the agent text, commen
   kept = await pin('/other', 'kept across a restart');
   await sleep(300);
   const { token, agent } = lab.keys();
+  // Each read answers in full first: an error's text holds no key either, and proves nothing.
+  const read = async (p) => {
+    const r = await raw(PORT, p);
+    assert.equal(r.status, 200, `${p} → ${r.status} ${r.text.slice(0, 80)}`);
+    assert.ok(r.text.length, `${p} sent something`);
+    return r.text;
+  };
   const places = {
-    list: (await raw(PORT, '/_lab/api/comments?page=/other')).text,
-    'agent text': (await raw(PORT, '/_lab/agent/other')).text,
-    state: (await raw(PORT, '/_lab/state')).text,
-    pages: (await raw(PORT, '/_lab/pages')).text,
-    changes: (await raw(PORT, '/_lab/api/changes?page=/other&since=0')).text,
+    list: await read('/_lab/api/comments?page=/other'),
+    'agent text': await read('/_lab/agent/other'),
+    state: await read('/_lab/state'),
+    pages: await read('/_lab/pages'),
+    changes: await read('/_lab/api/changes?page=/other&since=0'),
     'comments.md': fs.readFileSync(path.join(DIR, '.lab/comments.md'), 'utf8'),
     store: fs.readdirSync(path.join(DIR, '.lab/comments')).map((n) => fs.readFileSync(path.join(DIR, '.lab/comments', n), 'utf8')).join('\n'),
     'state.json': fs.existsSync(path.join(DIR, '.lab/state.json')) ? fs.readFileSync(path.join(DIR, '.lab/state.json'), 'utf8') : '',
@@ -187,7 +196,8 @@ test('a key is never written where others read: the list, the agent text, commen
   const html = (await raw(PORT, '/other')).text;
   assert.ok(html.includes(`data-admin="${token}"`));
   assert.ok(!html.includes(agent));
-  for (const f of ['server.json', 'key']) assert.equal((fs.statSync(path.join(DIR, '.lab', f)).mode & 0o777).toString(8), '600', `${f} is the owner's alone`);
+  // Windows has no owner/group/other bits to check.
+  if (process.platform !== 'win32') for (const f of ['server.json', 'key']) assert.equal((fs.statSync(path.join(DIR, '.lab', f)).mode & 0o777).toString(8), '600', `${f} is the owner's alone`);
 });
 
 test('a key still opens its pin after the lab starts again; the agent key of the old run opens nothing', async () => {

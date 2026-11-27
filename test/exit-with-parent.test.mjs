@@ -26,6 +26,8 @@ for (const [flag, ends] of [['1', true], ['', false]]) {
       cwd: DIR,
       env: { ...process.env, LABIT_EXIT_WITH_PARENT: flag },
     });
+    // The "run" goes at the end also when the test fails before its own kill below.
+    after(() => new Promise((r) => (run.exitCode !== null || run.signalCode ? r() : (run.once('exit', r), run.kill('SIGKILL')))));
     const labPid = Number(await new Promise((r) => run.stdout.once('data', (d) => r(String(d).trim()))));
     after(() => {
       try {

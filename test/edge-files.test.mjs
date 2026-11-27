@@ -24,6 +24,7 @@ const raw = (port, p, { method = 'GET', headers = {}, body } = {}) =>
     const req = http.request({ host: '127.0.0.1', port, path: p, method, agent: false, headers: { host: `localhost:${port}`, ...headers } }, (res) => {
       const parts = [];
       res.on('data', (d) => parts.push(d));
+      res.on('error', (e) => done({ status: 0, text: String(e), json: null, bytes: Buffer.alloc(0), headers: {} })); // cut after the headers
       res.on('end', () => {
         const bytes = Buffer.concat(parts);
         const text = bytes.toString();
@@ -56,6 +57,7 @@ const startLab = async (dir, { wait = 10000 } = {}) => {
 after(async () => {
   for (const l of labs) await l.stop();
   for (const d of dirs) fs.rmSync(d, { recursive: true, force: true, maxRetries: 5 });
+  fs.rmSync(ENV.LABIT_HOME, { recursive: true, force: true, maxRetries: 5 });
 });
 const pinOn = (lab, page, text) => raw(lab.port, '/_lab/api/comments', { method: 'POST', body: JSON.stringify({ page, name: 'Leo', text, anchor: { selector: 'h1', x: 0.5, y: 0.5 } }), headers: { 'content-type': 'application/json', origin: lab.B } });
 const listOn = async (lab, page) => (await raw(lab.port, `/_lab/api/comments?page=${encodeURIComponent(page)}`)).json?.comments;
@@ -262,7 +264,7 @@ test('pages that are empty, plain words, not UTF-8, in capitals, or folders name
   // Byte ranges on a file: the part asked for, 416 for one that can't be, never a 500.
   for (const [range, want] of [['bytes=0-4', 206], ['bytes=-5', 206], ['bytes=5-', 206], ['bytes=5-2', 416], ['bytes=99999-', 416], ['bytes=abc', 200], ['bytes=', 200], ['bytes=0-4,6-8', 200], ['items=0-4', 200], ['bytes=-', 200], ['bytes=-0', 416]]) {
     const r = await raw(PORT, '/odd/data.json', { headers: { range } });
-    assert.ok(r.status === want || (want === 416 && r.status === 206), `range ${range} → ${r.status}, not ${want}`);
+    assert.equal(r.status, want, `range ${range} → ${r.status}, not ${want}`);
     assert.ok(r.status < 500);
   }
   const first = await raw(PORT, '/odd/data.json');
@@ -277,21 +279,30 @@ test('folders made and removed again and again while the lab looks through them 
   await pinOn(one, '/index', 'so the lab has a page to look up');
   // Up to 40 rounds: a tree of 150 folders with pages is written, left for about as long as the lab waits before it
   // looks (80 ms), and removed while it looks.
+  // A Node child, not bash, so it runs wherever the tests do.
   const script = `
-    i=0
-    while [ $i -lt 40 ]; do
-      for d in 0 1 2 3 4 5 6 7 8 9; do for e in 0 1 2 3 4; do for f in 0 1 2; do mkdir -p "build/$d/$e/$f"; echo '<h1>x</h1>' > "build/$d/$e/$f/p.html"; done; done; done
-      sleep 0.0$((RANDOM % 4 + 7))
-      rm -rf build
-      i=$((i+1))
-    done`;
-  const build = spawn('bash', ['-c', script], { cwd: dir, stdio: 'ignore' });
-  const ended = new Promise((done) => build.once('exit', done));
+    const fs = require('fs');
+    const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+    for (let i = 0; i < 40; i++) {
+      for (let d = 0; d < 10; d++) for (let e = 0; e < 5; e++) for (let f = 0; f < 3; f++) {
+        fs.mkdirSync(\`build/\${d}/\${e}/\${f}\`, { recursive: true });
+        fs.writeFileSync(\`build/\${d}/\${e}/\${f}/p.html\`, '<h1>x</h1>\\n');
+      }
+      pause(70 + Math.floor(Math.random() * 40));
+      fs.rmSync('build', { recursive: true, force: true });
+    }`;
+  const build = spawn(process.execPath, ['-e', script], { cwd: dir, stdio: ['ignore', 'ignore', 'pipe'] });
+  let buildErr = '';
+  build.stderr.on('data', (d) => (buildErr += d));
+  const ended = new Promise((done) => {
+    build.once('error', (e) => done({ code: null, why: String(e) }));
+    build.once('exit', (code, signal) => done({ code, why: signal || buildErr }));
+  });
   const watch = setInterval(() => one.gone() && build.kill(), 100);
-  await ended;
-  clearInterval(watch);
+  const { code, why } = await ended.finally(() => clearInterval(watch));
   await sleep(600);
   assert.ok(!one.gone(), `the lab went down: ${one.out().split('\n').filter((l) => /Error/.test(l)).join(' | ')}`);
+  assert.equal(code, 0, `the build ran to its end: ${why}`);
   assert.equal((await raw(one.port, '/')).status, 200);
   assert.doesNotMatch(one.out(), STACK);
 });

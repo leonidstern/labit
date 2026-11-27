@@ -46,8 +46,18 @@ test('one board is shipped: no second bundle beside the view', async () => {
 });
 
 test('a board page does not count as an opened page', async () => {
-  const s = await (await fetch(`http://localhost:${base}/_lab/state`)).json();
-  assert.ok(!(s.pages || []).some((p) => /_board/.test(p.path || '')));
+  // When a page was opened is kept in .lab/state.json (opened). A plain page opened after the board shows the save
+  // happened; the board is not in it.
+  fs.writeFileSync(path.join(ON, 'plain.html'), '<!doctype html><title>plain</title><h1>plain</h1>');
+  assert.equal((await fetch(`http://localhost:${base}/_lab/board/checkout`)).status, 200);
+  assert.equal((await fetch(`http://localhost:${base}/plain`)).status, 200);
+  let opened = {};
+  for (let i = 0; i < 60 && !opened['/plain']; i++) {
+    await new Promise((r) => setTimeout(r, 100));
+    try { opened = JSON.parse(fs.readFileSync(path.join(ON, '.lab/state.json'), 'utf8')).opened || {}; } catch {}
+  }
+  assert.ok(opened['/plain'], 'the plain page is recorded as opened');
+  assert.deepEqual(Object.keys(opened).filter((k) => k.startsWith('/_board')), []);
 });
 
 test('a name that is not a board name is not a board page', async () => {

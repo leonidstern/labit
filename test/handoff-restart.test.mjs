@@ -28,7 +28,8 @@ for (const sig of ['SIGKILL', 'SIGTERM']) {
     const first = await call('/_lab/wait', { timeout: 5, ack: true }, 'sA');
     assert.equal(first.status, 200);
     assert.ok(first.text.includes(comment.id), 'the first wait has the pin');
-    await call('/_lab/ack', { id: first.delivery }, 'sA');
+    const ack = await call('/_lab/ack', { id: first.delivery }, 'sA');
+    assert.equal(ack.status, 204, ack.text);
     lab.kill(sig); // at once: inside the 300 ms the state file used to wait
     await new Promise((r) => (lab.exitCode !== null || lab.signalCode ? r() : lab.once('exit', r)));
     lab = start();
@@ -38,6 +39,7 @@ for (const sig of ['SIGKILL', 'SIGTERM']) {
     tabs.push(openTab(PORT));
     await sleep(300);
     const again = await call('/_lab/wait', { timeout: 1, ack: true }, 'sA');
+    assert.equal(again.status, 204, `an empty wait, not an error: ${again.text}`);
     assert.ok(!again.text.includes(comment.id), 'the pin the session already has is not handed again');
   });
 }

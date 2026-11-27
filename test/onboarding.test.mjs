@@ -266,10 +266,9 @@ test('a project with an index.html and a dev script whose server is not running 
 });
 
 test('a plain folder of pages is served as pages even with a server running in it, and one with a package.json but no dev script or framework too', { skip: !hasLsof && 'needs lsof' }, async () => {
-  const devPort = claimPort(5700, 90);
   for (const pkg of [null, { name: 'site', scripts: { build: 'tsc' }, dependencies: { lodash: '1' } }]) {
     const dir = project('onboard-static', { 'index.html': '<!doctype html><title>plain</title><h1>plain page</h1>' }, pkg);
-    await standIn(dir, devPort + (pkg ? 1 : 0));
+    await standIn(dir, claimPort(5700, 90)); // a port of its own each: the one next to a claimed port may be taken
     const { html, out } = await startLab(dir, claimPort(5800, 90));
     assert.match(html, /plain page/);
     assert.doesNotMatch(out(), /fronting your dev server/);
@@ -283,6 +282,11 @@ test('a dev server that has a lab already gets no second one; `use` moves a lab 
   const site = (await import('node:http')).createServer((q, s) => s.end('<title>Site</title>'));
   const devPort = claimPort(6300, 90);
   await new Promise((r) => site.listen(devPort, '127.0.0.1', r));
+  // Closed at the end also when an assertion below fails: a listening server keeps the test process alive.
+  after(() => {
+    site.closeAllConnections();
+    site.close();
+  });
   const [a, b] = [fs.realpathSync(tmp('front-a')), fs.realpathSync(tmp('front-b'))];
   const lab = spawn(process.execPath, [LAB, '--no-open', '--proxy', String(devPort), '--port', String(claimPort(6400, 90))], { cwd: a, env });
   kids.push(lab);
@@ -329,8 +333,6 @@ test('a dev server that has a lab already gets no second one; `use` moves a lab 
   assert.equal(now.root, a);
   process.kill(now.pid);
   other.kill();
-  site.closeAllConnections();
-  site.close();
   for (let i = 0; i < 50 && fs.readdirSync(reg).length; i++) await sleep(100);
   rm([a, b, home]);
 });

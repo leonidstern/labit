@@ -23,6 +23,7 @@ const raw = (port, p, { method = 'GET', headers = {}, body } = {}) =>
     const req = http.request({ host: '127.0.0.1', port, path: p, method, headers: { host: `localhost:${port}`, ...headers } }, (res) => {
       const parts = [];
       res.on('data', (d) => parts.push(d));
+      res.on('error', (e) => done({ status: 0, text: String(e), json: null, headers: {} })); // cut after the headers
       res.on('end', () => {
         const text = Buffer.concat(parts).toString();
         let json = null;
@@ -54,6 +55,7 @@ const startLab = async (name) => {
 after(async () => {
   for (const l of labs) await l.stop();
   for (const d of dirs) fs.rmSync(d, { recursive: true, force: true, maxRetries: 5 });
+  fs.rmSync(ENV.LABIT_HOME, { recursive: true, force: true, maxRetries: 5 });
 });
 const lab = await startLab('board');
 const PORT = lab.port;
@@ -193,6 +195,8 @@ test('two saves from the same rev whose requests are both open before either bod
   const second = await two.done;
   const now = (await get('name=slow')).json;
   assert.deepEqual([first.status, second.status], [200, 409], `both were made from rev ${made.json.rev}; the board is now rev ${now.rev} with "${now.frames[0].label}" (tab one's save ${now.frames[0].label === 'from tab one' ? 'stands' : 'was written over'})`);
+  assert.equal(now.frames[0].label, 'from tab one', 'the refused save wrote nothing');
+  assert.equal(now.rev, made.json.rev + 1, 'one save on top of the first');
 });
 
 test('names and pages that are none: refused before anything is read or written', async () => {

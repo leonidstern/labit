@@ -51,7 +51,8 @@ test('a reply from another session does not confirm', async () => {
   await sleep(2000);
   // taken back: the thread should come out again
   const b = await wait('s8', { ack: true, timeout: 1, pages: ['/other'] });
-  console.log('after other-session reply + timeout:', b.status, b.text.slice(0, 200));
+  assert.equal(b.status, 200, b.text.slice(0, 200));
+  assert.match(b.text, /other reply pin/);
 });
 
 test('two waits on different pages by one session: second does not take back the first', async () => {

@@ -32,12 +32,14 @@ test('a page saved as iso-8859-1 is read as such and sent as UTF-8', async () =>
 });
 test('a <header> is not the <head>: the icon goes to the top of the page', async () => {
   const text = await (await fetch(B + '/header')).text();
+  assert.ok(text.includes('rel="icon"') && text.includes('<header'), 'the icon and the <header> are both there');
   assert.ok(text.indexOf('rel="icon"') < text.indexOf('<header'), 'the icon is before the <header>, not inside it');
   assert.ok(!/<header[^>]*>\s*<link/.test(text));
 });
 
 test('a board variant of such a page gets its <base> before the <header> too', () => {
   const out = seed('<!doctype html><body><header class="x">H</header></body>', 'a/p.html');
+  assert.ok(out.includes('<base'), 'the <base> is there');
   assert.ok(out.indexOf('<base') < out.indexOf('<header'));
   assert.ok(seed('<html><head lang=en><title>t</title></head>', 'p.html').startsWith('<html><head lang=en><base'), 'a real <head> with attributes still is one');
 });

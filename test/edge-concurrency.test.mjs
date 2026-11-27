@@ -8,8 +8,10 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import net from 'node:net';
+import zlib from 'node:zlib';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { sseReader } from './harness.mjs';
 
 const LAB = fileURLToPath(new URL('../local.mjs', import.meta.url));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -23,16 +25,20 @@ const raw = (port, p, { method = 'GET', headers = {}, body, signal } = {}) =>
     const req = http.request({ host: '127.0.0.1', port, path: p, method, agent: false, signal, headers: { host: `localhost:${port}`, ...headers } }, (res) => {
       const parts = [];
       res.on('data', (d) => parts.push(d));
+      res.on('error', (e) => done({ status: 0, text: String(e), json: null, headers: {} })); // cut after the headers
       res.on('end', () => {
-        const text = Buffer.concat(parts).toString();
+        const bytes = Buffer.concat(parts);
+        const text = bytes.toString();
         let json = null;
         try { json = JSON.parse(text); } catch {}
-        done({ status: res.statusCode, text, json, headers: res.headers });
+        done({ status: res.statusCode, text, json, bytes, headers: res.headers });
       });
     });
     req.on('error', (e) => done({ status: 0, text: String(e), json: null, headers: {} }));
     req.end(body);
   });
+// A list read as sent: Brotli when the answer says so.
+const listOf = (r) => JSON.parse((r.headers['content-encoding'] === 'br' ? zlib.brotliDecompressSync(r.bytes) : r.bytes).toString());
 const DIR = tmp('many');
 for (const n of ['index', 'p1', 'p2', 'p3', 'p4', 'p5', 'nums', 'kill']) fs.writeFileSync(path.join(DIR, `${n}.html`), `<!doctype html><title>${n}</title><h1>${n}</h1>`);
 const PORT = await freePort();
@@ -53,6 +59,7 @@ const startLab = async () => {
 after(async () => {
   for (const l of labs) await l.stop();
   fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
+  fs.rmSync(ENV.LABIT_HOME, { recursive: true, force: true, maxRetries: 5 });
 });
 let lab = await startLab();
 const send = (body, headers = {}) => raw(PORT, '/_lab/api/comments', { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json', origin: lab.B, ...headers } });
@@ -76,6 +83,8 @@ const settled = async (page, n) => {
 };
 
 test('50 pins sent at the same moment to one page: 50 answers, 50 ids, all in the list, the file, the delta and comments.md', async () => {
+  // A change first (on another page), so the revision below is in the change log and the lab can answer with a delta.
+  assert.equal((await pin('/kill', 'before the burst')).status, 201);
   const rev0 = JSON.parse((await raw(PORT, '/_lab/state')).text).comments;
   const got = await Promise.all(Array.from({ length: 50 }, (_, i) => pin('/index', `at once ${i}`)));
   assert.deepEqual([...new Set(got.map((r) => r.status))], [201]);
@@ -88,7 +97,8 @@ test('50 pins sent at the same moment to one page: 50 answers, 50 ids, all in th
   await settled('/index', 50);
   assert.deepEqual(Object.keys(inFiles()['/index']).sort(), [...ids].sort(), 'the file has them all');
   const delta = (await raw(PORT, `/_lab/api/changes?page=/index&since=${rev0}`)).json;
-  assert.ok(delta.full || delta.set.length === 50, `a page that pulls only what changed gets all 50 (got ${delta.set?.length})`);
+  assert.ok(!delta.full, 'a delta, not "pull the whole list"');
+  assert.deepEqual(delta.set.map((c) => c.id).sort(), [...ids].sort(), 'a page that pulls only what changed gets all 50');
   const md = fs.readFileSync(path.join(DIR, '.lab/comments.md'), 'utf8');
   for (const id of ids) assert.ok(md.includes(`· id ${id}`), `comments.md has ${id}`);
   assert.equal((await raw(PORT, '/_lab/pages')).json.pages.find((p) => p.path === '/index').open, 50);
@@ -115,13 +125,17 @@ test('50 pins at once across five pages, with 30 readers in between: each page g
   const reads = Array.from({ length: 30 }, (_, i) => raw(PORT, `/_lab/api/comments?page=${pages[i % 5]}`, { headers: { 'accept-encoding': i % 2 ? 'br' : 'identity' } }));
   const got = await Promise.all(writes);
   assert.deepEqual([...new Set(got.map((r) => r.status))], [201]);
-  for (const r of await Promise.all(reads)) assert.equal(r.status, 200);
+  for (const r of await Promise.all(reads)) {
+    assert.equal(r.status, 200);
+    assert.ok(Array.isArray(listOf(r).comments), `a whole list (${r.headers['content-encoding'] || 'identity'})`);
+  }
   for (const page of pages) {
     const mine = got.filter((_, i) => pages[i % 5] === page).map((r) => r.json.comment.id).sort();
     assert.deepEqual((await list(page)).map((c) => c.id).sort(), mine, page);
     // Asked for again, the kept (compressed) list is the same list.
-    const again = await raw(PORT, `/_lab/api/comments?page=${page}`);
-    assert.deepEqual(again.json.comments.map((c) => c.id).sort(), mine, `${page}, the kept list`);
+    const again = await raw(PORT, `/_lab/api/comments?page=${page}`, { headers: { 'accept-encoding': 'br' } });
+    assert.equal(again.headers['content-encoding'], 'br');
+    assert.deepEqual(listOf(again).comments.map((c) => c.id).sort(), mine, `${page}, the kept list`);
   }
 });
 
@@ -173,14 +187,18 @@ test('50 pins made while a wait is open, and 20 more as it is handed over: every
 });
 
 test('60 pages listening at once: each hears a new comment, and the lab is fine when they all go', async () => {
-  const streams = await Promise.all(Array.from({ length: 60 }, (_, i) => new Promise((resolve) => {
+  // Every stream is closed at the end, also when one of them failed to open.
+  const reqs = [];
+  after(() => reqs.forEach((q) => q.destroy()));
+  const streams = await Promise.all(Array.from({ length: 60 }, (_, i) => new Promise((resolve, reject) => {
     const req = http.get({ host: '127.0.0.1', port: PORT, path: `/_lab/live?tab=t${i}`, agent: false, headers: { host: `localhost:${PORT}` } }, (res) => {
       const s = { req, seen: [] };
       res.setEncoding('utf8');
-      res.on('data', (d) => { for (const l of d.split('\n')) if (l.startsWith('data: {')) s.seen.push(JSON.parse(l.slice(6))); });
+      res.on('data', sseReader((d) => d.startsWith('{') && s.seen.push(JSON.parse(d))));
       resolve(s);
     });
-    req.on('error', () => {});
+    reqs.push(req);
+    req.on('error', reject);
   })));
   await sleep(200);
   const before = streams.map((s) => s.seen.at(-1)?.comments);

@@ -31,7 +31,7 @@ test('a folder that ships with the site is told apart from one that does not', (
 });
 
 test('preview keeps a launch.json it made out of git, and only says so for one already in git', async () => {
-  const run = (d) => new Promise((resolve) => execFile(process.execPath, [LAB, 'preview', '.'], { cwd: d }, (e, out) => resolve(out)));
+  const run = (d) => new Promise((resolve, reject) => execFile(process.execPath, [LAB, 'preview', '.'], { cwd: d }, (e, out, err) => (e ? reject(new Error(`preview failed: ${err || e.message}`)) : resolve(out))));
   const d = repo('ship-preview');
   const out = await run(d);
   assert.match(out, /Kept out of git/);

@@ -29,14 +29,15 @@ const live = async (field) => {
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let text = '';
-  while (!text.includes('\n\n')) {
+  // Whole data events only: the stream opens with "retry: 500", which can come alone.
+  const events = () => text.split('\n\n').slice(0, -1).map((e) => e.replace(/^data: /, '').trim()).filter((e) => e.startsWith('{'));
+  while (!events().length) {
     const { value, done } = await reader.read();
     if (done) break;
     text += decoder.decode(value, { stream: true });
   }
   ctl.abort();
-  const events = text.split('\n\n').slice(0, -1).map((e) => e.replace(/^data: /, '').trim()).filter((e) => e.startsWith('{'));
-  return JSON.parse(events.at(-1))[field];
+  return JSON.parse(events().at(-1))[field];
 };
 
 test('the lab starts', async () => {

@@ -100,8 +100,11 @@ test('under --dev a parked lab ends the watcher too, so nothing is left running'
   const dir = fs.realpathSync(tmp('idle-dev'));
   fs.writeFileSync(path.join(dir, 'index.html'), '<h1>Hi</h1>');
   const port = String(claimPort(5500, 90));
-  const lab = spawnLab(dir, port, { flags: ['--dev'], env: { ...process.env, LABIT_HOME: tmp('idle-home'), LABIT_IDLE_MS: '1500' } });
+  const home = tmp('idle-home');
+  const lab = spawnLab(dir, port, { flags: ['--dev'], env: { ...process.env, LABIT_HOME: home, LABIT_IDLE_MS: '1500' } });
   kids.push(lab);
   const code = await Promise.race([new Promise((r) => lab.on('exit', r)), sleep(10000).then(() => 'still running')]);
-  assert.notEqual(code, 'still running', '--dev and its watcher ended with the parked lab');
+  assert.equal(code, 0, '--dev and its watcher ended with the parked lab, cleanly');
+  const parked = JSON.parse(fs.readFileSync(path.join(home, 'parked', `${port}.json`), 'utf8'));
+  assert.equal(parked.why, 'idle', 'it parked for being idle, not an early exit');
 });

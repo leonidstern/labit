@@ -51,12 +51,54 @@ async function settle(s, from) {
   let n = s.msgs.length;
   for (let i = 0; i < 12; i++) { await sleep(120); if (s.msgs.length === n && s.msgs.length > from) break; n = s.msgs.length; }
 }
-async function step(s, label, fn) {
+// A tab on each page, kept as the widget keeps it: the comments it holds and the version they are as of. It follows
+// every hop of the stream: it skips when the widget would, and pulls what changed since its own version otherwise.
+// A wrong skip anywhere in a step, not only on its last hop, leaves the tab holding something the lab no longer has.
+const shape = (c) => JSON.stringify([c.parent || null, c.text, !!c.resolved]);
+const listOf = async (P) => {
+  const r = await fetch(`${B}/_lab/api/comments?page=${encodeURIComponent(P)}`);
+  return { rev: Number(r.headers.get('x-lab-rev')), held: new Map((await r.json()).comments.map((c) => [c.id, shape(c)])) };
+};
+const tabs = {};
+const openTabs = async () => {
+  for (const P of PAGES) tabs[P] = await listOf(P);
+};
+const follow = async (msgs) => {
+  for (let k = 1; k < msgs.length; k++) {
+    const [prev, cur] = [msgs[k - 1], msgs[k]];
+    for (const P of PAGES) {
+      const tab = tabs[P];
+      if (cur.comments <= tab.rev) continue;
+      if (skips(prev, cur, P) && tab.rev === prev.comments) {
+        tab.rev = cur.comments;
+        continue;
+      }
+      const d = await (await fetch(`${B}/_lab/api/changes?page=${encodeURIComponent(P)}&since=${tab.rev}`)).json();
+      if (d.full) tabs[P] = await listOf(P);
+      else {
+        for (const c of d.set) tab.held.set(c.id, shape(c));
+        for (const id of d.del) tab.held.delete(id);
+        tab.rev = d.rev;
+      }
+    }
+  }
+};
+// A step that changes comments must reach the stream (changes: false for one that may not).
+async function step(s, label, fn, { changes = true } = {}) {
   const from = s.msgs.length;
   const prevRev = s.msgs[from - 1].comments;
-  await fn();
+  const done = await fn();
+  for (const r of [done].flat()) if (r && typeof r === 'object' && 'status' in r && r.status >= 300) problems.push(`${label}: answered ${r.status}`);
   await settle(s, from);
+  if (changes && s.msgs.at(-1).comments <= prevRev) problems.push(`${label}: the stream stayed at rev ${prevRev}`);
   const msgs = s.msgs.slice(from - 1);
+  await follow(msgs);
+  for (const P of PAGES) {
+    const now = await listOf(P);
+    const want = [...now.held].sort().join('\n');
+    const has = [...tabs[P].held].sort().join('\n');
+    if (has !== want) problems.push(`${label}: a tab on ${P} that followed the stream holds ${tabs[P].held.size} comments as of rev ${tabs[P].rev}, the lab ${now.held.size} as of ${now.rev}`);
+  }
   // the widget sees a chain; check each hop it would skip
   for (let k = 1; k < msgs.length; k++) {
     const [prev, cur] = [msgs[k - 1], msgs[k]];
@@ -81,6 +123,7 @@ test('skips only when nothing is new for that page', async () => {
   const o = await post('/other', 'o');
   const u = await post('/_c3_bcn_c3_af_5fcode', 'u');
   await sleep(300);
+  await openTabs();
   await step(s, 'post index', () => post('/index', 'b'));
   await step(s, 'post sub', () => post('/sub/index', 'b'));
   await step(s, 'three at once', () => Promise.all([post('/index', 'x1'), post('/other', 'x2'), post('/sub/index', 'x3')]));
@@ -92,7 +135,7 @@ test('skips only when nothing is new for that page', async () => {
   await step(s, 'agent wait handoff', async () => {
     const p = spawn(process.execPath, [LAB, 'wait', '--timeout', '5', '--name', 'cp'], { cwd: DIR, env });
     await new Promise((r) => p.on('close', r));
-  });
+  }, { changes: false });
   console.log(JSON.stringify(s.msgs.map((m) => [m.comments, m.commentPages])));
   s.close();
   assert.deepEqual(problems, []);

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { LAB, site, rm, sleep, up } from './harness.mjs';
+import { LAB, site, rm, sleep, up, sseReader } from './harness.mjs';
 
 const { DIR, PORT, B } = site('livewatch', 8490, 20);
 fs.writeFileSync(path.join(DIR, 'pricing.html'), '<!doctype html><title>P</title><h1>Pricing</h1>');
@@ -23,18 +23,18 @@ const ready = (async () => {
   await up(B + '/', { tries: 100, fail: false });
   const res = await fetch(B + '/_lab/live', { signal: abort.signal });
   const reader = res.body.getReader();
-  const dec = new TextDecoder();
+  const feed = sseReader((d) => {
+    try {
+      const s = JSON.parse(d);
+      for (const k of Object.keys(state)) if (typeof s[k] === 'number') state[k] = s[k];
+    } catch {}
+  });
   void (async () => {
     try {
       for (;;) {
         const { value, done } = await reader.read();
         if (done) break;
-        for (const m of dec.decode(value).matchAll(/data: (.*)\n/g)) {
-          try {
-            const s = JSON.parse(m[1]);
-            for (const k of Object.keys(state)) if (typeof s[k] === 'number') state[k] = s[k];
-          } catch {}
-        }
+        feed(value);
       }
     } catch {}
   })();
@@ -123,7 +123,17 @@ test('writes that never pause are still announced, within about a second', async
 test('the event stream asks to be reopened in half a second, and a script is not cached', async () => {
   await ready;
   const res = await fetch(B + '/_lab/live', { signal: AbortSignal.timeout(2000) }).catch(() => null);
-  const first = res ? new TextDecoder().decode((await res.body.getReader().read()).value) : '';
+  // The first line, however many reads it takes.
+  let first = '';
+  if (res) {
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    while (!first.includes('\n')) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      first += dec.decode(value, { stream: true });
+    }
+  }
   assert.match(first, /^retry: 500\n/);
   fs.writeFileSync(path.join(DIR, 'app.js'), '2');
   assert.equal((await fetch(`${B}/app.js`)).headers.get('cache-control'), 'no-store');

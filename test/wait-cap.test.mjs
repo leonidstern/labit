@@ -5,6 +5,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { FOREGROUND_CAP, WAIT_DEFAULT, parseArgs, waitSeconds } from '../lib/args.ts';
 
+// A runner started with LABIT_BACKGROUND=1 (an agent's background shell) would lift the cap: these tests set it themselves.
+delete process.env.LABIT_BACKGROUND;
+
 test('with no promise, a long wait is held to a minute', () => {
   assert.deepEqual(waitSeconds({ timeout: '1500' }), { seconds: FOREGROUND_CAP, capped: true });
   assert.deepEqual(waitSeconds({}), { seconds: FOREGROUND_CAP, capped: true });
