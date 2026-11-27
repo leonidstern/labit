@@ -24,8 +24,8 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
-// Where WebKit shards run: GitHub's macOS runners, or Leo's Mac when those are full (test.yml's "Mac overflow" step sets
-// WEBKIT_OS to the Mac runners' labels, a JSON array).
+// Where WebKit shards run: GitHub's macOS runners, or Leo's Mac Studio (test.yml's "WebKit on the Studio" step sets
+// WEBKIT_OS to its runners' labels, a JSON array).
 const WEBKIT_OS = process.env.WEBKIT_OS ? JSON.parse(process.env.WEBKIT_OS) : 'macos-latest';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
