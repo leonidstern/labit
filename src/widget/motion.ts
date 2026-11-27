@@ -36,12 +36,22 @@ const ours = new WeakSet<object>(); // the videos and animations labit itself pa
 // `mine`: play only what labit paused (play all), not a video the person had paused themselves.
 const setItem = (el, stop, mine = false) => {
   for (const v of videosIn(el)) {
-    if (stop && !v.paused) (v.pause(), ours.add(v));
-    else if (!stop && (!mine || ours.has(v))) (ours.delete(v), v.play?.().catch(() => {}));
+    if (stop && !v.paused) {
+      v.pause();
+      ours.add(v);
+    } else if (!stop && (!mine || ours.has(v))) {
+      ours.delete(v);
+      v.play?.().catch(() => {});
+    }
   }
   for (const a of animsOf(el)) {
-    if (stop && a.playState === 'running') (a.pause(), ours.add(a));
-    else if (!stop && a.playState === 'paused' && (!mine || ours.has(a))) (ours.delete(a), a.play());
+    if (stop && a.playState === 'running') {
+      a.pause();
+      ours.add(a);
+    } else if (!stop && a.playState === 'paused' && (!mine || ours.has(a))) {
+      ours.delete(a);
+      a.play();
+    }
   }
   if (!stop) for (const h of held) if (el.contains(h)) held.delete(h); // played from around it: what is inside plays too
   held[stop ? 'add' : 'delete'](el);
