@@ -6,9 +6,6 @@ import path from 'node:path';
 import { putAside, writeAtomic } from './files.ts';
 import { IMAGE_FILE, imageInfo } from './images.mjs';
 
-// lib/replies.ts takes the writer from here until the reply rules go (their own PR).
-export { writeAtomic };
-
 export type Frame = { id: string; src: string; kind?: 'image'; file?: string; iw?: number; ih?: number; pv?: number[]; guest?: boolean; w: number; h: number; x?: number; y?: number; label?: string; variantOf?: string; state?: 'live' | 'picked' | 'archived'; auto?: boolean };
 export type Board = { v: 1; name: string; rev: number; title?: string; of?: string; frames: Frame[] };
 

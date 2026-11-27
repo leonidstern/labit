@@ -138,7 +138,7 @@ test('done threads with nothing new in 30 days are archived on start; open and r
   await lab.stop();
 });
 
-test('an older page file loads unchanged in meaning: replies lose resolved:false, agent replies get their intent, the rule fields are one, hand-off marks move beside the comments, the file is written in the new shape without being touched', async () => {
+test('an older page file loads unchanged in meaning: replies lose resolved:false, agent replies get their intent, the old rule fields are dropped, hand-off marks move beside the comments, the file is written in the new shape without being touched', async () => {
   const dir = folder();
   fs.mkdirSync(path.join(dir, '.lab/comments'), { recursive: true });
   const now = new Date().toISOString();
@@ -149,6 +149,7 @@ test('an older page file loads unchanged in meaning: replies lose resolved:false
     r3: { id: 'r3', parent: 't1', name: 'Leo', text: 'Done: thanks', createdAt: now, resolved: false, anchor: null, from: 'this computer', deliveredAt: now },
     r4: { v: 1, id: 'r4', parent: 't1', name: 'Claude', text: 'Done', createdAt: now, anchor: null, session: { agent: 'claude' }, rule: 'Link it', ruleUndone: true },
     r5: { v: 1, id: 'r5', parent: 't1', name: 'Claude', text: 'Which one?', createdAt: now, anchor: null, session: { agent: 'claude' }, suggest: 'Ask less' },
+    r6: { v: 2, id: 'r6', parent: 't1', name: 'Claude', text: 'Done: blue', createdAt: now, session: { agent: 'claude' }, intent: 'done', suggest: { text: 'Link it', state: 'kept' } },
     w1: { id: 'w1', parent: null, name: 'Leo', text: 'this word', createdAt: now, resolved: false, anchor: { ...anchor, selector: 'body', element: '<body>', text: '…some words [here] after it…' } },
   };
   fs.writeFileSync(path.join(dir, '.lab/comments/x.json'), JSON.stringify({ page: '/x', comments }));
@@ -162,8 +163,9 @@ test('an older page file loads unchanged in meaning: replies lose resolved:false
   assert.equal(got.r2.intent, 'working');
   assert.equal(got.r3.intent, undefined, "a person's words never become an intent");
   assert.equal(got.r4.intent, 'done', 'an answer saved in v1 without one gets it too');
-  assert.deepEqual([got.r1.suggest, got.r2.suggest, got.r4.suggest, got.r5.suggest], [{ text: 'Say where', state: 'kept' }, { text: 'Shorter', state: 'no' }, { text: 'Link it', state: 'undone' }, { text: 'Ask less' }], 'a rule offered, kept, refused or taken back is one field');
+  assert.equal(got.r6.text, 'Done: blue', 'a reply saved with a rule (the rules feature, removed 27 Nov) still loads');
   for (const k of ['suggestDone', 'rule', 'ruleUndone', 'deliveredAt', 'deliveredTo', 'remindedAt']) assert.equal(Object.values(got).some((c) => k in c), false, `${k} is gone from the comments`);
+  assert.equal([got.r1, got.r2, got.r4, got.r5].some((c) => 'suggest' in c), false, 'an older rule offer is dropped');
   assert.equal(got.t1.handedAt, now, 'a thread still says when the agent got it');
   assert.deepEqual(got.w1.anchor.quote, { exact: 'here', prefix: 'some words ', suffix: ' after it' }, 'a word pin from before quotes has its word as a quote');
   await until(() => readJson(path.join(dir, '.lab/comments/x.json')).v === 2, 'the file written in the new shape once the lab is up');

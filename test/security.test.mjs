@@ -77,7 +77,7 @@ test("the agent's answer is told from a person's: an admin request marked as the
   const { comment } = await pin(page, 'fix this', '10.1.2.1');
   const reply = async (body, headers) => (await (await call({ page, parent: comment.id, ...body }, headers)).json()).comment;
   const agent = await reply({ name: 'Claude', text: 'Fixed.', intent: 'done', suggest: 'Say where' }, { 'x-lab-admin': OWNER, 'x-lab-agent': '1' });
-  assert.deepEqual([agent.session, agent.intent, agent.suggest], [{ name: 'Claude' }, 'done', { text: 'Say where' }]);
+  assert.deepEqual([agent.session, agent.intent, agent.suggest], [{ name: 'Claude' }, 'done', undefined], 'an old agent\'s rule offer is not kept (rules removed 27 Nov)');
   const owner = await reply({ name: 'Owner', text: 'ok', intent: 'done', suggest: 'x' }, { 'x-lab-admin': OWNER });
   assert.deepEqual([owner.session, owner.intent, owner.suggest], [undefined, undefined, undefined], 'an admin who is not the agent');
   const guest = await reply({ name: 'Ann', text: 'ok', intent: 'done', suggest: 'x' }, { ip: '10.1.2.2', 'x-lab-agent': '1' });
@@ -199,10 +199,9 @@ test('posts must come from the lab page itself, as JSON', async () => {
 
 test('a body over 256 KB is 413 and one that is not JSON is 400, not a 500 with the error in it', async () => {
   const headers = { 'content-type': 'application/json', origin: `http://localhost:${PORT}` };
-  const mac = { ...headers, 'x-lab-admin': fs.readFileSync(path.join(DIR, '.lab', 'key'), 'utf8').trim() }; // a rule is this computer's
   const big = JSON.stringify({ page: '/index', name: 'X', text: 'x'.repeat(300 * 1024) });
-  for (const p of ['/_lab/api/comments', '/_lab/rule', '/_lab/api/reads']) assert.equal((await raw(p, { method: 'POST', body: big, headers: p === '/_lab/rule' ? mac : headers })).status, 413, p);
-  const bad = await raw('/_lab/rule', { method: 'POST', body: '{"page":', headers: mac });
+  for (const p of ['/_lab/api/comments', '/_lab/api/reads']) assert.equal((await raw(p, { method: 'POST', body: big, headers })).status, 413, p);
+  const bad = await raw('/_lab/api/comments', { method: 'POST', body: '{"page":', headers });
   assert.equal(bad.status, 400);
   assert.doesNotMatch(bad.text, /SyntaxError|at /);
   assert.equal((await raw('/')).status, 200, 'the lab is still there');
@@ -491,7 +490,6 @@ test('a device with a pass is the owner: board and picture actions, comment admi
 
   // ---- what stays with this computer
   assert.equal((await dev('/_lab/labs', { method: 'POST', body: { action: 'archive', port: WPORT } })).status, 403, 'stop or archive a lab');
-  assert.equal((await dev('/_lab/rule', { method: 'POST', body: { page: '/index', id: asked.id, action: 'keep' } })).status, 403, 'keep an agent-offered rule');
   assert.equal((await dev('/_lab/me', { method: 'POST', body: { name: 'Someone' } })).status, 403, 'rename');
   assert.equal((await dev('/_lab/wait', { headers: {} })).status, 403, 'listen as the agent');
   assert.equal((await dev('/_lab/invite', { method: 'POST', body: {} })).status, 403, 'mint a link');

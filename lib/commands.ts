@@ -565,7 +565,7 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die, model }: Ctx):
         .filter((c) => (c.id === hit.id || c.parent === hit.id) && !c.session)
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
         .pop()?.id;
-      const out = await call('/_lab/api/comments', { page: hit.page, parent: hit.id, nonce: nonceOf(hit.page, hit.id, hit.to, said, words.join(' '), intent || '', opts.checked ?? '', opts['suggest-rule'] ?? '', JSON.stringify(asked || null)), ...(hit.to ? { to: hit.to } : {}), name: signed(), text: words.join(' '), ...(typeof opts['suggest-rule'] === 'string' ? { suggest: opts['suggest-rule'] } : {}), ...(intent ? { intent } : {}), ...(typeof opts.checked === 'string' ? { checked: opts.checked } : {}), ...asked });
+      const out = await call('/_lab/api/comments', { page: hit.page, parent: hit.id, nonce: nonceOf(hit.page, hit.id, hit.to, said, words.join(' '), intent || '', opts.checked ?? '', JSON.stringify(asked || null)), ...(hit.to ? { to: hit.to } : {}), name: signed(), text: words.join(' '), ...(intent ? { intent } : {}), ...(typeof opts.checked === 'string' ? { checked: opts.checked } : {}), ...asked });
       if (out.status === 410) return dropped();
       if (out.status >= 300) die(`Could not reply: ${out.text}`);
       // The page tries each choice in place of the quoted words: a choice that reaches past them is said here.

@@ -67,15 +67,16 @@ test('two waits on different pages by one session: second does not take back the
   assert.equal(ack.status, 204, 'first hand-off was taken back by a wait on a different page');
 });
 
-test('rules text is sent again after a take-back', async () => {
+// The rules feature is gone (27 Nov): a replies.md it left in your folder is not read, not handed over, and not touched.
+test('an old replies.md is left alone and never handed over', async () => {
   await drain('s10');
   const f = path.join(process.env.XDG_CONFIG_HOME, 'labit', 'replies.md');
   fs.mkdirSync(path.dirname(f), { recursive: true });
   fs.writeFileSync(f, '# r\n\n- always be brief\n');
   await post('rules pin', '/third'); // every page is claimed by a wait above: this one listens on /third by name
   const a = await wait('s10', { ack: true, pages: ['/third'] });
-  assert.match(a.text, /always be brief/);
-  const b = await wait('s10', { ack: true, pages: ['/third'] });
-  assert.match(b.text, /rules pin/);
-  assert.match(b.text, /always be brief/, 'rules lost in the redelivery (rulesSent not restored)');
+  assert.match(a.text, /rules pin/);
+  assert.doesNotMatch(a.text, /always be brief|How the person wants answers/);
+  await call('/_lab/ack', { id: a.delivery }, 's10');
+  assert.equal(fs.readFileSync(f, 'utf8'), '# r\n\n- always be brief\n');
 });

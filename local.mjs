@@ -18,7 +18,6 @@ if (process.env.LABIT_LOG_TIMES === '1')
   }
 import { apiOn, BODY_MAX, callApi, decoderFor, encodingFor, onLan, packBody, sendBody, sendFile, sendPacked } from './lib/dev.ts';
 import { parseArgs, windowsPagePath, WRITE_SHORT, NEW_VERSION_NEAR } from './lib/args.ts';
-import { addRule, dropRule, rulesText } from './lib/replies.ts';
 import { AGENTS } from './lib/agents.ts';
 import { watchTree } from './lib/watch.ts';
 import { PARKED, REGISTRY, askPages, keyFor, parkedLabs, rememberRoot, runningLabs } from './lib/labs.ts';
@@ -1283,13 +1282,9 @@ const sessionFrom = (req) => {
 
 // ---------- live pages and the session that listens ----------
 let session = null;
-// Your rules for answers go to each session once, and again only when they change (Leo, 17 Nov: ~250 tokens a pin).
-const rulesSent = new Map();
 // How to answer goes to each session in full once (again when the lab restarts or the session changes); after that, one
 // short line (~70 tokens less a pin).
 const toldAt = new Map();
-// Sessions that have had the suggest-rule line (it waits for the first reply in a thread, so it has its own mark).
-const suggestTold = new Set();
 // What the page says about Claude: listening (a wait is open), working (it got comments and hasn't waited again
 // yet), or away (no wait, or nothing from it for ten minutes after it got comments).
 let mode = 'away';
@@ -1845,13 +1840,6 @@ function threadText(page, root, replies, fresh, spot, when) {
 // been handed over: a single "seen up to" time could skip one that a batch left out. `seen` is only the line for
 // comments from before these marks.
 const stamp = (c) => [c.createdAt, c.movedAt, c.spotChange?.at].filter(Boolean).sort().pop(); // new when written, moved, or its words were changed
-const rulesOnce = () => {
-  const rules = rulesText();
-  const who = session?.id || session?.name || '';
-  if (!rules || rulesSent.get(who) === rules) return '';
-  rulesSent.set(who, rules);
-  return rules;
-};
 
 // Who a wait is: the session's id, or its name for an agent with no id. Each comment handed over is marked with it
 // (handoff[id][1]), so a reply goes in the short thread form only to the session that already has its thread.
@@ -1948,10 +1936,6 @@ async function unseen(scope = pages(), who = '') {
   // First line: how many things this message holds, so an agent that only reads part of it can tell.
   const count = [given.filter((f) => !f.c.parent || !known(f)).length && `${given.filter((f) => !f.c.parent || !known(f)).length} new`, replies.length && `${replies.length} repl${replies.length === 1 ? 'y' : 'ies'}`, missed.length && `${missed.length} still waiting`].filter(Boolean).join(', ');
   const full = !toldAt.has(who);
-  const rules = rulesOnce();
-  // The suggest-rule line only matters once a thread has a reply: said in full the first time one comes (or on a full
-  // hand-off), not again.
-  const suggest = given.some((f) => f.c.parent) && (full || !suggestTold.has(who));
   // The standing lines (how to read, answer, report progress, write) are said in full to a session the first time it
   // hears, and again only when the lab restarts or the session changes; after that, one line.
   const standing = full
@@ -1962,7 +1946,7 @@ async function unseen(scope = pages(), who = '') {
       `\nIf it will take more than about a minute (a build, a restart, a PR): send one ${CMD} reply <id> --progress "<what you're doing>" on each first (a status line, not a message), then start, and a new one when the step changes (about 3 minutes after your last, the page says no update; with the labit plugin, about 10 while this session keeps working); a quick ask needs none (an answer within 2 minutes counts). A plain "go" gets no words: resolve it when done.` +
       `\n${NEW_VERSION_NEAR}` +
       `\n${WRITE_SHORT}`
-    : `\n\nAnswer each: ${CMD} reply <id> --done "what you did" (or --question) [--wait --bg]; the standing lines (read threads whole, --progress before long work, short answers) and rules as before.`;
+    : `\n\nAnswer each: ${CMD} reply <id> --done "what you did" (or --question) [--wait --bg]; the standing lines (read threads whole, --progress before long work, short answers) as before.`;
   // Listen again first (Leo, 23 Nov: "why stopped"): a wait that ended with a pin while the agent went on to work left
   // nobody listening for 13 minutes. Said at the top, where it is read before the work starts, not only in the answer line.
   const again = `Listen again first: run ${CMD} wait --bg in the background now, before you work on these, so pins that come meanwhile are heard (answers then without --wait). In the middle of other work? Before going back to it, answer what is quick and send a --progress line on the rest, so the person sees you have them.`;
@@ -1971,13 +1955,11 @@ async function unseen(scope = pages(), who = '') {
     lost.map(({ page, c }) => `\n${UNMATCHED(c.id, page, c.anchor.selector)}`).join('') +
     (ticks.length ? `\nticked: ${ticks.length} of your ${own} pins (resolved by people since your last wait: ${ticks.map(({ page, c }) => `${page} id ${c.id} "${cut(c.text.replace(/\s+/g, ' '), 50)}"`).join('; ')}). Nothing to do.` : '') +
     ([...sent].some((k) => { const [pg, id] = k.split('\n'); return commentsOf(pg).some((c) => (c.id === id || c.parent === id) && imagesOf(c).length); }) ? `\n${IMAGES_SAID}` : '') +
-    (given.some((f) => f.c.picked) ? `\nA pick ("Picked B: …"): make that change, then ${CMD} resolve <id> with no words; words only if something isn't obvious or you couldn't do it.` : '') +
-    (suggest ? `\nA reply about how you answered rather than the work (too long, unclear, didn't show or link it, the same misread twice): answer it and add --suggest-rule "<one short rule>"; they keep it with a tap. Not for the work itself or a one-off correction.` : '') +
-    (rules || '');
+    (given.some((f) => f.c.picked) ? `\nA pick ("Picked B: …"): make that change, then ${CMD} resolve <id> with no words; words only if something isn't obvious or you couldn't do it.` : '');
   // The threads handed over: the page shows them as being worked on until the agent answers or resolves them.
   const handed = [...sent].map((k) => k.split('\n'));
   const marks = given.map(({ page, c }) => [page, c.id, stamp(c)]);
-  return { text, marks, handed, told: [...ticks.map(({ page, c }) => [page, c.id, 'tickedAt', c.resolvedAt]), ...lost.map(({ page, c }) => [page, c.id, 'lostTold', true])], full, suggest, rules: Boolean(rules) };
+  return { text, marks, handed, told: [...ticks.map(({ page, c }) => [page, c.id, 'tickedAt', c.resolvedAt]), ...lost.map(({ page, c }) => [page, c.id, 'lostTold', true])], full };
 }
 // Hand-offs the agent hasn't said it got yet (a wait that asked with ack: true). The marks go on at once, so no other
 // wait takes the same pins and the page shows them being worked on; the agent's `wait` says it printed
@@ -2044,19 +2026,16 @@ function deliver(res, got, who = '', ack = false, key = '', label = 'Claude') {
           if (was) handoff[id] = was;
           else delete handoff[id];
         }
-        if (got.rules) rulesSent.delete(who); // the rules went with it, so they go again
         for (const [page, id, was] of handedBefore) if (!theirs.has(id)) setComment(page, id, { handedAt: was });
         for (const [page, id, k] of got.told) setComment(page, id, { [k]: undefined }); // not seen: said again
         writeState(); // now, not in 300 ms: a restart or a kill in between would hand the same pins out again
         for (const page of new Set(handedBefore.map(([page]) => page))) persist(page).catch(() => {});
         if (got.full) toldAt.delete(who);
-        if (got.suggest) suggestTold.delete(who);
         broadcast();
         wake();
       },
     });
   if (got.full) toldAt.set(who, Date.now());
-  if (got.suggest) suggestTold.add(who);
   for (const [, id, at] of got.marks) handoff[id] = [at, who];
   for (const [page, id, k, v] of got.told) setComment(page, id, { [k]: v }); // told once
   const wrote = {}; // what this hand-off set, filled in below
@@ -2558,7 +2537,7 @@ const pickedPin = async (board, frame) => {
 const keyOk = (req) => sameKey(String(req.headers['x-lab-admin'] || ''), TOKEN);
 // Who is the owner. A device that holds a pass (a one-time link opened there: its cookie) is the owner's own, as this
 // computer's browser is: it may do what that may, except what changes this machine or its settings (stopping or archiving a
-// lab, updating labit, keeping a rule, renaming, the agent's key and the admin key), which stay with this computer (isMac:
+// lab, updating labit, renaming, the agent's key and the admin key), which stay with this computer (isMac:
 // loopback with the key). Comments, their authors and pictures still say where they came from ("wifi guest").
 const isMac = (req) => isLoopback(req) && keyOk(req);
 const isDevice = (req) => WIFI && !isLoopback(req) && Boolean(guestOk(req));
@@ -2625,24 +2604,6 @@ const handler = async (req, res) => {
       return;
     }
     // `labit invite`: a link for a phone on the same wifi. Only the agent on this computer may ask for one.
-    // Keep, no, or undo a rule the agent offered (src/widget/thread.ts): out of replies.md, and the answer says so.
-    if (pathname === '/_lab/rule' && req.method === 'POST') {
-      // A rule goes into this computer's own replies.md and out to every agent in every lab: kept from this computer only.
-      if (!isMac(req)) return plain(res, 403, 'forbidden');
-      const b = await sent(req);
-      const page = String(b.page || '');
-      // keep / no: a rule the agent offered (--suggest-rule). Otherwise: undo a kept one.
-      const c = commentsOf(page).find((x) => x.id === b.id && x.suggest && x.session);
-      const to = b.action === 'keep' ? 'kept' : b.action === 'no' ? 'no' : 'undone';
-      if (!c || (to === 'undone' && !c.suggest.state)) return res.writeHead(404).end('no rule');
-      if (c.suggest.state === (to === 'undone' ? 'kept' : undefined)) {
-        if (to !== 'no') (to === 'kept' ? addRule : dropRule)(c.suggest.text);
-        setComment(page, c.id, { suggest: { ...c.suggest, state: to } });
-        persist(page).catch(() => {});
-        broadcast();
-      }
-      return res.writeHead(204).end();
-    }
     // `labit invite` / `labit --wifi` / `--no-wifi`: this lab starts again in its own place with the wifi on or off
     // (handOver, as for a newer build: same folder, port and name; waits and open pages carry on). 200 when it already is.
     if (pathname === '/_lab/wifi' && req.method === 'POST') {
