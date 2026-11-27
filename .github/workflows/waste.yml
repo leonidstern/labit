@@ -5,8 +5,7 @@
 #
 # A release is a vX.Y.Z tag (publish.yml makes it). A tag pushed with the workflow token starts no workflow, so
 # publish.yml starts this one itself (workflow_dispatch, on the tag) after it tags; a tag pushed by hand starts it
-# through `push: tags`. The AI review that reads this report is ci/waste-review.sh (ci/AGENT.md): it needs a logged-in
-# claude, so it is run from Leo's machine like the other agents, not here.
+# through `push: tags`.
 name: waste
 
 on:

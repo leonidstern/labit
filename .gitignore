@@ -19,7 +19,6 @@ public/_lab/lab.css
 public/_lab/*.br
 public/_lab/bundles.json
 /waste-report.md
-/waste-review.md
 bench/**/out/
 ci/reach-map.json
 co/.vercel/

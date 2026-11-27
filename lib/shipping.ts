@@ -30,25 +30,3 @@ export function shipsWithSite(root: string): string {
   if (top && fs.realpathSync(top) !== root && git(parent, ['check-ignore', '-q', root]) !== null) return `${name}/ is ignored by git, as built output usually is`;
   return '';
 }
-
-/** Keeps a file labit made in a repository out of `git add` on this computer only (.git/info/exclude, never shared).
- * Returns what happened: 'excluded', 'tracked' (it is in git already, so the change shows in `git status`), or ''. */
-export function keepOutOfGit(file: string): '' | 'excluded' | 'tracked' {
-  const dir = path.dirname(file);
-  const top = git(dir, ['rev-parse', '--show-toplevel']);
-  if (!top) return '';
-  const rel = path.relative(fs.realpathSync(top), fs.realpathSync(file)).split(path.sep).join('/');
-  if (git(top, ['ls-files', '--error-unmatch', rel]) !== null) return 'tracked';
-  if (git(top, ['check-ignore', '-q', rel]) !== null) return '';
-  const exclude = git(top, ['rev-parse', '--git-path', 'info/exclude']);
-  if (!exclude) return '';
-  const at = path.resolve(top, exclude);
-  try {
-    const had = fs.existsSync(at) ? fs.readFileSync(at, 'utf8') : '';
-    fs.mkdirSync(path.dirname(at), { recursive: true });
-    fs.writeFileSync(at, `${had}${had && !had.endsWith('\n') ? '\n' : ''}/${rel}\n`);
-    return 'excluded';
-  } catch {
-    return '';
-  }
-}

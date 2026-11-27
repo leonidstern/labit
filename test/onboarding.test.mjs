@@ -177,13 +177,12 @@ test('a mistyped flag is refused for every command, not posted as text', async (
   rm([dir]);
 });
 
-test('preview with a bare --proxy writes a bare --proxy', async () => {
+test('preview is gone: it is a folder name like any other word', async () => {
   const dir = tmp('preview');
-  await new Promise((resolve) => execFile(process.execPath, [LAB, 'preview', '.', '--proxy'], { cwd: dir }, resolve));
-  const lab = JSON.parse(fs.readFileSync(path.join(dir, '.claude', 'launch.json'), 'utf8')).configurations.find((c) => c.name === 'lab');
-  const args = lab.args || lab.runtimeArgs;
-  assert.equal(args.at(-1), '--proxy');
-  assert.ok(!args.includes(true), 'no boolean in the args');
+  const r = await cli(['preview'], { cwd: dir });
+  assert.equal(r.code, 1);
+  assert.match(r.out, /No folder preview\./);
+  assert.equal(fs.existsSync(path.join(dir, '.claude')), false, 'no launch.json written');
   rm([dir]);
 });
 

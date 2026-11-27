@@ -72,7 +72,7 @@ const HELP = `labit ${VERSION}: comment on local pages; your agent answers on th
   labit [folder] [--name topic] [--proxy [port]] [--port 4400] [--wifi|--no-wifi] [--no-open] [--new]
   labit publish <page.html|folder> [--name topic] [--dev]
   labit invite [name] [--page /path]
-  labit list | pages [--all] | settings | skill | update | preview [folder]
+  labit list | pages [--all] | settings | skill | update
   labit use   this lab moves onto the build you run this from (a branch)
   labit gc   what every lab on this computer keeps in its .lab, and what could go (only reports)
 
@@ -133,7 +133,7 @@ const HERE = fs.realpathSync(path.resolve(opts.dir || '.'));
 // ---------- settings (lib/settings.ts) ----------
 // labit.json in the project and ~/.config/labit/settings.json fill in what the flags and variables leave out, by
 // setting them here, so everything below (and the commands) reads them as before.
-const COMMANDS = ['publish', 'preview', 'list', 'pages', 'wait', 'reply', 'resolve', 'thread', 'pin', 'invite', 'board', 'update', 'settings', 'skill', 'gc', 'use'];
+const COMMANDS = ['publish', 'list', 'pages', 'wait', 'reply', 'resolve', 'thread', 'pin', 'invite', 'board', 'update', 'settings', 'skill', 'gc', 'use'];
 // Your list of actions is written into your settings once, when a lab starts (or `labit settings` shows it) with none there yet.
 if (!pos[0] || !COMMANDS.includes(pos[0]) || pos[0] === 'settings') {
   try {
@@ -182,7 +182,7 @@ if (pos[0] === 'settings') {
   process.exit(SETTINGS.problems.length ? 1 : 0);
 }
 
-// The commands that answer and exit (publish, preview, list, pages, gc, wait, reply, resolve, thread, pin, invite): lib/commands.ts.
+// The commands that answer and exit (publish, list, pages, gc, wait, reply, resolve, thread, pin, invite): lib/commands.ts.
 if (COMMANDS.includes(pos[0])) {
   await runCommand({ pos, opts, HERE, CMD, ME, die, model: SET.model });
 }

@@ -1,11 +1,11 @@
 // What labit leaves in a project must not leave the computer with it: .lab is out of git by its .gitignore, a .lab in a
-// folder that ships (built output, public/) is said at the start, and `preview`'s launch.json stays out of git.
+// folder that ships (built output, public/) is said at the start.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFile, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { LAB, rm, tmp } from './harness.mjs';
+import { rm, tmp } from './harness.mjs';
 import { shipsWithSite } from '../lib/shipping.ts';
 
 const dirs = [];
@@ -16,7 +16,6 @@ const repo = (name) => {
   execFileSync('git', ['init', '-q'], { cwd: d });
   return d;
 };
-const status = (d) => execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], { cwd: d, encoding: 'utf8' });
 
 test('a folder that ships with the site is told apart from one that does not', () => {
   const d = repo('ship-site');
@@ -28,18 +27,4 @@ test('a folder that ships with the site is told apart from one that does not', (
   assert.match(shipsWithSite(path.join(d, 'generated')), /ignored by git/);
   assert.equal(shipsWithSite(path.join(d, 'pages')), '');
   assert.equal(shipsWithSite(d), '', 'the project folder itself');
-});
-
-test('preview keeps a launch.json it made out of git, and only says so for one already in git', async () => {
-  const run = (d) => new Promise((resolve, reject) => execFile(process.execPath, [LAB, 'preview', '.'], { cwd: d }, (e, out, err) => (e ? reject(new Error(`preview failed: ${err || e.message}`)) : resolve(out))));
-  const d = repo('ship-preview');
-  const out = await run(d);
-  assert.match(out, /Kept out of git/);
-  assert.equal(status(d), '', 'git status shows nothing');
-  const t = repo('ship-preview-tracked');
-  fs.mkdirSync(path.join(t, '.claude'));
-  fs.writeFileSync(path.join(t, '.claude/launch.json'), '{"version":"0.0.1","configurations":[]}\n');
-  execFileSync('git', ['add', '.'], { cwd: t });
-  assert.match(await run(t), /is in git/);
-  assert.equal(fs.readFileSync(path.join(t, '.git/info/exclude'), 'utf8').includes('launch.json'), false, 'a tracked file is not excluded');
 });
