@@ -127,7 +127,7 @@ await section('1. Page script size: gzip against its cap', async () => {
   summary.push(['page script gzip', `${gz.toLocaleString('en')} / ${cap.toLocaleString('en')} B${capExceeded ? ' (OVER)' : ''}`]);
   // The same bundle scripts/build-widget.mjs makes (minified, stylesheet as minified text), with a metafile, before terser renames.
   const cssText = { name: 'css-text', setup(b) { b.onLoad({ filter: /\.css$/ }, async (a) => ({ contents: (await esbuild.transform(read(a.path), { loader: 'css', minify: true })).code, loader: 'text' })); } };
-  const res = await esbuild.build({ entryPoints: [path.join(ROOT, 'src/comments.js')], bundle: true, format: 'iife', minify: true, write: false, metafile: true, logLevel: 'silent', plugins: [cssText], define: { 'globalThis.__LAB_DEBUG__': 'false' } });
+  const res = await esbuild.build({ entryPoints: [path.join(ROOT, 'src/comments.js')], bundle: true, format: 'iife', minify: true, write: false, metafile: true, logLevel: 'silent', plugins: [cssText], define: { 'globalThis.__LAB_DEBUG__': 'false', 'globalThis.__LAB_CO__': 'false' } });
   const inputs = Object.values(res.metafile.outputs)[0].inputs;
   const total = Object.values(inputs).reduce((a, i) => a + i.bytesInOutput, 0);
   const ratio = gz / buf.length;

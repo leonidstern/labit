@@ -2,8 +2,8 @@
 // The judge for labit: deterministic metrics, measured the same way in CI and locally.
 //
 //   collect <out.json>                                 measure the current tree
-//   compare <current.json> <reference.json> [--must-improve <metric>]
-//                                                      exit 1 if the gate fails
+//   compare <current.json> <reference.json> [--must-improve <metric>] [--no-growth]
+//                                                      exit 1 if the gate fails; --no-growth: budgets may not grow at all
 //   pick <current.json> [<reference.json>]             choose a target metric for the agent
 //   types                                              list TypeScript errors (npm run typecheck)
 //
@@ -97,7 +97,10 @@ function collect() {
 
   // What npm users download.
   // The package ships the built server (dist/, from build:cli): build it so the size is what npm users get.
-  if (read("package.json").scripts?.["build:cli"]) run("npm run --silent build:cli");
+  if (read("package.json").scripts?.["build:cli"]) {
+    const cli = run("npm run --silent build:cli");
+    if (cli.status !== 0) fail(`npm run build:cli failed:\n${cli.out}${cli.err}`);
+  }
   const pack = run("npm pack --dry-run --json --ignore-scripts");
   let packInfo;
   try { packInfo = JSON.parse(pack.out)[0]; } catch { fail(`npm pack did not run:\n${pack.err}`); }
@@ -130,7 +133,7 @@ function collect() {
   if (existsSync("src/comments.js") && build.includes(`--outfile=${PAGE_SCRIPT}`)) {
     const fresh = join(mkdtempSync(join(tmpdir(), "build-")), "comments.js");
     const b = run(build.replace(`--outfile=${PAGE_SCRIPT}`, `--outfile=${fresh}`));
-    if (!existsSync(fresh)) fail(`npm run build did not run:\n${b.out}${b.err}`);
+    if (b.status !== 0 || !existsSync(fresh)) fail(`npm run build failed:\n${b.out}${b.err}`);
     // …and so must the parts it loads later, built beside it (public/_lab/<part>.js).
     const parts = readdirSync(dirname(fresh)).filter((f) => f !== "comments.js");
     m.staleBuild = [readFileSync(fresh).equals(readFileSync(PAGE_SCRIPT)), ...parts.map((f) => existsSync(join(dirname(PAGE_SCRIPT), f)) && readFileSync(join(dirname(fresh), f)).equals(readFileSync(join(dirname(PAGE_SCRIPT), f))))].every(Boolean) ? 0 : 1;
@@ -162,17 +165,18 @@ function typeCheck() {
 
 const isBetter = (name, cur, ref) => (METRICS[name].dir === "down" ? cur < ref : cur > ref);
 
-// null if the metric passes the gate, or the reason it fails.
-function gateProblem(name, cur, ref) {
+// null if the metric passes the gate, or the reason it fails. noGrowth: a budget may not grow at all (the agent's own check).
+function gateProblem(name, cur, ref, noGrowth) {
   const def = METRICS[name];
   if (cur === undefined) return "missing";
   if (def.kind === "ratchet") return isBetter(name, ref, cur) ? `worse than ${ref}` : null;
   if (cur > def.max) return `over the hard cap of ${def.max}`;
+  if (noGrowth && cur > ref) return `grew ${cur - ref}, may not grow here`;
   if (process.env.ALLOW_GROWTH !== "1" && cur > ref + def.perPr) return `grew ${cur - ref}, budget is +${def.perPr} per PR`;
   return null;
 }
 
-function compare(curFile, refFile, mustImprove) {
+function compare(curFile, refFile, mustImprove, noGrowth) {
   const cur = read(curFile);
   const ref = read(refFile);
   let ok = true;
@@ -181,7 +185,7 @@ function compare(curFile, refFile, mustImprove) {
   for (const name of Object.keys(METRICS)) {
     if (!(name in ref)) continue;
     const c = cur[name];
-    const problem = gateProblem(name, c, ref[name]);
+    const problem = gateProblem(name, c, ref[name], noGrowth);
     let verdict;
     if (problem) { verdict = `**FAIL**: ${problem}`; ok = false; }
     else if (isBetter(name, c, ref[name])) verdict = "better";
@@ -204,7 +208,7 @@ function compare(curFile, refFile, mustImprove) {
       ok = false;
     }
   }
-  if (process.env.ALLOW_GROWTH === "1") console.log("\nPer-PR growth budgets lifted by the size-approved label. Hard caps still apply.");
+  if (process.env.ALLOW_GROWTH === "1" && !noGrowth) console.log("\nPer-PR growth budgets lifted by the size-approved label. Hard caps still apply.");
   process.exit(ok ? 0 : 1);
 }
 
@@ -235,7 +239,7 @@ const flag = (f) => { const i = args.indexOf(f); return i >= 0 ? args[i + 1] : u
 
 switch (cmd) {
   case "collect": write(args[0] ?? fail("usage: collect <out.json>"), collect()); break;
-  case "compare": compare(args[0], args[1], flag("--must-improve")); break;
+  case "compare": compare(args[0], args[1], flag("--must-improve"), args.includes("--no-growth")); break;
   case "pick": pick(args[0], args[1]); break;
   case "types": { const out = typeCheck(); process.stdout.write(out || "No type errors.\n"); process.exit(/error TS\d+/.test(out) ? 1 : 0); }
   default: fail("commands: collect | compare | pick | types");

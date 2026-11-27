@@ -22,6 +22,10 @@ if [ -z "${JUDGE:-}" ]; then
   if ! git diff --quiet || ! git diff --cached --quiet; then
     echo "commit or stash your changes first"; exit 1
   fi
+  # Untracked files would be committed with the agent's patch, or deleted by git clean when a patch is rejected.
+  if [ -n "$(git ls-files --others --exclude-standard)" ]; then
+    echo "move or commit your untracked files first:"; git ls-files --others --exclude-standard; exit 1
+  fi
   RUN="$(mktemp -d)"
   export RUN JUDGE="$RUN/judge"
   mkdir -p "$JUDGE"
@@ -31,25 +35,36 @@ fi
 export JUDGE_METRICS="$JUDGE/metrics.mjs"
 metrics() { node "$JUDGE_METRICS" "$@"; }
 measure() { bash "$JUDGE/measure.sh" "$@"; }
+# The page script is built from src/, not kept in git: build a tree before it is measured, as CI does.
+# Steps log to $RUN; on failure the end of the log is printed and the run stops.
+logged() {
+  local log="$RUN/$1.log"; shift
+  if ! "$@" > "$log" 2>&1; then echo "$* failed ($log):"; tail -n 40 "$log"; exit 1; fi
+}
+build() { (cd "$1" && npm run --silent build); }
 trap 'git -C "$ROOT" worktree remove --force "$RUN/base" 2>/dev/null || true' EXIT
 
 # Paths the agent may never touch, so it can't edit the judge, the tests or the claims instead of the code.
 PROTECTED='^(\.github/|ci/|test/|bench/|\.oxlintrc|tsconfig\.json$|package\.json$|README\.md$|CHANGELOG\.md$|LICENSE$)'
 # Ways to silence a check instead of fixing the cause.
-SUPPRESS='(oxlint-disable|eslint-disable|@ts-ignore|@ts-expect-error|@ts-nocheck|@type \{any\}|\{\*\}|!important)'
+SUPPRESS='(oxlint-disable|eslint-disable|@ts-ignore|@ts-expect-error|@ts-nocheck|\{ *(any|\*) *\}|!important)'
 reset_tree() { git reset -q; git checkout -- .; git clean -fdq; }
 
 # Reference = what CI will compare against. For a PR: its base, linted with the PR's rules.
 if [ -n "$PR" ]; then
   gh pr checkout "$PR"
   BASE="$(gh pr view "$PR" --json baseRefName -q .baseRefName)"
+  # The size-approved label lifts the per-PR budgets in CI (gates.yml); the same here.
+  if gh pr view "$PR" --json labels -q '.labels[].name' | grep -qx size-approved; then export ALLOW_GROWTH=1; fi
   git fetch -q origin "$BASE"
   git worktree add -q --detach "$RUN/base" "origin/$BASE"
-  measure "$RUN/base" "$RUN/reference.json" "$ROOT" > "$RUN/measure-base.log" 2>&1
+  logged build-base build "$RUN/base"
+  logged measure-base measure "$RUN/base" "$RUN/reference.json" "$ROOT"
   REF="$RUN/reference.json"
 fi
 
-measure "$ROOT" "$RUN/before.json" > "$RUN/measure-before.log" 2>&1
+logged build-before build "$ROOT"
+logged measure-before measure "$ROOT" "$RUN/before.json"
 REF="${REF:-$RUN/before.json}"
 
 if ! PICK="$(metrics pick "$RUN/before.json" ${PR:+"$REF"})"; then
@@ -59,11 +74,13 @@ fi
 IFS=$'\t' read -r TARGET HINT <<<"$PICK"
 echo "target: $TARGET   (record: $RUN)"
 
-# The gate CI will run, with tests, plus: the target metric must actually move.
+# The gate CI will run, with tests, plus: the target metric must actually move, and nothing else may
+# grow at all against the run's start (AGENT.md), not even within the per-PR budgets.
 gates() {
+  build "$ROOT" &&
   RUN_TESTS=1 measure "$ROOT" "$RUN/after.json" &&
   metrics compare "$RUN/after.json" "$REF" &&
-  metrics compare "$RUN/after.json" "$RUN/before.json" --must-improve "$TARGET"
+  metrics compare "$RUN/after.json" "$RUN/before.json" --must-improve "$TARGET" --no-growth
 }
 
 FEEDBACK=""
@@ -85,7 +102,8 @@ $FEEDBACK"
 
   git add -A
   git diff --cached > "$RUN/patch-$i.diff"
-  CHANGED="$(git diff --cached --name-only)"
+  # No renames: a file moved out of a protected path must show its old path too.
+  CHANGED="$(git diff --cached --name-only --no-renames)"
 
   if [ -z "$CHANGED" ]; then
     FEEDBACK="## Previous attempt
@@ -101,7 +119,9 @@ It edited protected files: $(tr '\n' ' ' <<<"$BAD")"
     continue
   fi
 
-  if git diff --cached -U0 | grep -E '^\+[^+]' | grep -Eq "$SUPPRESS"; then
+  # Added lines into a variable first: grep -q ending a pipe early would fail it under pipefail.
+  ADDED="$(git diff --cached -U0 --no-renames | grep -E '^\+' | grep -Ev '^\+\+\+ ' || true)"
+  if grep -Eq "$SUPPRESS" <<<"$ADDED"; then
     FEEDBACK="## Previous attempt was rejected
 It added a lint suppression, @ts-ignore or !important. Fix the cause instead."
     reset_tree
@@ -123,14 +143,20 @@ It added a lint suppression, @ts-ignore or !important. Fix the cause instead."
       echo "### Agent's note"
       tail -n 20 "$RUN/agent-$i.log"
     } > "$RUN/summary.md"
+    # A new branch before the commit, so main is never committed to.
+    if [ -z "$PR" ]; then
+      BRANCH="agent/improve-$TARGET-$(date -u +%Y%m%d)"
+      git switch -q -c "$BRANCH"
+    fi
     git add -A
     git commit -q -m "agent: improve $TARGET" -m "$(cat "$RUN/summary.md")"
 
     if [ -n "$PR" ]; then
-      git push -q || echo "couldn't push to the PR branch; the commit is local on $(git branch --show-current)"
+      if ! git push -q; then
+        echo "couldn't push to the PR branch; the commit is local on $(git branch --show-current) (record: $RUN)"
+        exit 1
+      fi
     else
-      BRANCH="agent/improve-$TARGET-$(date -u +%Y%m%d)"
-      git switch -q -c "$BRANCH"
       git push -q -u origin "$BRANCH"
       gh pr create --title "agent: improve $TARGET" --body-file "$RUN/summary.md"
     fi
