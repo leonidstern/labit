@@ -267,6 +267,17 @@ try {
       check(eng, 'a label put inside the pinned card: the pin stays on the card', r.inner, JSON.stringify(r));
       check(eng, 'a pinned badge deleted, a badge of another tag elsewhere: lost, not on it', r.badge === null, JSON.stringify(r));
       await p.close();
+      p = await open(ctx, '<section id="s"><h2>Orders</h2><div id="target" class="card">Pending</div><p>Other words here.</p></section>');
+      r = await p.evaluate(() => {
+        const t = document.getElementById('target');
+        const a = pinOn('#target');
+        t.insertAdjacentHTML('afterend', '<div class="card">Pending</div>');
+        t.className = 'tile';
+        const n = A.findTarget(JSON.parse(JSON.stringify(a)));
+        return { onCopy: Boolean(n) && n !== t };
+      });
+      check(eng, 'a copy of the pinned card beside it, the original restyled: not silently on the copy', !r.onCopy, JSON.stringify(r));
+      await p.close();
       await ctx.close();
     } finally {
       await browser.close();

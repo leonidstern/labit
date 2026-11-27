@@ -475,8 +475,8 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
       const bare = !c.anchor?.element; // a pin from a selector alone: the agent's (labit pin), or one it placed (pin move)
       if (quick === true && !bare) continue;
       const edit = store.get(`lab-edit:${c.id}`) || undefined;
-      if ((c.resolved && !bare) || looked.has(c.id + c.anchor?.selector) || !(S.isAdmin || edit) || !c.anchor?.selector || c.anchor.gone || c.anchor.kind === 'board') continue; // (a board pin's element is in its frame's page, not this one)
-      looked.add(c.id + c.anchor.selector); // by its selector too: a pin moved to a new one (pin move) is looked at again
+      if ((c.resolved && !bare) || looked.has(c.id + c.anchor?.selector + c.resolved) || !(S.isAdmin || edit) || !c.anchor?.selector || c.anchor.gone || c.anchor.kind === 'board') continue; // (a board pin's element is in its frame's page, not this one)
+      looked.add(c.id + c.anchor.selector + c.resolved); // a pin moved to a new selector (pin move) or reopened is looked at again
       const anchor = !c.resolved && foundAt(c.anchor);
       // Its words or element were changed or taken away (the agent's edit): the lab says so on the pin's next wait.
       const changed = !c.resolved && spotChanged(c.anchor);

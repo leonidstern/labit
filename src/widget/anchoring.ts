@@ -1102,7 +1102,7 @@ function prove(a): Proof {
   const cls = / class="([^"]+)"/.exec(a.element || '')?.[1].trim().split(/\s+/) || [];
   // A box of its kind around it or in it says its words too (a card put in a new div, a label put in the card): the
   // one with its classes, else the one inside.
-  if (fp.u < 2 && ex.length > 1) {
+  if (fp.u < 2 && ex.some((n) => ex.some((d) => d !== n && n.contains(d)))) {
     const mine = ex.filter((n) => cls.every((c) => n.classList.contains(c)));
     ex = mine.length === 1 ? mine : ex.filter((n) => !ex.some((d) => d !== n && n.contains(d)));
   }
@@ -1123,7 +1123,7 @@ function prove(a): Proof {
   if (found.node || fp.u > 1) return found;
   // Its words rewritten where it stood (a status, a button's label): the element at its path, of its kind, with its
   // classes, between the same neighbours, shown as changed: it follows the change (Leo, 27 Nov).
-  if (at && cls.every((c) => at.classList.contains(c)) && co(at)) return guess(at);
+  if (at && cls.every((c) => at.classList.contains(c)) && co(at) && beside(at) === (fp.b || '')) return guess(at);
   // Its tag changed (a div made an article, a p a div) with too few words to tell: the one element of another tag with
   // all its classes (in its company, among several), shown as changed, so the pin follows it (Leo, 27 Nov).
   const like = cls.length ? [...document.querySelectorAll(cls.map((c) => '.' + CSS.escape(c)).join(''))].filter((n) => n.localName !== tag && !host.contains(n)) : [];
