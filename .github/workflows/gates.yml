@@ -47,9 +47,18 @@ jobs:
           JUDGE_METRICS: base/ci/metrics.mjs
         run: bash base/ci/measure.sh base "$RUNNER_TEMP/base.json" pr
 
+      # A release (package.json's version differs from base's): the PR side must also have a fresh co/co.js
+      # (staleBuild). Base is measured without it, so a stale copy on both sides still fails.
+      - name: A release?
+        id: rel
+        run: |
+          v() { node -p "require('./$1/package.json').version"; }
+          echo "release=$([ "$(v base)" != "$(v pr)" ] && echo 1 || echo 0)" >> "$GITHUB_OUTPUT"
+
       - name: Measure PR
         env:
           JUDGE_METRICS: base/ci/metrics.mjs
+          RELEASE: ${{ steps.rel.outputs.release }}
         run: bash base/ci/measure.sh pr "$RUNNER_TEMP/pr.json"
 
       - name: Compare PR with base

@@ -47,7 +47,7 @@ const METRICS = {
   },
   staleBuild: {
     kind: "ratchet", dir: "down", ideal: 0,
-    hint: "public/_lab/comments.js doesn't match a fresh build of src/comments.js (npm run build; those files are not kept in git), or co/co.js doesn't match a fresh npm run build:co (it is kept in git: run it and commit co/co.js).",
+    hint: "public/_lab/comments.js doesn't match a fresh build of src/comments.js (npm run build; those files are not kept in git), or, on a release, co/co.js doesn't match a fresh build: a release needs a fresh co/co.js: npm run build:co (and commit it).",
   },
   sharedScriptCopies: {
     kind: "ratchet", dir: "down", ideal: 0,
@@ -139,10 +139,11 @@ function collect() {
     const parts = readdirSync(dirname(fresh)).filter((f) => f !== "comments.js");
     m.staleBuild = [readFileSync(fresh).equals(readFileSync(PAGE_SCRIPT)), ...parts.map((f) => existsSync(join(dirname(PAGE_SCRIPT), f)) && readFileSync(join(dirname(fresh), f)).equals(readFileSync(join(dirname(PAGE_SCRIPT), f))))].every(Boolean) ? 0 : 1;
   }
-  // Colabit's one script is kept in git (colabits load it from a release), so main's copy must be what npm run build:co
-  // makes from the same source, byte for byte.
+  // Colabit's one script is kept in git and colabits load it from a release (@latest), so a release's copy must be what
+  // npm run build:co makes from the same source, byte for byte. Only on a release (RELEASE=1, gates.yml sets it on the
+  // PR side when the version changes): other PRs need not rebuild it.
   const buildCo = read("package.json").scripts?.["build:co"] ?? "";
-  if (existsSync(CO_SCRIPT) && buildCo.includes(`--outfile=${CO_SCRIPT}`)) {
+  if (process.env.RELEASE === "1" && existsSync(CO_SCRIPT) && buildCo.includes(`--outfile=${CO_SCRIPT}`)) {
     const fresh = join(mkdtempSync(join(tmpdir(), "build-co-")), "co.js");
     const b = run(buildCo.replace(`--outfile=${CO_SCRIPT}`, `--outfile=${fresh}`));
     if (b.status !== 0 || !existsSync(fresh)) fail(`npm run build:co failed:\n${b.out}${b.err}`);

@@ -12,10 +12,12 @@ Every PR, forks included, is measured against its own base commit. Takes seconds
 | `npmPackBytes` | may grow 4 KB per PR, never past 210 KB | what `npx` users download, README.md left out |
 | `oxlintProblems` | never more | pinned `oxlint@1.93.0` over lib, api, local.mjs, src/comments.js |
 | `typeErrors` | never more | TypeScript (pinned 5.9.3) over the plain JS via `tsconfig.json`; `npm run typecheck` lists them |
-| `staleBuild` | must be 0 | `public/_lab/comments.js` must equal a fresh `npm run build` of `src/comments.js`, and `co/co.js` (kept in git) a fresh `npm run build:co` |
+| `staleBuild` | must be 0 | `public/_lab/comments.js` must equal a fresh `npm run build` of `src/comments.js`; on a release PR (a new version), `co/co.js` (kept in git) a fresh `npm run build:co` |
 | `runtimeDependencies` | never more (it's 0) | the README promises none |
 | `readmeClaimsWrong` | never more | the README's size and file-count claims vs what was measured |
 
+- A release needs a fresh `co/co.js`: `npm run build:co`, and commit it. Colabits load it from the release (`@latest`), so
+  only a release PR checks it (`RELEASE=1`, set on the PR side); other PRs needn't rebuild it.
 - Over a per-PR budget on purpose? Add the `size-approved` label. Hard caps still apply;
   raising one means editing `ci/metrics.mjs`.
 - Both sides are measured with the **base** branch's `ci/`, so a PR can't change how it's judged.
