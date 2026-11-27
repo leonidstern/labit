@@ -33,7 +33,16 @@ try {
       await p.waitForFunction(() => document.querySelector('[data-lab-comments]')?.shadowRoot?.querySelector('.chat-btn'), null, { timeout: 8000 });
       await sleep(500);
       await p.evaluate(() => document.querySelector('[data-lab-comments]').shadowRoot.querySelector('.chat-btn').click());
-      await sleep(1500);
+      // The drawing waits while the list still moves (the chat keeps itself at its newest for a second as it opens), then
+      // takes a batch a frame: done when no batch is out and the height has held for a few frames (a busy CI runner is slow).
+      await p.waitForFunction(() => {
+        const box = document.querySelector('[data-lab-comments]').shadowRoot.querySelector('.chatwin .msgs');
+        const w = /** @type {any} */ (window);
+        const h = box.scrollHeight;
+        w.__same = w.__h === h && !box.querySelector('.warm') ? (w.__same || 0) + 1 : 0;
+        w.__h = h;
+        return w.__same >= 8;
+      }, null, { polling: 100, timeout: 8000 }).catch(() => {});
       const got = await p.evaluate(() => {
         const box = document.querySelector('[data-lab-comments]').shadowRoot.querySelector('.chatwin .msgs');
         const now = box.scrollHeight;

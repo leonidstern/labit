@@ -40,7 +40,7 @@ export const stamped = (bubble, stamp) => {
 // the scroll then would stop it.
 const BATCH = 24;
 const warmed = new WeakSet<Element>(); // drawn once: a node kept across redraws keeps its height (drawChat's same())
-export function warmChat(box: HTMLElement) {
+function warmChat(box: HTMLElement) {
   let held: HTMLElement[] = []; // drawn in full this frame: their real height is kept once the frame is drawn
   let down = false;
   let movedAt = 0;
