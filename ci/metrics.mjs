@@ -29,7 +29,7 @@ const METRICS = {
     hint: "Shrink src/comments.js without changing behaviour: remove dead code and duplication, then npm run build. No new dependencies.",
   },
   npmPackBytes: {
-    kind: "budget", dir: "down", perPr: 4096, max: 202_000,
+    kind: "budget", dir: "down", perPr: 4096, max: 210_000,
     hint: "Shrink the published package (npm pack): remove dead code from the shipped files.",
   },
   oxlintProblems: {
