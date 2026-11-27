@@ -101,14 +101,18 @@ test('two sessions answer the same pin at the same moment: both answers are kept
   assert.equal(new Set(replies.map((c) => c.id)).size, 2);
   const thread = all.find((c) => c.id === p.id);
   assert.deepEqual([thread.resolved, thread.resolvedBy], [true, 'agent']);
-  // The person writes again (reopens); one session resolves while the other says it is on it.
+  // The person writes again (reopens); one session resolves, then the other says it is on it: an agent starting work
+  // on a done pin reopens it (#669, Leo 27 Nov), whichever session closed it.
   await send(lab, { page: '/index', parent: p.id, name: 'Leo', text: 'not quite' });
   assert.equal((await list(lab, '/index')).find((c) => c.id === p.id).resolved, false);
   await sleep(150);
-  const [c, d] = await Promise.all([cli(lab, 'sess-a', 'resolve', p.id), cli(lab, 'sess-b', 'reply', p.id, 'Looking again', '--on-it')]);
-  assert.deepEqual([c.code, d.code], [0, 0], c.out + d.out);
+  const c = await cli(lab, 'sess-a', 'resolve', p.id);
+  assert.equal(c.code, 0, c.out);
+  assert.equal((await list(lab, '/index')).find((x) => x.id === p.id).resolved, true);
+  const d = await cli(lab, 'sess-b', 'reply', p.id, 'Looking again', '--on-it');
+  assert.equal(d.code, 0, d.out);
   const after = await list(lab, '/index');
-  assert.equal(after.find((x) => x.id === p.id).resolved, true, 'an agent\'s word does not reopen what an agent closed');
+  assert.equal(after.find((x) => x.id === p.id).resolved, false, 'an agent starting on a done pin reopens it');
   assert.equal(after.filter((x) => x.parent === p.id && x.text === 'Looking again' && x.intent === 'working').length, 1);
 });
 
