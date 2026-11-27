@@ -952,6 +952,19 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
   const newBoardBtn = el('button', { type: 'button' }, 'new board');
   // A board opening keeps the focus off ⋯ (the menu's own click gives it back there), so Esc closes the board.
   newBoardBtn.addEventListener('click', (e) => (e.stopPropagation(), setMenu(false), void newBoard()));
+  // On a board, the draw tool (Leo, 27 Nov: "so people with ipads and pencils can draw"): while it is on, a pen or a mouse
+  // draws, as holding D does (drag.ts), and a finger still moves the board. It goes off with the board.
+  S.penTool = false;
+  const drawBtn = el('button', { type: 'button' }, 'draw');
+  drawBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setMenu(false);
+    S.penTool = !S.penTool;
+    if (S.penTool) void part('draw');
+    else S.dKey = false; // off: a press points again
+    say(S.penTool ? 'draw with a pen or mouse; a finger moves the board' : 'drawing off');
+    render();
+  });
   const boardRows = () => [...(S.pageBoards || []).map((b) => {
     const row = el('button', { type: 'button' }, b.title || b.name);
     row.append(el('span', { class: 'n' }, ` · ${b.frames}`));
@@ -960,7 +973,9 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
     return row;
   }), newBoardBtn, ...(coarse ? [] : [boardHeld])];
   function placeBar() {
-    const inMenu = !S.on ? [] : S.menuBoards ? (S.menuRows ??= boardRows()) : [...(labHead ? [labHead, labsBtn] : []), doneBtn, movedBtn, ...(!globalThis.__LAB_CO__ && !S.board && self === top ? [newBoardBtn] : []), ...(globalThis.__LAB_CO__ ? [] : [copyBtn]), ...(coarse && mo ? [motionBtn] : []), toggleBtn, ...(expBox ? [expBox] : []), ...(coarse ? [] : [pageHeld]), ...(versionLine ? [versionLine] : [])];
+    if (S.penTool && !boardShown()) S.penTool = S.dKey = false;
+    drawBtn.textContent = S.penTool ? 'stop drawing' : 'draw';
+    const inMenu = !S.on ? [] : S.menuBoards ? (S.menuRows ??= boardRows()) : [...(labHead ? [labHead, labsBtn] : []), ...(boardShown() ? [drawBtn] : []), doneBtn, movedBtn, ...(!globalThis.__LAB_CO__ && !S.board && self === top ? [newBoardBtn] : []), ...(globalThis.__LAB_CO__ ? [] : [copyBtn]), ...(coarse && mo ? [motionBtn] : []), toggleBtn, ...(expBox ? [expBox] : []), ...(coarse ? [] : [pageHeld]), ...(versionLine ? [versionLine] : [])];
     // In this order every time: a part that came back (hide comments, after showing them again) went to the end, below
     // the version line.
     if (S.on && (inMenu.some((b, i) => moreMenu.children[i] !== b) || moreMenu.children.length !== inMenu.length)) moreMenu.replaceChildren(...inMenu);

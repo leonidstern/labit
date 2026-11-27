@@ -36,6 +36,7 @@ export const drawOnce = () => {
 };
 export const draftHasText = () => Boolean(S.draft) && [...(W.root.querySelectorAll('.float textarea') as NodeListOf<HTMLTextAreaElement>)].some((t) => t.value.trim());
 export function startDrag(e) {
+  if (S.penTool && e.pointerType !== 'touch') (S.dKey = true), (S.drew = false); // the board's draw tool: a pen or mouse draws (a finger moves the board)
   // An open card doesn't block a new area: it closes once the area is drawn (a plain click still just closes it).
   if ((!S.on && !e.altKey) || draftHasText() || e.button !== 0 || e.pointerType === 'touch' || e.metaKey || e.ctrlKey || (e.shiftKey && !S.shiftUp && !S.dKey)) return;
   // Holding D, a press on an earlier drawing's line draws a new one instead of opening it.
