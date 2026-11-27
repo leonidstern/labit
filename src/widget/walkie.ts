@@ -55,6 +55,13 @@ let timer = 0;
 let scrollIdle = 0;
 let quietUntil = 0;
 let keptQuote = null;
+let ring = null; // a circle waiting to see where the pointer lands (gesture, below)
+let bodyOff = false; // the page had data-lab-off on its body itself
+let unsent = []; // walks the lab didn't take, in order: tal(k) sends them again
+let resending = false;
+let btnWas = null; // tal(k)'s own label, while the button says something else
+let btnT = 0;
+let shots = new Map(); // element -> what it was when seen: [{ t, label, sel }]
 let pill: HTMLElement;
 let ta: HTMLTextAreaElement;
 let tm: HTMLElement;
@@ -89,8 +96,10 @@ function allFrames(): HTMLIFrameElement[] {
   walk(document);
   return out;
 }
+const framePath = new WeakMap();
 function frameOf(el) {
   if (el.ownerDocument === document) return '';
+  if (framePath.has(el.ownerDocument)) return framePath.get(el.ownerDocument);
   const f = allFrames().find((x) => {
     try {
       return x.contentDocument === el.ownerDocument;
@@ -98,7 +107,9 @@ function frameOf(el) {
       return false;
     }
   });
-  return f ? `frame ${new URL(f.src, location.href).pathname} › ` : 'frame › ';
+  const out = f ? `frame ${new URL(f.src, location.href).pathname} › ` : 'frame › ';
+  framePath.set(el.ownerDocument, out);
+  return out;
 }
 const selectorOf = (el) => frameOf(el) + selectorIn(el);
 function selectorIn(el) {
@@ -122,24 +133,37 @@ function label(el) {
   const t = (el.getAttribute('aria-label') || el.getAttribute('alt') || el.placeholder || el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
   return (el.localName === 'tr' ? 'row ' : '') + (t.length > 40 ? `${t.slice(0, 39)}…` : t || el.localName);
 }
+// What an element was when it was seen, not when the walk is sent: a list that reuses its rows (a virtual list) shows
+// other words in the same element by then.
+function snap(el) {
+  if (!el) return el;
+  const d = { t: now(), label: label(el), sel: selectorOf(el) }, list = shots.get(el), last = list?.[list.length - 1];
+  if (!list) shots.set(el, [d]);
+  else if (last.label !== d.label || last.sel !== d.sel) list.push(d);
+  return el;
+}
+// What it was at time t (seconds into the walk); an element first met at the end (a group) is described now.
+function desc(el, t) {
+  const list = shots.get(el);
+  return list ? list.filter((d) => d.t <= t + 0.5).pop() || list[0] : { label: label(el), sel: selectorOf(el) };
+}
 
 // The pointer: logged only when the element under it changes. On a picture (a screenshot, a canvas, a video) the spot
 // is also where on it, in shares of its size.
+function spotOn(t, x?: number, y?: number) {
+  if (!t || !/^(img|canvas|svg|video|picture)$/.test(t.localName) || x == null || t.ownerDocument !== document) return null;
+  const r = t.getBoundingClientRect();
+  return { x: Math.max(0, Math.min(1, (x - r.left) / r.width)), y: Math.max(0, Math.min(1, (y - r.top) / r.height)) };
+}
 function point(el, x?: number, y?: number) {
-  const t = target(el);
-  let pos = null, cell = null;
-  if (t && /^(img|canvas|svg|video|picture)$/.test(t.localName) && x != null && t.ownerDocument === document) {
-    const r = t.getBoundingClientRect();
-    pos = { x: Math.max(0, Math.min(1, (x - r.left) / r.width)), y: Math.max(0, Math.min(1, (y - r.top) / r.height)) };
-    cell = `${Math.round(pos.x * 10)},${Math.round(pos.y * 10)}`;
-  }
+  const t = target(el), pos = spotOn(t, x, y), cell = pos && `${Math.round(pos.x * 10)},${Math.round(pos.y * 10)}`;
   if (t === cur && cell === curCell) return;
   curCell = cell;
   cur = t;
-  hovers.push({ t: now(), el: t, pos, drift: drifting || undefined });
+  hovers.push({ t: now(), el: snap(t), pos, drift: drifting || undefined });
 }
 // What is under a point, looking into same-origin frames: the frame's page is asked at the matching spot, scaled the
-// way the board shows it.
+// way the board shows it. Found by its box, as a board's frames don't take the pointer.
 function frameAt(x, y) {
   const fs = allFrames();
   for (let i = fs.length - 1; i >= 0; i--) {
@@ -150,13 +174,36 @@ function frameAt(x, y) {
       d = f.contentDocument;
     } catch {}
     if (!d) continue;
-    return d.elementFromPoint((x - r.left) * (f.clientWidth / r.width), (y - r.top) * (f.clientHeight / r.height)) || null;
+    return { f, el: d.elementFromPoint((x - r.left) * (f.clientWidth / r.width), (y - r.top) * (f.clientHeight / r.height)) || null };
   }
-  return undefined;
+  return null;
+}
+// Everything under a point, top first, inside shadow roots too (not labit's own).
+function stackAt(x, y) {
+  const out = [];
+  const add = (root) => {
+    for (const n of root.elementsFromPoint(x, y)) {
+      if (out.includes(n) || (root !== document && n.getRootNode() !== root)) continue;
+      if (n.shadowRoot && n !== W.host) add(n.shadowRoot);
+      out.push(n);
+    }
+  };
+  add(document);
+  return out;
+}
+// a holds b, across shadow roots
+function holds(a, b) {
+  for (let n = b; n; n = n.parentElement || n.getRootNode().host) if (n === a) return true;
+  return false;
 }
 function at(x, y, fallback?) {
-  const inFrame = frameAt(x, y);
-  if (inFrame !== undefined) return inFrame;
+  const fr = frameAt(x, y);
+  if (fr) {
+    // a meaningful thing over the frame (a button on top of it) is what is pointed at, not the frame's page under it
+    const top = stackAt(x, y).find((n) => n === fr.f || holds(n, fr.f) || target(n));
+    if (!top || top === fr.f || holds(top, fr.f)) return fr.el;
+    return top;
+  }
   const el = fallback && fallback !== W.host ? fallback : document.elementFromPoint(x, y);
   if (target(el)) return el;
   // a layer with nothing meaningful on top (a site's overlay, an animation wrapper): the first thing under it that is
@@ -217,7 +264,7 @@ function onUp() {
     clicks = clicks.filter((c) => c.t < d.t - 0.01); // a drag is not a click: no cut, no click spot
     let from = r.startContainer;
     if (from.nodeType !== 1) from = from.parentElement; // where the selection began
-    quotes.push({ t: d.t, end: now(), el: target(from), text: text.length > 160 ? `${text.slice(0, 159)}…` : text });
+    quotes.push({ t: d.t, end: now(), el: snap(target(from)), text: text.length > 160 ? `${text.slice(0, 159)}…` : text });
   } else lit(null);
 }
 
@@ -237,20 +284,26 @@ function gesture(x, y) {
   if (g.kind !== 'circle') return commit(g, now());
   // A loop can be a hook: overshooting and coming round to land on something. So wait a moment and look where the
   // pointer settles: on a thing the loop mostly lies outside of, it was a landing, not a ring round it.
-  const when = now();
-  setTimeout(() => {
-    if (!on) return;
-    const endEl = target(document.elementFromPoint(lastX, lastY)), er = endEl?.getBoundingClientRect(), bx = g.box;
-    const ov = er ? Math.max(0, Math.min(er.right, bx.r) - Math.max(er.left, bx.l)) * Math.max(0, Math.min(er.bottom, bx.b) - Math.max(er.top, bx.t)) : 0;
-    const area = (bx.r - bx.l) * (bx.b - bx.t);
-    if (endEl && area > 0 && ov < 0.4 * area && bx.r - bx.l < 220 && bx.b - bx.t < 220) return;
-    commit(g, when);
-  }, 300);
+  settle(); // one waiting already: decided now
+  ring = { g, when: now(), id: window.setTimeout(settle, 300) };
+}
+// Decide the waiting circle: also when the walk ends before its moment is up, so it neither goes missing nor lands in
+// the next walk.
+function settle() {
+  if (!ring) return;
+  const { g, when, id } = ring;
+  ring = null;
+  clearTimeout(id);
+  const endEl = target(document.elementFromPoint(lastX, lastY)), er = endEl?.getBoundingClientRect(), bx = g.box;
+  const ov = er ? Math.max(0, Math.min(er.right, bx.r) - Math.max(er.left, bx.l)) * Math.max(0, Math.min(er.bottom, bx.b) - Math.max(er.top, bx.t)) : 0;
+  const area = (bx.r - bx.l) * (bx.b - bx.t);
+  if (endEl && area > 0 && ov < 0.4 * area && bx.r - bx.l < 220 && bx.b - bx.t < 220) return;
+  commit(g, when);
 }
 function commit(g, when) {
   let el = g.kind === 'circle' ? inside(g.box) : target(at(g.x, g.y));
   if (el && tooBig(el)) el = null;
-  gestures.push({ t: when, kind: g.kind, el });
+  gestures.push({ t: when, kind: g.kind, el: snap(el) });
 }
 // A deliberate shake: 5+ quick reversals of 32 px or more along one line (sideways, up-down or slanted), within 0.9 s,
 // staying close to that line (a small wiggle while resting is not one).
@@ -328,7 +381,7 @@ function inside(box) {
 function inkLoop() {
   const dpr = devicePixelRatio || 1, cx = ink.getContext('2d');
   if (!cx) return;
-  if (ink.width !== innerWidth * dpr) [ink.width, ink.height] = [innerWidth * dpr, innerHeight * dpr];
+  if (ink.width !== innerWidth * dpr || ink.height !== innerHeight * dpr) [ink.width, ink.height] = [innerWidth * dpr, innerHeight * dpr];
   cx.setTransform(dpr, 0, 0, dpr, 0, 0);
   cx.clearRect(0, 0, innerWidth, innerHeight);
   const t = performance.now();
@@ -356,8 +409,8 @@ function onDown(e) {
     drag = { x: e.clientX, y: e.clientY, t: now() };
   }
   if (t) {
-    clicks.push({ t: now(), el: t });
-    point(t);
+    clicks.push({ t: now(), el: snap(t), pos: spotOn(t, e.clientX, e.clientY) }); // on a picture, where on it
+    point(t, e.clientX, e.clientY);
   }
 }
 function onScroll() {
@@ -371,15 +424,23 @@ function onScroll() {
       drifting = false;
       return;
     }
-    scrolls.push({ t: now(), y: Math.round(scrollY), el: target(document.elementFromPoint(innerWidth / 2, innerHeight / 2)) });
+    scrolls.push({ t: now(), y: Math.round(scrollY), el: snap(target(document.elementFromPoint(innerWidth / 2, innerHeight / 2))) });
   }, 250);
 }
 // The screen's own buttons and links do nothing while walking: a click is pointing.
 const onClick = (e) => on && !ours(e) && (e.preventDefault(), e.stopPropagation());
-// Words: each keeps the moment it first showed up, even when dictation corrects it later ("their" → "there").
+// Words: each keeps the moment it first showed up, even when dictation corrects it later ("their" → "there"). The
+// same words at the start and at the end keep theirs; the ones between take the old ones' times in order, so a word
+// taken out or put in the middle doesn't shift the times of the words after it.
 function onInput() {
   const next = ta.value.split(/\s+/).filter(Boolean), t = now();
-  words = next.map((w, i) => (words[i] ? { w, t: words[i].t } : { w, t }));
+  let a = 0, z = 0;
+  while (a < next.length && a < words.length && next[a] === words[a].w) a++;
+  while (z < next.length - a && z < words.length - a && next[next.length - 1 - z] === words[words.length - 1 - z].w) z++;
+  words = next.map((w, i) => {
+    const old = i < a ? words[i] : i >= next.length - z ? words[words.length - (next.length - i)] : words[i] && i < words.length - z ? words[i] : null;
+    return { w, t: old ? old.t : t };
+  });
   ta.scrollTop = ta.scrollHeight; // the newest line shows
 }
 const onKey = (e) => {
@@ -438,9 +499,14 @@ function start() {
   quotes = [];
   drag = null;
   cur = null;
+  shots = new Map();
+  clearTimeout(scrollIdle);
+  if (ring) clearTimeout(ring.id);
+  ring = null;
   keptQuote = window.CSS?.highlights?.get('lab-quote') || null; // an open pin's quote, back after the walk
   ta.value = '';
   // No pins anywhere while walking (Leo, 25 Nov): the page is labit's off-limits, the pointer the plain arrow.
+  bodyOff = document.body.hasAttribute('data-lab-off');
   document.body.setAttribute('data-lab-off', '');
   W.host.setAttribute('data-walking', '');
   pill.hidden = false;
@@ -450,22 +516,31 @@ function start() {
   inkLoop();
 }
 function stop(send: boolean) {
+  if (send) settle();
+  if (ring) clearTimeout(ring.id);
+  ring = null;
+  clearTimeout(scrollIdle);
   on = false;
   clearInterval(timer);
-  document.body.removeAttribute('data-lab-off');
+  if (!bodyOff) document.body.removeAttribute('data-lab-off');
   W.host.removeAttribute('data-walking');
   pill.hidden = true;
   ta.blur();
   if (keptQuote) CSS.highlights.set('lab-quote', keptQuote);
   else lit(null);
   if (!send) return;
+  // How exact the times are: words that showed up one by one (live dictation) or many at once (a whole sentence).
+  // Counted before cut(), which spreads words that came in bursts.
+  const alone = words.filter((w) => words.filter((x) => x.t === w.t).length <= 2).length;
+  const live = words.length ? Math.round((100 * alone) / words.length) : 0;
   const pieces = cut();
   if (!pieces.length) return void W.say?.('nothing was said');
-  void post(pieces);
+  void post(pieces, live);
 }
 export const walking = () => on;
 export function toggle(w: unknown) {
   W = w;
+  if (!on && unsent.length && !resending) return void retry(); // a walk the lab didn't take: this press sends it again
   return on ? stop(true) : start();
 }
 
@@ -537,6 +612,7 @@ function cut() {
     const pick = click ? [click, 'clicked'] : ring ? [ring, 'circled'] : jolt ? [jolt, 'shook it'] : null;
     if (pick?.[0].el) {
       p.el = pick[0].el;
+      p.pos = pick[0].pos;
       p.why = pick[1] + (p.shook && pick[1] !== 'shook it' ? ', shook it' : '');
       continue;
     }
@@ -562,7 +638,7 @@ function cut() {
     const end = log[i + 1] ? log[i + 1].t : now();
     if (h.el && end - h.t >= 0.3) stops.push({ t: h.t, end, el: h.el, w: (end - h.t) * (h.drift ? 0.3 : 1), pos: h.pos });
   });
-  for (const g of [...clicks, ...gestures]) if (g.el) stops.push({ t: g.t - 0.2, end: g.t + 0.4, el: g.el, w: 5 });
+  for (const g of [...clicks, ...gestures]) if (g.el) stops.push({ t: g.t - 0.2, end: g.t + 0.4, el: g.el, w: 5, pos: g.pos });
   for (const g of quotes) if (g.el) stops.push({ t: g.t, end: g.end + 0.3, el: g.el, w: 5 });
   stops.sort((a, b) => a.t - b.t);
   let lastLand = 0;
@@ -771,43 +847,76 @@ function cut() {
     };
     let g = group.closest('table, ul, ol, nav') || group;
     if (huge(g)) g = huge(group) ? null : group;
-    if (g) [q.el, q.why] = [g, `swept over ${n}`];
+    if (g) [q.el, q.why] = [snap(g), `swept over ${n}`];
   }
   return fin;
 }
 
 // "sent ✓" on the bar's talk button for a moment, no line over the bar (Leo, 25 Nov); as wide as it was, so the bar
-// doesn't move (the longer word takes some of the button's own padding).
-function sent() {
+// doesn't move (the longer word takes some of the button's own padding). "retry" stays until a kept walk is sent.
+function mark(word: string | null) {
   const b = W.root.querySelector('.walkie-btn') as HTMLElement | null;
-  if (!b || b.style.width) return; // already saying it
-  const was = [...b.childNodes];
-  b.style.cssText = `width:${b.getBoundingClientRect().width}px;padding:0;justify-content:center`;
-  b.replaceChildren('sent ✓');
-  setTimeout(() => (b.replaceChildren(...was), (b.style.cssText = '')), 1800);
+  if (!b) return;
+  clearTimeout(btnT);
+  if (!word) {
+    if (btnWas) b.replaceChildren(...btnWas);
+    b.style.cssText = '';
+    btnWas = null;
+    return;
+  }
+  if (!btnWas) {
+    btnWas = [...b.childNodes];
+    b.style.cssText = `width:${b.getBoundingClientRect().width}px;padding:0;justify-content:center`;
+  }
+  b.replaceChildren(word);
+}
+function sent() {
+  mark('sent ✓');
+  btnT = window.setTimeout(() => mark(unsent.length ? 'retry' : null), 1800);
 }
 
-// The whole walk goes to the page's chat as one message: each part with its spot (words + selector).
-async function post(pieces) {
+// The whole walk goes to the page's chat as one message: each part with its spot (words + selector), each spot as it
+// was when it was pointed at.
+async function post(pieces, live) {
   const where = (q) => (q ? ` at ${Math.round(q.x * 100)}% across, ${Math.round(q.y * 100)}% down` : '');
-  const named = (el) => `"${label(el)}" (${selectorOf(el)})`;
-  // How exact the times are: words that showed up one by one (live dictation) or many at once (a whole sentence)
-  const alone = words.filter((w) => words.filter((x) => x.t === w.t).length <= 2).length;
-  const live = words.length ? Math.round((100 * alone) / words.length) : 0;
+  const named = (el, t) => {
+    const d = desc(el, t);
+    return `"${d.label}" (${d.sel})`;
+  };
   const text = `Walkie-talkie, ${pieces.length} ${pieces.length === 1 ? 'part' : 'parts'} (timing: ${live}% of words came live, ${live >= 70 ? 'within about half a second' : 'rough, the words came in whole sentences'}):\n` + pieces.map((p, i) => {
-    let spot = p.el ? `On "${label(p.el)}"${where(p.pos)} (${selectorOf(p.el)}, ${p.why})` : 'On the page';
-    if (p.move) spot += `, move from ${named(p.move[0])} to ${named(p.move[1])}`;
+    const d = p.el && desc(p.el, p.to);
+    let spot = d ? `On "${d.label}"${where(p.pos)} (${d.sel}, ${p.why})` : 'On the page';
+    if (p.move) spot += `, move from ${named(p.move[0], p.to)} to ${named(p.move[1], p.to)}`;
     if (p.quotes) spot += `, quoting ${p.quotes.map((t) => `"${t}"`).join(' and ')}`;
-    if (p.compare) spot += `, comparing ${named(p.compare[0])} and ${named(p.compare[1])}`;
-    if (p.also?.length) spot += `, passing ${p.also.map(named).join(', ')}`;
-    return `${i + 1}. ${spot} ${p.from.toFixed(1)}–${p.to.toFixed(1)}s: ${p.said.map((w) => (w.at ? `${w.w} [${label(w.at)}${where(w.pos)} · ${selectorOf(w.at)}]` : w.w)).join(' ')}`;
+    if (p.compare) spot += `, comparing ${named(p.compare[0], p.to)} and ${named(p.compare[1], p.to)}`;
+    if (p.also?.length) spot += `, passing ${p.also.map((el) => named(el, p.to)).join(', ')}`;
+    return `${i + 1}. ${spot} ${p.from.toFixed(1)}–${p.to.toFixed(1)}s: ${p.said.map((w) => {
+      if (!w.at) return w.w;
+      const a = desc(w.at, w.t);
+      return `${w.w} [${a.label}${where(w.pos)} · ${a.sel}]`;
+    }).join(' ')}`;
   }).join('\n');
+  // its own nonce, kept with it: a retry after a lost answer can't save it twice
+  const payload = { name: W.store.get('lab-name') || 'walkie-talkie', text, anchor: { kind: 'page', width: innerWidth, height: innerHeight, dpr: devicePixelRatio || 1 }, nonce: Math.random().toString(36).slice(2) + Date.now().toString(36) };
+  if (await deliver(payload)) return;
+  unsent.push(payload); // kept: the next press of tal(k) sends it again
+  mark('retry');
+}
+async function deliver(payload) {
   try {
-    const { comment } = await W.send({ name: W.store.get('lab-name') || 'walkie-talkie', text, anchor: { kind: 'page', width: innerWidth, height: innerHeight, dpr: devicePixelRatio || 1 } });
+    const { comment } = await W.send(payload);
     W.addComment(comment, 1);
     W.render();
     sent();
+    return true;
   } catch (err) {
-    W.say?.(err.message || "couldn't reach the lab");
+    W.say?.(`${err.message || "couldn't reach the lab"} · retry sends the walk again`);
+    return false;
   }
+}
+async function retry() {
+  resending = true;
+  while (unsent.length && (await deliver(unsent[0]))) unsent.shift();
+  resending = false;
+  if (unsent.length) mark('retry');
 }
