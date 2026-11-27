@@ -49,6 +49,19 @@ Built so a PR, mostly opened by agents, hears back in about 3 minutes, and a fai
 - **The same before a push.** `npm run check` runs the quick checks, the unit tests and the browser tests CI would pick
   for your changes against origin/main (WebKit, needs `npm i --no-save playwright@1.65.1`; `--no-browser` skips them).
 
+## Merging and releasing
+
+- **main's rule.** A PR merges by squash only, once `gate`, `checks`, `windows`, `unit` and `browser` are green (each a
+  single check, whatever the plan picked). No review and no "up to date with main" step, so nothing waits on a rebase.
+  Leo can merge past it.
+- **Auto-merge.** Open the PR, then `gh pr merge <n> --auto --squash`: GitHub merges it the moment the checks are green
+  and deletes the branch. No one waits on the checks by hand.
+- **A red check.** Rerun it once (`gh run rerun <run> --failed`). A second failure is real: fix it, or quarantine the
+  test in `ci/flaky.json` with its reason, in the same PR.
+- **A release** is a PR that bumps `package.json`'s version (a patch, with its CHANGELOG section). That PR runs every
+  browser test in WebKit and Chromium and every unit test on Node 22, 24 and 26. Once it merges, `publish.yml` puts it
+  on npm as `latest` in about a minute, with no test run of its own.
+
 ## Waste check (`.github/workflows/waste.yml`)
 
 On every release tag (and on demand), `npm run waste` reports duplicated blocks, long functions, unused CSS custom

@@ -90,11 +90,12 @@ test('shards: every picked test runs once per engine, the longest shard near the
   assert.ok(shards('all').some((j) => j.files.split(' ').includes('anchoring-torture@1/3')));
 });
 
-test('main runs the browsers only for a version bump', async () => {
-  const { onMain } = await import('../ci/affected.mjs');
-  assert.equal(onMain('-  "version": "0.7.0",\n+  "version": "0.7.1",').tests, 'all');
-  assert.equal(onMain('+    "dev": "node scripts/dev.mjs",').tests, '');
-  assert.equal(onMain('').tests, '');
+test('a version bump is a release, tested whole in its PR; main runs no browser test', async () => {
+  const { onMain, bumpsVersion } = await import('../ci/affected.mjs');
+  assert.equal(bumpsVersion('-  "version": "0.7.0",\n+  "version": "0.7.1",'), true);
+  assert.equal(bumpsVersion('+    "dev": "node scripts/dev.mjs",'), false);
+  assert.equal(bumpsVersion(''), false);
+  assert.equal(onMain().tests, '');
 });
 
 test('reach map: a changed line runs the tests that ran it; one no test ran runs all (widget) or none (server)', async () => {
