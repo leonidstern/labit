@@ -117,7 +117,9 @@ test('more hot files in one go than the list holds is a reload, not a list that 
   const live = await listen();
   const first = await live.next(() => true);
   for (let i = 0; i < 60; i++) save(`many-${i}.css`, `h1{margin:${i}px}`);
-  const said = await live.next((s) => s.files > first.files || s.hot > (first.hot || 0));
+  // Only an answer to this burst: on Linux the test above removing its outside folder is a change too (far.svg), and
+  // that update can land here first. Taken for this one, it failed this test and left the burst's reload to the next.
+  const said = await live.next((s) => s.files > first.files || (s.hot > (first.hot || 0) && s.hotFiles?.some((f) => f.path.startsWith('/many-'))));
   live.stop();
   assert.ok(said?.files > first.files, 'every page reloads');
   assert.equal(said.changed, null, 'with no list of files');
