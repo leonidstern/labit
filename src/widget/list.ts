@@ -9,14 +9,17 @@ export function bindList(w: unknown) {
   W = w;
 }
 
+let going = 0; // the latest goTo: a board that opens late opens its pin only if nothing else was picked meanwhile
 export const goTo = (c, keys = false) => {
+  const mine = ++going;
   // A pin on a board this page links (overlay.ts): the board opens over the page and the pin opens on it; the page stays.
   const a = c.anchor || {};
   const view = (window as unknown as { __labBoard?: { name?: string; look?: (a: unknown) => void }; __labBoardView?: { show: (n: string) => Promise<unknown> } });
   // On its board, open: the camera goes to it (a frame is drawn whole: the board moves, no frame scrolls).
   if (a.kind === 'board' && view.__labBoard && (W.S.board || view.__labBoard.name === a.board)) return void (view.__labBoard.look?.(a), (W.S.openId = c.id), (W.S.draft = null), W.render());
   if (a.kind === 'board' && !W.S.board) {
-    return void view.__labBoardView?.show(a.board).then(() => setTimeout(() => (view.__labBoard?.look?.(a), (W.S.openId = c.id), (W.S.draft = null), W.render()), 300));
+    const was = W.S.openId;
+    return void view.__labBoardView?.show(a.board).then(() => setTimeout(() => mine === going && W.S.openId === was && (view.__labBoard?.look?.(a), (W.S.openId = c.id), (W.S.draft = null), W.render()), 300));
   }
   W.S.stepping = Boolean(W.S.openId);
   W.S.keepKeys = W.S.stepping && (keys || W.root.activeElement?.localName === 'textarea');
@@ -64,7 +67,7 @@ export function drawList(places?: Map<string, { moved?: boolean }>) {
   W.listBtn.setAttribute('aria-label', `next new comment, ${freshAll} new`);
   W.listBtn.setAttribute('aria-keyshortcuts', W.KEYS.next);
   const key = W.KEYS.next.toUpperCase();
-  W.listBtn.title = `next new comment: ${key} (⌃D while typing), ⌥${key}: back to the one read before`;
+  W.listBtn.title = `next new comment: ${key}, or ⌥${key} while typing (⌥⇧${key}: back to the one read before)`;
   W.listBtn.disabled = !freshAll;
   W.listBtn.classList.toggle('quiet', !freshAll);
   const doneCount = all.filter((c) => !W.isPage(c) && (c.resolved || workState(c)[0] === 'done') && !W.unread(c).length).length;
@@ -173,7 +176,7 @@ export const stepNew = (dir) => {
   goTo(fresh[next], !W.coarse); // the reply box takes the cursor (not on phones: no keyboard popping up)
 };
 
-// ⌥W goes back to the thread read before the open one, read or not, in the order they were first read; with none open,
+// ⌥⇧W goes back to the thread read before the open one, read or not, in the order they were first read; with none open,
 // to the last one read (Leo, 26 Nov: "doesnt open last readed comment"; it went to the unread one above).
 const opened: string[] = [];
 let last = '';

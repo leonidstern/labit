@@ -89,6 +89,16 @@ try {
       check(eng, 'back: the first route\'s one pin again', await until(() => shows(p, 1)), String(await pins(p)));
       await p.goForward();
       check(eng, 'forward: the second route\'s three pins', await until(() => shows(p, 3)), String(await pins(p)));
+      // An unsent comment on a route comes back when the app goes back to that route, as after a reload.
+      const box = () => p.evaluate(() => [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim'))?.shadowRoot.querySelector('textarea')?.value || '');
+      await p.mouse.click(500, 400);
+      await sleep(300);
+      await p.keyboard.type(`unsent on the second route in ${eng}`);
+      await sleep(400);
+      await p.evaluate((to) => history.pushState({}, '', to), one);
+      await until(() => shows(p, 1));
+      await p.evaluate((to) => history.pushState({}, '', to), two);
+      check(eng, 'an unsent comment comes back when the app goes back to its route', await until(async () => (await box()).includes('unsent on the second route')), await box());
 
       // ---- 19: a reload with the dev server down stays on the page, then goes on when it is back ----
       await p.goto(B + one);

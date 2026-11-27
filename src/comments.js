@@ -444,7 +444,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
       const res = await fetch(`${API}?page=${encodeURIComponent(S.page)}`, { headers: headers(), cache: 'no-store' });
       if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
-      if (mine !== loads) return;
+      if (mine !== loads) return true; // the newer load brings the list
       S.comments = data.comments || [];
       S.rev = res.headers.has('x-lab-rev') ? Number(res.headers.get('x-lab-rev')) : null; // the lab's comments version this list is as of
       S.isAdmin = Boolean(data.admin);
@@ -460,8 +460,11 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
       setTimeout(found, 3000);
     } catch {
       // Keep what is already on screen when a refresh fails.
+      shownAgain();
+      return false;
     }
     shownAgain();
+    return true;
   }
   // A pin found again somewhere else than its saved path (the page changed around it) says where it is now, so the
   // next look and the agent's text start from there. Once per pin and page load, once the page has settled, and only
@@ -491,10 +494,11 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
     setTimeout(() => (isTrying() ? relook() : found()), 500);
   };
   // Only what changed since comments version `since` (local labs): a reply costs ~1 KB, not the page's whole list.
-  // Anything odd (a gap, an error, an old lab) falls back to the whole list.
+  // Anything odd (a gap, an error, an old lab) falls back to the whole list. Says whether either came in (live.ts asks
+  // the same again on the next state when neither did).
   // One at a time, in the order asked: two answers on the way (wifi) may arrive the other way round, and the older would
   // then overwrite what the newer one brought (a pin resolved, then reopened, shown resolved; a deleted pin back).
-  let changesChain = Promise.resolve();
+  let changesChain = /** @type {Promise<boolean | void>} */ (Promise.resolve());
   const loadChanges = (since) => (changesChain = changesChain.then(() => changesSince(since)));
   async function changesSince(since) {
     try {
@@ -513,6 +517,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
       return load();
     }
     shownAgain();
+    return true;
   }
   function shownAgain() {
     setTimeout(found, 400, true); // an agent's new pin is looked at at once (labit pin waits for it)
@@ -580,7 +585,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
     const ro = 'ResizeObserver' in window ? new ResizeObserver(end) : null;
     ro?.observe(box);
     for (const k of box.children) ro?.observe(k);
-    const timer = setTimeout(() => ro?.disconnect(), 1100);
+    const timer = setTimeout(() => cancel(), 1100); // done: it leaves `stays` too
     const cancel = () => {
       stop();
       ro?.disconnect();
@@ -1266,7 +1271,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
       if (moved) {
         if (!c.resolved && !autoShut.has(c.id) && workState(c)[0] === 'done' && mayResolve(c)) {
           autoShut.add(c.id);
-          send({ action: 'resolve', id: c.id, edit: store.get(`lab-edit:${c.id}`) || undefined }).then(({ comment }) => (Object.assign(c, comment), render()), () => {});
+          send({ action: 'resolve', id: c.id, edit: store.get(`lab-edit:${c.id}`) || undefined }).then(({ comment }) => (Object.assign(c, comment), render()), () => autoShut.delete(c.id)); // failed: tried again on a later render
         }
         if (S.openId !== c.id) return;
       }
@@ -1433,7 +1438,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
         if (appear && !S.stepping) card.classList.add('in');
         // Reduced motion: the page's scroll to the pin is instant, so the card is drawn again within its fade: it keeps the fade (a fresh node has no class).
         if (appear) S.inAt = performance.now();
-        if (appear) noteOpened(c.id); // ⌥W walks back through these (list.ts)
+        if (appear) noteOpened(c.id); // ⌥⇧W walks back through these (list.ts)
         else if (still.matches && performance.now() - S.inAt < 200) card.classList.add('in');
         if (prevHeight) card.style.minHeight = `min(${prevHeight}px, var(--_thread-max))`;
         S.stepping = S.keepKeys = false;
@@ -1836,22 +1841,22 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
       e.preventDefault();
       return void undoLast();
     }
-    // ⌥W (Leo, 27 Nov) goes back to the comment read before; Control-D goes to the next new one. Both work from the
-    // widget's own text boxes too, where a plain W types a letter (Leo 18 Nov), and type nothing there. ⌥W is the next
-    // key's place with Option (actionOf: Option turns W into ∑ on a Mac, so the key's place, not its letter). Shift stays
-    // free: it selects text.
-    const backKey = e.altKey && !e.ctrlKey && actionOf(e) === 'next';
-    if (S.on && (backKey || (e.ctrlKey && !e.altKey && e.code === 'KeyD')) && !e.metaKey && !e.shiftKey && !(typing(e) && !e.composedPath().includes(host))) {
+    // ⌥W goes to the next new comment, ⌥⇧W back to the one read before (Leo, 27 Nov); Control-D is next too. They work
+    // from the widget's own text boxes too, where a plain W types a letter (Leo 18 Nov), and type nothing there. ⌥W is the
+    // next key's place with Option (actionOf: Option turns W into ∑ on a Mac, so the key's place, not its letter). Shift
+    // alone takes no W: it selects text.
+    const optKey = e.altKey && !e.ctrlKey && actionOf(e) === 'next';
+    if (S.on && (optKey || (e.ctrlKey && !e.altKey && !e.shiftKey && e.code === 'KeyD')) && !e.metaKey && !(typing(e) && !e.composedPath().includes(host))) {
       e.preventDefault();
       // Words typed in a reply box aren't thrown away: it nudges instead, send or clear them first.
       const typed = /** @type {HTMLTextAreaElement | null} */ (root.querySelector('.card textarea, .float textarea'));
       if (typed?.value.trim()) return shake(typed.closest('.card, .float'));
-      return backKey ? stepBack() : stepNew(1);
+      return optKey && e.shiftKey ? stepBack() : stepNew(1);
     }
     const act = actionOf(e);
     // The list's keys, with comments shown and nothing typed: L list, T chat, J/K next/previous, R reply, E resolve.
     // By the key's place, not its letter, so the keys work with any layout (Russian, Greek…): the C key is C (keyOf).
-    // The keys (Leo, 2026-11-15/16), marked in the bar's words: cha(t) (C was chat until 19 Nov), ne(w) (⌥W: back to the one read before, above),
+    // The keys (Leo, 2026-11-15/16), marked in the bar's words: cha(t) (C was chat until 19 Nov), ne(w) (⌥⇧W: back to the one read before, above),
     // P pause, M hide, E show/hide done. With a thread open: R reply, E resolve (done's own key).
     // Shift takes none of these (it selects text): ⇧D draws straight, ⇧B and the rest belong to the board.
     // H folds the bar into the rabbit or opens it (Leo, 26 Nov). Computers only.
@@ -2392,7 +2397,17 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
   };
   addEventListener('resize', reflow);
   addEventListener('resize', () => requestAnimationFrame(() => requestAnimationFrame(revealOpen))); // a turned phone: the open thread's pin stays in sight, above its sheet
-  addEventListener('scroll', (e) => e.target !== document && !host.contains(/** @type {Node} */ (e.target)) && reflow(true), { capture: true, passive: true }); // the page's own scroll moves only what is held to the screen
+  addEventListener('scroll', (e) => e.target !== document && !host.contains(/** @type {Node} */ (e.target)) && reflow(true), { capture: true, passive: true });
+  // Pins on sticky or fixed things (phones and tablets, pinhold.ts stuck) fade while the page itself scrolls, and are
+  // placed again on their spots 150 ms after it stops.
+  /** @type {any} */
+  let scrollQuiet = 0;
+  addEventListener('scroll', (e) => {
+    if (e.target !== document || !layer.querySelector('.stuck')) return;
+    if (!host.hasAttribute('data-scrolling')) host.setAttribute('data-scrolling', '');
+    clearTimeout(scrollQuiet);
+    scrollQuiet = setTimeout(() => (host.removeAttribute('data-scrolling'), reflow()), 150);
+  }, { passive: true }); // the page's own scroll moves only what is held to the screen
 
   // Client-side navigation (pushState, back/forward, Astro view transitions): comments follow the new page,
   // and the layer comes back if the page swapped out <body>.
@@ -2414,6 +2429,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
     S.comments = [];
     S.draft = null;
     S.openId = null;
+    S.loaded = false; // the new page's list is a first load: its half-written thread or unsent comment comes back
     render();
     load();
   };

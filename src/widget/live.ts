@@ -170,16 +170,19 @@ export function startLive() {
       e.stopImmediatePropagation();
       clearTimeout(reloadTimer);
       reloadTimer = 0;
-      now();
+      now(true);
     };
     // The page is asked for first: with its dev server down the lab answers a plain 502, and with its file gone its page
     // list or "not found" (200 for a folder): none of them has a widget, and a reload would leave the tab there for good.
-    // This page stays, and asks again in a moment.
-    const now = () =>
+    // This page stays, and asks again in a moment. `taken`: the "!" was tapped, so it goes whatever is open.
+    const now = (taken = false) =>
       fetch(location.href, { cache: 'no-store', headers: { accept: 'text/html', 'x-lab': '1' } })
-        .then((r) => r.ok && r.text().then((t) => t.includes('data-live')), () => false)
+        .then((r) => r.ok && r.text().then((t) => t.includes('data-live')))
+        .catch(() => false) // a body cut off mid-read too: asked again
         .then((up) => {
           if (!up) return void (reloadTimer ||= setTimeout(() => ((reloadTimer = 0), reload()), 2000));
+          // A thread, the chat or a drawing opened while the page was asked for: the reload waits for it again.
+          if (!taken && (document.hidden || busy())) return void reload();
           keep();
           // A board's frame: the board loads it anew behind this one and swaps them (board/mount.ts again), no blank frame.
           if (!frame || !(top as unknown as { __labBoard?: { again?: (n: string) => boolean } }).__labBoard?.again?.(window.name)) location.reload();
@@ -467,8 +470,15 @@ export function startLive() {
         // One version on and it names the pages it changed, none of them this one: nothing to fetch. (An older lab sends
         // no commentPages; more than one version on, the pages in between aren't known.)
         const elsewhere = v.comments === commentsRev + 1 && Array.isArray(v.commentPages) && !v.commentPages.includes(W.S.page);
-        if (commentsRev !== null && v.comments !== commentsRev && !elsewhere) W.loadChanges(commentsRev); // keeps typed text: it adds replies in place
-        commentsRev = v.comments;
+        // The version moves on only once its changes are in: one that failed (and its whole-list fallback with it) is
+        // asked for again on the next state, not skipped (a reply would never show).
+        if (commentsRev !== null && v.comments !== commentsRev && !elsewhere) {
+          const to = v.comments;
+          const era = W.script.dataset.lab;
+          Promise.resolve(W.loadChanges(commentsRev)).then((ok) => { // (a board's frame loads none: no answer)
+            if (ok && era === W.script.dataset.lab) commentsRev = Math.max(commentsRev, to); // (a restarted lab counts again from its own)
+          });
+        } else commentsRev = v.comments;
         // read on another device with your name
         if (v.reads !== readsAt) {
           readsAt = v.reads;

@@ -32,14 +32,26 @@ const animsOf = (el) => pageAnims().filter((a) => el.contains(targetOf(a))).sort
 const videosIn = (el) => (el instanceof HTMLVideoElement ? [el] : [...el.querySelectorAll('video')]);
 const moving = () => [...new Set([...document.querySelectorAll('video'), ...held, ...pageAnims().filter((a) => a.playState === 'running').map(targetOf)])].filter((el) => el?.isConnected);
 const isStill = (el) => videosIn(el).every((v) => v.paused) && animsOf(el).every((a) => a.playState !== 'running');
-const setItem = (el, stop) => {
+const ours = new WeakSet<object>(); // the videos and animations labit itself paused: "play all" plays only those
+// `mine`: play only what labit paused (play all), not a video the person had paused themselves.
+const setItem = (el, stop, mine = false) => {
   for (const v of videosIn(el)) {
-    if (stop) v.pause();
-    else v.play?.().catch(() => {});
+    if (stop && !v.paused) {
+      v.pause();
+      ours.add(v);
+    } else if (!stop && (!mine || ours.has(v))) {
+      ours.delete(v);
+      v.play?.().catch(() => {});
+    }
   }
   for (const a of animsOf(el)) {
-    if (stop && a.playState === 'running') a.pause();
-    else if (!stop && a.playState === 'paused') a.play();
+    if (stop && a.playState === 'running') {
+      a.pause();
+      ours.add(a);
+    } else if (!stop && a.playState === 'paused' && (!mine || ours.has(a))) {
+      ours.delete(a);
+      a.play();
+    }
   }
   if (!stop) for (const h of held) if (el.contains(h)) held.delete(h); // played from around it: what is inside plays too
   held[stop ? 'add' : 'delete'](el);
@@ -115,13 +127,13 @@ const seekMoment = (m) => {
     el = m?.sel ? document.querySelector(m.sel) : null;
   } catch {}
   if (!el || m.kind === 'gif') return false;
+  const a = el instanceof HTMLVideoElement ? null : animsOf(el)[0];
+  if (!a && !(el instanceof HTMLVideoElement)) return false; // nothing there to go back in: the page isn't paused for it
   setPause(true);
   if (!held.has(el)) setItem(el, true);
   if (el instanceof HTMLVideoElement) el.currentTime = m.at;
-  else {
-    const a = animsOf(el)[0];
-    const t = a?.effect?.getComputedTiming();
-    if (!a) return false;
+  else if (a) {
+    const t = a.effect?.getComputedTiming();
     a.currentTime = Number.isFinite(m.ms) ? m.ms : (t?.delay || 0) + ((m.pass || 1) - 1) * Number(t?.duration) + m.at * 1000;
   }
   refresh();
@@ -173,6 +185,7 @@ export const msOf = (el) => {
 let pageRate = 1;
 const rateOf = new Map<Element, number>(); // a thing's own speed, from its menu
 const ownRate = new WeakMap<object, number>(); // each animation's and video's own rate, to go back to
+const slowed = new Set<HTMLMediaElement>(); // videos at another rate: one taken off the page goes back to its own
 const wantRate = (t) => {
   let best = null;
   for (const [e, r] of rateOf) if (e.isConnected && e.contains(t) && (!best || best[0].contains(e))) best = [e, r];
@@ -184,15 +197,17 @@ const applyRates = () => {
     if (r !== 1 && !ownRate.has(x)) ownRate.set(x, x.playbackRate);
     const base = ownRate.get(x);
     if (base === undefined) return;
-    if (x instanceof HTMLMediaElement) x.playbackRate = base * r;
-    else x.updatePlaybackRate(base * r);
+    if (x instanceof HTMLMediaElement) {
+      x.playbackRate = base * r;
+      slowed[r === 1 ? 'delete' : 'add'](x);
+    } else x.updatePlaybackRate(base * r);
     if (r === 1) ownRate.delete(x);
   };
   for (const a of document.getAnimations()) {
     const t = (a.effect as KeyframeEffect | null)?.target;
     if (t && !W.root.contains(t)) set(a, wantRate(t));
   }
-  for (const v of document.querySelectorAll('video')) set(v, wantRate(v));
+  for (const v of new Set([...document.querySelectorAll('video'), ...slowed])) set(v, v.isConnected ? wantRate(v) : 1); // (it takes the speed again if it comes back)
 };
 const setRate = (el, r) => {
   if (el) rateOf.set(el, r);
@@ -206,7 +221,7 @@ const setRate = (el, r) => {
 };
 export const setSlow = (on) => setRate(null, on ? 0.25 : 1);
 export const setPause = (on) => {
-  for (const el of on ? moving().filter((el) => !isStill(el)) : [...held]) setItem(el, on);
+  for (const el of on ? moving().filter((el) => !isStill(el)) : [...held]) setItem(el, on, !on);
   refresh();
 };
 
@@ -294,7 +309,7 @@ const fill = () => {
     const pause = item(isStill(target) ? 'play' : 'pause', () => (setItem(target, !isStill(target)), (moment = momentOf(target) || moment))); // its moment as it stopped
     pause.dataset.key = W.KEYS.pause; // P works while the menu is open, as R and E do
     rows.push(pause);
-    rows.push(speedRow(rateOf.get(target) ?? pageRate, (v) => setRate(target, v)));
+    rows.push(speedRow(wantRate(target), (v) => setRate(target, v))); // its own, else what holds it, else the page's
     if (said && !under) rows.push(said);
     if (!W.coarse) rows.push(W.el('hr', {}), item(S.paused ? 'play all motion' : 'pause all motion', () => setPause(!S.paused)));
   }
@@ -395,7 +410,7 @@ export function bindMotion(w: unknown) {
     down = { x: e.clientX, y: e.clientY };
   }, true);
   addEventListener('pointermove', (e) => picking && down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 10 && (down = null), { capture: true, passive: true });
-  addEventListener('touchend', (e) => (picking || performance.now() - pickedAt < 600) && e.cancelable && e.preventDefault(), { capture: true, passive: false }); // no click, no video controls
+  addEventListener('touchend', (e) => (picking || performance.now() - pickedAt < 600) && e.cancelable && !e.composedPath().includes(W.host) && e.preventDefault(), { capture: true, passive: false }); // no click, no video controls (the sheet it opens keeps its taps)
   addEventListener('pointerup', (e) => {
     if (!picking || !down) return;
     e.stopImmediatePropagation();
@@ -407,5 +422,6 @@ export function bindMotion(w: unknown) {
   }, true);
   addEventListener('click', (e) => (picking || performance.now() - pickedAt < 600) && !e.composedPath().includes(W.host) && swallow(e), true);
   for (const type of ['animationstart', 'transitionrun', 'play']) addEventListener(type, () => anySlow() && applyRates(), true);
+  addEventListener('play', (e) => ours.delete(e.target as object), true); // played by the person: no longer labit's pause
   setInterval(() => anySlow() && applyRates(), 1000);
 }

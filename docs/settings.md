@@ -141,7 +141,7 @@ win over yours, key by key.
 | --- | --- | --- |
 | `toggle` | `m` | Show or hide comments |
 | `chat` | `t` | Open the chat |
-| `next` | `w` | The next new comment (with ⌥: back to the one read before) |
+| `next` | `w` | The next new comment (⌥W too, also while typing; ⌥⇧W: back to the one read before) |
 | `pause` | `p` | Pause the page's videos and animations, or play what was paused (each one also has its own menu: right-click it on a computer, ⋯ → motion on a phone) |
 | `slow` | `s` | Play the page's videos and animations at ¼ speed, or back at full speed (the speed row in a thing's own menu, ¼ ½ 1, sets only it); a pin made while paused carries the moment in ms |
 | `draw` | `d` | Held while you drag: draw a comment (a circle, an arrow, an underline…); the agent is told what it reads as |

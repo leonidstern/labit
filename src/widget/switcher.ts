@@ -68,11 +68,11 @@ export function bindSwitcher(deps: Deps) {
     active = 0;
     draw();
   });
-  // Keys anywhere in the box (after a click on a fold button too); Enter only from the search, so a focused
-  // button still does its own thing.
+  // Keys anywhere in the box (after a click on a fold button too); Enter only from the search or a row (the chosen
+  // row goes, not the one with focus), so another focused button still does its own thing.
   panel.addEventListener('keydown', (e) => {
     const rows = [...list.querySelectorAll<HTMLElement>('.sw-row')];
-    if (e.key === 'Enter' && e.target !== input) return;
+    if (e.key === 'Enter' && e.target !== input && !(e.target as HTMLElement).classList?.contains('sw-row')) return;
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
       if (!rows.length) return;
@@ -116,6 +116,7 @@ export function openSwitcher() {
   toCur = true;
   armed = '';
   showArchived = false;
+  failed = false;
   draw();
   // A phone: no keyboard until you tap the search (it pushed the sheet up and down as it opened, Leo 18 Nov).
   if (!matchMedia('(pointer: coarse)').matches) input.focus({ preventScroll: true });
@@ -137,12 +138,21 @@ export function closeSwitcher() {
 /** Ask for the labs ahead, as the ⋯ menu opens, so the box opens with its list. */
 export const preloadSwitcher = () => void load();
 
+// One answer at a time counts: an older ask that answers late (a lab starting, asked again at 1.5 s and 4 s) is dropped.
+// One that fails keeps the list already shown, or says so instead of "loading…".
+let loads = 0;
+let failed = false;
 async function load() {
+  const mine = ++loads;
+  let got = null;
   try {
-    data = await (await fetch(`${d.api}?page=${encodeURIComponent(d.page)}`, { cache: 'no-store' })).json();
-  } catch {
-    data = null;
-  }
+    const r = await fetch(`${d.api}?page=${encodeURIComponent(d.page)}`, { cache: 'no-store' });
+    if (!r.ok) throw new Error(String(r.status));
+    got = await r.json();
+  } catch {}
+  if (mine !== loads) return;
+  if (got) data = got;
+  failed = !got;
   if (switcherOpen()) draw();
 }
 
@@ -213,7 +223,7 @@ function draw() {
   const q = input.value.trim().toLowerCase();
   const out: HTMLElement[] = [];
   if (!data) {
-    list.replaceChildren(el('div', { class: 'sw-none' }, 'loading…'));
+    list.replaceChildren(el('div', { class: 'sw-none' }, failed ? "couldn't reach the lab: try again in a moment" : 'loading…'));
     return;
   }
   const local = !data.guest;
