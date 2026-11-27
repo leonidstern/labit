@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Members · Tidepool</title>
+<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="b2.css">
+</head>
+<body>
+<header class="site-header">
+  <a class="brand" href="/sit/tour">Tidepool</a>
+  <span class="tagline">Harbour Studio</span>
+  <nav>
+    <a href="/sit/b2-account" data-i18n="nav.calendar">Calendar</a>
+    <a href="/sit/b2-invite" aria-current="page" data-i18n="nav.members">Members</a>
+    <a href="/sit/b2-account" data-i18n="nav.settings">Settings</a>
+  </nav>
+</header>
+
+<main>
+  <section id="invite">
+    <h1 data-i18n="invite.title">Invite your team</h1>
+    <p class="lead" data-i18n="invite.lead">Send a link, or add people by email. They join with one click.</p>
+    <form class="invite-form">
+      <label>
+        <span data-i18n="invite.email.label">Email addresses</span>
+        <input type="text" name="emails" placeholder="mira@harbour.studio, jonas@harbour.studio">
+        <small data-i18n="invite.email.hint">Separate addresses with a comma.</small>
+      </label>
+      <button type="button" class="btn" data-i18n="invite.send">Send invites</button>
+    </form>
+  </section>
+
+  <section id="members">
+    <h2 data-i18n="invite.members.title">Members</h2>
+    <p data-i18n="invite.members.empty">Nobody has joined yet.</p>
+  </section>
+
+  <section id="roles">
+    <h2 data-i18n="invite.roles.title">Roles</h2>
+    <p data-i18n="invite.roles.admin">Admins can change billing and remove people.</p>
+    <p data-i18n="invite.roles.member">Everyone else can create and change events.</p>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <p class="brand">Tidepool</p>
+  <p class="tagline" data-i18n="footer.tagline">Shared calendars for small teams</p>
+  <p class="fine">© 2026 Tidepool GmbH · Hamburg</p>
+</footer>
+<script src="b2-i18n.js" defer></script>
+<script src="/_lab/comments.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Workspace · Tidepool</title>
+<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="b2.css">
+</head>
+<body>
+<header class="site-header">
+  <a class="brand" href="/sit/tour">Tidepool</a>
+  <span class="tagline">Harbour Studio</span>
+  <nav>
+    <a href="/sit/b2-account" aria-current="page">Workspace</a>
+    <a href="/sit/b2-invite">Members</a>
+    <a href="/sit/b2-integrations">Integrations</a>
+  </nav>
+</header>
+
+<main>
+  <section id="plan">
+    <h1>Harbour Studio</h1>
+    <p class="lead">Your workspace: the plan, what comes with it, and the settings everyone shares.</p>
+    <div class="plan-cards">
+      <article class="plan-card current">
+        <h3>Team</h3>
+        <p class="price-line">
+          <s class="was">€15</s>
+          <b class="now">€12</b>
+          <span class="per">per seat, per month</span>
+        </p>
+        <p class="fine">Your plan since March 2026.</p>
+      </article>
+      <article class="plan-card">
+        <h3>Studio</h3>
+        <p class="price-line">
+          <s class="was">€29</s>
+          <b class="now">€24</b>
+          <span class="per">per seat, per month</span>
+        </p>
+        <p class="fine">Adds booking pages and single sign-on.</p>
+      </article>
+    </div>
+  </section>
+
+  <section id="included">
+    <h2>What is included</h2>
+    <div class="tiles">
+      <article class="tile">
+        <h3>Calendars</h3>
+        <p>As many shared calendars as you need.</p>
+        <p class="status">Included in your plan</p>
+      </article>
+      <article class="tile">
+        <h3 class="is-new">Booking pages</h3>
+        <p>Let people outside the team pick a free slot.</p>
+        <p class="status">Studio plan only</p>
+      </article>
+      <article class="tile">
+        <h3 class="is-beta">Insights</h3>
+        <p>Charts of how the team spends its week.</p>
+        <p class="status">Included in your plan</p>
+      </article>
+      <article class="tile featured">
+        <h3 class="is-new">Integrations</h3>
+        <p>Slack, Linear, Zoom and nine more.</p>
+        <p class="status">Included in your plan</p>
+      </article>
+    </div>
+    <p class="note">Beta features can change without notice.</p>
+  </section>
+
+  <section id="week">
+    <h2>This week</h2>
+    <ul class="agenda">
+      <li><span class="title">Standup</span><time>Mon 09:30</time></li>
+      <li><span class="title">Quarterly planning review with the whole product team, Berlin office</span><time>Tue 10:00</time></li>
+      <li><span class="title">Lunch with Ines</span><time>Wed 12:30</time></li>
+      <li><span class="title">Quarterly planning review with the whole product team, Lisbon office</span><time>Thu 10:00</time></li>
+      <li><span class="title">On-call handover</span><time>Fri 16:00</time></li>
+    </ul>
+  </section>
+
+  <section id="feeds">
+    <h2>Calendar feeds</h2>
+    <p>Subscribe from any calendar app. Anyone with the link can read the team calendar.</p>
+    <ul class="feeds">
+      <li>With reminders: <code>https://feeds.tidepool.example/v2/workspaces/harbour-studio/calendars/team/events.ics?token=7f3a9c1e5b2d4860a1c3e5f7092b4d6e&amp;tz=Europe%2FBerlin&amp;alarms=on</code></li>
+      <li>Without reminders: <code>https://feeds.tidepool.example/v2/workspaces/harbour-studio/calendars/team/events.ics?token=7f3a9c1e5b2d4860a1c3e5f7092b4d6e&amp;tz=Europe%2FBerlin&amp;alarms=off</code></li>
+    </ul>
+  </section>
+
+  <section id="sharing">
+    <h2>Team calendar</h2>
+    <p>Everyone in the workspace sees this calendar. Share it outside the team with a link.</p>
+    <div class="toolbar">
+      <div class="menu-wrap">
+        <button type="button" class="btn ghost" aria-haspopup="menu" aria-expanded="false">Export</button>
+        <ul class="menu" role="menu" hidden>
+          <li role="menuitem" data-action="ics">Calendar file</li>
+          <li role="menuitem" data-action="csv">Spreadsheet</li>
+          <li role="menuitem" data-action="copy">Copy link</li>
+        </ul>
+      </div>
+      <div class="menu-wrap">
+        <button type="button" class="btn ghost" aria-haspopup="menu" aria-expanded="false">Share</button>
+        <ul class="menu" role="menu" hidden>
+          <li role="menuitem" data-action="invite">Invite by email</li>
+          <li role="menuitem" data-action="copy">Copy link</li>
+          <li role="menuitem" data-action="embed">Embed on a website</li>
+        </ul>
+      </div>
+      <span id="menu-status" role="status"></span>
+    </div>
+    <p>Links stop working the moment you turn sharing off.</p>
+    <p>People who open a shared link see event titles and times, never the guest list.</p>
+  </section>
+
+  <section id="usage">
+    <h2>Usage this month</h2>
+    <dl class="usage">
+      <dt>
+        <span class="has-tip" tabindex="0">Seats
+          <span class="tip" role="tooltip">Guests who only look at calendars do not use a seat.</span>
+        </span>
+      </dt>
+      <dd>9 of 12</dd>
+      <dt>
+        <span class="has-tip" tabindex="0">Storage
+          <span class="tip" role="tooltip">Guests can attach files too. Their files count towards the workspace.</span>
+        </span>
+      </dt>
+      <dd>3.1 of 10 GB</dd>
+    </dl>
+  </section>
+
+  <section id="defaults">
+    <h2>Defaults for new events</h2>
+    <form class="defaults">
+      <label>Length
+        <select name="length">
+          <option>15 minutes</option>
+          <option selected>30 minutes</option>
+          <option>45 minutes</option>
+          <option>1 hour</option>
+        </select>
+      </label>
+      <label>Reminder
+        <select name="reminder">
+          <option>None</option>
+          <option>5 minutes before</option>
+          <option selected>10 minutes before</option>
+          <option>30 minutes before</option>
+          <option>1 hour before</option>
+        </select>
+      </label>
+    </form>
+  </section>
+
+  <section id="billing-faq">
+    <h2>Billing questions</h2>
+    <details>
+      <summary>When am I charged?</summary>
+      <p>On the first of each month, for the seats in use that day.</p>
+    </details>
+    <details>
+      <summary>Can I pay once a year?</summary>
+      <p>Yes, and two months are free. You can change this at any time from the billing page.</p>
+    </details>
+    <details>
+      <summary>Do you send invoices?</summary>
+      <p>Every charge comes with a PDF invoice, sent to the billing contact.</p>
+    </details>
+    <details>
+      <summary>Who is the billing contact?</summary>
+      <p>The person who created the workspace. You can change this at any time from the billing page.</p>
+    </details>
+  </section>
+
+  <section id="danger">
+    <h2>Danger zone</h2>
+    <p>Deleting the workspace removes its calendars and events for everyone. This cannot be undone.</p>
+    <button type="button" class="btn danger" id="delete-open">Delete workspace</button>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <p class="brand">Tidepool</p>
+  <p class="tagline">Shared calendars for small teams</p>
+  <p class="fine">© 2026 Tidepool GmbH · Hamburg</p>
+</footer>
+
+<div class="modal-backdrop" id="delete-backdrop" hidden>
+  <div class="modal" id="delete-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-title">
+    <h2 id="delete-title">Delete workspace</h2>
+    <p>This removes 14 calendars and 2,381 events for everyone. This cannot be undone.</p>
+    <p class="fine">Invoices stay available for ten years.</p>
+    <div class="row">
+      <button type="button" class="btn ghost" id="delete-cancel">Cancel</button>
+      <button type="button" class="btn danger" id="delete-confirm">Delete workspace</button>
+    </div>
+  </div>
+</div>
+<script src="b2-account.js" defer></script>
+<script src="/_lab/comments.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+# Waste check for the page script on every release: duplicated blocks, long functions, unused CSS custom properties,
+# listeners added on every redraw, state nothing reads, and the page script's gzip size with what makes it up (ci/waste.mjs).
+# Report-only: the job fails only when comments.js is over its gzip cap. The report is in the job summary and uploaded
+# as an artifact. Zero secrets, no browser.
+#
+# A release is a vX.Y.Z tag (publish.yml makes it). A tag pushed with the workflow token starts no workflow, so
+# publish.yml starts this one itself (workflow_dispatch, on the tag) after it tags; a tag pushed by hand starts it
+# through `push: tags`. The AI review that reads this report is ci/waste-review.sh (ci/AGENT.md): it needs a logged-in
+# claude, so it is run from Leo's machine like the other agents, not here.
+name: waste
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  waste:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Waste report
+        env:
+          WASTE_OUT: ${{ runner.temp }}/waste-report.md
+        run: npm run waste # builds the page script first; writes the job summary
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: waste-report-${{ github.ref_name }}
+          path: ${{ runner.temp }}/waste-report.md
+          if-no-files-found: ignore

@@ -1,0 +1,102 @@
+[
+  {
+    "version": "2.5.0",
+    "date": "2026-11-10",
+    "notes": [
+      "Sync now sends changes in batches of up to 200.",
+      "The activity page shows which device a change came from.",
+      "Fixed a crash when a calendar was deleted while it was syncing."
+    ]
+  },
+  {
+    "version": "2.4.2",
+    "date": "2026-10-27",
+    "notes": [
+      "Fixed guests being asked to sign in twice.",
+      "Faster first load of the week view."
+    ]
+  },
+  {
+    "version": "2.4.1",
+    "date": "2026-10-13",
+    "notes": [
+      "Fixed the timeout being applied to the whole call instead of each try.",
+      "Retries are now logged with their delay."
+    ]
+  },
+  {
+    "version": "2.4.0",
+    "date": "2026-10-01",
+    "notes": [
+      "New: shared availability across calendars.",
+      "A Retry-After delay is now capped by maxDelayMs.",
+      "Dropped support for the v1 sync endpoints."
+    ]
+  },
+  {
+    "version": "2.3.1",
+    "date": "2026-09-18",
+    "notes": [
+      "Retries now honour the Retry-After header.",
+      "Fixed the week view starting on Sunday for some locales."
+    ]
+  },
+  {
+    "version": "2.3.0",
+    "date": "2026-09-02",
+    "notes": [
+      "New: templates for standups, offsites and on-call rotas.",
+      "Retries now use full jitter instead of a fixed delay.",
+      "Fixed duplicate events after moving a recurring event."
+    ]
+  },
+  {
+    "version": "2.2.3",
+    "date": "2026-08-19",
+    "notes": [
+      "Fixed invitations going out in the wrong time zone.",
+      "Smaller downloads on slow connections."
+    ]
+  },
+  {
+    "version": "2.2.2",
+    "date": "2026-08-05",
+    "notes": [
+      "Fixed a sync loop when two devices renamed the same calendar.",
+      "The default timeout is now 30 seconds."
+    ]
+  },
+  {
+    "version": "2.2.1",
+    "date": "2026-07-22",
+    "notes": [
+      "Fixed history older than 90 days showing on the Solo plan."
+    ]
+  },
+  {
+    "version": "2.2.0",
+    "date": "2026-07-08",
+    "notes": [
+      "New: guests can answer straight from the invitation email.",
+      "Calls to the sync service are now retried up to five times.",
+      "Fixed all-day events ending a day early."
+    ]
+  },
+  {
+    "version": "2.1.0",
+    "date": "2026-06-17",
+    "notes": [
+      "New: the activity page.",
+      "Exports now include declined events."
+    ]
+  },
+  {
+    "version": "2.0.0",
+    "date": "2026-06-01",
+    "notes": [
+      "New sync service (v2): changes arrive in seconds, not minutes.",
+      "New: the Studio plan.",
+      "Calendars from v1 are moved over the first time you sign in."
+    ]
+  }
+]

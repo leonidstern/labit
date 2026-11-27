@@ -1,0 +1,101 @@
+{
+  "$comment": "The widget's shared parts (checked by ci/reuse.mjs). Something new (a module, an animation) is listed here on purpose, with what it is, in the same pull request, so it's a choice made in review and not a copy that slipped in. Before adding one, look for the part that already does it.",
+  "modules": {
+    "anchoring.ts": "where a pin sits on the page and how it finds its spot again",
+    "boardcam.ts": "a board in the page: showing it, a tap on it that closes a comment, its camera moving the pins with it, and the page's pins hiding under its view",
+    "sheetmove.ts": "how a drawer moves under a finger and after it lets go (glide, carry, the throw that closes it): the comment drawers (sheets.ts) and the board drawer (src/board/overlay.ts) share it",
+    "chat.ts": "the chat sheet",
+    "components.ts": "which component drew an element (React, Vue, Svelte), for a pin; its own file (public/_lab/components.js), loaded only on a page a framework drew",
+    "composer.ts": "the text box for a comment or a reply, and its send button",
+    "framework.ts": "whether the page was drawn by React, Vue or Svelte, so components.ts is loaded and can say which component a pin is on",
+    "frame.ts": "a page inside a board's frame: draws nothing, binds nothing; keeps live updates and passes keys to the board",
+    "hold.ts": "a dev server's reload waits while a sheet is open",
+    "pinhold.ts": "pins the browser holds on their element with CSS anchor positioning (flag native): no script on scroll",
+    "ink.ts": "drawing pins (hold D and drag): the lines as they are drawn and over a saved drawing, and the drawing as an area comment",
+    "drag.ts": "dragging to mark an area (or, holding D, a drawing) with a mouse or pen, the ink at the end of a drag, and the words selected with Shift + drag offered as a comment",
+    "draw.ts": "what a drawing's lines read as (circled, arrow, underlined…); its own file (public/_lab/draw.js), loaded when D is first pressed",
+    "keys.ts": "the Shift and Alt keys: Shift (drag to quote words) with its cursor and Alt (Option) with its crosshair",
+    "list.ts": "the list of pins (a sheet on phones)",
+    "live.ts": "the live stream: listening badge, mode, who is heard",
+    "messages.ts": "one message in a thread or the chat",
+    "motion.ts": "pause and speed (¼ ½ 1) for what moves on the page (videos, animations) from a right-click menu on a computer and ⋯ → motion on a phone, and a pin's moment on it; its own file (public/_lab/motion.js), loaded once the page has something that moves, P or S is pressed, or a comment has a moment",
+    "motion.css": "the styles of motion.ts, which brings them with it",
+    "actions.ts": "action buttons: a data-lab-action element on the page opens a comment with its words, the agent acts on it",
+    "attach.ts": "the pictures of a comment: the strip above a box that holds some (paste, drop, ✕), the send with their tokens, and a message's thumbnails; its own file (public/_lab/attach.js), loaded when a picture comes or a message has one",
+    "reload.ts": "live reload in place: a saved stylesheet, picture, font or the page's own HTML patched without a reload (scroll, open things and typed text stay); its own file (public/_lab/reload.js), loaded by live.ts on the first save the page hears about",
+    "attach.css": "the styles of attach.ts, which brings them with it",
+    "pics.ts": "a picture made ready to send (the board's paste and a comment's attachment): kept as it is when small, else drawn smaller and encoded again; its own file (public/_lab/pics.js), loaded the first time a picture is put in",
+    "sheets.ts": "THE drawer: every sheet on a phone (handle, swipe down, dimmed page, keyboard fit, back closes). Any new panel on a phone uses it.",
+    "stick.ts": "a message list that stays at its newest while it shrinks (keyboard up) until you scroll back; used by the chat and a thread",
+    "styles.css": "the widget's one stylesheet",
+    "switcher.ts": "labs & pages (⌘K): a box on a computer, one of the sheets on a phone; built as its own file (public/_lab/switcher.js), loaded on the first ⌘K or ⋯ open",
+    "switcher.css": "the styles of switcher.ts, which brings them with it",
+    "thread.ts": "a pin's thread card",
+    "trial.ts": "a question's choices tried in the sentence: the differing words swapped in place, the block's height held, the page put back exactly",
+    "types.d.ts": "types shared by the modules",
+    "walkie.ts": "Walkie-talkie: talk while you point, with the computer's own dictation (no microphone); the pointer, clicks, circles, shakes and selected words are matched to the words and sent to the chat as one message; its own file (public/_lab/walkie.js), loaded on the bar's walkie-talkie or K",
+    "walkie.css": "the styles of walkie.ts, which brings them with it"
+  },
+  "classes": {
+    "pinboard": "the host of a board pin's strip in its card (boardcam.ts); the board's part draws the strip inside it, so no rule of the widget's styles it",
+    "copy-all": "the copy-link button: a row of the ⋯ menu (its rules), or hidden in the corner when comments are off; comments.js looks it up",
+    "walkie-btn": "the bar's walkie-talkie part (comments.js looks it up, walkie.ts takes over); a bar segment like the others, no rule of its own",
+    "boards-btn": "the page's \"boards · N\" part of the bar (comments.js looks it up, list.ts fills it); a bar segment like the others, no rule of its own",
+    "pv": "a board picture's preview, over the picture (mount.ts sets its src and shows it); styled by the board's img rules",
+    "moved-btn": "the 'moved' button in the bar; comments.js looks it up and the browser tests click it",
+    "nm": "the name box in the first-comment form; the tests fill it",
+    "ini": "the pointer's inner mark; comments.js sets its text and the tests read it",
+    "item": "a message in a thread card; thread.ts looks the messages up",
+    "under": "a card set under its words (trial.ts); comments.js asks whether a card is one when it ties it to its pin",
+    "cur": "the labs & pages row you are on (switcher.ts): arrow keys start from it",
+    "bv-close": "the board view's close button; the board browser tests click it",
+    "saved": "a stored area's outline (anchoring.ts drawZone 'saved', as against a new one's 'draft'): boardcam.ts finds it to move it with the board's camera; no rule of its own"
+  },
+  "animations": [
+    "lab-arrive",
+    "lab-swap",
+    "lab-gone",
+    "lab-turn",
+    "lab-draw",
+    "lab-ready",
+    "lab-fly",
+    "lab-twitch",
+    "lab-fade",
+    "lab-in",
+    "lab-out",
+    "lab-pin",
+    "lab-halo",
+    "lab-card-in",
+    "lab-ink-settle",
+    "lab-undo", "lab-scrolled-top", "lab-scrolled-end"
+  ],
+  "$where": "Files that may own a part: the drawer's gestures and keyboard fit live in sheets.ts (comments.js wires them up).",
+  "gestures": [
+    "sheets.ts",
+    "comments.js"
+  ],
+  "keyboardFit": [
+    "sheets.ts",
+    "comments.js"
+  ],
+  "values": {
+    "$comment": "Values written into a rule on purpose (ci/reuse.mjs part 6). Everything else comes from a token. Add one here with why, in the pull request that needs it.",
+    "colours": {},
+    "radii": {
+      "14px 14px 14px 2px": "the pin: a teardrop, its tail at the bottom left (28 px)",
+      "11px 11px 11px 2px": "the pin glyph in the bar: the same teardrop at 22 px",
+      "18px 18px 18px 6px": "the ring around a pin: the teardrop 4 px out, concentric",
+      "2px": "the grab handle: a 4 px tall pill",
+      "8px": "the switch in the ⋯ menu: a 16 px tall pill",
+      "12px": "the switch knob: a 12 px circle"
+    },
+    "motion": {
+      "0ms !important": "reduced motion: every animation runs at once"
+    },
+    "code": {
+      "anchoring.ts: rgb(1, 2, 3)": "a sentinel colour to tell whether the page set one, never drawn",
+      "sheetmove.ts: cubic-bezier(": "a sheet let go carries on at the speed it had: the curve is worked out from that speed and the way left (docs/motion.md), so no token can hold it",
+      "comments.js: rgba(52, 199, 89, .3)": "the selection highlight, drawn in the page document where the widget tokens are not"
+    }
+  }
+}

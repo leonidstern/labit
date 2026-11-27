@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Calendar internals · Tidepool Docs</title>
+<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="b2.css">
+</head>
+<body>
+<header class="site-header">
+  <a class="brand" href="/sit/tour">Tidepool</a>
+  <span class="tagline">Docs</span>
+  <nav>
+    <a href="/sit/docs">Sync</a>
+    <a href="/sit/b2-guide" aria-current="page">Calendar</a>
+    <a class="btn small" href="/signup">Start free trial</a>
+  </nav>
+</header>
+
+<main class="docs">
+  <h1>Calendar internals</h1>
+  <p class="lead">How invites, repeating events, time zones and reminders work, for people who change that code.</p>
+
+  <section id="invites">
+    <h2>Invites skip people who opted out</h2>
+    <p>
+      Since 2.4 a guest who opted out of mail gets no invite, the invite is written in the
+      guest's language, and every batch is written to the audit log. The change:
+    </p>
+    <figure class="code">
+      <figcaption>src/calendar/invite.ts</figcaption>
+      <pre class="diff"><code><span class="hunk">@@ -1,4 +1,5 @@</span>
+<span class="ctx"> import { mailer } from &#39;../mail/mailer&#39;;</span>
+<span class="add">+import { audit } from &#39;../audit/log&#39;;</span>
+<span class="ctx"> import { render } from &#39;./invite-template&#39;;</span>
+<span class="ctx"> import type { CalendarEvent, Guest } from &#39;./types&#39;;</span>
+<span class="ctx"> </span>
+<span class="hunk">@@ -6,9 +7,11 @@ import type { CalendarEvent, Guest } from &#39;./types&#39;;</span>
+<span class="ctx"> export async function sendInvites(event: CalendarEvent, guests: Guest[]): Promise&lt;string[]&gt; {</span>
+<span class="ctx">   const sent: string[] = [];</span>
+<span class="ctx">   for (const guest of guests) {</span>
+<span class="del">-    await mailer.send(guest.email, render(event));</span>
+<span class="add">+    if (guest.optedOut) continue;</span>
+<span class="add">+    await mailer.send(guest.email, render(event, guest.locale));</span>
+<span class="ctx">     sent.push(guest.id);</span>
+<span class="ctx">   }</span>
+<span class="add">+  await audit.log(&#39;invites.sent&#39;, sent.length);</span>
+<span class="ctx">   return sent;</span>
+<span class="ctx"> }</span>
+<span class="ctx"> </span></code></pre>
+    </figure>
+    <p>Sending an invite again works the same way and is logged the same way.</p>
+  </section>
+
+  <section id="repeats">
+    <h2>Repeating events</h2>
+    <p>
+      A repeating event is stored once, with a rule. The dates you see in the week view are
+      worked out when the view opens, never further ahead than <code>HORIZON_DAYS</code>.
+    </p>
+    <table class="code-table" data-file="src/calendar/recurrence.ts">
+      <tr><td class="num" data-line="34"></td><td class="src"><span class="tok-c">/** Every start of a repeating event between `from` and `to`, oldest first. */</span></td></tr>
+      <tr><td class="num" data-line="35"></td><td class="src"><span class="tok-k">export</span> <span class="tok-k">function</span> expand(event: CalendarEvent, <span class="tok-k">from</span>: Date, to: Date): Date[] {</td></tr>
+      <tr><td class="num" data-line="36"></td><td class="src">  <span class="tok-k">const</span> rule = event.rule;</td></tr>
+      <tr><td class="num" data-line="37"></td><td class="src">  <span class="tok-k">if</span> (!rule) <span class="tok-k">return</span> [event.start];</td></tr>
+      <tr><td class="num" data-line="38"></td><td class="src">  <span class="tok-k">const</span> step = stepOf(rule);</td></tr>
+      <tr><td class="num" data-line="39"></td><td class="src">  <span class="tok-k">const</span> starts: Date[] = [];</td></tr>
+      <tr><td class="num" data-line="40"></td><td class="src">  <span class="tok-k">const</span> limit = Math.min(to.getTime(), event.start.getTime() + HORIZON_DAYS * DAY);</td></tr>
+      <tr><td class="num" data-line="41"></td><td class="src">  <span class="tok-k">let</span> at = event.start.getTime();</td></tr>
+      <tr><td class="num" data-line="42"></td><td class="src">  <span class="tok-k">let</span> n = <span class="tok-n">0</span>;</td></tr>
+      <tr><td class="num" data-line="43"></td><td class="src">  <span class="tok-k">while</span> (at &lt;= limit) {</td></tr>
+      <tr><td class="num" data-line="44"></td><td class="src">    <span class="tok-k">if</span> (rule.count &amp;&amp; n &gt;= rule.count) <span class="tok-k">break</span>;</td></tr>
+      <tr><td class="num" data-line="45"></td><td class="src">    <span class="tok-k">if</span> (rule.until &amp;&amp; at &gt; rule.until.getTime()) <span class="tok-k">break</span>;</td></tr>
+      <tr><td class="num" data-line="46"></td><td class="src">    <span class="tok-k">if</span> (at &gt;= <span class="tok-k">from</span>.getTime()) starts.push(<span class="tok-k">new</span> Date(at));</td></tr>
+      <tr><td class="num" data-line="47"></td><td class="src">    at += step;</td></tr>
+      <tr><td class="num" data-line="48"></td><td class="src">    n += <span class="tok-n">1</span>;</td></tr>
+      <tr><td class="num" data-line="49"></td><td class="src">  }</td></tr>
+      <tr><td class="num" data-line="50"></td><td class="src">  <span class="tok-k">return</span> starts;</td></tr>
+      <tr><td class="num" data-line="51"></td><td class="src">}</td></tr>
+    </table>
+    <p>The step between two repeats comes from <code>stepOf</code>, which only knows days and weeks.</p>
+  </section>
+
+  <section id="zones">
+    <h2>Time zones</h2>
+    <p>Events keep the zone they were made in. Everything the viewer sees is shifted when it is shown.</p>
+    <div class="language-ts codeBlockContainer">
+      <div class="codeBlockTitle">src/calendar/timezone.ts</div>
+      <div class="codeBlockContent"><pre tabindex="0" class="prism-code language-ts"><code class="codeBlockLines"><span class="token-line"><span class="token keyword">import</span><span class="token plain"> </span><span class="token keyword">type</span><span class="token plain"> { CalendarEvent } </span><span class="token keyword">from</span><span class="token plain"> </span><span class="token string">&#39;./types&#39;</span><span class="token plain">;</span><br></span><span class="token-line"><span class="token plain" style="display:inline-block"></span><br></span><span class="token-line"><span class="token comment">/** Minutes between UTC and the zone at that moment, daylight saving included. */</span><br></span><span class="token-line"><span class="token keyword">export</span><span class="token plain"> </span><span class="token keyword">function</span><span class="token plain"> offsetMinutes(zone: string, at: Date): number {</span><br></span><span class="token-line"><span class="token plain">  </span><span class="token keyword">const</span><span class="token plain"> parts = </span><span class="token keyword">new</span><span class="token plain"> Intl.DateTimeFormat(</span><span class="token string">&#39;en-US&#39;</span><span class="token plain">, { timeZone: zone, timeZoneName: </span><span class="token string">&#39;longOffset&#39;</span><span class="token plain"> }).formatToParts(at);</span><br></span><span class="token-line"><span class="token plain">  </span><span class="token keyword">const</span><span class="token plain"> name = parts.find((p) =&gt; p.</span><span class="token keyword">type</span><span class="token plain"> === </span><span class="token string">&#39;timeZoneName&#39;</span><span class="token plain">)?.value ?? </span><span class="token string">&#39;GMT&#39;</span><span class="token plain">;</span><br></span><span class="token-line"><span class="token plain">  </span><span class="token keyword">const</span><span class="token plain"> m = name.match(/GMT([+-])(\d{</span><span class="token number">2</span><span class="token plain">}):(\d{</span><span class="token number">2</span><span class="token plain">})/);</span><br></span><span class="token-line"><span class="token plain">  </span><span class="token keyword">if</span><span class="token plain"> (!m) </span><span class="token keyword">return</span><span class="token plain"> </span><span class="token number">0</span><span class="token plain">;</span><br></span><span class="token-line"><span class="token plain">  </span><span class="token keyword">return</span><span class="token plain"> (m[</span><span class="token number">1</span><span class="token plain">] === </span><span class="token string">&#39;-&#39;</span><span class="token plain"> ? -</span><span class="token number">1</span><span class="token plain"> : </span><span class="token number">1</span><span class="token plain">) * (Number(m[</span><span class="token number">2</span><span class="token plain">]) * </span><span class="token number">60</span><span class="token plain"> + Number(m[</span><span class="token number">3</span><span class="token plain">]));</span><br></span><span class="token-line"><span class="token plain">}</span><br></span><span class="token-line"><span class="token plain" style="display:inline-block"></span><br></span><span class="token-line"><span class="token comment">/** The event&#39;s start and end as the viewer&#39;s clock shows them. */</span><br></span><span class="token-line"><span class="token keyword">export</span><span class="token plain"> </span><span class="token keyword">function</span><span class="token plain"> inZone(event: CalendarEvent, zone: string): { start: Date; end: Date } {</span><br></span><span class="token-line"><span class="token plain">  </span><span class="token keyword">const</span><span class="token plain"> startShift = offsetMinutes(zone, event.start) - offsetMinutes(event.zone, event.start);</span><br></span><span class="token-line"><span class="token plain">  </span><span class="token keyword">const</span><span class="token plain"> endShift = offsetMinutes(zone, event.end) - offsetMinutes(event.zone, event.end);</span><br></span><span class="token-line"><span class="token plain">  </span><span class="token keyword">return</span><span class="token plain"> {</span><br></span><span class="token-line"><span class="token plain">    start: </span><span class="token keyword">new</span><span class="token plain"> Date(event.start.getTime() + startShift * </span><span class="token number">60_000</span><span class="token plain">),</span><br></span><span class="token-line"><span class="token plain">    end: </span><span class="token keyword">new</span><span class="token plain"> Date(event.end.getTime() + endShift * </span><span class="token number">60_000</span><span class="token plain">),</span><br></span><span class="token-line"><span class="token plain">  };</span><br></span><span class="token-line"><span class="token plain">}</span><br></span><span class="token-line"><span class="token plain" style="display:inline-block"></span><br></span><span class="token-line"><span class="token comment">/** True when the event crosses midnight for the viewer but not for its owner. */</span><br></span><span class="token-line"><span class="token keyword">export</span><span class="token plain"> </span><span class="token keyword">function</span><span class="token plain"> movesDay(event: CalendarEvent, zone: string): boolean {</span><br></span><span class="token-line"><span class="token plain">  </span><span class="token keyword">if</span><span class="token plain"> (event.allDay) </span><span class="token keyword">return</span><span class="token plain"> false;</span><br></span><span class="token-line"><span class="token plain">  </span><span class="token keyword">const</span><span class="token plain"> local = inZone(event, zone);</span><br></span><span class="token-line"><span class="token plain">  </span><span class="token keyword">if</span><span class="token plain"> (local.start.getDate() === local.end.getDate()) </span><span class="token keyword">return</span><span class="token plain"> false;</span><br></span><span class="token-line"><span class="token plain">  </span><span class="token keyword">return</span><span class="token plain"> event.start.getDate() === event.end.getDate();</span><br></span><span class="token-line"><span class="token plain">}</span><br></span><span class="token-line"><span class="token plain" style="display:inline-block"></span><br></span><span class="token-line"><span class="token comment">/** True when the card should show the zone next to the time. */</span><br></span><span class="token-line"><span class="token keyword">export</span><span class="token plain"> </span><span class="token keyword">function</span><span class="token plain"> needsZoneLabel(event: CalendarEvent, zone: string): boolean {</span><br></span><span class="token-line"><span class="token plain">  </span><span class="token keyword">if</span><span class="token plain"> (event.allDay) </span><span class="token keyword">return</span><span class="token plain"> false;</span><br></span><span class="token-line"><span class="token plain">  </span><span class="token keyword">return</span><span class="token plain"> offsetMinutes(zone, event.start) !== offsetMinutes(event.zone, event.start);</span><br></span><span class="token-line"><span class="token plain">}</span><br></span></code></pre></div>
+    </div>
+  </section>
+
+  <section id="reminders">
+    <h2>Reminders</h2>
+    <p>One push per event, held back during quiet hours. The evening digest is folded away below.</p>
+    <figure class="code">
+      <figcaption>src/calendar/reminders.ts</figcaption>
+      <pre class="folds"><code><span class="tok-k">import</span> <span class="tok-k">type</span> { CalendarEvent, User } <span class="tok-k">from</span> <span class="tok-s">&#39;./types&#39;</span>;
+<span class="tok-k">import</span> { push } <span class="tok-k">from</span> <span class="tok-s">&#39;../notify/push&#39;</span>;
+
+<span class="tok-k">const</span> MINUTE = <span class="tok-n">60_000</span>;
+
+<span class="tok-c">/** When the reminder for this event goes out, or null when the user turned reminders off. */</span>
+<span class="tok-k">export</span> <span class="tok-k">function</span> reminderTime(event: CalendarEvent, user: User): Date | <span class="tok-k">null</span> {
+  <span class="tok-k">if</span> (user.reminderMinutes === <span class="tok-k">null</span>) <span class="tok-k">return</span> <span class="tok-k">null</span>;
+  <span class="tok-k">return</span> <span class="tok-k">new</span> Date(event.start.getTime() - user.reminderMinutes * MINUTE);
+}
+
+<span class="tok-c">/** True while the user does not want to be disturbed: 22:00 to 07:00 unless they changed it. */</span>
+<span class="tok-k">export</span> <span class="tok-k">function</span> inQuietHours(user: User, at: Date): boolean {
+  <span class="tok-k">const</span> hour = at.getHours();
+  <span class="tok-k">const</span> <span class="tok-k">from</span> = user.quietFrom ?? <span class="tok-n">22</span>;
+  <span class="tok-k">const</span> to = user.quietTo ?? <span class="tok-n">7</span>;
+  <span class="tok-k">if</span> (<span class="tok-k">from</span> === to) <span class="tok-k">return</span> false;
+  <span class="tok-k">if</span> (<span class="tok-k">from</span> &lt; to) <span class="tok-k">return</span> hour &gt;= <span class="tok-k">from</span> &amp;&amp; hour &lt; to;
+  <span class="tok-k">return</span> hour &gt;= <span class="tok-k">from</span> || hour &lt; to;
+}
+
+<span class="tok-c">/** One line about tomorrow&#39;s events, sent in the evening instead of one push per event. */</span>
+<span class="tok-k">export</span> <span class="tok-k">function</span> digest(events: CalendarEvent[], user: User): string {<button type="button" class="fold" aria-expanded="false" title="Show 8 lines">⋯ 8 lines</button><span class="folded" hidden>
+  <span class="tok-k">const</span> lines: string[] = [];
+  <span class="tok-k">for</span> (<span class="tok-k">const</span> event <span class="tok-k">of</span> events) {
+    <span class="tok-k">const</span> at = reminderTime(event, user);
+    <span class="tok-k">if</span> (!at) <span class="tok-k">continue</span>;
+    lines.push(<span class="tok-s">`${event.title} at ${event.start.toLocaleTimeString()}`</span>);
+  }
+  <span class="tok-k">if</span> (lines.length === <span class="tok-n">0</span>) <span class="tok-k">return</span> <span class="tok-s">&#39;&#39;</span>;
+  <span class="tok-k">return</span> <span class="tok-s">`Tomorrow: ${lines.join(&#39;, &#39;)}`</span>;</span>
+}
+
+<span class="tok-c">/** Sends the reminders that are due now. Returns how many went out. */</span>
+<span class="tok-k">export</span> <span class="tok-k">async</span> <span class="tok-k">function</span> sendDue(events: CalendarEvent[], user: User, now: Date): Promise&lt;number&gt; {
+  <span class="tok-k">let</span> sent = <span class="tok-n">0</span>;
+  <span class="tok-k">for</span> (<span class="tok-k">const</span> event <span class="tok-k">of</span> events) {
+    <span class="tok-k">const</span> at = reminderTime(event, user);
+    <span class="tok-k">if</span> (!at) <span class="tok-k">continue</span>;
+    <span class="tok-k">if</span> (at &gt; now) <span class="tok-k">continue</span>;
+    <span class="tok-k">if</span> (inQuietHours(user, now)) <span class="tok-k">continue</span>;
+    <span class="tok-k">await</span> push(user.id, <span class="tok-s">`${event.title} starts soon`</span>);
+    sent += <span class="tok-n">1</span>;
+  }
+  <span class="tok-k">return</span> sent;
+}</code></pre>
+    </figure>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <p class="brand">Tidepool</p>
+  <p class="tagline">Shared calendars for small teams</p>
+  <p class="fine">© 2026 Tidepool GmbH · Hamburg</p>
+</footer>
+<script src="b2-guide.js" defer></script>
+<script src="/_lab/comments.js" defer></script>
+</body>
+</html>

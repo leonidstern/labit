@@ -1,0 +1,1565 @@
+{
+  "fixtures": "bench/situations",
+  "agent_text": "bench/results/situations-agent-text.txt",
+  "situations": [
+    {
+      "id": "text-word",
+      "group": "text",
+      "tests": "point on one word in a paragraph; the word shows elsewhere on the page too",
+      "page": "/sit/pricing",
+      "comment": "say archive instead of this word",
+      "expect": {
+        "file": "pricing.html",
+        "lines": [
+          27
+        ],
+        "words": "history"
+      },
+      "in_agent_text": [
+        {
+          "what": "the word under the pin is quoted: [history]",
+          "ok": true,
+          "got": "\"…n one place and in sync, with unlimited [history] on every paid plan and no seat minimums…\""
+        },
+        {
+          "what": "the element is <p class=\"lead\">",
+          "ok": true,
+          "got": "<p class=\"lead\">"
+        }
+      ],
+      "anchor": {
+        "selector": "body > main:nth-of-type(1) > section:nth-of-type(1) > p:nth-of-type(1)",
+        "x": 0.33125,
+        "y": 0.4855143229166667,
+        "docX": 0.309375,
+        "docY": 231,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "text",
+        "element": "<p class=\"lead\">",
+        "text": "Tidepool keeps every calendar your team relies on in one place and in sync, with",
+        "section": "One calendar your whole team can trust",
+        "scheme": "light",
+        "background": "#ffffff",
+        "quote": {
+          "exact": "history",
+          "prefix": "n one place and in sync, with unlimited ",
+          "suffix": " on every paid plan and no seat minimums"
+        }
+      }
+    },
+    {
+      "id": "text-heading",
+      "group": "text",
+      "tests": "point on a heading; the same word is a table header and a second (hidden) heading",
+      "page": "/sit/pricing",
+      "comment": "rename this plan to Crew",
+      "expect": {
+        "file": "pricing.html",
+        "lines": [
+          48
+        ],
+        "words": "Team"
+      },
+      "in_agent_text": [
+        {
+          "what": "the word under the pin is quoted: [Team]",
+          "ok": true,
+          "got": "\"…[Team]…\""
+        },
+        {
+          "what": "the element is <h3>",
+          "ok": true,
+          "got": "<h3>"
+        },
+        {
+          "what": "the selector leads to the element (#plans)",
+          "ok": true,
+          "got": "#plans > div:nth-of-type(1) > article:nth-of-type(2) > h3:nth-of-type(1)"
+        }
+      ],
+      "anchor": {
+        "selector": "#plans > div:nth-of-type(1) > article:nth-of-type(2) > h3:nth-of-type(1)",
+        "x": 0.09699409205998831,
+        "y": 0.43037974683544306,
+        "docX": 0.42421875,
+        "docY": 508,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "text",
+        "element": "<h3>",
+        "text": "Team",
+        "inside": "#plans",
+        "section": "Team",
+        "scheme": "light",
+        "background": "#ffffff",
+        "quote": {
+          "exact": "Team",
+          "prefix": "",
+          "suffix": ""
+        }
+      }
+    },
+    {
+      "id": "text-list-item",
+      "group": "text",
+      "tests": "point on a list item; the same item is in the next plan’s list",
+      "page": "/sit/pricing",
+      "comment": "nobody gets this one, call it free/busy",
+      "expect": {
+        "file": "pricing.html",
+        "lines": [
+          55
+        ],
+        "words": "availability"
+      },
+      "in_agent_text": [
+        {
+          "what": "the word under the pin is quoted: [availability]",
+          "ok": true,
+          "got": "\"…Shared [availability]…\""
+        },
+        {
+          "what": "the section heading is \"Team\"",
+          "ok": true,
+          "got": "\"Team\""
+        },
+        {
+          "what": "the selector leads to the element (article:nth-of-type(2))",
+          "ok": true,
+          "got": "#plans > div:nth-of-type(1) > article:nth-of-type(2) > ul:nth-of-type(1) > li:nth-of-type(4)"
+        }
+      ],
+      "anchor": {
+        "selector": "#plans > div:nth-of-type(1) > article:nth-of-type(2) > ul:nth-of-type(1) > li:nth-of-type(4)",
+        "x": 0.35876128027007725,
+        "y": 0.4797297297297297,
+        "docX": 0.4734375,
+        "docY": 790,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "text",
+        "element": "<li>",
+        "text": "Shared availability",
+        "inside": "#plans",
+        "section": "Team",
+        "scheme": "light",
+        "background": "#ffffff",
+        "quote": {
+          "exact": "availability",
+          "prefix": "Shared ",
+          "suffix": ""
+        }
+      }
+    },
+    {
+      "id": "text-link-option",
+      "group": "text",
+      "tests": "Option-click on a link; three links on the page read the same, only the address differs",
+      "page": "/sit/pricing",
+      "comment": "on this plan the button should say Talk to us",
+      "expect": {
+        "file": "pricing.html",
+        "lines": [
+          70
+        ],
+        "words": "trial"
+      },
+      "in_agent_text": [
+        {
+          "what": "the word under the pin is quoted: [trial]",
+          "ok": true,
+          "got": "\"…Start free [trial]…\""
+        },
+        {
+          "what": "the element is href=\"/signup?plan=studio\"",
+          "ok": true,
+          "got": "<a class=\"btn\" href=\"/signup?plan=studio\">"
+        }
+      ],
+      "anchor": {
+        "selector": "#plans > div:nth-of-type(1) > article:nth-of-type(3) > a:nth-of-type(1)",
+        "x": 0.7568919390485053,
+        "y": 0.4943181818181818,
+        "docX": 0.728125,
+        "docY": 892,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "text",
+        "element": "<a class=\"btn\" href=\"/signup?plan=studio\">",
+        "text": "Start free trial",
+        "inside": "#plans",
+        "section": "Studio",
+        "scheme": "dark",
+        "background": "#1b1d21",
+        "quote": {
+          "exact": "trial",
+          "prefix": "Start free ",
+          "suffix": ""
+        }
+      }
+    },
+    {
+      "id": "text-table-cell",
+      "group": "text",
+      "tests": "point on a table cell; five cells in the table read the same",
+      "page": "/sit/pricing",
+      "comment": "should be 1 year here, not unlimited",
+      "expect": {
+        "file": "pricing.html",
+        "lines": [
+          106
+        ],
+        "words": "Unlimited"
+      },
+      "in_agent_text": [
+        {
+          "what": "the word under the pin is quoted: [Unlimited]",
+          "ok": true,
+          "got": "\"…[Unlimited]…\""
+        },
+        {
+          "what": "the selector leads to the element (tr:nth-of-type(3) > td:nth-of-type(2))",
+          "ok": true,
+          "got": "#compare > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(3) > td:nth-of-type(2)"
+        }
+      ],
+      "anchor": {
+        "selector": "#compare > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(3) > td:nth-of-type(2)",
+        "x": 0.2946769924517204,
+        "y": 0.48692602040816324,
+        "docX": 0.53359375,
+        "docY": 1332,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "text",
+        "element": "<td>",
+        "text": "Unlimited",
+        "inside": "#compare",
+        "section": "Compare plans",
+        "scheme": "light",
+        "background": "#ffffff",
+        "quote": {
+          "exact": "Unlimited",
+          "prefix": "",
+          "suffix": ""
+        }
+      }
+    },
+    {
+      "id": "other-gap-between-sections",
+      "group": "other",
+      "tests": "point on the empty space between two sections, far down the page",
+      "page": "/sit/pricing",
+      "comment": "too much empty space here",
+      "expect": {
+        "file": "pricing.html",
+        "lines": [
+          170,
+          172
+        ]
+      },
+      "in_agent_text": [
+        {
+          "what": "it says where on the page (not only where on a page-tall element)",
+          "ok": true,
+          "got": "<main> · center (50% across, 45% down)"
+        }
+      ],
+      "anchor": {
+        "selector": "body > main:nth-of-type(1)",
+        "x": 0.5,
+        "y": 0.45471420341803753,
+        "docX": 0.5,
+        "docY": 1503,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "element",
+        "element": "<main>",
+        "gapAbove": "<section id=\"compare\"> \"Compare plans\"",
+        "gapBelow": "<section id=\"faq\"> \"Questions\"",
+        "scheme": "light",
+        "background": "#ffffff"
+      }
+    },
+    {
+      "id": "text-area-part-of-line",
+      "group": "text",
+      "tests": "area over three words of one line, drawn taller than the line",
+      "page": "/sit/pricing",
+      "comment": "legal says this has to be 14",
+      "expect": {
+        "file": "pricing.html",
+        "lines": [
+          177
+        ],
+        "words": "within 30 days"
+      },
+      "in_agent_text": [
+        {
+          "what": "the words in the area are exactly the ones marked",
+          "ok": true,
+          "got": "\"within 30 days\""
+        }
+      ],
+      "zone_on_screen": {
+        "x0": 581,
+        "y0": 431,
+        "x1": 696,
+        "y1": 469
+      },
+      "anchor": {
+        "selector": "#faq > p:nth-of-type(1)",
+        "x": 0.619677734375,
+        "y": 0.2597701149425287,
+        "docX": 0.4535888671875,
+        "docY": 1671,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "text",
+        "element": "<p>",
+        "text": "Yes. You can cancel at any time from the billing page, and your plan stays activ",
+        "inside": "#faq",
+        "section": "Can I cancel?",
+        "zoneText": "within 30 days",
+        "scheme": "light",
+        "background": "#ffffff",
+        "zw": 0.180126953125,
+        "zh": 0.46590038314176246,
+        "docW": 115,
+        "docH": 38,
+        "quote": {
+          "exact": "30",
+          "prefix": "riod you paid for. If you cancel within ",
+          "suffix": " days of your first payment we refund it"
+        }
+      }
+    },
+    {
+      "id": "text-area-two-lines",
+      "group": "text",
+      "tests": "area over the second and third line of a four-line paragraph (with &nbsp; &mdash; &rsquo; in the source)",
+      "page": "/sit/pricing",
+      "comment": "this part is confusing, rewrite it",
+      "expect": {
+        "file": "pricing.html",
+        "lines": [
+          182,
+          185
+        ],
+        "words": "older than 90 days is hidden — not removed — until you upgrade again. Guests you invited keep their access, but you can’t add new ones past the limit. Exports &"
+      },
+      "in_agent_text": [
+        {
+          "what": "the words in the area are exactly the ones marked",
+          "ok": true,
+          "got": "\"older than 90 days is hidden — not removed — until you upgrade again. Guests you invited keep their access, but you can’t add new ones past the limit. Exports &\""
+        }
+      ],
+      "zone_on_screen": {
+        "x0": 178,
+        "y0": 425,
+        "x1": 827,
+        "y1": 475
+      },
+      "anchor": {
+        "selector": "body > main:nth-of-type(1)",
+        "x": 0.01875,
+        "y": 0.5562952057863406,
+        "docX": 0.1390625,
+        "docY": 1825,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "text",
+        "element": "<main>",
+        "text": "Nothing is deleted. Calendars above the Solo limit become read-only, and history",
+        "inside": "#faq",
+        "section": "What happens to my calendars if I downgrade?",
+        "zoneText": "older than 90 days is hidden — not removed — until you upgrade again. Guests you invited keep their access, but you can’t add new ones past the limit. Exports &",
+        "scheme": "light",
+        "background": "#ffffff",
+        "zw": 0.6764485677083333,
+        "zh": 0.015499830132103064,
+        "docW": 649,
+        "docH": 49,
+        "quote": {
+          "exact": "removed",
+          "prefix": "tory older than 90 days is hidden — not ",
+          "suffix": " — until you upgrade again. Guests you i"
+        }
+      }
+    },
+    {
+      "id": "text-form-input",
+      "group": "text",
+      "tests": "Option-click inside a form field (third of four, no id, no text of its own)",
+      "page": "/sit/pricing",
+      "comment": "make this a dropdown with ranges",
+      "expect": {
+        "file": "pricing.html",
+        "lines": [
+          200
+        ]
+      },
+      "in_agent_text": [
+        {
+          "what": "the element is <input",
+          "ok": true,
+          "got": "<input>"
+        },
+        {
+          "what": "the selector leads to the element (label:nth-of-type(3) > input)",
+          "ok": true,
+          "got": "#contact > form:nth-of-type(1) > label:nth-of-type(3) > input:nth-of-type(1)"
+        }
+      ],
+      "anchor": {
+        "selector": "#contact > form:nth-of-type(1) > label:nth-of-type(3) > input:nth-of-type(1)",
+        "x": 0.5,
+        "y": 0.47940865892291445,
+        "docX": 0.3078125,
+        "docY": 2448,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "element",
+        "element": "<input>",
+        "inside": "#contact",
+        "section": "Talk to us",
+        "scheme": "light",
+        "background": "#ffffff"
+      }
+    },
+    {
+      "id": "text-same-sentence-twice",
+      "group": "text",
+      "tests": "point on a sentence that is on the page twice, word for word (top and bottom)",
+      "page": "/sit/pricing",
+      "comment": "drop this, it is already said at the top",
+      "expect": {
+        "file": "pricing.html",
+        "lines": [
+          210
+        ],
+        "words": "card"
+      },
+      "in_agent_text": [
+        {
+          "what": "the word under the pin is quoted: [card]",
+          "ok": true,
+          "got": "\"…No credit [card] required.…\""
+        },
+        {
+          "what": "the section heading is \"Ready when you are\"",
+          "ok": true,
+          "got": "\"Ready when you are\""
+        }
+      ],
+      "anchor": {
+        "selector": "body > main:nth-of-type(1) > section:nth-of-type(6) > p:nth-of-type(3)",
+        "x": 0.5011574074074074,
+        "y": 0.4898813677599442,
+        "docX": 0.50078125,
+        "docY": 3022,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "text",
+        "element": "<p class=\"fine\">",
+        "text": "No credit card required.",
+        "section": "Ready when you are",
+        "scheme": "light",
+        "background": "#f6f5f2",
+        "quote": {
+          "exact": "card",
+          "prefix": "No credit ",
+          "suffix": " required."
+        }
+      }
+    },
+    {
+      "id": "other-sticky-header",
+      "group": "other",
+      "tests": "point on text in the sticky header after scrolling to the bottom; the footer right below has the same words",
+      "page": "/sit/pricing",
+      "comment": "too long up here, cut it to two words",
+      "expect": {
+        "file": "pricing.html",
+        "lines": [
+          13
+        ],
+        "words": "small"
+      },
+      "in_agent_text": [
+        {
+          "what": "the word under the pin is quoted: [small]",
+          "ok": true,
+          "got": "\"…Shared calendars for [small] teams…\""
+        },
+        {
+          "what": "the element is <span class=\"tagline\">",
+          "ok": true,
+          "got": "<span class=\"tagline\">"
+        },
+        {
+          "what": "the selector leads to the element (header)",
+          "ok": true,
+          "got": "body > header:nth-of-type(1) > span:nth-of-type(1)"
+        }
+      ],
+      "anchor": {
+        "selector": "body > header:nth-of-type(1) > span:nth-of-type(1)",
+        "x": 0.7194438214846378,
+        "y": 0.47801814375436147,
+        "docX": 0.20703125,
+        "docY": 2551,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "text",
+        "element": "<span class=\"tagline\">",
+        "text": "Shared calendars for small teams",
+        "scheme": "light",
+        "background": "#ffffff",
+        "quote": {
+          "exact": "small",
+          "prefix": "Shared calendars for ",
+          "suffix": " teams"
+        }
+      }
+    },
+    {
+      "id": "other-phone-layout",
+      "group": "other",
+      "tests": "tap on a phone (390 px wide, 3x): the table is replaced by cards there, so the same value is in the source twice",
+      "page": "/sit/pricing",
+      "comment": "Solo should say 30 days",
+      "expect": {
+        "file": "pricing.html",
+        "lines": [
+          132
+        ],
+        "words": "90"
+      },
+      "in_agent_text": [
+        {
+          "what": "the word under the pin is quoted: [90]",
+          "ok": true,
+          "got": "\"…3 Guests per event 5 History [90] days Shared availability No Support Com…\""
+        },
+        {
+          "what": "the element is <dd>",
+          "ok": true,
+          "got": "<dd>"
+        },
+        {
+          "what": "the selector leads to the element (article:nth-of-type(1))",
+          "ok": true,
+          "got": "#compare > div:nth-of-type(1) > article:nth-of-type(1) > dl:nth-of-type(1) > dd:nth-of-type(3)"
+        }
+      ],
+      "anchor": {
+        "selector": "#compare > div:nth-of-type(1) > article:nth-of-type(1) > dl:nth-of-type(1) > dd:nth-of-type(3)",
+        "x": 0.43053589484327603,
+        "y": 0.4720052083333333,
+        "docX": 0.7923076923076923,
+        "docY": 2187,
+        "width": 390,
+        "height": 844,
+        "dpr": 3,
+        "kind": "text",
+        "element": "<dd>",
+        "text": "90 days",
+        "inside": "#compare",
+        "section": "Solo",
+        "scheme": "light",
+        "background": "#ffffff",
+        "quote": {
+          "exact": "90",
+          "prefix": "3 Guests per event 5 History ",
+          "suffix": " days Shared availability No Support Com"
+        }
+      }
+    },
+    {
+      "id": "code-long-block",
+      "group": "code",
+      "tests": "a line far down a 74-line block that scrolls inside its own box (coloured code: many small spans)",
+      "page": "/sit/docs",
+      "comment": "the cap here cuts off what the server asked for",
+      "expect": {
+        "file": "src/sync/retry.ts",
+        "lines": [
+          56
+        ]
+      },
+      "in_agent_text": [
+        {
+          "what": "code block \"src/sync/retry.ts\", line 56",
+          "ok": true,
+          "got": "code \"src/sync/retry.ts\" (search the repo for it) · 56 of 74 in the block: const delayMs = Math.min(asked ?? backoff(attempt, options), options.maxDelayMs);"
+        }
+      ],
+      "anchor": {
+        "selector": "#retries > figure:nth-of-type(1) > pre:nth-of-type(1) > code:nth-of-type(1)",
+        "x": 0.3636583449193012,
+        "y": 0.7505876233045623,
+        "docX": 0.3796875,
+        "docY": 647,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "text",
+        "element": "<code>",
+        "inside": "#retries",
+        "section": "How a call is retried",
+        "scheme": "light",
+        "background": "#f5f5f3",
+        "quote": {
+          "exact": "Math.min(asked",
+          "prefix": "ror.retryAfter) : null; const delayMs = ",
+          "suffix": " ?? backoff(attempt, options), options.m",
+          "line": "const delayMs = Math.min(asked ?? backoff(attempt, options), options.maxDelayMs);",
+          "lineNo": 56,
+          "lines": 74,
+          "label": "src/sync/retry.ts"
+        }
+      }
+    },
+    {
+      "id": "code-identical-lines",
+      "group": "code",
+      "tests": "two identical lines in one block (pull and push): the second one",
+      "page": "/sit/docs",
+      "comment": "pushes need a longer timeout than this",
+      "expect": {
+        "file": "src/sync/client.ts",
+        "lines": [
+          42
+        ]
+      },
+      "in_agent_text": [
+        {
+          "what": "code block \"src/sync/client.ts\", line 42",
+          "ok": true,
+          "got": "code \"src/sync/client.ts\" (search the repo for it) · 42 of 50 in the block: signal: AbortSignal.timeout(timeoutMs),"
+        }
+      ],
+      "anchor": {
+        "selector": "#client > figure:nth-of-type(1) > pre:nth-of-type(1) > code:nth-of-type(1)",
+        "x": 0.2284317012088107,
+        "y": 0.8309814899451554,
+        "docX": 0.30078125,
+        "docY": 2046,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "text",
+        "element": "<code>",
+        "inside": "#client",
+        "section": "The client",
+        "scheme": "light",
+        "background": "#f5f5f3",
+        "quote": {
+          "exact": "AbortSignal.timeout(timeoutMs),",
+          "prefix": "y: JSON.stringify({ changes }), signal: ",
+          "suffix": " }); if (!res.ok) throw await SyncError.",
+          "line": "signal: AbortSignal.timeout(timeoutMs),",
+          "lineNo": 42,
+          "lines": 50,
+          "label": "src/sync/client.ts"
+        }
+      }
+    },
+    {
+      "id": "code-same-snippet-two-files",
+      "group": "code",
+      "tests": "the same line, at the same line number, in two blocks from two files (staging and production)",
+      "page": "/sit/docs",
+      "comment": "three is enough on this one",
+      "expect": {
+        "file": "config/sync.production.ts",
+        "lines": [
+          8
+        ]
+      },
+      "in_agent_text": [
+        {
+          "what": "code block \"config/sync.production.ts\", line 8",
+          "ok": true,
+          "got": "code \"config/sync.production.ts\" (search the repo for it) · 8 of 12 in the block: maxAttempts: 5,"
+        }
+      ],
+      "anchor": {
+        "selector": "#options > figure:nth-of-type(2) > pre:nth-of-type(1) > code:nth-of-type(1)",
+        "x": 0.16946908513173572,
+        "y": 0.6277858527131783,
+        "docX": 0.221875,
+        "docY": 3386,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "text",
+        "element": "<code>",
+        "text": "import type { ClientOptions } from '../src/sync/client'; export const sync: Clie",
+        "inside": "#options",
+        "section": "Production",
+        "scheme": "light",
+        "background": "#f5f5f3",
+        "quote": {
+          "exact": "maxAttempts:",
+          "prefix": "OKEN ?? '', timeoutMs: 30_000, retry: { ",
+          "suffix": " 5, baseDelayMs: 250, maxDelayMs: 8_000,",
+          "line": "maxAttempts: 5,",
+          "lineNo": 8,
+          "lines": 12,
+          "label": "config/sync.production.ts"
+        }
+      }
+    },
+    {
+      "id": "code-inline-in-prose",
+      "group": "code",
+      "tests": "inline code inside a sentence; the same name is in four code blocks, a table and another paragraph",
+      "page": "/sit/docs",
+      "comment": "link this to the options table",
+      "expect": {
+        "file": "docs.html",
+        "lines": [
+          191
+        ],
+        "words": "maxAttempts"
+      },
+      "in_agent_text": [
+        {
+          "what": "the word under the pin is quoted: [maxAttempts]",
+          "ok": true,
+          "got": "\"…Set [maxAttempts] to 1 to turn retries off, for example i…\""
+        },
+        {
+          "what": "the element is <code>",
+          "ok": true,
+          "got": "<code>"
+        }
+      ],
+      "anchor": {
+        "selector": "#options > p:nth-of-type(1) > code:nth-of-type(1)",
+        "x": 0.49290932531155995,
+        "y": 0.45951704545454547,
+        "docX": 0.209375,
+        "docY": 2700,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "text",
+        "element": "<code>",
+        "text": "maxAttempts",
+        "inside": "#options",
+        "section": "Options",
+        "scheme": "light",
+        "background": "#f6f5f2",
+        "quote": {
+          "exact": "maxAttempts",
+          "prefix": "Set ",
+          "suffix": " to 1 to turn retries off, for example i"
+        }
+      }
+    },
+    {
+      "id": "code-same-command-two-blocks",
+      "group": "code",
+      "tests": "the same command in two blocks with no file label (on your machine / in CI): the CI one",
+      "page": "/sit/docs",
+      "comment": "add --strict to this run",
+      "expect": {
+        "file": "docs.html",
+        "lines": [
+          239
+        ]
+      },
+      "in_agent_text": [
+        {
+          "what": "code block \"no label\", line 2",
+          "ok": true,
+          "got": "code · 2 of 3 in the block: npx tidepool sync --check"
+        },
+        {
+          "what": "the section heading is \"In CI\"",
+          "ok": true,
+          "got": "\"In CI\""
+        }
+      ],
+      "anchor": {
+        "selector": "#check > pre:nth-of-type(2) > code:nth-of-type(1)",
+        "x": 0.858964852439567,
+        "y": 0.4903645833333333,
+        "docX": 0.30078125,
+        "docY": 3976,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "text",
+        "element": "<code>",
+        "text": "npm ci npx tidepool sync --check npm test",
+        "inside": "#check",
+        "section": "In CI",
+        "scheme": "light",
+        "background": "#f5f5f3",
+        "quote": {
+          "exact": "--check",
+          "prefix": "npm ci npx tidepool sync ",
+          "suffix": " npm test",
+          "line": "npx tidepool sync --check",
+          "lineNo": 2,
+          "lines": 3
+        }
+      }
+    },
+    {
+      "id": "other-scrolled-far-rendered",
+      "group": "other",
+      "tests": "point on text at the very bottom of a long page; the text is put there by a script from a JSON file",
+      "page": "/sit/docs",
+      "comment": "this shipped a version later, move it",
+      "expect": {
+        "file": "data/changelog.json",
+        "lines": [
+          40
+        ],
+        "words": "honour"
+      },
+      "in_agent_text": [
+        {
+          "what": "the word under the pin is quoted: [honour]",
+          "ok": true,
+          "got": "\"…Retries now [honour] the Retry-After header.…\""
+        },
+        {
+          "what": "the section heading is \"2.3.1 · 18 September 2026\"",
+          "ok": true,
+          "got": "\"2.3.1 · 18 September 2026\""
+        }
+      ],
+      "anchor": {
+        "selector": "#changelog-list > ul:nth-of-type(5) > li:nth-of-type(1)",
+        "x": 0.16805555555555557,
+        "y": 0.4603448275862069,
+        "docX": 0.25390625,
+        "docY": 4765,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "text",
+        "element": "<li>",
+        "text": "Retries now honour the Retry-After header.",
+        "inside": "#changelog-list",
+        "section": "2.3.1 · 18 September 2026",
+        "scheme": "light",
+        "background": "#ffffff",
+        "quote": {
+          "exact": "honour",
+          "prefix": "Retries now ",
+          "suffix": " the Retry-After header."
+        }
+      }
+    },
+    {
+      "id": "photo-css-background",
+      "group": "photos",
+      "tests": "point on a thing in a CSS background photo (cover, cropped top and bottom)",
+      "page": "/sit/tour",
+      "comment": "this looks odd, pick a photo without it",
+      "expect": {
+        "file": "media/hero-desk.jpg",
+        "size": [
+          2400,
+          1350
+        ],
+        "box": [
+          1830,
+          670,
+          2170,
+          930
+        ]
+      },
+      "in_agent_text": [
+        {
+          "what": "the file is named (hero-desk)",
+          "ok": true,
+          "got": "background \"hero-desk\" (search the repo's src/ and public/ for it)"
+        },
+        {
+          "what": "the spot, in the file’s own pixels, is on the thing",
+          "ok": true,
+          "got": "83% across, 59% down of 2400×1350 (pixel 2000,799) (background cover) = 2000,799"
+        }
+      ],
+      "anchor": {
+        "selector": "body > main:nth-of-type(1) > section:nth-of-type(1)",
+        "x": 0.8333333333333334,
+        "y": 0.6236842105263158,
+        "docX": 0.7375,
+        "docY": 353,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "background",
+        "element": "<section class=\"tour-hero\">",
+        "text": "Plan the week in one place Every calendar your team uses, side by side, on every",
+        "src": "http://localhost:4391/sit/media/hero-desk.jpg",
+        "file": "hero-desk",
+        "fit": "background cover",
+        "nw": 2400,
+        "nh": 1350,
+        "imgX": 0.8333333333333334,
+        "imgY": 0.5916179337231969,
+        "scheme": "light",
+        "background": "#ffffff"
+      }
+    },
+    {
+      "id": "photo-large-scaled",
+      "group": "photos",
+      "tests": "point in a 2880×1800 screenshot shown 912 px wide; five things in a row look the same",
+      "page": "/sit/tour",
+      "comment": "this one should start at 10:00",
+      "expect": {
+        "file": "media/app-week.png",
+        "size": [
+          2880,
+          1800
+        ],
+        "box": [
+          1576,
+          442,
+          1884,
+          482
+        ]
+      },
+      "in_agent_text": [
+        {
+          "what": "the file is named (app-week)",
+          "ok": true,
+          "got": "image \"app-week\" (search the repo's src/ and public/ for it)"
+        },
+        {
+          "what": "the spot, in the file’s own pixels, is on the thing",
+          "ok": true,
+          "got": "60% across, 26% down of 2880×1800 (pixel 1727,461) = 1727,461"
+        }
+      ],
+      "anchor": {
+        "selector": "#week > figure:nth-of-type(1) > img:nth-of-type(1)",
+        "x": 0.5997807017543859,
+        "y": 0.25618703460359177,
+        "docX": 0.57109375,
+        "docY": 839,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "image",
+        "element": "<img alt=\"The week view with events from four calendars\">",
+        "inside": "#week",
+        "section": "The week view",
+        "src": "http://localhost:4391/sit/media/app-week.png",
+        "file": "app-week",
+        "alt": "The week view with events from four calendars",
+        "fit": "fill",
+        "nw": 2880,
+        "nh": 1800,
+        "imgX": 0.5997807017543859,
+        "imgY": 0.25618703460359177,
+        "scheme": "light",
+        "background": "#ffffff"
+      }
+    },
+    {
+      "id": "photo-area",
+      "group": "photos",
+      "tests": "area on an image (around the small month calendar in the screenshot)",
+      "page": "/sit/tour",
+      "comment": "hide this panel in the screenshot",
+      "expect": {
+        "file": "media/app-week.png",
+        "size": [
+          2880,
+          1800
+        ],
+        "area": [
+          18,
+          110,
+          454,
+          465
+        ]
+      },
+      "in_agent_text": [
+        {
+          "what": "the file is named (app-week)",
+          "ok": true,
+          "got": "image \"app-week\" (search the repo's src/ and public/ for it)"
+        },
+        {
+          "what": "the area, in the file’s own pixels, is the one marked",
+          "ok": true,
+          "got": "pixels 18,110 to 454,465"
+        }
+      ],
+      "anchor": {
+        "selector": "#week > figure:nth-of-type(1) > img:nth-of-type(1)",
+        "x": 0.006249996653774329,
+        "y": 0.06111113606343079,
+        "docX": 0.1482031226158142,
+        "docY": 728,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "image",
+        "element": "<img alt=\"The week view with events from four calendars\">",
+        "inside": "#week",
+        "section": "The week view",
+        "src": "http://localhost:4391/sit/media/app-week.png",
+        "file": "app-week",
+        "alt": "The week view with events from four calendars",
+        "fit": "fill",
+        "nw": 2880,
+        "nh": 1800,
+        "imgX": 0.006249996653774329,
+        "imgY": 0.06111113606343079,
+        "imgX2": 0.15763888442725466,
+        "imgY2": 0.2583333440271846,
+        "scheme": "light",
+        "background": "#ffffff",
+        "zw": 0.15138888777348034,
+        "zh": 0.19722220796375384,
+        "docW": 138,
+        "docH": 113
+      }
+    },
+    {
+      "id": "photo-object-fit-cover",
+      "group": "photos",
+      "tests": "point on a square thumbnail of a 3:2 picture (object-fit: cover, object-position: 78% 50%): screen position is not file position",
+      "page": "/sit/tour",
+      "comment": "make this brighter",
+      "expect": {
+        "file": "media/template-offsite.jpg",
+        "size": [
+          1800,
+          1200
+        ],
+        "box": [
+          1249,
+          850,
+          1421,
+          1006
+        ]
+      },
+      "in_agent_text": [
+        {
+          "what": "the file is named (template-offsite)",
+          "ok": true,
+          "got": "image \"template-offsite\" (search the repo's src/ and public/ for it)"
+        },
+        {
+          "what": "the spot, in the file’s own pixels, is on the thing",
+          "ok": true,
+          "got": "74% across, 77% down of 1800×1200 (pixel 1332,927) (object-fit cover) = 1332,927"
+        }
+      ],
+      "anchor": {
+        "selector": "#templates > div:nth-of-type(1) > article:nth-of-type(2) > img:nth-of-type(1)",
+        "x": 0.7202064183196258,
+        "y": 0.7722947911627157,
+        "docX": 0.55,
+        "docY": 1674,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "image",
+        "element": "<img class=\"thumb\" alt=\"\">",
+        "inside": "#templates",
+        "section": "Daily standup",
+        "src": "http://localhost:4391/sit/media/template-offsite.jpg",
+        "file": "template-offsite",
+        "fit": "cover",
+        "nw": 1800,
+        "nh": 1200,
+        "imgX": 0.7401376122130838,
+        "imgY": 0.7722947911627157,
+        "scheme": "light",
+        "background": "#ffffff"
+      }
+    },
+    {
+      "id": "photo-srcset",
+      "group": "photos",
+      "tests": "point on a responsive image (srcset 800/1600/2400): the browser shows the 1600 file, the tag names the 800 one",
+      "page": "/sit/tour",
+      "comment": "retouch this out",
+      "expect": {
+        "files": {
+          "media/harbour-800.jpg": [
+            800,
+            533
+          ],
+          "media/harbour-1600.jpg": [
+            1600,
+            1067
+          ],
+          "media/harbour-2400.jpg": [
+            2400,
+            1600
+          ]
+        },
+        "size": [
+          2400,
+          1600
+        ],
+        "box": [
+          1530,
+          1090,
+          1630,
+          1250
+        ]
+      },
+      "in_agent_text": [
+        {
+          "what": "the file is named (harbour-1600)",
+          "ok": true,
+          "got": "image \"harbour-1600\" (search the repo's src/ and public/ for it)"
+        },
+        {
+          "what": "the spot, in the file’s own pixels, is on the thing",
+          "ok": true,
+          "got": "66% across, 73% down of 1600×1067 (pixel 1053,779) = 1053,779"
+        },
+        {
+          "what": "the size printed with the spot is the file’s own size",
+          "ok": true,
+          "got": "66% across, 73% down of 1600×1067 (pixel 1053,779)"
+        }
+      ],
+      "anchor": {
+        "selector": "#harbour > img:nth-of-type(1)",
+        "x": 0.6578947368421053,
+        "y": 0.7298157367961813,
+        "docX": 0.6125,
+        "docY": 2492,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "image",
+        "element": "<img class=\"wide\" alt=\"Boats and buoys in the harbour at sunrise\">",
+        "inside": "#harbour",
+        "section": "Made in Hamburg",
+        "src": "http://localhost:4391/sit/media/harbour-1600.jpg",
+        "file": "harbour-1600",
+        "alt": "Boats and buoys in the harbour at sunrise",
+        "fit": "fill",
+        "nw": 1600,
+        "nh": 1067,
+        "imgX": 0.6578947368421053,
+        "imgY": 0.7298157367961813,
+        "scheme": "light",
+        "background": "#ffffff"
+      }
+    },
+    {
+      "id": "photo-svg-shape",
+      "group": "photos",
+      "tests": "point on one shape of an inline SVG chart (fifth of seven bars, no ids)",
+      "page": "/sit/tour",
+      "comment": "this bar looks too low, check the number",
+      "expect": {
+        "file": "tour.html",
+        "lines": [
+          82
+        ]
+      },
+      "in_agent_text": [
+        {
+          "what": "the element is <rect class=\"bar\">",
+          "ok": true,
+          "got": "<rect class=\"bar\">"
+        },
+        {
+          "what": "the selector leads to the element (rect:nth-of-type(5))",
+          "ok": true,
+          "got": "#numbers > svg:nth-of-type(1) > g:nth-of-type(2) > rect:nth-of-type(5)"
+        }
+      ],
+      "anchor": {
+        "selector": "#numbers > svg:nth-of-type(1) > g:nth-of-type(2) > rect:nth-of-type(5)",
+        "x": 0.4981478342352513,
+        "y": 0.4996740723554909,
+        "docX": 0.596875,
+        "docY": 3053,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "svg",
+        "element": "<rect class=\"bar\">",
+        "inside": "#numbers",
+        "section": "Events synced per weekday, in thousands",
+        "nw": 912,
+        "nh": 329,
+        "imgX": 0.6359649122807017,
+        "imgY": 0.6383261374958485,
+        "scheme": "light",
+        "background": "#ffffff",
+        "time": 2.1
+      }
+    },
+    {
+      "id": "other-canvas-chart",
+      "group": "other",
+      "tests": "point on a bar of a chart drawn on a canvas by a script: the answer is the data line, found through the drawing code",
+      "page": "/sit/tour",
+      "comment": "is this month right? it looks too high",
+      "expect": {
+        "file": "tour-chart.js",
+        "lines": [
+          12
+        ]
+      },
+      "in_agent_text": [
+        {
+          "what": "the spot on the canvas falls on bar 10 of 12",
+          "ok": true,
+          "got": "canvas animation, 912×320 on screen · 78% across, 57% down"
+        }
+      ],
+      "anchor": {
+        "selector": "#growth",
+        "x": 0.7817982456140351,
+        "y": 0.569384765625,
+        "docX": 0.70078125,
+        "docY": 3435,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "canvas",
+        "element": "<canvas id=\"growth\" role=\"img\" aria-label=\"Teams using Tidepool, by month\">",
+        "inside": "#numbers",
+        "section": "Teams using Tidepool",
+        "nw": 912,
+        "nh": 320,
+        "imgX": 0.7817982456140351,
+        "imgY": 0.569384765625,
+        "scheme": "light",
+        "background": "#ffffff",
+        "time": 2.5
+      }
+    },
+    {
+      "id": "photo-tall-screenshot-row",
+      "group": "photos",
+      "tests": "point on one row of a 1600×7200 full-page screenshot (125 rows of 56 px)",
+      "page": "/sit/tour",
+      "comment": "this entry is a duplicate, hide it",
+      "expect": {
+        "file": "media/activity-log.png",
+        "size": [
+          1600,
+          7200
+        ],
+        "box": [
+          0,
+          3968,
+          1600,
+          4024
+        ]
+      },
+      "in_agent_text": [
+        {
+          "what": "the file is named (activity-log)",
+          "ok": true,
+          "got": "image \"activity-log\" (search the repo's src/ and public/ for it)"
+        },
+        {
+          "what": "the spot, in the file’s own pixels, is on the thing",
+          "ok": true,
+          "got": "40% across, 55% down of 1600×7200 (pixel 639,3988) = 639,3988"
+        }
+      ],
+      "anchor": {
+        "selector": "#activity > figure:nth-of-type(1) > img:nth-of-type(1)",
+        "x": 0.3991228070175439,
+        "y": 0.5539228398828411,
+        "docX": 0.428125,
+        "docY": 6039,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "image",
+        "element": "<img alt=\"The activity page: one row per change\">",
+        "inside": "#activity",
+        "section": "Every change, on the record",
+        "src": "http://localhost:4391/sit/media/activity-log.png",
+        "file": "activity-log",
+        "alt": "The activity page: one row per change",
+        "fit": "fill",
+        "nw": 1600,
+        "nh": 7200,
+        "imgX": 0.3991228070175438,
+        "imgY": 0.5539228398828411,
+        "scheme": "light",
+        "background": "#ffffff"
+      }
+    },
+    {
+      "id": "video-spot",
+      "group": "video",
+      "tests": "point on a video paused at 7.3 s (the thing is on screen from 6 to 9 s only)",
+      "page": "/sit/demo",
+      "comment": "this covers the button, show it somewhere else",
+      "expect": {
+        "file": "media/tour.webm",
+        "size": [
+          1280,
+          720
+        ],
+        "box": [
+          916,
+          72,
+          1256,
+          128
+        ],
+        "from": 6,
+        "to": 9
+      },
+      "in_agent_text": [
+        {
+          "what": "the file is named (tour)",
+          "ok": true,
+          "got": "video \"tour\" (search the repo's src/ and public/ for it)"
+        },
+        {
+          "what": "the spot, in the file’s own pixels, is on the thing",
+          "ok": true,
+          "got": "92% across, 13% down of 1280×720 (pixel 1179,95) (object-fit contain) = 1179,95"
+        },
+        {
+          "what": "the video time is between 6 and 9 s",
+          "ok": true,
+          "got": "0:07.3 of 0:12"
+        }
+      ],
+      "anchor": {
+        "selector": "#walkthrough > video:nth-of-type(1)",
+        "x": 0.9210526315789473,
+        "y": 0.13179215399610136,
+        "docX": 0.8,
+        "docY": 332,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "video",
+        "element": "<video>",
+        "inside": "#walkthrough",
+        "section": "See it in twelve seconds",
+        "src": "http://localhost:4391/sit/media/tour.webm",
+        "file": "tour",
+        "fit": "contain",
+        "nw": 1280,
+        "nh": 720,
+        "imgX": 0.9210526315789473,
+        "imgY": 0.13179215399610136,
+        "scheme": "dark",
+        "background": "#000000",
+        "time": 7.3,
+        "duration": 12
+      }
+    },
+    {
+      "id": "video-same-place-other-time",
+      "group": "video",
+      "tests": "a second comment on the same video, almost the same place, paused at 1.5 s: something else is there then",
+      "page": "/sit/demo",
+      "comment": "make this smaller",
+      "expect": {
+        "file": "media/tour.webm",
+        "size": [
+          1280,
+          720
+        ],
+        "box": [
+          1088,
+          72,
+          1256,
+          128
+        ],
+        "from": 0,
+        "to": 3
+      },
+      "in_agent_text": [
+        {
+          "what": "the file is named (tour)",
+          "ok": true,
+          "got": "video \"tour\" (search the repo's src/ and public/ for it)"
+        },
+        {
+          "what": "the spot, in the file’s own pixels, is on the thing",
+          "ok": true,
+          "got": "91% across, 16% down of 1280×720 (pixel 1159,112) (object-fit contain) = 1159,112"
+        },
+        {
+          "what": "the video time is between 0 and 3 s",
+          "ok": true,
+          "got": "0:01.5 of 0:12"
+        }
+      ],
+      "anchor": {
+        "selector": "#walkthrough > video:nth-of-type(1)",
+        "x": 0.9057017543859649,
+        "y": 0.15518396686159844,
+        "docX": 0.7890625,
+        "docY": 344,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "video",
+        "element": "<video>",
+        "inside": "#walkthrough",
+        "section": "See it in twelve seconds",
+        "src": "http://localhost:4391/sit/media/tour.webm",
+        "file": "tour",
+        "fit": "contain",
+        "nw": 1280,
+        "nh": 720,
+        "imgX": 0.9057017543859649,
+        "imgY": 0.15518396686159844,
+        "scheme": "dark",
+        "background": "#000000",
+        "time": 1.5,
+        "duration": 12
+      }
+    },
+    {
+      "id": "video-area",
+      "group": "video",
+      "tests": "area on a 4:3 video shown in a wider box (black bars left and right), paused at 3.2 s",
+      "page": "/sit/demo",
+      "comment": "show three people here, not two",
+      "expect": {
+        "file": "media/new-event.webm",
+        "size": [
+          960,
+          720
+        ],
+        "area": [
+          70,
+          342,
+          890,
+          428
+        ],
+        "from": 2,
+        "to": 4
+      },
+      "in_agent_text": [
+        {
+          "what": "the file is named (new-event)",
+          "ok": true,
+          "got": "video \"new-event\" (search the repo's src/ and public/ for it)"
+        },
+        {
+          "what": "the area, in the file’s own pixels, is the one marked",
+          "ok": true,
+          "got": "pixels 70,342 to 890,428"
+        },
+        {
+          "what": "the video time is between 2 and 4 s",
+          "ok": true,
+          "got": "0:03.2 of 0:06"
+        }
+      ],
+      "anchor": {
+        "selector": "#new-event > div:nth-of-type(1) > video:nth-of-type(1)",
+        "x": 0.23775585910730196,
+        "y": 0.475,
+        "docX": 0.3131510496139526,
+        "docY": 1174,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "video",
+        "element": "<video>",
+        "inside": "#new-event",
+        "section": "Creating an event",
+        "src": "http://localhost:4391/sit/media/new-event.webm",
+        "file": "new-event",
+        "fit": "contain",
+        "nw": 960,
+        "nh": 720,
+        "imgX": 0.07291668483189175,
+        "imgY": 0.475,
+        "imgX2": 0.9270833696637835,
+        "imgY2": 0.5944444202241443,
+        "scheme": "dark",
+        "background": "#000000",
+        "zw": 0.5244883152476528,
+        "zh": 0.11944442022414435,
+        "docW": 478,
+        "docH": 50,
+        "time": 3.2,
+        "duration": 6
+      }
+    },
+    {
+      "id": "other-dark-mode",
+      "group": "other",
+      "tests": "point on text while the page is in dark mode; the page has light and dark colours and the complaint is only true in dark",
+      "page": "/sit/status",
+      "comment": "can barely read this line",
+      "expect": {
+        "file": "status.html",
+        "lines": [
+          57
+        ],
+        "words": "Started",
+        "color_scheme": "dark"
+      },
+      "in_agent_text": [
+        {
+          "what": "the word under the pin is quoted: [Started]",
+          "ok": true,
+          "got": "\"…[Started] 14 November 2026, 09:12 UTC · last upda…\""
+        },
+        {
+          "what": "it says the page was in dark mode",
+          "ok": true,
+          "got": "dark (background #101114)"
+        }
+      ],
+      "anchor": {
+        "selector": "body > main:nth-of-type(1) > p:nth-of-type(3)",
+        "x": 0.034375,
+        "y": 0.4696441032798325,
+        "docX": 0.2671875,
+        "docY": 644,
+        "width": 1280,
+        "height": 900,
+        "dpr": 1,
+        "kind": "text",
+        "element": "<p class=\"muted\">",
+        "text": "Started 14 November 2026, 09:12 UTC · last update 09:40 UTC",
+        "section": "Sync is slower than usual",
+        "scheme": "dark",
+        "background": "#101114",
+        "quote": {
+          "exact": "Started",
+          "prefix": "",
+          "suffix": " 14 November 2026, 09:12 UTC · last upda"
+        }
+      }
+    }
+  ]
+}

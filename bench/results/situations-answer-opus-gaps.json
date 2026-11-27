@@ -1,0 +1,57 @@
+[
+  {
+    "comment": "too much empty space here",
+    "file": "pricing.html",
+    "line": 172,
+    "words": null,
+    "x": null, "y": null, "x2": null, "y2": null,
+    "seconds": null,
+    "color_scheme": null,
+    "what_is_there": "The empty gap between the end of the Compare plans section (table ends line 124, section closes line 170; the phone-only compare cards are hidden at 1280px) and the start of the Questions (#faq) section at line 172, produced by the 96px section margin.",
+    "confidence": "medium"
+  },
+  {
+    "comment": "this looks odd, pick a photo without it",
+    "file": "media/hero-desk.jpg",
+    "line": null,
+    "words": null,
+    "x": 2000, "y": 799, "x2": null, "y2": null,
+    "seconds": null,
+    "color_scheme": null,
+    "what_is_there": "The coffee cup (dark coffee in a white mug, right of the laptop) in the hero-desk background photo of the tour hero.",
+    "confidence": "high"
+  },
+  {
+    "comment": "retouch this out",
+    "file": "media/harbour-1600.jpg",
+    "line": null,
+    "words": null,
+    "x": 1053, "y": 779, "x2": null, "y2": null,
+    "seconds": null,
+    "color_scheme": null,
+    "what_is_there": "The red buoy with a white band in the water, right of centre, in the 1600w harbour photo the srcset served.",
+    "confidence": "high"
+  },
+  {
+    "comment": "this entry is a duplicate, hide it",
+    "file": "media/activity-log.png",
+    "line": null,
+    "words": null,
+    "x": 639, "y": 3988, "x2": null, "y2": null,
+    "seconds": null,
+    "color_scheme": null,
+    "what_is_there": "The row \"13:36:29 Tariq moved “On-call handover” web\" (pixels y 3968-4022) in the activity-log screenshot.",
+    "confidence": "high"
+  },
+  {
+    "comment": "can barely read this line",
+    "file": "status.html",
+    "line": 57,
+    "words": "Started",
+    "x": null, "y": null, "x2": null, "y2": null,
+    "seconds": null,
+    "color_scheme": "dark",
+    "what_is_there": "The muted line \"Started 14 November 2026, 09:12 UTC · last update 09:40 UTC\" under the incident, which in dark mode uses --muted #3d4046 on #101114 (status.html line 22).",
+    "confidence": "high"
+  }
+]

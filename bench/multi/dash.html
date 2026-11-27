@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overview · Ledger</title>
+<style>
+  :root { --ink: #1b1e24; --muted: #6b7280; --line: #e5e7eb; --accent: #2f6fed; --radius: 10px; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 system-ui, sans-serif; color: var(--ink); background: #f7f8fa; }
+  main { max-width: 960px; margin: 0 auto; padding: 32px 24px; }
+  h1 { font-size: 24px; margin: 0 0 20px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px; }
+  .stat { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; }
+  .stat .label { color: var(--muted); font-size: 13px; }
+  .stat .value { font-size: 28px; font-weight: 650; margin-top: 4px; }
+  .stat.revenue .value { margin-top: 18px; }
+  .actions { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 28px; }
+  .btn { display: inline-block; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: #fff; font: 600 14px system-ui, sans-serif; color: var(--ink); }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn.export { margin-top: 9px; }
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; }
+  .card h2 { font-size: 16px; margin: 0 0 6px; }
+  .card p { margin: 0; color: var(--muted); font-size: 14px; }
+  .tags { display: flex; gap: 8px; margin-top: 24px; }
+  .tag { padding: 2px 10px; border-radius: 999px; background: #eef2ff; color: #3730a3; font-size: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Overview</h1>
+  <section class="stats">
+    <div class="stat users"><div class="label">Active users</div><div class="value">12,480</div></div>
+    <div class="stat revenue"><div class="label">Revenue</div><div class="value">€48,200</div></div>
+    <div class="stat churn"><div class="label">Churn</div><div class="value">2.1%</div></div>
+  </section>
+  <div class="actions">
+    <a class="btn primary" href="#new">New report</a>
+    <a class="btn" href="#share">Share</a>
+    <a class="btn export" href="#export">Export</a>
+  </div>
+  <section class="cards">
+    <article class="card a"><h2>Weekly digest</h2><p>Every Monday, 9:00</p></article>
+    <article class="card b"><h2>Alerts</h2><p>3 rules active</p></article>
+    <article class="card c"><h2>Integrations</h2><p>Slack, Stripe</p></article>
+  </section>
+  <div class="tags">
+    <span class="tag t1">Q3</span><span class="tag t2">EU</span><span class="tag t3">Draft</span><span class="tag t4">Old</span><span class="tag t5">Archived</span>
+  </div>
+</main>
+</body>
+</html>

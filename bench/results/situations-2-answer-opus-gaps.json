@@ -1,0 +1,112 @@
+[
+  {
+    "comment": "this label should say Preview",
+    "file": "b2.css",
+    "line": 40,
+    "words": "Beta",
+    "x": null, "y": null, "x2": null, "y2": null,
+    "seconds": null,
+    "color_scheme": null,
+    "what_is_there": "The \"Beta\" badge on the Insights tile, added by the CSS content of .is-beta::after.",
+    "confidence": "high"
+  },
+  {
+    "comment": "call this Copy invite link",
+    "file": "b2-account.html",
+    "line": 111,
+    "words": "link",
+    "x": null, "y": null, "x2": null, "y2": null,
+    "seconds": null,
+    "color_scheme": null,
+    "what_is_there": "The \"Copy link\" item of the Share menu (second menu in the Team calendar toolbar), not the identical item in the Export menu.",
+    "confidence": "high"
+  },
+  {
+    "comment": "make this one the default for new workspaces",
+    "file": "b2-account.html",
+    "line": 155,
+    "words": "30 minutes before",
+    "x": null, "y": null, "x2": null, "y2": null,
+    "seconds": null,
+    "color_scheme": null,
+    "what_is_there": "The \"30 minutes before\" option of the Reminder select, chosen at comment time (the source currently marks \"10 minutes before\" as selected).",
+    "confidence": "high"
+  },
+  {
+    "comment": "wrong term here, check with the Tokyo office",
+    "file": "b2-world.html",
+    "line": 40,
+    "words": "調整",
+    "x": null, "y": null, "x2": null, "y2": null,
+    "seconds": null,
+    "color_scheme": null,
+    "what_is_there": "The word 調整 (scheduling/coordination) in the Japanese customer quote.",
+    "confidence": "high"
+  },
+  {
+    "comment": "guard against a step of zero here",
+    "file": "src/calendar/recurrence.ts",
+    "line": 38,
+    "words": "stepOf(rule)",
+    "x": null, "y": null, "x2": null, "y2": null,
+    "seconds": null,
+    "color_scheme": null,
+    "what_is_there": "const step = stepOf(rule); inside expand(), not the identical line 13 in nextStart().",
+    "confidence": "high"
+  },
+  {
+    "comment": "this early return hides a bug",
+    "file": "src/calendar/timezone.ts",
+    "line": 32,
+    "words": "event.allDay",
+    "x": null, "y": null, "x2": null, "y2": null,
+    "seconds": null,
+    "color_scheme": null,
+    "what_is_there": "if (event.allDay) return false; in needsZoneLabel(), the second of two identical lines (the first is in movesDay at line 24).",
+    "confidence": "high"
+  },
+  {
+    "comment": "crop this out, it pulls the eye away",
+    "file": "media/b2-offsite.jpg",
+    "line": null,
+    "words": null,
+    "x": 975, "y": 85, "x2": 1044, "y2": 305,
+    "seconds": null,
+    "color_scheme": null,
+    "what_is_there": "The red kite and its string in the top right of the beach picture.",
+    "confidence": "high"
+  },
+  {
+    "comment": "this room has a new name, the picture is out of date",
+    "file": "media/b2-floor-plan.png",
+    "line": null,
+    "words": null,
+    "x": 444, "y": 624, "x2": 835, "y2": 955,
+    "seconds": null,
+    "color_scheme": null,
+    "what_is_there": "The Meeting B room on the floor plan (pin on its label \"Meeting B\", label at about 569,778-711,805).",
+    "confidence": "medium"
+  },
+  {
+    "comment": "this colour is too close to the one before it",
+    "file": "media/b2-sync.gif",
+    "line": null,
+    "words": null,
+    "x": 554, "y": 28, "x2": null, "y2": null,
+    "seconds": 6.5,
+    "color_scheme": null,
+    "what_is_there": "The status chip in the top right during the fourth frame (6-8 s, \"Conflict\", crimson), following the green \"Synced\" frame; the page time is rough, and no adjacent chip colours are numerically very close, so the frame is inferred from the 6.5 s estimate.",
+    "confidence": "medium"
+  },
+  {
+    "comment": "is this still true? ask marketing",
+    "file": "b2-rating.js",
+    "line": 15,
+    "words": "weekly",
+    "x": null, "y": null, "x2": null, "y2": null,
+    "seconds": null,
+    "color_scheme": null,
+    "what_is_there": "\"updated weekly\" in the source line of the tide-rating web component's shadow DOM.",
+    "confidence": "high"
+  }
+]

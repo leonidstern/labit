@@ -1,0 +1,112 @@
+[
+  {
+    "comment": "straighten this, it hangs crooked",
+    "file": "media/b2-team-tall.jpg",
+    "line": null,
+    "words": null,
+    "x": 851, "y": 420, "x2": null, "y2": null,
+    "seconds": null,
+    "color_scheme": null,
+    "what_is_there": "The wall clock in the tall (phone) crop of the team photo, which the <picture> serves below 600px instead of b2-team.jpg.",
+    "confidence": "high"
+  },
+  {
+    "comment": "crop this out, it pulls the eye away",
+    "file": "media/b2-offsite.jpg",
+    "line": null,
+    "words": null,
+    "x": 1003, "y": 133, "x2": null, "y2": null,
+    "seconds": null,
+    "color_scheme": null,
+    "what_is_there": "The red kite in the sky of the offsite beach photo; the image is shown rotated -8deg, so the reported 929,132 (bounding-box based) is corrected by un-rotating to 1003,133, inside the kite (red diamond 977-1043 x 87-171).",
+    "confidence": "high"
+  },
+  {
+    "comment": "this room has a new name, the picture is out of date",
+    "file": "media/b2-floor-plan.png",
+    "line": null,
+    "words": null,
+    "x": 640, "y": 790, "x2": null, "y2": null,
+    "seconds": null,
+    "color_scheme": null,
+    "what_is_there": "The 'Meeting B' room label in the floor plan PNG (shown via <image> inside the SVG at 880x550 of a 960x640 viewBox; 41%,71% of the SVG maps to 640,790 in the 1600x1000 file). The PNG is not animated.",
+    "confidence": "high"
+  },
+  {
+    "comment": "swap this shape for our logo",
+    "file": "media/b2-slide-3.jpg",
+    "line": null,
+    "words": null,
+    "x": 1300, "y": 418, "x2": null, "y2": null,
+    "seconds": null,
+    "color_scheme": null,
+    "what_is_there": "The yellow diamond on the right of the third carousel slide (summer release artwork).",
+    "confidence": "high"
+  },
+  {
+    "comment": "the clapper is missing on this one",
+    "file": "media/b2-icons.png",
+    "line": null,
+    "words": null,
+    "x": 144, "y": 143, "x2": null, "y2": null,
+    "seconds": null,
+    "color_scheme": null,
+    "what_is_there": "The blue (picked) bell icon in the sprite, second column of the bottom row (cell 96-192 x 96-192), shown at half size via background-size 288x96 and position -48px -48px.",
+    "confidence": "high"
+  },
+  {
+    "comment": "this colour is too close to the one before it",
+    "file": "media/b2-sync.gif",
+    "line": null,
+    "words": null,
+    "x": 554, "y": 28, "x2": null, "y2": null,
+    "seconds": 5.0,
+    "color_scheme": null,
+    "what_is_there": "The status chip in the GIF's top right; the GIF loops 4 frames of 2 s (Offline olive 0-2 s, Syncing blue 2-4 s, Synced green 4-6 s, Conflict pink 6-8 s) and the comment carries no time, so I picked the green 'Synced' frame, the only chip colour close to an earlier one (olive Offline, Lab distance 35; every other pair is 75+).",
+    "confidence": "low"
+  },
+  {
+    "comment": "this crate looks half empty, pick another shot",
+    "file": "media/b2-market.jpg",
+    "line": null,
+    "words": null,
+    "x": 669, "y": 754, "x2": null, "y2": null,
+    "seconds": null,
+    "color_scheme": null,
+    "what_is_there": "The yellow-fruit crate, second from the left, in the full market photo (the lazy loader swaps the tiny placeholder for b2-market.jpg).",
+    "confidence": "high"
+  },
+  {
+    "comment": "too playful for us, cut this part of the loop",
+    "file": "media/b2-harbour-loop.webm",
+    "line": null,
+    "words": null,
+    "x": 939, "y": 272, "x2": null, "y2": null,
+    "seconds": 4.3,
+    "color_scheme": null,
+    "what_is_there": "The red hot-air balloon that floats by in the harbour background loop; it is on screen from 4.0 to 6.0 s (gulls before, a cloud after).",
+    "confidence": "high"
+  },
+  {
+    "comment": "this field needs a label you can see",
+    "file": "media/tour.webm",
+    "line": null,
+    "words": null,
+    "x": 640, "y": 291, "x2": null, "y2": null,
+    "seconds": 3.8,
+    "color_scheme": null,
+    "what_is_there": "The empty Title field in the New event dialog of the tour video (its 'Title' label is tiny and faint); 3.8 s is the file time (currentTime), the 2x playback rate does not change it.",
+    "confidence": "high"
+  },
+  {
+    "comment": "the typing stutters here, show it letter by letter",
+    "file": "media/new-event.webm",
+    "line": null,
+    "words": null,
+    "x": 480, "y": 168, "x2": null, "y2": null,
+    "seconds": 1.4,
+    "color_scheme": null,
+    "what_is_there": "The Title field in the phone clip, where the typing sits on 'Des' from 1.0 to 1.9 s and then jumps to 'Design review' at 2.0 s.",
+    "confidence": "high"
+  }
+]

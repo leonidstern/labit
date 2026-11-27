@@ -1,0 +1,29 @@
+{
+  "nav": {
+    "calendar": "Calendar",
+    "members": "Members",
+    "settings": "Settings"
+  },
+  "invite": {
+    "title": "Invite your team",
+    "lead": "Send a link, or add people by email. They join with one click.",
+    "email": {
+      "label": "Email addresses",
+      "hint": "Separate addresses with a comma."
+    },
+    "send": "Send invites",
+    "members": {
+      "title": "Members",
+      "empty": "Nobody has joined yet.",
+      "you": "That is you"
+    },
+    "roles": {
+      "title": "Roles",
+      "admin": "Admins can change billing and remove people.",
+      "member": "Everyone else can create and change events."
+    }
+  },
+  "footer": {
+    "tagline": "Shared calendars for small teams"
+  }
+}
