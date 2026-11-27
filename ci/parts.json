@@ -67,7 +67,7 @@
     "lab-halo",
     "lab-card-in",
     "lab-ink-settle",
-    "lab-undo", "lab-scrolled-top"
+    "lab-undo", "lab-scrolled-top", "lab-scrolled-end"
   ],
   "$where": "Files that may own a part: the drawer's gestures and keyboard fit live in sheets.ts (comments.js wires them up).",
   "gestures": [
