@@ -1062,8 +1062,8 @@ function prove(a): Proof {
   // A pin from before fingerprints, its element at its path still says its words: as before (it gets a fingerprint then).
   if (!a.fp && at && fp.t && words(at).startsWith(fp.t.slice(0, 40))) return sure(at);
   // A pin placed from a selector alone (labit pin move), an id on its path renamed (#video to #motion, Leo 27 Nov): the
-  // rest of its path after that id, when it names one element only.
-  if (!a.fp && !at) {
+  // rest of its path after that id, when it names one element only. Not an old pin that saved its words: found by them.
+  if (!a.fp && !a.text && !a.file && !at) {
     const rest = String(a.selector).replace(/^.*#[^\s>+~]+\s*[>+~]?\s*/, '');
     try {
       const l = rest !== a.selector && rest ? document.querySelectorAll(rest) : [];
