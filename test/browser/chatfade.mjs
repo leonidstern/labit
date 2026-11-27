@@ -7,7 +7,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { claimPort } from './port.mjs';
-import { playwright, engines, tmp, labEnv, startLab, labUp, sleep, check, finish } from './harness.mjs';
+import { execFile } from 'node:child_process';
+import { playwright, engines, LAB, tmp, labEnv, startLab, labUp, sleep, check, finish } from './harness.mjs';
 
 const pw = playwright({ ciFails: true });
 const chatSpot = { kind: 'page', width: 390, height: 844, dpr: 2 };
@@ -24,9 +25,11 @@ for (const [n, eng] of engines().entries()) {
     await labUp(B);
     const seen = [];
     for (let i = 0; i < 30; i++) {
-      const r = await fetch(B + '/_lab/api/comments', { method: 'POST', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ page: '/index', name: i % 2 ? 'Ann' : 'Sam', text: `Message ${i}. ` + 'Words that wrap onto a second line on a phone. '.repeat(1 + (i % 3)), anchor: chatSpot }) });
+      const r = await fetch(B + '/_lab/api/comments', { method: 'POST', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ page: '/index', name: i === 29 ? 'leo' : i % 2 ? 'Ann' : 'Sam', text: `Message ${i}. ` + 'Words that wrap onto a second line on a phone. '.repeat(1 + (i % 3)), anchor: chatSpot }) });
       seen.push((await r.json()).comment.id);
     }
+    // An agent on your last message: its words ("on it …") under the bubble.
+    await new Promise((done) => execFile(process.execPath, [LAB, 'reply', seen[29], '--progress', 'looking at it', '--page', '/index'], { cwd: dir, env }, () => done()));
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: eng === 'chromium', deviceScaleFactor: 2 });
     await ctx.addInitScript(([s]) => {
       localStorage.setItem('lab-name', 'leo');
@@ -61,6 +64,8 @@ for (const [n, eng] of engines().entries()) {
         opaqueTo: end - 82 - pb, // the fade starts here (fully shown above)
         goneAt: end - 42 - pb, // and nothing shows from here down
         last: R(msgs[msgs.length - 1]).toJSON(),
+        waits: msgs[msgs.length - 1].classList.contains('waits'),
+        words: (() => { const w = msgs[msgs.length - 1].querySelector('.stamp .state'); return w ? { ...R(w).toJSON(), text: w.textContent } : null; })(),
         atEnd: list.scrollHeight - list.scrollTop - list.clientHeight < 2,
       };
     });
@@ -69,6 +74,8 @@ for (const [n, eng] of engines().entries()) {
     const near = (a, b) => Math.abs(a - b) <= 1;
     check(eng, 'the box sits 8 px in from the sheet\'s sides and bottom', near(atEnd.box.left - atEnd.sheet.left, 8) && near(atEnd.sheet.right - atEnd.box.right, 8) && near(atEnd.sheet.bottom - atEnd.box.bottom, 8), JSON.stringify({ box: atEnd.box, sheet: atEnd.sheet }));
     check(eng, 'at the newest, the last message is whole and clear, 12 px above the box', atEnd.atEnd && atEnd.last.bottom <= atEnd.opaqueTo + 1 && near(atEnd.box.top - atEnd.last.bottom, 12), JSON.stringify(atEnd));
+    // Your own message last, an agent on it: its words under it ("on it …") sit in that 12 px, clear of the box .
+    check(eng, 'your own waiting message last: 12 px above the box too, its words under it clear of the box', atEnd.waits && near(atEnd.box.top - atEnd.last.bottom, 12) && atEnd.words?.text && atEnd.words.bottom <= atEnd.box.top + 0.5, JSON.stringify({ last: atEnd.last, words: atEnd.words, box: atEnd.box, waits: atEnd.waits }));
     await shadow(() => { const l = r.querySelector('.chatwin .msgs'); l.scrollTop = l.scrollHeight - l.clientHeight - 300; });
     await sleep(400);
     const back = await look();
