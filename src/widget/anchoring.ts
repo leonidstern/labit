@@ -1061,6 +1061,17 @@ function prove(a): Proof {
   const near = (l: Element[]) => (l.length < 9 ? l.map((n) => [Math.abs(n.getBoundingClientRect().top + scrollY - (a.docY || 0)), n] as const).sort((x, y) => x[0] - y[0])[0]?.[1] : null);
   // A pin from before fingerprints, its element at its path still says its words: as before (it gets a fingerprint then).
   if (!a.fp && at && fp.t && words(at).startsWith(fp.t.slice(0, 40))) return sure(at);
+  // A pin placed from a selector alone (labit pin move): the element its selector names (a path with a space in it was
+  // searched for by words it never had, and lost: "#motion .sv-vid", Leo 27 Nov). An id on its path renamed (#video to
+  // #motion): the rest of its path after that id, when it names one element only. Not an old pin that saved its words.
+  if (!a.fp && !a.text && !a.file) {
+    if (at) return sure(at);
+    const rest = String(a.selector).replace(/^.*#[^\s>+~]+\s*[>+~]?\s*/, '');
+    try {
+      const l = rest !== a.selector && rest ? document.querySelectorAll(rest) : [];
+      if (l.length === 1 && !host.contains(l[0])) return sure(l[0]);
+    } catch {}
+  }
   const ex = fp.h ? saying(tag, fp.h) : [];
   const set = fp.x ? ex.filter(co) : ex;
   const apart = set.filter((n) => beside(n) === fp.b);
