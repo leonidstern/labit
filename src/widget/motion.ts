@@ -376,7 +376,7 @@ export function bindMotion(w: unknown) {
     // auto one closed again in WebKit on the lift of the very right-click that opened it.
     if ('showPopover' in HTMLElement.prototype) box.popover = 'manual';
     // A press outside only closes it: the click it ends pins nothing (docs/design-rules.md, S.menuShut in comments.js).
-    addEventListener('pointerdown', (e) => open && !e.composedPath().includes(box) && ((S.menuShut = Date.now()), closeMotion()), true);
+    addEventListener('pointerdown', (e) => open && !e.composedPath().includes(box) && ((S.menuShut = Date.now() + 1500), closeMotion()), true);
     addEventListener('keydown', (e) => open && e.key === 'Escape' && (swallow(e), closeMotion()), true);
     // The keys a row shows work while the menu is open (Leo, 26 Nov: "shortcuts there doesnt work when menu opened"):
     // R replies, E resolves, P pauses, as the row would.

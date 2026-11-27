@@ -25,7 +25,7 @@ const terser = tool('terser');
 
 // esbuild leaves the spaces inside what it can't read: a custom property's value (`--_ease: var(--lab-ease, cubic-bezier(.2, .8, .2, 1))`)
 // and a var() fallback. They only separate; taking them out (outside strings) leaves every value the same.
-const tighten = (css) => css.split(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/).map((part, i) => (i % 2 ? part : part.replace(/(--[\w-]+):\s+/g, '$1:').replace(/,\s+/g, ','))).join('');
+const tighten = (css) => css.split(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/).map((part, i) => (i % 2 ? part : part.replace(/(--[\w-]+):\s+/g, '$1:').replace(/,\s+/g, ',').replace(/\s+([;}])/g, '$1'))).join('');
 // The stylesheet as text, minified (comments and spaces out). Everything else as the plain command line did it.
 const minifiedCss = {
   name: 'minified-css-text',
