@@ -78,7 +78,18 @@ try {
       await sleep(1500);
       await keys.keyboard.press('s');
       await sleep(800);
-      check(eng, 'on a still page, S asks for motion and slows (the next pin says so)', await keys.evaluate(() => performance.getEntriesByType('resource').some((e) => /\/_lab\/motion\.js/.test(e.name))));
+      // The motion file is asked for on every page (above): what S did shows in the next pin, which says the page ran slowed.
+      await keys.mouse.click(300, 200, { button: 'right' });
+      await keys.getByText('comment here', { exact: true }).click({ timeout: 3000 }).catch(() => {});
+      await keys.waitForFunction(() => Boolean([...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim'))?.shadowRoot.querySelector('.float textarea')), null, { timeout: 3000 }).catch(() => {});
+      await keys.keyboard.type(`slowed in ${eng}`);
+      await keys.keyboard.press('Enter');
+      let pin;
+      for (let i = 0; i < 30 && !pin; i++) {
+        await sleep(100);
+        pin = ((await (await fetch(`${B}/_lab/api/comments?page=/still`)).json()).comments || []).find((c) => c.text === `slowed in ${eng}`);
+      }
+      check(eng, 'on a still page, S slows the page (the next pin says so)', pin?.anchor?.slow === true, JSON.stringify(pin?.anchor ?? null));
     } finally {
       await browser.close();
     }

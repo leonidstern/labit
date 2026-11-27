@@ -144,24 +144,27 @@ try {
       await p.mouse.click(...(await pinOf('#p6')));
       await sleep(900);
       const to = await pinOf('#p8');
+      // #p6's card is tall enough to lie over #p8's pin: a click there lands on the card, and #p8's never opened (the
+      // check below then read #p6's frames). The pin itself is clicked, as a click that reaches it would.
+      const click8 = () => shadow((r, [x, y]) => [...r.querySelectorAll('button.pin')].find((b) => { const q = b.getBoundingClientRect(); return Math.abs(q.x + 14 - x) < 1 && Math.abs(q.y + 14 - y) < 1; })?.click(), to);
       await shadow((r) => {
         window.__frames = [];
         const tick = () => {
           const c = [...r.querySelectorAll('.card')].find((n) => !n.classList.contains('out') && n.getBoundingClientRect().width);
-          if (c) window.__frames.push([c.offsetHeight, c.getBoundingClientRect().top]);
+          if (c) window.__frames.push([c.offsetHeight, c.getBoundingClientRect().top, c.textContent.includes('#p8')]); // whose card: #p8's thread ends in its name
           if (window.__frames.length < 120) requestAnimationFrame(tick);
         };
         tick();
       });
-      await p.mouse.click(...to);
+      await click8();
       await sleep(1500);
       const frames = await p.evaluate('window.__frames');
       const last = frames.at(-1);
-      // From the first frame the new card shows: its height is its final one.
-      const firstNew = frames.findIndex((f, i) => i > 0 && Math.abs(f[1] - frames[0][1]) > 1);
-      const fresh2 = frames.slice(Math.max(firstNew, 0));
+      // From the first frame the new card shows: its height is its final one. Only #p8's card's frames: the one before stayed open a while.
+      const fresh2 = frames.filter((f) => f[2]);
+      check(eng, 'another pin clicked: its card opens', fresh2.length > 0 && last?.[2], `${fresh2.length} of ${frames.length} frames`);
       const hs = fresh2.map((f) => f[0]);
-      check(eng, 'another pin clicked: its card has its height from the first frame', Math.max(...hs) - Math.min(...hs) < 2, `heights ${[...new Set(hs)].join(", ")}`);
+      check(eng, 'another pin clicked: its card has its height from the first frame', hs.length > 0 && Math.max(...hs) - Math.min(...hs) < 2, `heights ${[...new Set(hs)].join(", ")}`);
       const jumps = fresh2.slice(1).map((f, i) => Math.abs(f[1] - fresh2[i][1]));
       check(eng, 'another pin clicked: its card does not jump', Math.max(0, ...jumps) < 12, `largest step ${Math.max(0, ...jumps).toFixed(1)}, ends at ${last}`);
       // #467 ("selecting near + cancels my select"): words selected in the reply box by a drag that ends on "+" stay selected.

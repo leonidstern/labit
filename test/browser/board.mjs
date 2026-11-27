@@ -4,27 +4,28 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { claimPort } from './port.mjs';
-import { playwright, engines, tmp, labEnv, startLab, labUp, sleep, check, finish } from './harness.mjs';
+import { playwright, engines, freshLab, sleep, check, finish } from './harness.mjs';
 
-const pw = playwright();
+const pw = playwright({ ciFails: true });
 
-const DIR = tmp('labit-board-');
 const PORT = claimPort(8080, 30);
 const B = `http://localhost:${PORT}`;
-fs.writeFileSync(path.join(DIR, 'pricing.html'), '<!doctype html><meta charset="utf-8"><title>Pricing</title><h1>Pricing one</h1><div style="height:200px"></div>');
-fs.writeFileSync(path.join(DIR, 'checkout.html'), '<!doctype html><meta charset="utf-8"><title>Checkout</title><h1>Checkout</h1>');
-fs.writeFileSync(path.join(DIR, 'index.html'), '<!doctype html><meta charset="utf-8"><title>k</title><h1>Keys</h1><p>text</p>');
-fs.writeFileSync(path.join(DIR, 'labit.json'), JSON.stringify({ port: PORT }));
-const server = startLab(DIR, labEnv());
-await labUp(B);
+// Each engine on a lab of its own: the one before added a frame to 'three' and saved pricing.html.
+const L = freshLab('labit-board-', (dir) => {
+  fs.writeFileSync(path.join(dir, 'pricing.html'), '<!doctype html><meta charset="utf-8"><title>Pricing</title><h1>Pricing one</h1><div style="height:200px"></div>');
+  fs.writeFileSync(path.join(dir, 'checkout.html'), '<!doctype html><meta charset="utf-8"><title>Checkout</title><h1>Checkout</h1>');
+  fs.writeFileSync(path.join(dir, 'index.html'), '<!doctype html><meta charset="utf-8"><title>k</title><h1>Keys</h1><p>text</p>');
+  fs.writeFileSync(path.join(dir, 'labit.json'), JSON.stringify({ port: PORT }));
+}, { base: B });
 const put = (name, frames, extra = {}) => fetch(`${B}/_lab/api/board?name=${name}`, { method: 'PUT', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ v: 1, rev: 0, frames, ...extra }) }).then((r) => r.json());
 const grid = (n) => Array.from({ length: n }, (_, i) => ({ id: 'f' + i, src: '/pricing', w: 300, h: 300, x: (i % 5) * 340, y: Math.floor(i / 5) * 340 }));
-await put('ten', grid(10));
-await put('three', [{ id: 'a', src: '/pricing', w: 390, h: 844 }, { id: 'b', src: '/pricing', w: 820, h: 1180 }, { id: 'c', src: '/checkout', w: 390, h: 844 }]); // no page: a board about a page opens over it (boardhome.mjs)
-await put('two', [{ id: 'a', src: '/pricing', w: 300, h: 300, x: 0, y: 0 }, { id: 'b', src: '/pricing', w: 300, h: 300, x: 500, y: 0 }]);
-await put('wide', [{ id: 'a', src: '/pricing', w: 1000, h: 700, x: 0, y: 0 }, { id: 'b', src: '/pricing', w: 1000, h: 700, x: 4000, y: 3000 }]);
 try {
   for (const eng of engines()) {
+    await L.up();
+    await put('ten', grid(10));
+    await put('three', [{ id: 'a', src: '/pricing', w: 390, h: 844 }, { id: 'b', src: '/pricing', w: 820, h: 1180 }, { id: 'c', src: '/checkout', w: 390, h: 844 }]); // no page: a board about a page opens over it (boardhome.mjs)
+    await put('two', [{ id: 'a', src: '/pricing', w: 300, h: 300, x: 0, y: 0 }, { id: 'b', src: '/pricing', w: 300, h: 300, x: 500, y: 0 }]);
+    await put('wide', [{ id: 'a', src: '/pricing', w: 1000, h: 700, x: 0, y: 0 }, { id: 'b', src: '/pricing', w: 1000, h: 700, x: 4000, y: 3000 }]);
     const browser = await pw[eng].launch();
     try {
       const ctx = await browser.newContext({ viewport: { width: 1200, height: 800 } });
@@ -51,7 +52,7 @@ try {
       await p.mouse.wheel(0, 300);
       await sleep(200);
       const c1 = await cam();
-      check(eng, 'a wheel pans the board, never the page', c1.y < c0.y + 0.001 && (await p.evaluate(() => scrollY)) === 0 && c1.z === c0.z, JSON.stringify([c0, c1]));
+      check(eng, 'a wheel pans the board, never the page', c1.y < c0.y - 1 && (await p.evaluate(() => scrollY)) === 0 && c1.z === c0.z, JSON.stringify([c0, c1]));
       await p.keyboard.press('Shift+Digit2');
       await sleep(200);
       check(eng, 'Shift+2 goes to 100%', (await cam()).z === 1);
@@ -133,14 +134,19 @@ try {
       await p.goto(B + '/_lab/board/three');
       await bw(2500);
       await p.evaluate(() => (window.__same = 1));
-      fs.writeFileSync(path.join(DIR, 'pricing.html'), fs.readFileSync(path.join(DIR, 'pricing.html'), 'utf8').replace('Pricing one', 'Pricing two'));
+      const h1s = () => p.evaluate(() => [...document.querySelector('[data-lab-board-view]').shadowRoot.querySelectorAll('iframe')].map((f) => f.contentDocument?.querySelector('h1')?.textContent));
+      const was = await h1s();
+      fs.writeFileSync(path.join(L.dir, 'pricing.html'), fs.readFileSync(path.join(L.dir, 'pricing.html'), 'utf8').replace('Pricing one', 'Pricing two'));
       await sleep(2500);
       const saved = await p.evaluate(() => ({ same: window.__same === 1, text: [...document.querySelector('[data-lab-board-view]').shadowRoot.querySelectorAll('iframe')].map((f) => f.contentDocument?.querySelector('h1')?.textContent) }));
-      check(eng, 'a save does not reload the board; frames of that page follow', saved.same && saved.text.some((t) => t === 'Pricing two'), JSON.stringify(saved));
+      check(eng, 'a save does not reload the board; frames of that page follow', was.includes('Pricing one') && !was.includes('Pricing two') && saved.same && saved.text.some((t) => t === 'Pricing two'), JSON.stringify([was, saved]));
       // ----- the board file changes: the board follows
+      const ids = () => p.evaluate(() => [...(document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelectorAll('#lab-board .f') || [])].map((f) => f.dataset.id).join());
+      const ids0 = await ids();
       await put('three', [{ id: 'a', src: '/pricing', w: 390, h: 844 }, { id: 'b', src: '/pricing', w: 820, h: 1180 }, { id: 'c', src: '/checkout', w: 390, h: 844 }, { id: 'd', src: '/checkout', w: 820, h: 1180 }], { rev: (await (await fetch(`${B}/_lab/api/board?name=three`)).json()).rev });
       await sleep(2500);
-      check(eng, 'a frame added to the board file shows up', (await p.evaluate(() => document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelectorAll('#lab-board .f').length)) === 4);
+      const ids1 = await ids();
+      check(eng, 'a frame added to the board file shows up', ids0 === 'a,b,c' && ids1 === 'a,b,c,d', `${ids0} -> ${ids1}`);
       // ----- a board that does not exist
       await p.goto(B + '/_lab/board/nothere');
       await sleep(1200);
@@ -153,7 +159,13 @@ try {
       await sleep(900);
       const alone = await p.evaluate(() => { const v = document.querySelector('[data-lab-board-view="three"]'); const r = v?.getBoundingClientRect(); return { view: Boolean(v), whole: Boolean(r) && r.top === 0 && r.left === 0 && r.width === innerWidth && r.height === innerHeight, inView: Boolean(v?.shadowRoot?.querySelector('#lab-board .world')), name: v?.shadowRoot?.querySelector('.bv-name')?.textContent, half: Boolean(v?.shadowRoot?.querySelector('.bv-size, .bv-grip')), close: Boolean(v?.shadowRoot?.querySelector('.bv-close')), title: document.title, hash: location.hash, entries: history.length }; });
       check(eng, 'the board page is the board view over the whole window, named, with no half and no close (nothing is under it)', alone.view && alone.whole && alone.inView && alone.name === 'board three' && !alone.half && !alone.close && alone.title === 'board three', JSON.stringify(alone));
-      check(eng, 'the board page keeps its camera in the address (a reload comes back there)', /^#-?\d+,-?\d+,[\d.]+$/.test(alone.hash), alone.hash);
+      check(eng, 'the board page keeps its camera in the address', /^#-?\d+,-?\d+,[\d.]+$/.test(alone.hash), alone.hash);
+      const kept = await p.evaluate(() => __labBoard.camera());
+      await p.reload();
+      await bw(1500);
+      const back = await p.evaluate(() => __labBoard.camera());
+      // the address keeps whole px and a rounded zoom
+      check(eng, '… and a reload comes back there', Math.abs(back.x - kept.x) <= 1 && Math.abs(back.y - kept.y) <= 1 && Math.abs(back.z - kept.z) < 0.01, JSON.stringify([kept, back, alone.hash]));
       const backs = [];
       for (const how of ['button', 'Shift+KeyB', 'Escape']) {
         await p.goto(B + '/_lab/board/three?of=%2Fcheckout');
@@ -214,7 +226,7 @@ try {
     }
   }
 } finally {
-  server.kill();
-  fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
+  await L.stop();
+  fs.rmSync(L.dir, { recursive: true, force: true, maxRetries: 5 });
 }
 finish();

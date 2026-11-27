@@ -53,8 +53,11 @@ try {
         document.body.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true, composed: true }));
       });
       const c = await until(async () => (await frames(name)).find((f) => f.id === 'c'));
-      if (!c && !(await p.evaluate(() => { const dt = new DataTransfer(); dt.items.add(new File(['x'], 'x.png', { type: 'image/png' })); return new ClipboardEvent('paste', { clipboardData: dt }).clipboardData?.items.length === 1; }))) console.log(`skip ${eng}   this engine drops clipboardData from a synthetic paste`);
-      else {
+      if (!c && !(await p.evaluate(() => { const dt = new DataTransfer(); dt.items.add(new File(['x'], 'x.png', { type: 'image/png' })); return new ClipboardEvent('paste', { clipboardData: dt }).clipboardData?.items.length === 1; }))) {
+        // everything below is on that picture, or on more pasted ones: skipped with it
+        console.log(`skip ${eng}   this engine drops clipboardData from a synthetic paste (and the checks on pasted pictures)`);
+        continue;
+      } else {
         check(eng, 'a paste adds an image frame', before === 2 && c?.kind === 'image', JSON.stringify(c));
         check(eng, 'it is sent at 2400 px or less, never the 3000 it was drawn at', c && Math.max(c.iw, c.ih) <= 2400, JSON.stringify(c));
         check(eng, 'its centre is where the pointer was (the pointer on the board, in world px)', Boolean(c) && await until(async () => { const r = await rect('c'); return r && Math.abs(r.x + r.w / 2 - 700) < 6 && Math.abs(r.y + r.h / 2 - 500) < 6; }), JSON.stringify(await rect('c')));

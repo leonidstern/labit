@@ -4,18 +4,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { claimPort } from './port.mjs';
-import { playwright, engines, tmp, labEnv, startLab, labUp, sleep, check, finish } from './harness.mjs';
+import { playwright, engines, freshLab, sleep, check, finish } from './harness.mjs';
 
 const pw = playwright();
-const DIR = tmp('labit-boardsbar-');
 const PORT = claimPort(8420, 30);
 const B = `http://localhost:${PORT}`;
-fs.writeFileSync(path.join(DIR, 'd.html'), '<!doctype html><meta charset="utf-8"><title>Page d</title>\n<h1>Page d</h1>\n<p id="t">Words</p>\n');
-fs.writeFileSync(path.join(DIR, 'e.html'), '<!doctype html><meta charset="utf-8"><title>Page e</title>\n<h1>Page e</h1>\n');
-fs.writeFileSync(path.join(DIR, 'labit.json'), JSON.stringify({ port: PORT }));
-const server = startLab(DIR, labEnv());
-await labUp(B);
-const keys = () => JSON.parse(fs.readFileSync(path.join(DIR, '.lab/server.json'), 'utf8'));
+// Each engine on a lab of its own: the one before made a board of /e.
+const L = freshLab('labit-boardsbar-', (dir) => {
+  fs.writeFileSync(path.join(dir, 'd.html'), '<!doctype html><meta charset="utf-8"><title>Page d</title>\n<h1>Page d</h1>\n<p id="t">Words</p>\n');
+  fs.writeFileSync(path.join(dir, 'e.html'), '<!doctype html><meta charset="utf-8"><title>Page e</title>\n<h1>Page e</h1>\n');
+  fs.writeFileSync(path.join(dir, 'labit.json'), JSON.stringify({ port: PORT }));
+}, { base: B });
+const keys = () => JSON.parse(fs.readFileSync(path.join(L.dir, '.lab/server.json'), 'utf8'));
 const board = (body) => fetch(B + '/_lab/api/board', { method: 'POST', headers: { 'content-type': 'application/json', origin: B, 'x-lab-admin': keys().token }, body: JSON.stringify(body) }).then((r) => r.json());
 const boards = async () => (await (await fetch(`${B}/_lab/api/board`)).json()).boards;
 const until = async (fn, ms = 6000) => {
@@ -24,9 +24,10 @@ const until = async (fn, ms = 6000) => {
 };
 
 try {
-  await board({ action: 'new', topic: 'Hero options', of: '/d' });
-  await board({ action: 'new', topic: 'Spacing', of: '/d' });
   for (const eng of engines('chromium,webkit')) {
+    await L.up();
+    await board({ action: 'new', topic: 'Hero options', of: '/d' });
+    await board({ action: 'new', topic: 'Spacing', of: '/d' });
     const browser = await pw[eng].launch();
     try {
       const ctx = await browser.newContext({ viewport: { width: 1000, height: 800 } });
@@ -90,7 +91,7 @@ try {
     }
   }
 } finally {
-  server.kill();
-  fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
+  await L.stop();
+  fs.rmSync(L.dir, { recursive: true, force: true, maxRetries: 5 });
 }
 finish();

@@ -121,7 +121,7 @@ try {
         await touch('touchEnd');
         await sleep(600);
         const sw = await q.evaluate(() => ({ sel: __labBoard.selected(), cam: __labBoard.camera() }));
-        check(eng, 'phone: a swipe is a pan, not a step to the next frame (nothing picked, same zoom)', !sw.sel && Math.abs(sw.cam.z - before.z) < 1e-6, JSON.stringify([before, sw]));
+        check(eng, 'phone: a swipe is a pan, not a step to the next frame (the board moved, nothing picked, same zoom)', Math.abs(sw.cam.x - before.x) > 1 && !sw.sel && Math.abs(sw.cam.z - before.z) < 1e-6, JSON.stringify([before, sw]));
       } else console.log('skip      phone swipe (no CDP in this engine)');
       await ph.close();
       await ctx.close();

@@ -7,24 +7,22 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { claimPort } from './port.mjs';
-import { playwright, engines, tmp, labEnv, startLab, labUp, sleep, check, finish } from './harness.mjs';
+import { playwright, engines, freshLab, labEnv, sleep, check, finish } from './harness.mjs';
 
 const pw = playwright({ ciFails: true });
 
-const DIR = tmp('labit-updbadge-');
 const PORT = String(claimPort(5600, 190)); // below 6000: browsers refuse that port (X11)
 const B = `http://localhost:${PORT}`;
-const env = labEnv({}, { settings: false });
 const UPD_LABEL = 'update waiting, tap to load';
 const SESSION_URL = 'https://claude.ai/code/session_updbadge';
-const write = (f, t) => fs.writeFileSync(path.join(DIR, f), t);
-write('index.html', '<!doctype html><meta charset="utf-8"><title>upd</title><style>body{margin:30px}</style><h1>Update badge</h1><p>text</p>');
-write('data.json', '{"a":0}'); // a file the page may fetch: a save of it reloads the page
+const write = (f, t) => fs.writeFileSync(path.join(L.dir, f), t);
+// Each engine on a lab of its own: the one before it had an agent listening there.
+const L = freshLab('labit-updbadge-', () => {
+  write('index.html', '<!doctype html><meta charset="utf-8"><title>upd</title><style>body{margin:30px}</style><h1>Update badge</h1><p>text</p>');
+  write('data.json', '{"a":0}'); // a file the page may fetch: a save of it reloads the page
+}, { env: () => labEnv({}, { settings: false }), root: '.', port: PORT, stdio: 'ignore', base: B });
 let saves = 0;
 const save = () => write('data.json', JSON.stringify({ a: ++saves }));
-
-const server = startLab(DIR, env, { root: '.', port: PORT, stdio: 'ignore' });
-await labUp(B);
 const waitFor = async (ok, ms) => {
   for (const end = Date.now() + ms; Date.now() < end; await sleep(40)) if (await ok()) return true;
   return false;
@@ -71,16 +69,18 @@ const snapOnUnload = (p) =>
   });
 const snap = (p) => p.evaluate(() => ({ ...JSON.parse(sessionStorage.getItem('upd-snap') || 'null'), click: JSON.parse(sessionStorage.getItem('upd-click') || 'null') }));
 const clickStopped = (s) => !s.click || (s.click.prevented && !s.click.menuOpen);
-// A listening agent, with a session link, for as long as this runs.
-const listen = new AbortController();
+// A listening agent, with a session link, till the engine's run ends (a new one for each engine: the next one starts with none).
+let listen = new AbortController();
 const agentListens = () => {
-  const key = JSON.parse(fs.readFileSync(path.join(DIR, '.lab/server.json'), 'utf8')).agent;
+  const key = JSON.parse(fs.readFileSync(path.join(L.dir, '.lab/server.json'), 'utf8')).agent;
   const sess = { id: 'sess-upd', name: 'upd test', agent: 'Claude', kind: 'claude', url: SESSION_URL };
   fetch(`${B}/_lab/wait`, { method: 'POST', signal: listen.signal, headers: { 'content-type': 'application/json', origin: B, 'x-lab-admin': key, 'x-lab-agent': '1', 'x-lab-session': encodeURIComponent(JSON.stringify(sess)) }, body: JSON.stringify({ timeout: 600 }) }).catch(() => {});
 };
 
 try {
   for (const eng of engines()) {
+    await L.up();
+    listen = new AbortController();
     const browser = await pw[eng].launch();
     try {
       // A computer: the badge sits on the pill's mark.
@@ -187,13 +187,13 @@ try {
       await q.goto('about:blank');
       await pctx.close();
     } finally {
+      listen.abort();
       await browser.close();
     }
   }
 } finally {
   listen.abort();
-  server.kill();
-  await sleep(300); // the lab writes its .lab files as it stops
-  fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
+  await L.stop(); // gone before its folder is: the lab writes its .lab files as it stops
+  fs.rmSync(L.dir, { recursive: true, force: true, maxRetries: 5 });
 }
 finish();

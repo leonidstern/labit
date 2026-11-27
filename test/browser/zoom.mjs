@@ -51,10 +51,11 @@ for (const eng of engines()) {
   });
   check(eng, 'the page between takes taps', free && free !== 'widget', free);
   await p.keyboard.press('t');
-  await p.waitForFunction(() => !document.querySelector('[data-lab-comments]').shadowRoot.querySelector('.chatwin').hidden, null, { timeout: 2000 }).catch(() => {});
+  // A chat that never opened measures 0 × 0, which would pass the size checks: it must have opened, with a size.
+  const opened = await p.waitForFunction(() => !document.querySelector('[data-lab-comments]').shadowRoot.querySelector('.chatwin').hidden, null, { timeout: 2000 }).then(() => true, () => false);
   await p.waitForTimeout(500);
   const chat = await seen('.chatwin');
-  check(eng, 'the chat opens at its usual size, inside what the screen shows', Math.abs(chat.w * chat.scale - chat.laid) < 2 && chat.inside, JSON.stringify(chat));
+  check(eng, 'the chat opens at its usual size, inside what the screen shows', opened && chat.w > 0 && chat.laid > 0 && Math.abs(chat.w * chat.scale - chat.laid) < 2 && chat.inside, JSON.stringify({ opened, ...chat }));
   await browser.close();
 }
 server.kill();

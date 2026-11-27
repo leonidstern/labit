@@ -184,6 +184,9 @@ function cleanAnchor(a) {
     shownFor: sec(a.shownFor),
     gapAbove: clean(a.gapAbove, 160) || undefined,
     gapBelow: clean(a.gapBelow, 160) || undefined,
+    gapN: int(a.gapN, 1000) || undefined, // between look-alike blocks: the nth of gapOf such gaps, gapDy px below the one above
+    gapOf: int(a.gapOf, 1000) || undefined,
+    gapDy: int(a.gapDy),
     scheme: a.scheme === 'dark' || a.scheme === 'light' ? a.scheme : undefined,
     background: typeof a.background === 'string' && /^#[0-9a-f]{6}$/i.test(a.background) ? a.background : undefined,
     zw: isArea(a) ? Math.min(a.zw, 3) : undefined,

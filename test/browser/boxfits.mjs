@@ -58,7 +58,7 @@ try {
         if (!f) return null;
         const b = f.getBoundingClientRect();
         const send = f.querySelector('.send, button[type=submit], [data-k=send]');
-        return { top: b.top, bottom: b.bottom, h: innerHeight, send: send ? send.getBoundingClientRect().bottom : null, ta: f.querySelector('textarea')?.getBoundingClientRect().height };
+        return { top: b.top, bottom: b.bottom, h: innerHeight, send: send ? send.getBoundingClientRect().bottom : null, sendTop: send ? send.getBoundingClientRect().top : null, ta: f.querySelector('textarea')?.getBoundingClientRect().height };
       });
       const open = async (x, y) => {
         await p.mouse.click(x, y);
@@ -80,11 +80,13 @@ try {
         check(eng, `click at y=${y}, typing: the box is still whole inside the window`, fits(s), JSON.stringify(s));
         await close();
       }
+      // Send is there, its top and bottom inside the window (no Send at all passed: null <= n is true).
+      const sendIn = (s) => s.send !== null && s.sendTop >= 0 && s.send <= s.h - 4;
       s = await open(400, 700);
       await p.keyboard.type(Array.from({ length: 300 }, (_, i) => `word${i}`).join(' '));
       await sleep(400);
       s = await state();
-      check(eng, 'a 300-word draft at y=700: the box, Send and the name row stay inside the window', fits(s) && s.send <= s.h - 4, JSON.stringify(s));
+      check(eng, 'a 300-word draft at y=700: the box, Send and the name row stay inside the window', fits(s) && sendIn(s), JSON.stringify(s));
       await close();
       await p.evaluate(() => { const t = [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim')).shadowRoot.querySelector('.float textarea'); if (t) t.value = ''; });
       // A short window: the words scroll inside the box, so Send stays in view.
@@ -94,7 +96,7 @@ try {
       await p.keyboard.type(Array.from({ length: 300 }, (_, i) => `w${i}`).join(' '));
       await sleep(400);
       s = await state();
-      check(eng, 'a 320 px window, a 300-word draft: the words scroll in the box and Send stays inside the window', fits(s) && s.send <= s.h - 4 && s.ta < 200, JSON.stringify(s));
+      check(eng, 'a 320 px window, a 300-word draft: the words scroll in the box and Send stays inside the window', fits(s) && sendIn(s) && s.ta < 200, JSON.stringify(s));
       await close();
       // A long paste: the words past the box's tallest scroll (no words cut off at the top without a scrollbar) and the
       // cursor at their end stays in view. In a short window the tallest is under 200 px (180 at 360 px), so a medium paste, 180-200 px of words, counts too.

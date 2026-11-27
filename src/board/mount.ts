@@ -1115,7 +1115,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     }
   };
   // What a page's pin says of its element, taken onto a board pin (not its kind, its picture or its area: the board's own).
-  const ON_PAGE = ['selector', 'x', 'y', 'docX', 'docY', 'width', 'height', 'element', 'eh', 'text', 'fp', 'quote', 'word', 'inside', 'section', 'block', 'shadow', 'component', 'source', 'looks', 'rules', 'box', 'chosen', 'state', 'cssText', 'gapAbove', 'gapBelow', 'sx', 'scheme', 'background', 'build'];
+  const ON_PAGE = ['selector', 'x', 'y', 'docX', 'docY', 'width', 'height', 'element', 'eh', 'text', 'fp', 'quote', 'word', 'inside', 'section', 'block', 'shadow', 'component', 'source', 'looks', 'rules', 'box', 'chosen', 'state', 'cssText', 'gapAbove', 'gapBelow', 'gapN', 'gapOf', 'gapDy', 'sx', 'scheme', 'background', 'build'];
   const onPage = (c: Card | undefined, wx: number, wy: number) => {
     const w = spotter(c);
     if (!w || !c) return {};

@@ -4,20 +4,21 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { claimPort } from './port.mjs';
-import { playwright, engines, tmp, labEnv, startLab, labUp, sleep, check, finish } from './harness.mjs';
+import { playwright, engines, freshLab, sleep, check, finish } from './harness.mjs';
 
 const pw = playwright();
 
-const DIR = tmp('labit-framescroll-');
 const PORT = claimPort(8020, 30);
 const B = `http://localhost:${PORT}`;
-fs.writeFileSync(path.join(DIR, 'pricing.html'), '<!doctype html><meta charset="utf-8"><title>p</title><script>window.x=1</script><h1 id="t">Pricing one</h1><div style="height:3000px"></div><p id="end">end</p>');
-fs.writeFileSync(path.join(DIR, 'index.html'), '<!doctype html><meta charset="utf-8"><title>k</title><h1>Keys</h1><p>text</p>');
-fs.writeFileSync(path.join(DIR, 'labit.json'), JSON.stringify({ port: PORT }));
-const server = startLab(DIR, labEnv());
-await labUp(B);
+// Each engine on a lab of its own: the save below changes pricing.html, and a save that changes nothing reloads nothing.
+const L = freshLab('labit-framescroll-', (dir) => {
+  fs.writeFileSync(path.join(dir, 'pricing.html'), '<!doctype html><meta charset="utf-8"><title>p</title><script>window.x=1</script><h1 id="t">Pricing one</h1><div style="height:3000px"></div><p id="end">end</p>');
+  fs.writeFileSync(path.join(dir, 'index.html'), '<!doctype html><meta charset="utf-8"><title>k</title><h1>Keys</h1><p>text</p>');
+  fs.writeFileSync(path.join(dir, 'labit.json'), JSON.stringify({ port: PORT }));
+}, { base: B });
 try {
   for (const eng of engines()) {
+    await L.up();
     const browser = await pw[eng].launch();
     try {
       const ctx = await browser.newContext({ viewport: { width: 1000, height: 700 } });
@@ -41,7 +42,7 @@ try {
       await A.evaluate(() => scrollTo(0, 400));
       await Bf.evaluate(() => scrollTo(0, 900));
       await A.evaluate(() => (window.__same = 1));
-      fs.writeFileSync(path.join(DIR, 'pricing.html'), fs.readFileSync(path.join(DIR, 'pricing.html'), 'utf8').replace('Pricing one', 'Pricing two'));
+      fs.writeFileSync(path.join(L.dir, 'pricing.html'), fs.readFileSync(path.join(L.dir, 'pricing.html'), 'utf8').replace('Pricing one', 'Pricing two'));
       let got = [];
       for (let i = 0; i < 50; i++) {
         await sleep(200);
@@ -66,7 +67,7 @@ try {
     }
   }
 } finally {
-  server.kill();
-  fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
+  await L.stop();
+  fs.rmSync(L.dir, { recursive: true, force: true, maxRetries: 5 });
 }
 finish();

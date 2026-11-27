@@ -6,20 +6,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { claimPort } from './port.mjs';
-import { playwright, engines, tmp, labEnv, startLab, labUp, sleep, check, finish } from './harness.mjs';
+import { playwright, engines, freshLab, labEnv, sleep, check, finish } from './harness.mjs';
 
 const pw = playwright({ ciFails: true });
-const DIR = tmp('labit-smoothsmall-');
 const PORT = String(claimPort(5800, 190)); // below 6000: browsers refuse that port (X11), and the page never loads
 const B = `http://localhost:${PORT}`;
-const env = labEnv({}, { settings: false });
 const PAGE = `<!doctype html><meta charset="utf-8"><title>smooth</title>
 <style>body{margin:30px;max-width:420px;font:18px/1.6 Georgia,serif}</style>
 <p id="t">Plain words in a paragraph, quite a few of them, for a pin to sit on.</p>
 <div style="height:900px"></div>`;
-const server = startLab(DIR, env, { root: '.', port: PORT, stdio: 'ignore' });
+// Each engine on a lab of its own: the pins one engine leaves on a page would change the next one's counts.
+const L = freshLab('labit-smoothsmall-', () => {}, { env: () => labEnv({}, { settings: false }), root: '.', port: PORT, stdio: 'ignore', base: B });
 let n = 0;
-await labUp(B);
 const post = (page, text, name = 'Sam') =>
   fetch(`${B}/_lab/api/comments`, { method: 'POST', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ page, name, text, anchor: { selector: '#t', x: 0.5, y: 0.5, docX: 100 + (n++ % 12) * 25, docY: 120, width: 200 } }) });
 const inRoot = (p, fn, arg) =>
@@ -31,7 +29,7 @@ const until = (p, fn, ms) => p.waitForFunction(fn, null, { timeout: ms, polling:
 
 async function scene(browser, name, run) {
   const PG = `/${name}`;
-  fs.writeFileSync(path.join(DIR, `${name}.html`), PAGE);
+  fs.writeFileSync(path.join(L.dir, `${name}.html`), PAGE);
   const ctx = await browser.newContext({ viewport: { width: 1200, height: 800 } });
   await ctx.addInitScript(() => localStorage.setItem('lab-name', 'leo'));
   const p = await ctx.newPage();
@@ -49,6 +47,7 @@ const open = async (p, PG) => {
 
 try {
   for (const eng of engines()) {
+    await L.up();
     const browser = await pw[eng].launch();
     try {
       await scene(browser, 'a', async (p, PG) => {
@@ -114,7 +113,7 @@ try {
     }
   }
 } finally {
-  server.kill();
-  fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
+  await L.stop();
+  fs.rmSync(L.dir, { recursive: true, force: true, maxRetries: 5 });
 }
 finish();

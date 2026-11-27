@@ -584,6 +584,8 @@ for (const flavour of FLAVOURS) {
 // parts side by side. The parts go by kind of pin, so each base page and each cell of the matrix (mutation × kind,
 // what KNOWN judges) sits whole in one part; the kinds are dealt largest first onto the smallest part. The live patch
 // keeps the cases it picks from the whole list, and the smallest pages run in part 1.
+// A TORTURE_CASE that names no case that applies (a typo) would run nothing and pass.
+if (ONE && !cases.length) throw new Error(`TORTURE_CASE=${ONE}: no such case (mutation|kind|flavour|seed, one that applies to that pin)`);
 const [PART, PARTS] = ONE ? [1, 1] : (process.env.TEST_PART || '1/1').split('/').map(Number);
 if (!(PARTS >= 1 && PART >= 1 && PART <= PARTS)) throw new Error(`TEST_PART=${process.env.TEST_PART}: give it as i/n`);
 const allCases = cases.splice(0);
@@ -862,6 +864,7 @@ async function drag(p, [x0, y0], [x1, y1]) {
 }
 /** Puts the pin of a base page on it, as a person does, and gives the anchor the lab saved. */
 async function pinDown(p, page, b) {
+  const had = new Set((await commentsOf(page)).map((c) => c.id)); // a try before may have saved one: read only the new one
   await p.goto(B + page);
   await untilFn(p, () => document.readyState === 'complete' && Boolean(window.__torture.root()?.querySelector('.scrim')), null, 5000);
   await sleep(250); // the widget's handlers are in place a moment after its markup
@@ -904,7 +907,7 @@ async function pinDown(p, page, b) {
   await p.keyboard.type(`pin ${b.kind}`);
   await p.keyboard.press('Enter');
   for (const end = Date.now() + 3000; Date.now() < end; await sleep(40)) {
-    const c = (await commentsOf(page))[0];
+    const c = (await commentsOf(page)).find((x) => !had.has(x.id));
     if (c) return c.anchor;
   }
   throw new Error(`the comment was not saved on ${page}`);
@@ -916,25 +919,29 @@ const savedRight = (b, a) =>
     : a.element?.startsWith(`<${b.truth.tag}`) && !a.quote && a.zw === undefined && (b.kind !== 'img' || a.kind === 'image'));
 
 // ---------- a case read ----------
+// Lost (L) only when the widget says so: a page that never settled, or a pin neither drawn nor counted as moved, proves
+// nothing about the pin, and is the test's own failure (?).
 const outcomeOf = (c, got) => {
-  if (!got) return { outcome: 'L', note: 'nothing drawn and nothing flagged' };
+  if (!got) return { outcome: '?', note: 'the page never settled: nothing read' };
   if (c.truth && !got.truthOk) return { outcome: '?', note: `the test lost the element: ${got.truth}` };
   // Drawn as a pin on the page (a pin shown as moved is drawn only while open, which none is here).
   if (got.pins && !got.movedPin && !got.hidden) return { outcome: c.truth && got.on ? 'R' : 'W' };
-  return { outcome: 'L', note: got.flagged ? '' : 'not drawn, and not counted as moved' };
+  return got.flagged ? { outcome: 'L' } : { outcome: '?', note: 'not drawn, and not counted as moved' };
 };
 const row = (c, eng, mode, got) => {
   const { outcome, note } = outcomeOf(c, got);
   // The module beside the widget must put the pin where the widget drew it (or both say it moved).
+  // A reading without it, or one where the two differ, fails (checked with the test's own failures, not as a KNOWN cell).
   const calc = got?.calc;
-  const agrees = !calc || (calc.moved ? outcome === 'L' : outcome !== 'L' && Boolean(got.tip) && Math.hypot(calc.left - got.tip[0], calc.top - got.tip[1]) < 3);
-  if (!agrees || got?.asked) notes.push(`${eng} ${c.key} (${mode}): the widget drew ${got.tip ? got.tip.join(',') : 'no pin'}${got.flagged ? ' (moved)' : ''}, anchoring.ts alone says ${JSON.stringify(calc || got.asked)}`);
+  const agrees = Boolean(calc) && (calc.moved ? outcome === 'L' : outcome !== 'L' && Boolean(got.tip) && Math.hypot(calc.left - got.tip[0], calc.top - got.tip[1]) < 3);
+  if (got && outcome !== '?' && !agrees) disagree.push({ eng, key: `${c.key} (${mode})`, note: `the widget drew ${got.tip ? got.tip.join(',') : 'no pin'}${got.flagged ? ' (moved)' : ''}, anchoring.ts alone says ${JSON.stringify(calc || got.asked || 'nothing')}` });
   return { key: c.key, eng, mode, mut: c.mut, kind: c.kind, flavour: c.flavour, seed: c.seed, accept: c.accept, outcome, pass: c.accept.includes(outcome), told: got?.told || '', saved: got?.saved || '', far: got?.far ?? null, tip: got?.tip, under: got?.under, truth: got?.truth, flagged: got?.flagged || false, ...(note ? { note } : {}) };
 };
 
 const results = [];
 const hotResults = [];
 const notes = [];
+const disagree = []; // where the widget and anchoring.ts alone put a pin differently
 const t0 = Date.now();
 const took = () => `${((Date.now() - t0) / 1000).toFixed(1)} s`;
 
@@ -1015,12 +1022,18 @@ async function runEngine(eng) {
       await setPin(page, c.kind, anchors.get(c.base));
       await p.goto(B + page, { waitUntil: 'commit' }).catch(() => {});
       const before = await untilFn(p, ([truth, title]) => document.title.endsWith(title) && window.__torture?.settled(truth, null, 3), [c.base.truth, `old ${i}`], 4000);
+      // A mark on the old document: still there after the save, the page was patched in place, not loaded again.
+      await p.evaluate(() => (window.__oldDoc = 1)).catch(() => {});
       fs.writeFileSync(fileOf(page), titled(c.html, `new ${i}`));
       await untilFn(p, (title) => document.title.endsWith(title), `new ${i}`, 5000);
+      const patched = await p.evaluate(() => window.__oldDoc === 1).catch(() => false);
       await p.evaluate(() => window.__torture.reset()).catch(() => {});
       await sleep(120); // the patch cross-fades; the pins are drawn again after it
       const got = await untilFn(p, ([truth, title, anchor]) => document.title.endsWith(title) && window.__torture?.settled(truth, anchor, 6), [c.truth, `new ${i}`, anchors.get(c.base)], 3000);
-      hotResults.push({ ...row(c, eng, 'hot', got), before: before ? (before.on ? 'R' : 'W') : 'L' });
+      const read = row(c, eng, 'hot', got);
+      if (!before) Object.assign(read, { outcome: '?', pass: false, note: 'the old page never settled' });
+      else if (!patched) Object.assign(read, { outcome: '?', pass: false, note: 'the page was loaded again, not patched' });
+      hotResults.push({ ...read, before: before ? (before.on ? 'R' : 'W') : '?' });
     });
     // 4. The smallest pages, on anchoring.ts alone.
     for (const r of ONE || PART !== 1 ? [] : ROOTS) {
@@ -1164,6 +1177,7 @@ for (const x of rootResults) {
 }
 // The cases the live patch read differently from a reload are told, not judged (the matrix is the reload's).
 for (const x of hotResults.filter((y) => y.outcome === '?')) check(x.eng, `${x.key} (live patch): the test itself`, false, x.note);
+for (const x of disagree) check(x.eng, `${x.key}: the widget and anchoring.ts agree`, false, x.note);
 
 const md = report();
 console.log(`\n${md}\n`);
@@ -1182,15 +1196,19 @@ else if (process.env.TORTURE_KNOWN === 'print') {
   for (const mut of Object.keys(wanted)) {
     const kinds = [];
     for (const kind of Object.keys(wanted[mut])) {
+      // flavour → engine → its worst there; one entry when every engine fails the same way, else one per engine (a
+      // shared W would let the engine that only loses pins start putting them on the wrong element unnoticed)
       const by = new Map();
       for (const [o, f, eng] of wanted[mut][kind]) {
-        const had = by.get(f) || { o: 'L', engs: new Set() };
-        by.set(f, { o: had.o === 'W' || o === 'W' ? 'W' : 'L', engs: had.engs.add(eng) });
+        const engs = by.get(f) || new Map();
+        by.set(f, engs.set(eng, engs.get(eng) === 'W' || o === 'W' ? 'W' : 'L'));
       }
       const groups = new Map();
-      for (const [f, { o, engs }] of by) {
-        const g = `${o}${engs.size < ENG.length ? `@${[...engs][0]}` : ''}`;
-        groups.set(g, [...(groups.get(g) || []), f]);
+      const add = (g, f) => groups.set(g, [...(groups.get(g) || []), f]);
+      for (const [f, engs] of by) {
+        const os = new Set(engs.values());
+        if (engs.size === ENG.length && os.size === 1) add([...os][0], f);
+        else for (const [eng, o] of engs) add(`${o}@${eng}`, f);
       }
       kinds.push(`${/^\w+$/.test(kind) ? kind : `'${kind}'`}: '${[...groups].map(([g, fl]) => `${g[0]}:${fl.join(',')}${g.slice(1)}`).join(' ')}'`);
     }

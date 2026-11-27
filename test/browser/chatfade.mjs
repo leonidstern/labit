@@ -49,20 +49,23 @@ for (const [n, eng] of engines().entries()) {
       const list = sheet.querySelector('.msgs');
       const R = (e) => e.getBoundingClientRect();
       const cs = getComputedStyle(list);
-      const pb = parseFloat(getComputedStyle(sheet.querySelector('.chat')).paddingBottom);
       const sizes = cs.maskSize.split(',').map((x) => x.trim());
       const lr = R(list);
       // The second layer's height: 100% or calc(100% + Npx).
       const extra = Number(/\+\s*([\d.]+)px/.exec(sizes[1] || '')?.[1] || 0);
       const end = lr.bottom + extra;
+      // The bottom fade's own stops (the last layer), read from the computed mask: [alpha, px up from the layer's end].
+      const fade = cs.maskImage.split(/(?=linear-gradient)/).at(-1);
+      const stops = [...fade.matchAll(/rgba?\(([^)]*)\)\s+calc\(100% - ([\d.]+)px\)/g)].map((m) => [Number(m[1].split(',')[3] ?? 1), Number(m[2])]);
       const msgs = [...list.querySelectorAll('.msg')];
       return {
         coarse: matchMedia('(pointer: coarse)').matches,
         layers: (cs.maskImage.match(/linear-gradient/g) || []).length,
         timeline: CSS.supports('animation-timeline: scroll()'),
         sheet: R(sheet).toJSON(), box: R(box).toJSON(),
-        opaqueTo: end - 82 - pb, // the fade starts here (fully shown above)
-        goneAt: end - 42 - pb, // and nothing shows from here down
+        stops,
+        opaqueTo: stops.length === 2 && stops[0][0] === 1 ? end - stops[0][1] : NaN, // the fade starts here (fully shown above)
+        goneAt: stops.length === 2 && stops[1][0] === 0 ? end - stops[1][1] : NaN, // and nothing shows from here down
         last: R(msgs[msgs.length - 1]).toJSON(),
         waits: msgs[msgs.length - 1].classList.contains('waits'),
         words: (() => { const w = msgs[msgs.length - 1].querySelector('.stamp .state'); return w ? { ...R(w).toJSON(), text: w.textContent } : null; })(),

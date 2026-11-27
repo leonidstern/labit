@@ -4,29 +4,24 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { claimPort } from './port.mjs';
-import { playwright, engines, tmp, labEnv, startLab, labUp, sleep, check, finish, withAlt } from './harness.mjs';
+import { playwright, engines, freshLab, sleep, check, finish, withAlt } from './harness.mjs';
 
 const pw = playwright();
 
-const DIR = tmp('labit-boardpins-');
 const PORT = claimPort(8260, 30);
 const B = `http://localhost:${PORT}`;
-fs.writeFileSync(path.join(DIR, 'pricing.html'), '<!doctype html><meta charset="utf-8"><title>Pricing</title><h1>Pricing one</h1><div style="height:200px"></div>');
-fs.writeFileSync(path.join(DIR, 'checkout.html'), '<!doctype html><meta charset="utf-8"><title>Checkout</title><h1>Checkout</h1>');
-fs.writeFileSync(path.join(DIR, 'index.html'), '<!doctype html><meta charset="utf-8"><title>k</title><h1>Keys</h1><p>text</p>');
-fs.writeFileSync(path.join(DIR, 'labit.json'), JSON.stringify({ port: PORT }));
-const server = startLab(DIR, labEnv());
-await labUp(B);
+// Each engine on a lab of its own: the one before moved frame a and left its pin on the board.
+const L = freshLab('labit-boardpins-', (dir) => {
+  fs.writeFileSync(path.join(dir, 'pricing.html'), '<!doctype html><meta charset="utf-8"><title>Pricing</title><h1>Pricing one</h1><div style="height:200px"></div>');
+  fs.writeFileSync(path.join(dir, 'checkout.html'), '<!doctype html><meta charset="utf-8"><title>Checkout</title><h1>Checkout</h1>');
+  fs.writeFileSync(path.join(dir, 'index.html'), '<!doctype html><meta charset="utf-8"><title>k</title><h1>Keys</h1><p>text</p>');
+  fs.writeFileSync(path.join(dir, 'labit.json'), JSON.stringify({ port: PORT }));
+}, { base: B });
 const put = (name, frames, extra = {}) => fetch(`${B}/_lab/api/board?name=${name}`, { method: 'PUT', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ v: 1, rev: 0, frames, ...extra }) }).then((r) => r.json());
-await put('pins', [{ id: 'a', src: '/pricing', w: 390, h: 844 }, { id: 'b', src: '/pricing', w: 820, h: 600 }]); // no page: it keeps its own address and pins (a board about a page: boardhome.mjs)
 try {
   for (const eng of engines()) {
-    // Each engine starts from the same board (the one before moved frame a; a moved frame keeps its place, and the rows then
-    // start under it): its rev is the lab's now.
-    if (eng !== engines()[0]) {
-      const cur = await (await fetch(`${B}/_lab/api/board?name=pins`)).json();
-      await fetch(`${B}/_lab/api/board?name=pins`, { method: 'PUT', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ ...cur, frames: [{ id: 'a', src: '/pricing', w: 390, h: 844 }, { id: 'b', src: '/pricing', w: 820, h: 600 }] }) });
-    }
+    await L.up();
+    await put('pins', [{ id: 'a', src: '/pricing', w: 390, h: 844 }, { id: 'b', src: '/pricing', w: 820, h: 600 }]); // no page: it keeps its own address and pins (a board about a page: boardhome.mjs)
     const browser = await pw[eng].launch();
     try {
       const ctx = await browser.newContext({ viewport: { width: 1200, height: 800 } });
@@ -85,7 +80,7 @@ try {
     }
   }
 } finally {
-  server.kill();
-  fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
+  await L.stop();
+  fs.rmSync(L.dir, { recursive: true, force: true, maxRetries: 5 });
 }
 finish();

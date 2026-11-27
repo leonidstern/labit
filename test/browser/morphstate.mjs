@@ -5,24 +5,25 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { claimPort } from './port.mjs';
-import { playwright, engines, tmp, labEnv, startLab, labUp, sleep, check, finish } from './harness.mjs';
+import { playwright, engines, freshLab, sleep, check, finish } from './harness.mjs';
 const pw = playwright();
-const DIR = tmp('labit-morphstate-');
 const PORT = claimPort(10700, 30);
 const B = `http://localhost:${PORT}`;
-const save = (f, t) => fs.writeFileSync(path.join(DIR, f), t);
 const page = (v) => `<!doctype html><meta charset="utf-8"><title>t</title><body class="${v.body}">
 <form><input name="id" type="hidden"><input id="t"></form><p id="p">${v.p}</p>
 <ul><li class="${v.row}"><input class="r"><li class="row"><input class="r"><li class="row"><input class="r"></ul>
 <select id="s">${v.opts}</select><select id="s2"><option>a<option ${v.sel2 ? 'selected' : ''}>b</select>
 <textarea id="ta">${v.ta}</textarea>`;
 const base = { body: 'x', p: 'one', row: 'row', opts: '<option>a<option>b<option>c', sel2: false, ta: 'file text' };
-save('index.html', page(base));
-save('labit.json', JSON.stringify({ port: PORT }));
-const server = startLab(DIR, labEnv());
-await labUp(B);
+// Each engine on a lab of its own, from the base page: after a save the page has other options, and a pick by index differs.
+const L = freshLab('labit-morphstate-', (dir) => {
+  fs.writeFileSync(path.join(dir, 'index.html'), page(base));
+  fs.writeFileSync(path.join(dir, 'labit.json'), JSON.stringify({ port: PORT }));
+}, { base: B });
+const save = (f, t) => fs.writeFileSync(path.join(L.dir, f), t);
 try {
   for (const eng of engines()) {
+    await L.up();
     const browser = await pw[eng].launch();
     const ctx = await browser.newContext({ viewport: { width: 800, height: 600 } });
     await ctx.addInitScript(() => localStorage.setItem('lab-name', 'tester'));
@@ -47,4 +48,4 @@ try {
     await browser.close();
   }
   finish();
-} finally { server.kill(); }
+} finally { await L.stop(); }

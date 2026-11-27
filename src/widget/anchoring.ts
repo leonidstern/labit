@@ -37,6 +37,10 @@ type Anchor = {
   eh: number;
   /** A pin in the empty margin beside the page's content sits on the content level with it: this many px beyond the spot x says (minus: left of it). */
   sx?: number;
+  /** A pin between look-alike blocks: its gap was the nth of that many such gaps, this many px below the block above. */
+  gapN?: number;
+  gapOf?: number;
+  gapDy?: number;
   kind?: string;
   text?: string;
   inside?: string;
@@ -425,23 +429,37 @@ function between(target, cy) {
 }
 // What a block is called there: its heading, else its first words.
 const blockWords = (k) => short((k.matches('h1, h2, h3, h4, h5, h6') ? k : k.querySelector('h1, h2, h3, h4, h5, h6') || k).textContent, 60);
-// A pin in the space between two blocks (gapAbove / gapBelow name them; none: the box's own top or end) stays between
-// them: where it was put while that is still between them, else the nearest point that is. Among look-alikes the pair
-// nearest to where it was put; next to the one that is left when the other is gone; null when both are.
-function gapTop(anchor, node, rect) {
+// The gaps of a box that have a block a pin named next to them, top to bottom (both: it has both of them).
+function gapsOf(anchor, node, rect) {
   const kids = [...node.children].filter((k) => k !== host && k.getBoundingClientRect().height > 0);
   const is = (k, said) => (said ? k && sameKind(k, said) && blockWords(k).startsWith((said.split('> "')[1] || '').replace(/"$/, '')) : !k);
-  const put = rect.top + anchor.y * rect.height;
-  let best = null;
-  let near = Infinity;
+  const out: { lo: number; hi: number; both: boolean }[] = [];
   for (let i = 0; i <= kids.length; i++) {
     const [above, below] = [is(kids[i - 1], anchor.gapAbove), is(kids[i], anchor.gapBelow)];
     if (!above && !below) continue;
     // Past the last block (its neighbour above is gone, none below): the box's end, not a block that isn't there.
     const lo = above ? (kids[i - 1]?.getBoundingClientRect().bottom ?? rect.top) : (kids[i]?.getBoundingClientRect().top ?? rect.bottom) - 16;
     const hi = below ? (kids[i]?.getBoundingClientRect().top ?? rect.bottom) : lo + 16;
-    const top = Math.min(Math.max(put, lo), Math.max(lo, hi));
-    const far = Math.abs(top - put) + (above && below ? 0 : 1e6); // both neighbours beat one
+    out.push({ lo, hi: Math.max(lo, hi), both: above && below });
+  }
+  return out;
+}
+// A pin in the space between two blocks (gapAbove / gapBelow name them; none: the box's own top or end) stays between
+// them: where it was put while that is still between them, else the nearest point that is. Among look-alikes (gapN:
+// its gap was the nth of gapOf such gaps) the nth again while there are as many, gapDy px below the block above it: its
+// share of the box drifts when the box grows above it, and pointed at the gap before. Else the pair nearest to where it
+// was put; next to the one that is left when the other is gone; null when both are.
+function gapTop(anchor, node, rect) {
+  const gaps = gapsOf(anchor, node, rect);
+  const both = gaps.filter((g) => g.both);
+  const g = anchor.gapN && both.length === anchor.gapOf ? both[anchor.gapN - 1] : null;
+  if (g) return Math.min(Math.max(g.lo + (anchor.gapDy || 0), g.lo), g.hi);
+  const put = rect.top + anchor.y * rect.height;
+  let best = null;
+  let near = Infinity;
+  for (const { lo, hi, both } of gaps) {
+    const top = Math.min(Math.max(put, lo), hi);
+    const far = Math.abs(top - put) + (both ? 0 : 1e6); // both neighbours beat one
     if (far < near) [best, near] = [top, far];
   }
   return best;
@@ -750,7 +768,13 @@ export function anchorAt(clickX, clickY, words = false, onto = null, later = fal
       anchor.kind ||= 'element';
       if (anchor.kind === 'element') {
         const gap = between(target, clientY);
-        if (gap) Object.assign(anchor, { gapAbove: gap.above, gapBelow: gap.below });
+        if (gap) {
+          Object.assign(anchor, { gapAbove: gap.above, gapBelow: gap.below });
+          // Between look-alikes (cards with no words of their own): which of those gaps it is, counted from the top.
+          const both = gapsOf(anchor, target, rect).filter((g) => g.both);
+          const n = both.findIndex((g) => clientY >= g.lo && clientY <= g.hi);
+          if (both.length > 1 && n >= 0) Object.assign(anchor, { gapN: n + 1, gapOf: both.length, gapDy: Math.round(clientY - both[n].lo) });
+        }
         const w = !aside ? quoteAt(clientX, clientY, shadowRoots) : null;
         if (w) anchor.word = { exact: w.exact, prefix: w.prefix, suffix: w.suffix };
       }
@@ -1292,14 +1316,15 @@ function spotOf(anchor): Spot {
 // that stands once in the box, and beats the next band by half. Else null: the words are gone. Kept for a moment, as
 // the letters are (a redraw asks every pin again).
 const tokensOf = (s: string) => [...new Set(String(s || '').toLowerCase().split(/\s+/).filter((t) => /[\p{L}\p{N}]/u.test(t)))];
-let followed = new WeakMap<object, { when: number; node: Element; key: string; got: { zone: Box; guess?: boolean } | null }>();
+let followed = new WeakMap<object, { when: number; seen: Read; node: Element; key: string; got: { zone: Box; guess?: boolean } | null }>();
 function followZone(anchor, node: Element, zone: Box): { zone: Box; guess?: boolean } | null {
   const want = tokensOf(anchor.zoneText);
   // A drawing marks a place by its lines, and an area on a box that scrolls is on the box's window: words scroll under both.
   if (want.length < 2 || anchor.ink || (/auto|scroll/.test(getComputedStyle(node).overflowY + getComputedStyle(node).overflowX) && node.scrollHeight + node.scrollWidth > node.clientHeight + node.clientWidth)) return { zone };
   const key = [zone.left, zone.top, zone.width, zone.height, node.getBoundingClientRect().height].map(Math.round).join();
   const had = followed.get(anchor);
-  if (had && had.node === node && had.key === key && performance.now() - had.when < 400) return had.got;
+  const now = read(); // its words changed (the page did): looked for again, as the letters are
+  if (had && had.node === node && had.key === key && had.seen === now && performance.now() - had.when < 400) return had.got;
   const [l, t] = [zone.left - scrollX, zone.top - scrollY];
   const r = l + zone.width;
   type Word = ReturnType<typeof wordBoxes>[number];
@@ -1323,7 +1348,7 @@ function followZone(anchor, node: Element, zone: Box): { zone: Box; guess?: bool
     const fair = best.has.size >= want.length / 3 && [...best.has].some((k) => df.get(k) === 1) && best.score >= 2 * next;
     got = sure || fair ? { zone: { ...zone, top: best.y - zone.height / 2 + scrollY }, ...(sure ? {} : { guess: true }) } : null;
   }
-  followed.set(anchor, { when: performance.now(), node, key, got });
+  followed.set(anchor, { when: performance.now(), seen: now, node, key, got });
   return got;
 }
 // The words of a box, each with its middle in the window's px; with `within`, only those of text whose element meets it.
@@ -1418,13 +1443,16 @@ export function spotChanged(anchor) {
 }
 
 // An element's letters without spaces, each with its text piece and place in it; read once per moment and shared by
-// the pins in it (pins on the page itself each read the whole page).
-let letters = new WeakMap<Node, { when: number; text: string; at: [Text, number][] }>();
+// the pins in it (pins on the page itself each read the whole page). A change to the page reads them again (`seen` is
+// thrown away): a live patch writes new words into the same text pieces, and a word of the same length kept the old
+// letters' places right, so the old words around a quote found the twin the new page no longer says.
+let letters = new WeakMap<Node, { when: number; seen: Read; text: string; at: [Text, number][] }>();
 /** The page's words were changed by the widget itself (a question's choice tried in place, thread.ts): read them again. */
 export const forgetLetters = () => void ((letters = new WeakMap()), (followed = new WeakMap()), (seen = null));
 function lettersOf(node, fresh = false) {
   const had = letters.get(node);
-  if (had && !fresh && performance.now() - had.when < 400) return had;
+  const now = read();
+  if (had && !fresh && had.seen === now && performance.now() - had.when < 400) return had;
   let text = '';
   const at: [Text, number][] = [];
   const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT, { acceptNode: (t) => (host.contains(t.parentNode) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT) });
@@ -1434,7 +1462,7 @@ function lettersOf(node, fresh = false) {
       text += t.data[i];
       at.push([t, i]);
     }
-  const got = { when: performance.now(), text, at };
+  const got = { when: performance.now(), seen: now, text, at };
   letters.set(node, got);
   return got;
 }
