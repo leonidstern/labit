@@ -62,7 +62,7 @@ function followPin(node: HTMLElement, tie: Tie) {
     es.forEach((e) => {
       const n = e.target as HTMLElement;
       if (!n.isConnected) return forget(n);
-      lay(n) || rest(n);
+      if (!lay(n)) rest(n);
     }))).observe(node);
   node.addEventListener('animationstart', settled);
 }
