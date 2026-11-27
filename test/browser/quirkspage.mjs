@@ -1,6 +1,6 @@
 // A page with no doctype (quirks mode, as an Artifact's HTML often is) reports the whole page's height as html's clientHeight.
-// Next new (W) then scrolled short and opened the card off screen (Leo, 26 Nov). On such a page and on a standard one: W, ⌃D and
-// ⌥W (back through the ones read, Leo 27 Nov) land with the card and its pin on screen, ⌥W types nothing in the reply box,
+// Next new (W) then scrolled short and opened the card off screen (Leo, 26 Nov). On such a page and on a standard one: W, ⌥W and
+// ⌥⇧W (back through the ones read, Leo 27 Nov) land with the card and its pin on screen, ⌥⇧W types nothing in the reply box,
 // ⇧W does nothing (Shift selects text), and a pin or a new-comment box opened low in the window keeps its card inside it.
 // Not part of `npm test`; CI runs it in the `browser` job. Run: node test/browser/quirkspage.mjs (needs playwright).
 import fs from 'node:fs';
@@ -87,22 +87,22 @@ try {
         await sleep(1400);
         let s = await state(p);
         check(eng, `${tag} W opens the first new pin with its card and pin on screen`, s?.n === '1' && inView(s), JSON.stringify(s));
-        // From the reply box the step focused: ⌃D on to the next new ones, down to the last near the page's end.
+        // From the reply box the step focused: ⌥W on to the next new ones, down to the last near the page's end.
         const step = async (key, want, what) => {
           await p.keyboard.press(key);
           await sleep(1400);
           s = await state(p);
           check(eng, `${tag} ${what}`, s?.n === want && inView(s), JSON.stringify(s));
         };
-        await step('Control+KeyD', '2', '⌃D steps to the next new pin, on screen');
-        await step('Control+KeyD', '3', "⌃D again: the last one, near the page's end, on screen");
-        // ⌥W goes back through the ones read, the last read first (Leo, 26 Nov), read or not; at the first it stays.
-        await step('Alt+KeyW', '2', '⌥W goes back to the one read before, on screen');
-        await step('Alt+KeyW', '1', '⌥W again: the first one read, on screen');
-        await step('Alt+KeyW', '1', '⌥W at the first one read stays there');
+        await step('Alt+KeyW', '2', '⌥W steps to the next new pin, on screen');
+        await step('Control+KeyD', '3', "⌃D steps on too: the last one, near the page's end, on screen");
+        // ⌥⇧W goes back through the ones read, the last read first (Leo, 26 Nov), read or not; at the first it stays.
+        await step('Alt+Shift+KeyW', '2', '⌥⇧W goes back to the one read before, on screen');
+        await step('Alt+Shift+KeyW', '1', '⌥⇧W again: the first one read, on screen');
+        await step('Alt+Shift+KeyW', '1', '⌥⇧W at the first one read stays there');
         const typed = await p.evaluate(`${root}.querySelector('.card textarea')?.value`);
-        check(eng, `${tag} ⌥W from the reply box types nothing in it`, typed === '', JSON.stringify(typed));
-        // Closed, with nothing open: ⇧W does nothing (Shift is for selecting), ⌥W opens the last one read.
+        check(eng, `${tag} ⌥W and ⌥⇧W from the reply box type nothing in it`, typed === '', JSON.stringify(typed));
+        // Closed, with nothing open: ⇧W does nothing (Shift is for selecting), ⌥⇧W opens the last one read.
         await p.keyboard.press('Escape');
         await sleep(400);
         await p.evaluate('scrollTo(0, 0)');
@@ -110,7 +110,7 @@ try {
         await p.keyboard.press('Shift+KeyW');
         await sleep(800);
         check(eng, `${tag} ⇧W opens nothing`, (await state(p)) === null);
-        await step('Alt+KeyW', '1', 'with no card open, ⌥W opens the last one read, on screen');
+        await step('Alt+Shift+KeyW', '1', 'with no card open, ⌥⇧W opens the last one read, on screen');
         await p.keyboard.press('Escape');
         await sleep(300);
         // A pin low in the window: its card opens above it, inside the window.

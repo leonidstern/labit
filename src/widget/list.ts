@@ -64,7 +64,7 @@ export function drawList(places?: Map<string, { moved?: boolean }>) {
   W.listBtn.setAttribute('aria-label', `next new comment, ${freshAll} new`);
   W.listBtn.setAttribute('aria-keyshortcuts', W.KEYS.next);
   const key = W.KEYS.next.toUpperCase();
-  W.listBtn.title = `next new comment: ${key} (⌃D while typing), ⌥${key}: back to the one read before`;
+  W.listBtn.title = `next new comment: ${key}, or ⌥${key} while typing (⌥⇧${key}: back to the one read before)`;
   W.listBtn.disabled = !freshAll;
   W.listBtn.classList.toggle('quiet', !freshAll);
   const doneCount = all.filter((c) => !W.isPage(c) && (c.resolved || workState(c)[0] === 'done') && !W.unread(c).length).length;
@@ -173,7 +173,7 @@ export const stepNew = (dir) => {
   goTo(fresh[next], !W.coarse); // the reply box takes the cursor (not on phones: no keyboard popping up)
 };
 
-// ⌥W goes back to the thread read before the open one, read or not, in the order they were first read; with none open,
+// ⌥⇧W goes back to the thread read before the open one, read or not, in the order they were first read; with none open,
 // to the last one read (Leo, 26 Nov: "doesnt open last readed comment"; it went to the unread one above).
 const opened: string[] = [];
 let last = '';
