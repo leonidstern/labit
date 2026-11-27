@@ -1,6 +1,4 @@
-// Rules from how you reply (lib/replies.ts, src/widget/thread.ts): when a reply is about how the agent answered, the
-// agent offers a rule (--suggest-rule); "rule?" on your message keeps it in your replies.md, which goes out with every
-// pin; ignoring it is a no, and undo on the answer takes it back out.
+// Replies in a thread from the CLI: answering a reply, and asking with choices.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -9,7 +7,6 @@ import { site, tmp, rm, spawnLab, sleep, up, cli as command } from './harness.mj
 
 const HOME = tmp('replies'); // nobody's real ~/.config
 const { DIR, PORT, B } = site('replies-lab', 9100, 40);
-const RULES = path.join(HOME, 'labit', 'replies.md');
 const env = { ...process.env, XDG_CONFIG_HOME: HOME, PORT: '' };
 fs.writeFileSync(path.join(DIR, 'package.json'), '{}');
 fs.writeFileSync(path.join(DIR, 'bar.html'), '<!doctype html><title>Bar</title><p id="x">Hi</p>');
@@ -19,46 +16,30 @@ after(() => {
   rm([HOME, DIR]);
 });
 const cli = (...args) => command(args, { cwd: DIR, env });
-// This computer's browser key (.lab/key): keeping or undoing a rule needs it.
-const admin = () => fs.readFileSync(path.join(DIR, '.lab', 'key'), 'utf8').trim();
 const post = async (body, url = '/_lab/api/comments') => {
-  const r = await fetch(B + url, { method: 'POST', headers: { 'content-type': 'application/json', origin: B, ...(url === '/_lab/rule' && { 'x-lab-admin': admin() }) }, body: JSON.stringify({ page: '/bar', ...body }) });
+  const r = await fetch(B + url, { method: 'POST', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ page: '/bar', ...body }) });
   return { status: r.status, json: r.status === 204 ? null : await r.json().catch(() => null) };
 };
 const thread = async () => (await (await fetch(`${B}/_lab/api/comments?page=/bar`)).json()).comments;
 const ready = () => up(B + '/', { fail: false });
 
-test('the agent can offer a rule on its own; keep saves it, no does not; a person cannot offer one', async () => {
+test('answering a reply says which one; --suggest-rule (the rules feature, removed 27 Nov) is an unknown option', async () => {
   await ready();
   const pin = (await post({ name: 'leo', text: 'and the menu', anchor: { kind: 'element', selector: '#x', x: 0.1, y: 0.1 } })).json.comment;
   await cli('reply', pin.id, 'Changed the menu.');
   await cli('wait', '--bg', '--timeout', '2');
   await post({ name: 'leo', text: 'where is it', parent: pin.id, suggest: 'sneaky' });
   const handed = (await cli('wait', '--bg', '--timeout', '3')).out;
-  assert.match(handed, /add --suggest-rule "<one short rule>"/, 'a reply in a thread asks the agent to offer a rule when it fits');
-  assert.equal((await thread()).find((c) => c.text === 'where is it').suggest, undefined, 'a person never offers a rule');
+  assert.doesNotMatch(handed, /suggest-rule|How the person wants answers/);
   const where = (await thread()).find((c) => c.text === 'where is it');
-  await cli('reply', where.id, 'Under the menu.', '--suggest-rule', 'Say where to see what you built, with a link.');
+  assert.equal(where.suggest, undefined, 'a suggest field sent along is not kept');
+  await cli('reply', where.id, 'Under the menu.');
   assert.equal((await thread()).find((c) => c.text === 'Under the menu.').to, where.id, 'answering a reply says which one (a quote in the thread)');
-  await cli('reply', pin.id, 'And here.', '--suggest-rule', 'Never mind this one.');
-  const [keep, no] = (await thread()).filter((c) => c.suggest);
-  assert.equal((await post({ id: keep.id, action: 'keep' }, '/_lab/rule')).status, 204);
-  assert.equal((await post({ id: no.id, action: 'no' }, '/_lab/rule')).status, 204);
-  const rules = fs.readFileSync(RULES, 'utf8');
-  assert.match(rules, /^- Say where to see what you built, with a link\.$/m);
-  assert.doesNotMatch(rules, /Never mind/);
-  const after = await thread();
-  assert.deepEqual(after.find((c) => c.id === keep.id).suggest, { text: 'Say where to see what you built, with a link.', state: 'kept' }, 'kept: it shows as a rule, with undo');
-  assert.equal(after.find((c) => c.id === no.id).suggest.state, 'no');
-
-  // Every handover ends with the rules; undo takes one back out.
-  await post({ name: 'leo', text: 'and the colour?', anchor: { kind: 'element', selector: '#x', x: 0.2, y: 0.2 } });
-  assert.match((await cli('wait', '--bg', '--timeout', '3')).out, /How the person wants answers[^\n]*\n- Say where to see what you built, with a link\.$/m);
-  await post({ name: 'leo', text: 'and the size?', anchor: { kind: 'element', selector: '#x', x: 0.3, y: 0.3 } });
-  assert.doesNotMatch((await cli('wait', '--bg', '--timeout', '3')).out, /How the person wants answers/, 'the same rules go to a session once');
-  assert.equal((await post({ id: keep.id }, '/_lab/rule')).status, 204);
-  assert.doesNotMatch(fs.readFileSync(RULES, 'utf8'), /Say where/);
-  assert.equal((await post({ id: pin.id }, '/_lab/rule')).status, 404, 'a comment with no rule has nothing to undo');
+  const old = await cli('reply', pin.id, 'And here.', '--suggest-rule', 'Never mind this one.');
+  assert.notEqual(old.code, 0);
+  assert.match(old.out, /Unknown option --suggest-rule/);
+  assert.equal((await thread()).some((c) => /And here|Never mind/.test(c.text)), false, 'nothing is posted');
+  assert.equal((await post({ id: pin.id, action: 'keep' }, '/_lab/rule')).status, 404, 'the route is gone');
 });
 
 // Ask with choices and listen in one command: the pick, when the person makes it, is what the wait returns, with the

@@ -792,15 +792,6 @@ kbd::before { content: '('; } kbd::after { content: ')'; } /* read as a hint: ch
   .chatwin .msgs > .msg.waits:last-child .stamp .state { top: calc(100% + 6px); }
 }
 @keyframes lab-scrolled-end { from { mask-size: 100% calc(100% + 16px), 100% 100%; } to { mask-size: 100% calc(100% + 16px), 100% calc(100% + 32px); } }
-/* Feedback on an agent's answer (src/widget/thread.ts): the button under the answer, the bar over the reply box while
-   writing it, and the rule the agent made of it, on the answer that saved it. */
-.msg .rule { display: block; margin-top: 6px; font-size: 12px; opacity: .8; letter-spacing: 0; line-height: 1.35; }
-.msg .rule b { display: inline; margin: 0 6px 0 0; font-size: 11px; font-weight: 600; opacity: .7; text-transform: uppercase; letter-spacing: .04em; }
-.msg .rule button.btn { margin-left: 8px; font-size: 11px; padding: 0; color: inherit; opacity: .6; text-decoration: underline; text-underline-offset: 2px; }
-.msg button.offer { display: inline; padding: 0; font: inherit; letter-spacing: inherit; line-height: inherit; color: inherit; opacity: 1; pointer-events: auto; }
-.msg :is(.stamp, .stamp-room).offering > :not(.offer) { display: none; } .msg .stamp.offering { opacity: 1; }
-.msg button.offer .tm { opacity: .55; } .msg button.offer .tick { color: var(--_green-fg); }
-.msg button.offer .tick svg { width: 9px; height: 9px; vertical-align: top; margin-top: .5px; }
 .msg button :is(svg, svg *) { color: inherit; } /* the widget gives every element its text colour, the icon parts too */
 /* The ⋯ menu opens with which lab this is (labs & pages, ⌘K, is switcher.ts, its styles in switcher.css). */
 .more-menu .lab-head { margin: 2px 10px 4px; padding-bottom: 6px; border-bottom: var(--_hair); font-size: 12px; font-weight: 600; color: var(--_fg); }

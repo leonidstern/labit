@@ -454,9 +454,7 @@ function asText(path, comments, origin, whole = false, all = comments) {
     // the agent's own pick marked, then what the person picked.
     for (const r of [c, ...comments.filter((r) => r.parent === c.id)]) {
       if (r !== c) {
-        const s = r.suggest;
-        const rule = !s ? '' : s.state === 'kept' ? ` (kept as rule: ${s.text})` : ` (offered as rule: ${s.text}${s.state ? ', they said no' : ''})`;
-        lines.push(`reply: ${r.name}${r.from && r.from !== c.from ? ` (${r.from})` : ''} · ${stamp(r.createdAt)} · id ${r.id}: ${body(wordsOf(r))}${rule}${r.doit ? DO_IT(r.name) : ''}${r.session && r.intent === 'done' ? (r.checked ? ` (checked: ${r.checked})` : ' (not checked)') : ''}`);
+        lines.push(`reply: ${r.name}${r.from && r.from !== c.from ? ` (${r.from})` : ''} · ${stamp(r.createdAt)} · id ${r.id}: ${body(wordsOf(r))}${r.doit ? DO_IT(r.name) : ''}${r.session && r.intent === 'done' ? (r.checked ? ` (checked: ${r.checked})` : ' (not checked)') : ''}`);
         for (const i of imagesOf(r)) lines.push(`  ${imageLine(r, i)}`);
       }
       if (Array.isArray(r.choices)) {
@@ -685,9 +683,6 @@ export async function POST(request) {
     // where a person's came from.
     ...(agent ? { session: wrote?.session && typeof wrote.session === 'object' ? wrote.session : { name } } : {}),
     ...(!agent && (wrote?.from === 'this computer' || wrote?.from === 'wifi guest') ? { from: wrote.from } : {}),
-    // A rule the agent offers on its own, from a reply about how it answered (labit reply --suggest-rule): kept with a
-    // tap. state: none while it is only offered, then 'kept' | 'no' | 'undone'.
-    ...(parent && agent && cleanText(body.suggest, 200) ? { suggest: { text: cleanText(body.suggest, 200) } } : {}),
     // What the agent's answer is (labit reply --done / --on-it / --question): the thread's state is read from it, not
     // from the words. An answer that doesn't say (an older agent or skill) is read from its first words, once, here.
     ...(parent && agent && (INTENTS.includes(body.intent) || intentFromText(text)) ? { intent: INTENTS.includes(body.intent) ? body.intent : intentFromText(text) } : {}),

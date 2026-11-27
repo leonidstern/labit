@@ -293,7 +293,6 @@ export function grab(pin, now) {
 // - the thread's messages as chat bubbles (yours on the right), the time and ✓ ✓✓ in the corner, ✅ on a done answer,
 //   the "new" line above the first unread one, and opening it marks them read (markSeen);
 // - an answer to a later message quotes it (to), and a tap on the quote goes to it;
-// - a rule the agent offered (--suggest-rule): "rule?" on your message, kept with a tap, undo on the answer;
 // - resolve / reopen (admins and the thread's starter), delete with its in-card question (admins);
 // - the reply box (composer) at the foot, its draft kept per thread, focused on a computer when opened by a click;
 // - scroll keeping: at the newest it follows new messages and the keyboard; scrolled back, it stays put; sync() adds
@@ -322,43 +321,6 @@ export function threadCard(c, fresh = new Set(), focus = false) {
   const end = stickToEnd(body, !asking); // an open question starts at the question and its rows (on a half-height sheet, not at the newest)
   // Going to answer: the last message comes into view, so you write under what you're answering (Leo, 17 Nov).
   foot.addEventListener('focusin', (e) => (e.target as Element).localName === 'textarea' && end.pin());
-  // A rule the agent offered on its own (--suggest-rule), from your reply about how it answered: on your own message,
-  // where the words came from, "make it a rule" (Leo, 17 Nov). Leaving it is a no.
-  const STAR = '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1.5l1.7 4.8L14.5 8l-4.8 1.7L8 14.5l-1.7-4.8L1.5 8l4.8-1.7z"/></svg>';
-  const offerOn = (mine) => {
-    const all = [c, ...W.repliesOf(c.id)];
-    const ans = all.slice(all.indexOf(mine) + 1).find((x) => x.session);
-    // On this computer only: the lab keeps a rule from nowhere else, so another device would get a button that says no.
-    if (!W.S.isAdmin || !W.S.mac || !ans?.suggest || ans.suggest.state) return null;
-    const b = W.el('button', { class: 'btn offer', type: 'button', title: ans.suggest.text });
-    // The words where the time is, the star where the tick is, each in their size and colour (Leo, 17 Nov).
-    b.append(W.el('span', { class: 'tm' }, 'rule?'));
-    const star = W.el('span', { class: 'tick' });
-    star.innerHTML = STAR;
-    b.append(star);
-    b.addEventListener('click', async () => {
-      const r = await fetch('/_lab/rule', { method: 'POST', headers: W.headers(), body: JSON.stringify({ page: W.S.page, id: ans.id, action: 'keep' }) }).catch(() => null);
-      if (!r?.ok) return void (b.lastChild!.textContent = 'failed, try again');
-      ans.suggest.state = 'kept';
-      for (const n of card.querySelectorAll(`.msg[data-id="${mine.id}"] .offering`)) n.classList.remove('offering');
-      card.querySelectorAll(`.msg[data-id="${mine.id}"] .offer`).forEach((n) => n.remove()); // and its invisible copy
-      card.querySelector(`.msg[data-id="${ans.id}"]`)?.append(ruleLine(ans)); // the rule shows on the agent's answer
-    });
-    return b;
-  };
-  const ruleLine = (item) => {
-    const line = W.el('span', { class: 'rule' });
-    if (item.suggest.state === 'undone') return line.append(W.el('b', {}, 'rule removed')), line;
-    const undo = btn('undo');
-    undo.addEventListener('click', async () => {
-      const r = await fetch('/_lab/rule', { method: 'POST', headers: W.headers(), body: JSON.stringify({ page: W.S.page, id: item.id }) }).catch(() => null);
-      if (!r?.ok) return void (undo.textContent = 'failed, try again');
-      item.suggest.state = 'undone';
-      line.replaceWith(ruleLine(item));
-    });
-    line.append(W.el('b', {}, 'rule'), document.createTextNode(item.suggest.text), undo);
-    return line;
-  };
   const itemEl = (item) => {
     const box = W.el('div', { class: `item msg${W.mine(item) && !item.session ? ' mine' : ''}`, 'data-id': item.id, ...(W.agentOf(item) ? { 'data-agent': W.agentOf(item) } : {}) });
     box.append(W.nameLine(item.name));
@@ -376,19 +338,11 @@ export function threadCard(c, fresh = new Set(), focus = false) {
       box.classList.add('asks');
       box.append(choicesEl(c, item, card));
     }
-    if (item.session && /kept|undone/.test(item.suggest?.state)) box.append(ruleLine(item));
     // The moment the pin was written on (Leo, 23 Nov, 4c): a quiet line under its first message, its time beside it;
     // clicked, the page pauses there again (motion.ts).
     const moment = item === c && c.anchor?.moment && W.S.momentLine?.(c.anchor.moment, true);
     if (moment) box.append(W.el('span', { class: 'p when' }, moment));
     const stamp = W.stampOf(item, c, item === c && !c.resolved ? `#${W.numberOf(c)} · ` : '');
-    // The offer sits in your message's corner in place of the time and tick, so the bubble keeps its size (Leo, 17 Nov:
-    // 57 + 60, then "it makes bigger row"). Kept or gone, the time comes back.
-    const offer = !item.session && offerOn(item);
-    if (offer) {
-      stamp.classList.add('offering');
-      stamp.prepend(offer);
-    }
     W.stamped(box, stamp);
     return box;
   };

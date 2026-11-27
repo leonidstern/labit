@@ -301,7 +301,6 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
 
   S.comments = [];
   S.isAdmin = false;
-  S.mac = !globalThis.__LAB_CO__ && Boolean(adminToken); // this computer's own browser holds the key: what only it may do (keeping a rule) is shown there alone
   // Off by default: the page looks clean until someone turns comments on (button or c); remembered per browser.
   S.on = store.get('lab-on') ? store.get('lab-on') === '1' : script?.dataset.on === '1';
   // A board page (src/board/): a tap selects a frame; 1 (comment mode) pins the board.
