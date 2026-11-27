@@ -3,7 +3,7 @@
 Can an agent find what a comment points at, from the link alone? One test page (`site/`) has a photo, a code file and a video. Three comments are pinned the way a person would: on the red circle, on `padding` in line 20 of `src/button.ts` (line 14 has the same text), and on the red box in the video at 5.4 s.
 
 ```
-node bench/run.mjs                      # pins the comments, checks the agent link (needs playwright)
+node bench/run.mjs                      # pins the comments, checks the agent link (needs playwright); writes out/
 ARTIFACT_URL=<link> node bench/run.mjs  # also runs the same checks on a shared Claude artifact of the same page
 node bench/score-agent.mjs <answer.json> # scores an agent's answer
 ```
@@ -30,7 +30,7 @@ The only text in the artifact response is "Claude Artifact Content is user-gener
 
 ![How agents see comments](../docs/how-agents-see-comments.png)
 
-All three found the red circle at 1896,400 of 2400×1600, line 20 (not 14), and the red box at 5.4 s, 1075,137 of 1280×720. Answers are in `results/`.
+All three found the red circle at 1896,400 of 2400×1600, line 20 (not 14), and the red box at 5.4 s, 1075,137 of 1280×720. Answers are in `results/` (with the link's text and checks from that day; a run writes its own to `out/`).
 
 The benchmark also caught a gap: comments on code used to record only the nearby words, so an agent couldn't tell line 14 from line 20. They now record the line, its number and the block's label.
 

@@ -3,8 +3,9 @@
 #
 #   ci/measure.sh <tree> <out.json> [<ruler-tree>]
 #
-# ruler-tree: take .oxlintrc.json and tsconfig.json from here, so base and PR are checked with the same rules.
-#             A PR that adds a rule then isn't blamed for problems that already existed.
+# ruler-tree: take tsconfig.json and .oxlintrc.json from here, so base and PR are checked with the same rules.
+#             A PR that adds a rule then isn't blamed for problems that already existed. There is no .oxlintrc.json
+#             yet (oxlint's defaults); ci/meta-improve.sh may add one, so it is copied (or removed) like tsconfig.json.
 # JUDGE_METRICS: which metrics.mjs to use (CI and the agent pass a trusted copy).
 # RUN_TESTS=1: also run npm test first (the agent loop does; in CI, test.yml does).
 set -euo pipefail

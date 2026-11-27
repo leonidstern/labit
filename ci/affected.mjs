@@ -1,13 +1,11 @@
-// Which browser tests a pull request needs (Leo, 20 Nov: PR CI should run only the tests a change can break). The
-// browser jobs run on GitHub's runners; this picks, from the files a PR changes, which test/browser files they run.
+// Which browser tests a pull request needs (Leo, 20 Nov: PR CI should run only the tests a change can break). This
+// picks, from the files a PR changes, which test/browser files test.yml's browser jobs run.
 //
 // Rules, first match per changed file:
 // - Never affects a browser: docs, skills, hooks, examples, unit tests, the phone kit, the size gate's ci/ scripts,
 //   workflows other than test.yml. Nothing runs for these.
 // - A browser test that CI runs (listed in ci/browser-tests.json): that test.
 // - A widget module with a known reach (REACH below): the tests listed for it.
-// - public/_lab/*.js built from src/: nothing of its own when the PR also changes src/ (it is the build of those
-//   files, and the size gate's staleBuild check already holds it to them); everything when it changes alone.
 // - Everything else, including anything not listed here: every test. So src/comments.js, styles.css, the server
 //   (local.mjs, lib/), package.json, the build script, test.yml, this file, test helpers, and new folders all run the
 //   full set. Unknown means all: a missed test costs more than a run.
@@ -17,8 +15,8 @@
 //   node ci/affected.mjs <base> <head>    prints {"tests":"all"|"a b c","native":bool,"bench":bool,"jobs":[…],"why":[…]}
 //   node ci/affected.mjs --main <before> <after>
 //   node ci/affected.mjs --all
-// In CI the same JSON goes to $GITHUB_OUTPUT as tests=…, native=…, bench=…, jobs=… (the browser matrix, engines from
-// $ENGINES, default webkit), and the reasons and shards to the job summary.
+// In CI the parts test.yml reads go to $GITHUB_OUTPUT: jobs=… (the browser matrix, engines from $ENGINES, default
+// webkit), unit=…, unitShards=…, unitShardCount=… and release=…; the reasons and shards go to the job summary.
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -52,37 +50,26 @@ const REACH = {
   'src/widget/actions.ts': ['actions'],
   'src/widget/walkie.ts': ['walkie'],
   'src/widget/walkie.css': ['walkie'],
-  'src/widget/chat.ts': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'boardclose', 'connection', 'fluid', 'native', 'progress', 'shortcuts', 'update', 'updbadge', 'zoom'],
+  'src/widget/chat.ts': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'boardclose', 'connection', 'native', 'progress', 'shortcuts', 'update', 'updbadge', 'zoom'],
   'src/widget/draw.ts': ['draw', 'edge-draw1', 'edge-draw2', 'edge-draw3', 'edge-draw4', 'native', 'nativepins', 'shiftkeys'],
-  'src/widget/fluid.ts': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'fluid', 'nativepins', 'select', 'selection', 'shortcuts'],
   'src/widget/frame.ts': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardhome', 'boardmode', 'boardpins', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard'],
   'src/widget/ink.ts': ['draw', 'edge-draw1', 'edge-draw2', 'edge-draw3', 'edge-draw4', 'native', 'nativepins', 'shiftkeys'],
-  'src/widget/messages.ts': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'boardclose', 'boardcanvas', 'boardpins', 'connection', 'draw', 'edge-draw2', 'fluid', 'moment', 'native', 'progress', 'selection', 'shortcuts', 'undo', 'update', 'updbadge', 'zoom'],
-  'src/widget/pinhold.ts': ['actions', 'behaviours', 'behaviours-choices', 'behaviours-questions', 'boardclose', 'boardcanvas', 'boardpins', 'boardview', 'boxfits', 'connection', 'draw', 'edge-draw1', 'edge-draw2', 'edge-draw3', 'edge-draw4', 'fluid', 'moment', 'moved', 'native', 'nativeboard', 'nativepins', 'progress', 'select', 'selection', 'shortcuts', 'undo'],
-  'src/widget/select.ts': ['select'],
-  'src/widget/stick.ts': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'boardclose', 'boardcanvas', 'boardpins', 'connection', 'draw', 'edge-draw2', 'fluid', 'moment', 'native', 'progress', 'selection', 'shortcuts', 'undo', 'update', 'updbadge', 'zoom'],
-  'src/widget/switcher.ts': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'boardcanvas', 'boardmode', 'moved', 'native', 'select', 'shortcuts', 'update', 'updbadge'],
-  'src/widget/switcher.css': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'boardcanvas', 'boardmode', 'moved', 'native', 'select', 'shortcuts', 'update', 'updbadge'],
+  'src/widget/messages.ts': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'boardclose', 'boardcanvas', 'boardpins', 'connection', 'draw', 'edge-draw2', 'moment', 'native', 'progress', 'selection', 'shortcuts', 'undo', 'update', 'updbadge', 'zoom'],
+  'src/widget/pinhold.ts': ['actions', 'behaviours', 'behaviours-choices', 'behaviours-questions', 'boardclose', 'boardcanvas', 'boardpins', 'boardview', 'boxfits', 'connection', 'draw', 'edge-draw1', 'edge-draw2', 'edge-draw3', 'edge-draw4', 'moment', 'moved', 'native', 'nativeboard', 'nativepins', 'progress', 'selection', 'shortcuts', 'undo'],
+  'src/widget/stick.ts': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'boardclose', 'boardcanvas', 'boardpins', 'connection', 'draw', 'edge-draw2', 'moment', 'native', 'progress', 'selection', 'shortcuts', 'undo', 'update', 'updbadge', 'zoom'],
+  'src/widget/switcher.ts': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'boardcanvas', 'boardmode', 'moved', 'native', 'shortcuts', 'update', 'updbadge'],
+  'src/widget/switcher.css': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'boardcanvas', 'boardmode', 'moved', 'native', 'shortcuts', 'update', 'updbadge'],
   'src/widget/trial.ts': ['anchoring', 'behaviours', 'behaviours-choices', 'behaviours-questions', 'native', 'progress', 'selection', 'shortcuts'],
   'src/widget/tryout.ts': ['anchoring', 'behaviours', 'behaviours-choices', 'behaviours-questions', 'native', 'progress', 'selection', 'shortcuts'],
-  'public/_lab/tryout.js': ['anchoring', 'behaviours', 'behaviours-choices', 'behaviours-questions', 'native', 'progress', 'selection', 'shortcuts'],
   'src/widget/goto.ts': ['links', 'pagecss'],
-  'public/_lab/goto.js': ['links', 'pagecss'],
   'src/board/camera.ts': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardhome', 'boardmode', 'boardpins', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard'],
   'src/board/mount.ts': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardhome', 'boardimage', 'phonepins', 'boardmode', 'boardpins', 'boardzones', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard'],
   'src/board/overlay.ts': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardhome', 'boardimage', 'phonepins', 'boardmode', 'boardpins', 'boardzones', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard'],
-  'public/_lab/boardview.js': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardhome', 'boardimage', 'phonepins', 'boardmode', 'boardpins', 'boardzones', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard'],
-  'public/_lab/draw.js': ['draw', 'edge-draw1', 'edge-draw2', 'edge-draw3', 'edge-draw4', 'native', 'nativepins', 'shiftkeys'],
-  'public/_lab/motion.js': ['motionreach', 'moment', 'update'],
   'src/widget/attach.ts': ['attach'],
   'src/widget/attach.css': ['attach'],
-  'public/_lab/attach.js': ['attach'],
   'src/widget/reload.ts': ['livereload', 'hotrace', 'morphstate', 'reloadstate', 'remount', 'boardreload', 'pagecss'],
-  'public/_lab/reload.js': ['livereload', 'hotrace', 'morphstate', 'reloadstate', 'remount', 'boardreload', 'pagecss'],
   'src/widget/pics.ts': ['attach', 'boardimage'],
-  'public/_lab/pics.js': ['attach', 'boardimage'],
-  'public/_lab/switcher.js': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'boardcanvas', 'boardmode', 'moved', 'native', 'select', 'shortcuts', 'update', 'updbadge'],
-  'lib/actions.ts': ['actions', 'behaviours', 'behaviours-choices', 'behaviours-questions', 'fluid', 'nativepins', 'select', 'selection', 'shortcuts'],
+  'lib/actions.ts': ['actions', 'behaviours', 'behaviours-choices', 'behaviours-questions', 'nativepins', 'selection', 'shortcuts'],
   'lib/agents.ts': ['behaviours', 'behaviours-choices', 'behaviours-questions', 'connection', 'edge-draw1', 'edge-draw2', 'edge-draw3', 'edge-draw4', 'moment', 'moved', 'native', 'progress', 'shortcuts', 'updbadge'],
   'lib/board.ts': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardhome', 'boardmode', 'boardpins', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard'],
   'lib/boardact.ts': ['board', 'boardarrange', 'boardclose', 'boardcanvas', 'boardhome', 'boardmode', 'boardpins', 'boardreload', 'boardview', 'frame', 'framescroll', 'nativeboard'],
@@ -115,10 +102,10 @@ export function listEdit(diff) {
 
 // The browser jobs: the picked tests packed into shards per engine, longest first onto the shortest shard, so they
 // end at about the same time. As many shards as the tests need at about TARGET seconds each, at most RUNNERS[engine]:
-// WebKit runs on GitHub's macOS runners (Safari's own WebKit; Linux WebKit draws, scrolls and times frames otherwise),
-// 5 at once for a free account; Chromium on Linux, 5 so a release keeps room for a PR. The bench rides on the first
-// WebKit shard.
-const RUNNERS = { webkit: 5, chromium: 5 };
+// WebKit runs on macOS (Safari's own WebKit; Linux WebKit draws, scrolls and times frames otherwise), on the six
+// runners of Leo's Mac Studio (WEBKIT_OS set) or GitHub's, 5 at once for the account; Chromium on Linux, 5 so a
+// release keeps room for a PR. The bench rides on the first WebKit shard.
+const RUNNERS = { webkit: process.env.WEBKIT_OS ? 6 : 5, chromium: 5 };
 const TARGET = 60;
 // Tests too long for one shard, run in parts side by side: name@i/n, ci/browser-run.mjs passes TEST_PART=i/n and the
 // test runs only that part. Each part counts as its share of the test's time. anchoring-torture alone took 250-500 s,
@@ -415,10 +402,6 @@ export function affected(files, { tests = groupTests(), reach = REACH, diffOf = 
       why.push(`${f}: runs ${reach[f].filter((r) => tests.has(r)).join(' ')}`);
       continue;
     }
-    if (/^public\/_lab\/[^/]+\.js$/.test(f) && srcChanged) {
-      why.push(`${f}: the build of the src/ files changed here`);
-      continue;
-    }
     all = true;
     why.push(reach[f] ? `${f}: its tests (${reach[f].join(' ')}) aren't in ci/browser-tests.json, so every test` : `${f}: runs every test`);
   }
@@ -519,7 +502,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   console.log(JSON.stringify(out, null, 2));
   if (process.env.GITHUB_OUTPUT) {
     const jobs = out.jobs.map(({ secs, ...j }) => j);
-    fs.appendFileSync(process.env.GITHUB_OUTPUT, `tests=${out.tests}\nnative=${out.native}\nbench=${out.bench}\njobs=${JSON.stringify(jobs)}\nunit=${out.unit}\nunitShards=${JSON.stringify(out.unitShards)}\nunitShardCount=${out.unitShards.length}\nrelease=${release}\n`);
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `jobs=${JSON.stringify(jobs)}\nunit=${out.unit}\nunitShards=${JSON.stringify(out.unitShards)}\nunitShardCount=${out.unitShards.length}\nrelease=${release}\n`);
   }
   if (process.env.GITHUB_STEP_SUMMARY) {
     const head = out.tests === 'all' ? 'Every browser test' : out.tests ? `Browser tests: ${out.tests}` : 'No browser tests';

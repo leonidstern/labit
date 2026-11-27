@@ -3,7 +3,8 @@
 #
 # - The PR is compared with its own base commit. No baseline file, nothing pushed.
 # - Both sides are measured with the base branch's judge (ci/), so a PR can't change how it's judged.
-# - Both sides use the PR's .oxlintrc.json, so a PR adding a rule isn't blamed for old problems.
+# - Both sides use the PR's tsconfig.json and .oxlintrc.json (none yet: oxlint's defaults; ci/meta-improve.sh may add
+#   one), so a PR adding a rule isn't blamed for old problems.
 name: gates
 
 on:
@@ -42,19 +43,25 @@ jobs:
       - run: (cd base && npm run build) && (cd pr && npm run build)
 
       - name: Measure base
-        if: hashFiles('base/ci/metrics.mjs') != '' # skip until the judge exists on base
         env:
           JUDGE_METRICS: base/ci/metrics.mjs
         run: bash base/ci/measure.sh base "$RUNNER_TEMP/base.json" pr
 
+      # A release (package.json's version differs from base's): the PR side must also have a fresh co/co.js
+      # (staleBuild). Base is measured without it, so a stale copy on both sides still fails.
+      - name: A release?
+        id: rel
+        run: |
+          v() { node -p "require('./$1/package.json').version"; }
+          echo "release=$([ "$(v base)" != "$(v pr)" ] && echo 1 || echo 0)" >> "$GITHUB_OUTPUT"
+
       - name: Measure PR
-        if: hashFiles('base/ci/metrics.mjs') != '' # skip until the judge exists on base
         env:
           JUDGE_METRICS: base/ci/metrics.mjs
+          RELEASE: ${{ steps.rel.outputs.release }}
         run: bash base/ci/measure.sh pr "$RUNNER_TEMP/pr.json"
 
       - name: Compare PR with base
-        if: hashFiles('base/ci/metrics.mjs') != '' # skip until the judge exists on base
         env:
           ALLOW_GROWTH: ${{ contains(github.event.pull_request.labels.*.name, 'size-approved') && '1' || '0' }}
         run: |

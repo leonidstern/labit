@@ -61,7 +61,6 @@
     "lab-turn",
     "lab-draw",
     "lab-ready",
-    "lab-fly",
     "lab-twitch",
     "lab-fade",
     "lab-in",
@@ -69,16 +68,14 @@
     "lab-pin",
     "lab-halo",
     "lab-card-in",
-    "lab-ink-settle",
     "lab-undo", "lab-scrolled-top", "lab-scrolled-end"
   ],
-  "$where": "Files that may own a part: the drawer's gestures and keyboard fit live in sheets.ts (comments.js wires them up).",
+  "$where": "Files that may own a part: the drawer's gestures live in sheets.ts (comments.js wires them up); the keyboard fit is measured in comments.js and the sheets read it (--lab-kb).",
   "gestures": [
     "sheets.ts",
     "comments.js"
   ],
   "keyboardFit": [
-    "sheets.ts",
     "comments.js"
   ],
   "values": {
@@ -86,7 +83,6 @@
     "colours": {},
     "radii": {
       "14px 14px 14px 2px": "the pin: a teardrop, its tail at the bottom left (28 px)",
-      "11px 11px 11px 2px": "the pin glyph in the bar: the same teardrop at 22 px",
       "18px 18px 18px 6px": "the ring around a pin: the teardrop 4 px out, concentric",
       "2px": "the grab handle: a 4 px tall pill",
       "8px": "the switch in the ⋯ menu: a 16 px tall pill",

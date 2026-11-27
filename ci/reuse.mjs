@@ -101,8 +101,23 @@ for (const f of code) {
   }
 }
 
+// 7. Stale entries: ci/parts.json lists only what is still there, so the lists keep meaning something.
+const stale = (what) => say(`${what} in ci/parts.json is no longer used`, 'take it off the list');
+const keyframes = new Set(sheets.flatMap(([, css]) => [...css.matchAll(/@keyframes\s+([\w-]+)/g)].map((m) => m[1])));
+for (const f of Object.keys(parts.modules)) if (!fs.existsSync(path.join(W, f))) stale(`"modules" ${f}`);
+for (const a of parts.animations) if (!keyframes.has(a)) stale(`"animations" ${a}`);
+const owns = (list, re) => { for (const f of parts[list]) if (!code.some((c) => path.basename(c) === f && re.test(read(c)))) stale(`"${list}" ${f}`); };
+owns('gestures', /addEventListener\(\s*'touchmove'/);
+owns('keyboardFit', /visualViewport/);
+const written = [...sheets, lab].map(([, css]) => css.replace(/\s+/g, ' ')).join('\n');
+for (const kind of ['colours', 'radii', 'motion']) for (const v of Object.keys(parts.values[kind] || {})) if (!v.startsWith('$') && !written.includes(v)) stale(`"values".${kind} ${v}`);
+for (const k of Object.keys(parts.values.code || {})) {
+  const [f, v] = [k.slice(0, k.indexOf(': ')), k.slice(k.indexOf(': ') + 2)];
+  if (!code.some((c) => path.basename(c) === f && read(c).includes(v))) stale(`"values".code ${k}`);
+}
+
 if (problems.length) {
-  console.error(`Reuse check: ${problems.length} new part${problems.length === 1 ? '' : 's'} where an existing one would do.\n\n${problems.join('\n\n')}\n`);
+  console.error(`Reuse check: ${problems.length} problem${problems.length === 1 ? '' : 's'}: a new part where an existing one would do, or a list entry that is gone.\n\n${problems.join('\n\n')}\n`);
   process.exit(1);
 }
 console.log('Reuse check: one drawer, one dimmed page, shared gestures, keyboard fit, animations and styles; colours, corners, sizes and motion from tokens.');

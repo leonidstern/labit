@@ -1,7 +1,6 @@
 .lab/
 node_modules/
 dist/
-lab-motion/
 public/_lab/comments.min.js
 # Built from src/ (npm run build): a lab from a checkout builds them itself, CI and npm pack build them (lib/build.ts).
 public/_lab/comments.js
@@ -21,7 +20,7 @@ public/_lab/*.br
 public/_lab/bundles.json
 /waste-report.md
 /waste-review.md
-bench/multi/out/
+bench/**/out/
 ci/reach-map.json
 co/.vercel/
 .vercel/
