@@ -2240,9 +2240,10 @@ const withIcon = (html) => {
 // dev server's client already holds its socket. So this goes in first, before anything else on the page: it wraps
 // WebSocket, and while a box holds words nobody has sent (window.__lab.writing, set by the widget) a reload message
 // waits instead of being handed on. It is handed on the moment the words are sent or cleared, so the page is never
-// more than one comment behind.
+// more than one comment behind. The reload messages it knows: Vite's full-reload, Astro's, a plain {"type":"reload"}, and
+// Next's reloadPage (its webpack and Turbopack servers both send it).
 const HOLD = `<script>(()=>{const L=window.__lab={writing:0,held:[],flush(){const h=L.held;L.held=[];for(const f of h)f()}};
-const isReload=d=>typeof d==='string'&&(d.includes('"full-reload"')||d.includes('"type":"reload"')||d.includes('astro:reload'));
+const isReload=d=>typeof d==='string'&&(d.includes('"full-reload"')||d.includes('"type":"reload"')||d.includes('astro:reload')||d.includes('"reloadPage"'));
 const W=window.WebSocket;if(!W)return;window.WebSocket=new Proxy(W,{construct(T,a){const ws=new T(...a);
 const wrap=f=>function(e){if(L.writing&&isReload(e&&e.data)){L.held.push(()=>f.call(this,e));return;}return f.call(this,e)};
 const add=ws.addEventListener.bind(ws);ws.addEventListener=(t,f,o)=>add(t,t==='message'&&typeof f==='function'?wrap(f):f,o);

@@ -23,7 +23,9 @@ const span = (t: string, className = '') => Object.assign(document.createElement
 export function startLive() {
   if (W.script?.dataset.live) {
     // sessionStorage is shared by every frame of a tab: a board's frames of one page each keep their own (the board names them).
-    const key = 'lab-scroll:' + (window.name.startsWith('lab:') ? window.name + ':' : '') + location.pathname;
+    // The address now, not at load: an app behind --proxy moves between its pages without loading one.
+    const keyNow = () => 'lab-scroll:' + (window.name.startsWith('lab:') ? window.name + ':' : '') + location.pathname;
+    const key = keyNow();
     // The page's own state that a reload would lose, each with its element (by id, or its place among its kind): a
     // scrolled box, an opened <details>, words typed in a field, a tick, a choice, the field with the cursor.
     // A form with a field named "id" answers `form.id` with that field, so the id is read as the attribute it is.
@@ -70,14 +72,26 @@ export function startLive() {
       }
       return true;
     };
+    // What a reload would lose, kept in the tab for the next load of this page. `u`: kept as the page went, not by the lab.
+    const keep = (u = 0) => {
+      try {
+        sessionStorage.setItem(keyNow(), JSON.stringify({ y: scrollY, x: scrollX, open: W.S.openId, chat: W.S.chatOpen, page: pageState(), ...(u ? { u } : {}) }));
+      } catch {}
+    };
+    // A reload the lab didn't start (a dev server's own, behind --proxy, or the browser's): the page goes, and what you had
+    // open comes back with it, as it does after the lab's. A board's frames are swapped by the board, never reloaded.
+    if (!W.S.frame) addEventListener('pagehide', () => keep(Date.now()));
     let touchedAt = 0;
     try {
       // The scroll position and the open thread come back after a reload, so an answer shows where you left it. So does
       // what you did to the page itself (pageState). A page that builds itself after it loads is still short then, and
       // its fields aren't there yet: what can't be put back is tried again for 3 s, until you touch the page.
       const kept = JSON.parse(sessionStorage.getItem(key) || 'null');
-      if (kept !== null) {
-        sessionStorage.removeItem(key);
+      // Kept as the page went (pagehide, below): only a reload of it puts it back, and only right after. Leaving the page
+      // and coming back to it later starts it fresh, as any page does.
+      const nav = (performance.getEntriesByType?.('navigation')[0] as PerformanceNavigationTiming | undefined)?.type;
+      if (kept !== null) sessionStorage.removeItem(key);
+      if (kept !== null && !(kept.u && (nav !== 'reload' || Date.now() - kept.u > 60000))) {
         if (kept.open) W.S.openId = kept.open;
         if (kept.chat) W.S.chatOpen = true;
         const y = () => +(kept.y ?? kept);
@@ -166,9 +180,7 @@ export function startLive() {
         .then((r) => r.ok && r.text().then((t) => t.includes('data-live')), () => false)
         .then((up) => {
           if (!up) return void (reloadTimer ||= setTimeout(() => ((reloadTimer = 0), reload()), 2000));
-          try {
-            sessionStorage.setItem(key, JSON.stringify({ y: scrollY, x: scrollX, open: W.S.openId, chat: W.S.chatOpen, page: pageState() }));
-          } catch {}
+          keep();
           // A board's frame: the board loads it anew behind this one and swaps them (board/mount.ts again), no blank frame.
           if (!frame || !(top as unknown as { __labBoard?: { again?: (n: string) => boolean } }).__labBoard?.again?.(window.name)) location.reload();
         });
