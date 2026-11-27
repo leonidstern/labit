@@ -1,4 +1,4 @@
-// The commands that answer and exit: preview, publish, gc, list, pages (the labs on this computer), board, update / use,
+// The commands that answer and exit: publish, gc, list, pages (the labs on this computer), board, update / use,
 // and the agent's wait, reply, resolve, thread, pin, invite.
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -13,49 +13,10 @@ import { read as readBoard } from './board.ts';
 import { dashed } from './boardact.ts';
 import { numberOf, UNMATCHED } from './schema.mjs';
 import { loadSettings } from './settings.ts';
-import { keepOutOfGit } from './shipping.ts';
 
 type Ctx = { pos: string[]; opts: Opts; HERE: string; CMD: string; ME: string; die: (msg: string) => never; model: string };
 
 export async function runCommand({ pos, opts, HERE, CMD, ME, die, model }: Ctx): Promise<void> {
-  // ---------- the Claude desktop app's preview pane ----------
-  // It starts servers from .claude/launch.json in the session's folder and hands them a free port in PORT.
-  if (pos[0] === 'preview') {
-    const root = path.resolve(pos[1] || '.');
-    if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) die(`Not a folder: ${root}`);
-    const file = path.join(root, '.claude/launch.json');
-    let config = { version: '0.0.1', configurations: [] };
-    if (fs.existsSync(file)) {
-      // The app writes this file too, and allows comments and trailing commas in it (they don't survive this rewrite).
-      // Strings are kept as they are in both passes: a "," or "//" inside one is text.
-      const jsonc = (t) => t.replace(/("(?:\\.|[^"\\])*")|\/\/[^\n]*|\/\*[\s\S]*?\*\//g, (m, str) => str || '').replace(/("(?:\\.|[^"\\])*")|,(\s*[}\]])/g, (m, str, tail) => str || tail);
-      try {
-        config = JSON.parse(jsonc(fs.readFileSync(file, 'utf8')));
-      } catch {
-        die(`${file} isn't valid JSON, so it's left as it is. Add this to its "configurations":\n${JSON.stringify(entry(), null, 2)}`);
-      }
-    }
-    function entry() {
-      const args = ['.', '--no-open', ...(typeof opts.proxy === 'string' ? ['--proxy', opts.proxy] : opts.proxy ? ['--proxy'] : [])];
-      // Under npx this script sits in npx's cache, which moves with every version: name the package, not the path.
-      return CMD.startsWith('npx')
-        ? { name: 'lab', runtimeExecutable: 'npx', runtimeArgs: ['--yes', '@leonidstern/labit@latest', ...args], port: 4400, autoPort: true }
-        : { name: 'lab', program: ME, args, port: 4400, autoPort: true };
-    }
-    config.configurations = [...(config.configurations || []).filter((c) => c.name !== 'lab'), entry()];
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify(config, null, 2) + '\n');
-    console.log(`Added "lab" to ${file}.`);
-    // The entry names this computer's path to labit (or npx): it is for this computer, not the project's repository.
-    // A launch.json labit made is kept out of git here; one already in git is the project's, and only said.
-    const git = keepOutOfGit(file);
-    if (git === 'excluded') console.log('Kept out of git on this computer (.git/info/exclude): the "lab" entry is for this computer only.');
-    if (git === 'tracked') console.log(`${path.relative(root, file)} is in git: the "lab" entry${CMD.startsWith('npx') ? '' : ` names a path on this computer (${ME})`}. Leave it out of your commit unless the team wants it.`);
-    console.log('Open this folder in the Claude desktop app and ask Claude to start the "lab" preview.');
-    console.log(`Then: run \`${CMD} wait\` in the background and answer the comments.`);
-    process.exit(0);
-  }
-
   // This folder's lab (or --dir's), for the commands that talk to one.
   const myLab = () => findLab(opts.dir || '.') || die(`No lab server for this folder. Start one: run ${CMD} in the project.`);
   const forHere = (lab: Lab) => lab.root === HERE || lab.root.startsWith(HERE + path.sep) || HERE.startsWith(lab.root + path.sep);

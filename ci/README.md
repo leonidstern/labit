@@ -1,6 +1,6 @@
-# ci/: a deterministic gate, plus an agent that works to it
+# ci/: a deterministic gate
 
-Agents propose. A deterministic judge decides. You merge. CI has no secrets.
+A deterministic judge decides. You merge. CI has no secrets.
 
 ## The gate (`.github/workflows/gates.yml`)
 
@@ -21,8 +21,7 @@ Every PR, forks included, is measured against its own base commit. Takes seconds
 - Over a per-PR budget on purpose? Add the `size-approved` label. Hard caps still apply;
   raising one means editing `ci/metrics.mjs`.
 - Both sides are measured with the **base** branch's `ci/`, so a PR can't change how it's judged.
-- Both sides use the **PR's** lint and type rules (`tsconfig.json`, and `.oxlintrc.json` once `ci/meta-improve.sh` adds
-  one; oxlint's defaults until then), so adding a rule doesn't fail the PR that adds it.
+- Both sides use the **PR's** `tsconfig.json`, so tightening a type rule doesn't fail the PR that does it.
 
 ## Tests (`.github/workflows/test.yml`)
 
@@ -71,20 +70,7 @@ Built so a PR, mostly opened by agents, hears back in about 3 minutes, and a fai
 
 On every release tag (and on demand), `npm run waste` reports duplicated blocks, long functions, unused CSS custom
 properties, listeners added per redraw, state nothing reads, and the page script's gzip size with its biggest files. It
-only reports; it fails when `comments.js` is over its gzip cap. `ci/waste-review.sh` adds an AI review of the report (see AGENT.md).
-
-## The agent (run from your machine, from an up-to-date main)
-
-```bash
-ci/agent-improve.sh --pr 31   # fix what makes PR #31 fail the gate, push to it
-ci/agent-improve.sh           # improve one metric, open a PR
-ci/meta-improve.sh            # weekly: repeated review feedback → lint rules, as a PR
-```
-
-Needs `gh` and `claude` logged in; no API keys. Every run prints a folder with its prompts, patches
-and logs. The agent must pass the gate *and* `npm test` *and* move its target. It can't edit
-`ci/`, tests, `bench/`, `package.json` or the README, and can't add lint suppressions.
-Dependency and README-claim failures are left to you.
+only reports; it fails when `comments.js` is over its gzip cap.
 
 ## Numbers when this was set up (2026-11-16)
 

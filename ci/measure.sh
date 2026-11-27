@@ -3,11 +3,9 @@
 #
 #   ci/measure.sh <tree> <out.json> [<ruler-tree>]
 #
-# ruler-tree: take tsconfig.json and .oxlintrc.json from here, so base and PR are checked with the same rules.
-#             A PR that adds a rule then isn't blamed for problems that already existed. There is no .oxlintrc.json
-#             yet (oxlint's defaults); ci/meta-improve.sh may add one, so it is copied (or removed) like tsconfig.json.
-# JUDGE_METRICS: which metrics.mjs to use (CI and the agent pass a trusted copy).
-# RUN_TESTS=1: also run npm test first (the agent loop does; in CI, test.yml does).
+# ruler-tree: take tsconfig.json from here, so base and PR are checked with the same rules.
+#             A PR that tightens a type rule then isn't blamed for problems that already existed.
+# JUDGE_METRICS: which metrics.mjs to use (CI passes a trusted copy).
 set -euo pipefail
 
 abs() { case "$1" in /*) echo "$1" ;; *) echo "$PWD/$1" ;; esac; }
@@ -20,10 +18,7 @@ JUDGE_METRICS="$(abs "${JUDGE_METRICS:-$TREE/ci/metrics.mjs}")"
 cd "$TREE"
 
 if [ -n "$RULER" ] && [ "$RULER" != "$TREE" ]; then
-  for f in .oxlintrc.json tsconfig.json; do
-    if [ -f "$RULER/$f" ]; then cp "$RULER/$f" "$f"; elif [ -f "$f" ]; then rm "$f"; fi
-  done
+  if [ -f "$RULER/tsconfig.json" ]; then cp "$RULER/tsconfig.json" tsconfig.json; elif [ -f tsconfig.json ]; then rm tsconfig.json; fi
 fi
 
-if [ "${RUN_TESTS:-}" = "1" ]; then npm test --silent; fi
 node "$JUDGE_METRICS" collect "$OUT"

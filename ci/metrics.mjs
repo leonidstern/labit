@@ -2,9 +2,7 @@
 // The judge for labit: deterministic metrics, measured the same way in CI and locally.
 //
 //   collect <out.json>                                 measure the current tree
-//   compare <current.json> <reference.json> [--must-improve <metric>] [--no-growth]
-//                                                      exit 1 if the gate fails; --no-growth: budgets may not grow at all
-//   pick <current.json> [<reference.json>]             choose a target metric for the agent
+//   compare <current.json> <reference.json>            exit 1 if the gate fails
 //   types                                              list TypeScript errors (npm run typecheck)
 //
 // Fails closed: if a tool can't run, that's an error, never "0 problems".
@@ -23,7 +21,6 @@ const CO_SCRIPT = "co/co.js"; // what colabits load: built from the same source 
 
 // ratchet: may never get worse. budget: may grow by perPr per PR, never past max.
 // ALLOW_GROWTH=1 (the size-approved label) lifts perPr; raising max means editing this file.
-// agent: false = the agent may not fix it (it would have to edit a protected file); a human decides.
 const METRICS = {
   pageScriptGzipBytes: {
     kind: "budget", dir: "down", perPr: 2048, max: 85_000,
@@ -38,7 +35,7 @@ const METRICS = {
     hint: `Fix oxlint problems (npx --yes ${OXLINT} ${LINTED}), starting with the file that has the most.`,
   },
   runtimeDependencies: {
-    kind: "ratchet", dir: "down", ideal: 0, agent: false,
+    kind: "ratchet", dir: "down", ideal: 0,
     hint: "labit promises zero dependencies. Remove the new one, or decide to drop the promise.",
   },
   typeErrors: {
@@ -54,7 +51,7 @@ const METRICS = {
     hint: "Code is built into more than one shipped script (public/_lab/bundles.json lists which): load it from the script that has it (part() in src/comments.js, import() of that script) instead of importing it into another.",
   },
   readmeClaimsWrong: {
-    kind: "ratchet", dir: "down", ideal: 0, agent: false,
+    kind: "ratchet", dir: "down", ideal: 0,
     hint: "README size claims no longer match. Shrink back, or update the README.",
   },
 };
@@ -176,18 +173,17 @@ function typeCheck() {
 
 const isBetter = (name, cur, ref) => (METRICS[name].dir === "down" ? cur < ref : cur > ref);
 
-// null if the metric passes the gate, or the reason it fails. noGrowth: a budget may not grow at all (the agent's own check).
-function gateProblem(name, cur, ref, noGrowth) {
+// null if the metric passes the gate, or the reason it fails.
+function gateProblem(name, cur, ref) {
   const def = METRICS[name];
   if (cur === undefined) return "missing";
   if (def.kind === "ratchet") return isBetter(name, ref, cur) ? `worse than ${ref}` : null;
   if (cur > def.max) return `over the hard cap of ${def.max}`;
-  if (noGrowth && cur > ref) return `grew ${cur - ref}, may not grow here`;
   if (process.env.ALLOW_GROWTH !== "1" && cur > ref + def.perPr) return `grew ${cur - ref}, budget is +${def.perPr} per PR`;
   return null;
 }
 
-function compare(curFile, refFile, mustImprove, noGrowth) {
+function compare(curFile, refFile) {
   const cur = read(curFile);
   const ref = read(refFile);
   let ok = true;
@@ -196,7 +192,7 @@ function compare(curFile, refFile, mustImprove, noGrowth) {
   for (const name of Object.keys(METRICS)) {
     if (!(name in ref)) continue;
     const c = cur[name];
-    const problem = gateProblem(name, c, ref[name], noGrowth);
+    const problem = gateProblem(name, c, ref[name]);
     let verdict;
     if (problem) { verdict = `**FAIL**: ${problem}`; ok = false; }
     else if (isBetter(name, c, ref[name])) verdict = "better";
@@ -210,48 +206,15 @@ function compare(curFile, refFile, mustImprove, noGrowth) {
     console.log("\nREADME claims that don't match:");
     for (const line of cur.readmeClaims) console.log(`- ${line}`);
   }
-  if (mustImprove) {
-    if (!(mustImprove in METRICS)) fail(`unknown metric: ${mustImprove}`);
-    const c = cur[mustImprove];
-    const r = ref[mustImprove];
-    if (c === undefined || r === undefined || !isBetter(mustImprove, c, r)) {
-      console.log(`\nTarget \`${mustImprove}\` did not improve (${r} → ${c ?? "missing"}).`);
-      ok = false;
-    }
-  }
-  if (process.env.ALLOW_GROWTH === "1" && !noGrowth) console.log("\nPer-PR growth budgets lifted by the size-approved label. Hard caps still apply.");
+  if (process.env.ALLOW_GROWTH === "1") console.log("\nPer-PR growth budgets lifted by the size-approved label. Hard caps still apply.");
   process.exit(ok ? 0 : 1);
 }
 
-// With a reference: target the first metric that fails the gate (that's what blocks the PR).
-// Otherwise rotate through agent-fixable metrics that still have room, one per UTC day.
-function pick(curFile, refFile) {
-  const cur = read(curFile);
-  if (refFile) {
-    const ref = read(refFile);
-    const failing = Object.keys(METRICS).find((n) => n in ref && gateProblem(n, cur[n], ref[n]));
-    if (failing && METRICS[failing].agent === false) {
-      fail(`This PR fails the gate on ${failing}, which needs a human: ${METRICS[failing].hint}`);
-    }
-    if (failing) {
-      console.log(`${failing}\tThis PR fails the gate on ${failing} (${cur[failing]} vs base ${ref[failing]}). Bring it back within the gate. ${METRICS[failing].hint}`);
-      return;
-    }
-  }
-  const open = Object.keys(METRICS)
-    .filter((n) => METRICS[n].agent !== false && n in cur && cur[n] !== METRICS[n].ideal);
-  if (open.length === 0) fail("nothing left for the agent to improve");
-  const name = open[Math.floor(Date.now() / 86_400_000) % open.length];
-  console.log(`${name}\t${METRICS[name].hint}`);
-}
-
 const [cmd, ...args] = process.argv.slice(2);
-const flag = (f) => { const i = args.indexOf(f); return i >= 0 ? args[i + 1] : undefined; };
 
 switch (cmd) {
   case "collect": write(args[0] ?? fail("usage: collect <out.json>"), collect()); break;
-  case "compare": compare(args[0], args[1], flag("--must-improve"), args.includes("--no-growth")); break;
-  case "pick": pick(args[0], args[1]); break;
+  case "compare": compare(args[0], args[1]); break;
   case "types": { const out = typeCheck(); process.stdout.write(out || "No type errors.\n"); process.exit(/error TS\d+/.test(out) ? 1 : 0); }
-  default: fail("commands: collect | compare | pick | types");
+  default: fail("commands: collect | compare | types");
 }

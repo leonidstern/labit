@@ -31,7 +31,7 @@ const ROOT = path.resolve(import.meta.dirname, '..');
 // Paths that no browser test reads.
 const NO_BROWSER = [
   /\.md$/, /^LICENSE$/, /^docs\//, /^examples\//, /^skills\//, /^hooks\//, /^plugin\.json$/, /^\.claude-plugin\//,
-  /^knip\.json$/, /^\.oxlintrc\.json$/, /^tsconfig\.json$/, /^\.gitignore$/,
+  /^knip\.json$/, /^tsconfig\.json$/, /^\.gitignore$/,
   /^test\/[^/]+\.test\.mjs$/, /^test\/harness\.mjs$/, /^test\/setup\.mjs$/, /^test\/phone\//,
   /^ci\/(metrics|reuse|unit-run|pr-check|reach|reach-hook)\.mjs$/, /^ci\/(parts|flaky)\.json$/, /^ci\/[^/]+\.sh$/,
   /^\.github\/workflows\/(?!test\.yml$)/,
