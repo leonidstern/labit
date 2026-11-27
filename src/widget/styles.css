@@ -352,7 +352,9 @@ button.btn.undo { color: var(--_fg); }
 /* A long chat lays out only the messages near the screen; each keeps its last height while away. Not a thread card's:
    its first frame drew each message at the 64 px guess, then the card grew and jumped when the next pin was clicked
    (#467, Leo: "clicking new glitching"). */
-.chatwin .msgs > .msg { content-visibility: auto; contain-intrinsic-size: auto 64px; }
+.chatwin .msgs > .msg { content-visibility: auto; contain-intrinsic-size: auto 64px; flex-shrink: 0; }
+/* flex-shrink 0: Chrome let a skipped message shrink below the height it keeps, as the list overflowed (a 150-message
+   chat opened 4.6k px tall against 19.9k drawn, and grew back as you scrolled up); Safari didn't. */
 .chatwin .msgs > .msg.warm { content-visibility: visible; } /* drawn once as the chat opens, so its real height is known (chat.ts warmChat) */
 /* The agent's folded "on it" messages: one small muted row ("2 updates ›"), a tap opens them in place. */
 .msgs > .updates { align-self: flex-start; background: none; border: 0; padding: 2px 4px; margin: 0; font: inherit; font-size: 12px; letter-spacing: 0; color: var(--_muted); cursor: pointer; border-radius: var(--_radius); }
