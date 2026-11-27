@@ -1401,6 +1401,14 @@ const archivePage = (page, on) => {
   else archivedPages.delete(page);
   writeState();
 };
+// Pins deleted here, { id: ISO time }, kept a day: an agent's answer that comes after (it was writing while the pin
+// went) is dropped, not posted, so the pin stays deleted (Leo, 27 Nov: "if i delete pin and answer not came yet pls
+// ignore it and keep deleted"). In state.json, so `labit reply` knows it too once the pin is gone from the files.
+const deletedPins = new Map(Object.entries(isObj(labState.deleted) ? labState.deleted : {}));
+stateParts.deleted = () => {
+  for (const [id, at] of deletedPins) if (!(Date.now() - Date.parse(at) < 864e5)) deletedPins.delete(id);
+  return deletedPins.size ? Object.fromEntries(deletedPins) : undefined;
+};
 // Kept in objects with no prototype: a name or page like "__proto__" is just a key (it once could poison every object).
 const bare = (o) => Object.assign(Object.create(null), o);
 const reads = (() => {
@@ -3148,9 +3156,19 @@ const handler = async (req, res) => {
       let staged = [];
       let doomed = [];
       let dropped = null; // a deleted pin: [its page, its id]
+      let goneIds = []; // and the ids that go with it (its replies too)
       if (req.method === 'POST') {
         raw = await sentWithin(req, BODY_MAX);
         if (raw === null) return plain(res, 413, 'too big');
+        // An agent's answer, progress line or resolve on a pin deleted while it worked: dropped (410), the pin stays gone.
+        if (agent && deletedPins.size) {
+          let b = null;
+          try {
+            b = JSON.parse(raw.toString());
+          } catch {}
+          const on = b && b.action !== 'delete' && (b.parent || b.id);
+          if (typeof on === 'string' && deletedPins.has(on)) return answer(res, { error: 'deleted', dropped: true }, 410);
+        }
         if (raw.includes('"attachments"') || raw.includes('"delete"')) {
           let b = null;
           try {
@@ -3175,7 +3193,9 @@ const handler = async (req, res) => {
             const left = openOnBoard(page, b.id);
             if (left) return answer(res, { error: `its board has ${left} open thread${left === 1 ? '' : 's'}: close ${left === 1 ? 'it' : 'them'} first` }, 409);
             dropped = [page, b.id];
-            doomed = commentsOf(page).filter((c) => c.id === b.id || c.parent === b.id).flatMap((c) => imagesOf(c).map((i) => imageName(c, i)));
+            const going = commentsOf(page).filter((c) => c.id === b.id || c.parent === b.id);
+            goneIds = going.map((c) => c.id);
+            doomed = going.flatMap((c) => imagesOf(c).map((i) => imageName(c, i)));
           }
         }
       }
@@ -3194,6 +3214,11 @@ const handler = async (req, res) => {
         if (out.status === 201 && staged.length) staged.forEach((f, i) => { try { fs.renameSync(f.file, path.join(ATTACH, `${comment.id}-${i + 1}.${f.type}`)); } catch (e) { console.error('[lab] could not keep a picture:', e.message); } });
         for (const name of doomed) fs.rmSync(path.join(ATTACH, name), { force: true });
         if (dropped) dropBoard(...dropped);
+        // At once: the files lose the pin now, and labit reply looks here next.
+        if (goneIds.length) {
+          for (const id of goneIds) deletedPins.set(id, new Date().toISOString());
+          writeState();
+        }
         // A done said over words the agent was never handed (a correction sent while it worked) doesn't close the pin:
         // the thread stays open, so the page doesn't show it finished and the safety net still brings it back.
         if (agent && out.status === 201 && comment.intent === 'done' && comment.parent) {

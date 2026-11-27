@@ -145,8 +145,7 @@ export function drawChat() {
         attach: true,
         onSubmit: async (name, text, att) => {
           const { comment } = await W.send({ name, text, ...att, anchor: { kind: 'page', width: innerWidth, height: innerHeight, dpr: devicePixelRatio || 1, board: (window as unknown as { __labBoard?: { name?: string } }).__labBoard?.name } }); // sent with a board open: its name, so the agent knows (Leo, 26 Nov)
-          W.addComment(comment);
-          W.markSeen([comment]);
+          W.addComment(comment, 1);
           box.scrollTop = box.scrollHeight;
           W.S.stayAtEnd?.(box);
           W.render();

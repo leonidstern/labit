@@ -118,7 +118,7 @@ test('the same words from one session twice at once are one answer; from two ses
   assert.deepEqual(replies.map((c) => c.session.id).sort(), ['sess-a', 'sess-b']);
 });
 
-test('an answer to a thread that was deleted is refused with a plain word, and leaves nothing behind', async () => {
+test('an answer to a thread that was deleted is dropped with a plain word, and leaves nothing behind', async () => {
   const p = await pin(lab, '/other', 'soon gone');
   const reply = (await send(lab, { page: '/other', parent: p.id, name: 'Leo', text: 'and its reply' })).json.comment;
   await saved(lab, reply.id);
@@ -126,13 +126,13 @@ test('an answer to a thread that was deleted is refused with a plain word, and l
   await sleep(300);
   for (const args of [['reply', p.id, 'Done.'], ['reply', reply.id, 'Done.'], ['resolve', p.id], ['reply', p.id, '--progress', 'on it']]) {
     const r = await cli(lab, 'sess-a', ...args);
-    assert.equal(r.code, 1, `${args.join(' ')}: ${r.out}`);
-    assert.match(r.out, /No open comment/);
+    assert.equal(r.code, 0, `${args.join(' ')}: ${r.out}`);
+    assert.match(r.out, /Dropped: the person deleted that pin/);
     noStack(r.out);
   }
   // The same over the API, where the command's own look at the files can't stop it.
-  for (const parent of [p.id, reply.id]) assert.equal((await send(lab, { page: '/other', parent, name: 'Claude', text: 'Done.' }, asAgent(lab))).status, 404);
-  assert.equal((await send(lab, { page: '/other', action: 'resolve', id: p.id }, asAgent(lab))).status, 404);
+  for (const parent of [p.id, reply.id]) assert.equal((await send(lab, { page: '/other', parent, name: 'Claude', text: 'Done.' }, asAgent(lab))).status, 410);
+  assert.equal((await send(lab, { page: '/other', action: 'resolve', id: p.id }, asAgent(lab))).status, 410);
   assert.deepEqual(await list(lab, '/other'), []);
 });
 
@@ -147,7 +147,7 @@ test('a delete racing a reply, 40 times: no reply is ever left without its threa
     ]);
     for (const r of both) codes.add(r.status);
   }
-  assert.ok([...codes].every((c) => [200, 201, 404].includes(c)), [...codes].join(' '));
+  assert.ok([...codes].every((c) => [200, 201, 404, 410].includes(c)), [...codes].join(' ')); // 410: the agent's answer after the delete, dropped
   const left = await list(lab, '/third');
   const ids = new Set(left.map((c) => c.id));
   assert.deepEqual(left.filter((c) => c.parent && !ids.has(c.parent)).map((c) => c.text), [], 'replies whose thread is gone');

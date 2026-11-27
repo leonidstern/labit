@@ -279,7 +279,8 @@ test('the same action twice: resolve and reopen hold, a second delete is 404, an
   assert.equal((await act('reopen')).status, 404);
   assert.equal((await act('delete', reply.id)).status, 404, 'its reply went with it');
   assert.equal((await send({ page: '/index', action: 'move', id: comment.id, anchor: { selector: 'h1' } }, { headers: owner() })).status, 404);
-  assert.equal((await send({ page: '/index', action: 'progress', id: comment.id, text: 'on it' }, { headers: { 'x-lab-admin': lab.keys().agent, 'x-lab-agent': '1' } })).status, 404);
+  // The agent's progress on a pin deleted while it worked is dropped: 410, said apart from a pin that never was.
+  assert.equal((await send({ page: '/index', action: 'progress', id: comment.id, text: 'on it' }, { headers: { 'x-lab-admin': lab.keys().agent, 'x-lab-agent': '1' } })).status, 410);
   for (const parent of [comment.id, reply.id, 'nosuchthread', '__proto__', 'constructor']) {
     const r = await send({ page: '/index', parent, name: 'Bo', text: 'to nobody' });
     assert.equal(r.status, 404, `a reply to ${parent} → ${r.status}`);

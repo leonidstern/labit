@@ -6,6 +6,7 @@ import { pageBottom, winH, winW } from './anchoring.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let W: any;
+const btn = (t: string, c = '') => W.el('button', { class: `btn${c}`, type: 'button' }, t); // the card's plain keys
 export function bindThread(w: unknown) {
   W = w;
   bindThreadScroll();
@@ -341,7 +342,7 @@ export function threadCard(c, fresh = new Set(), focus = false) {
   const ruleLine = (item) => {
     const line = W.el('span', { class: 'rule' });
     if (item.suggest.state === 'undone') return line.append(W.el('b', {}, 'rule removed')), line;
-    const undo = W.el('button', { class: 'btn', type: 'button' }, 'undo');
+    const undo = btn('undo');
     undo.addEventListener('click', async () => {
       const r = await fetch('/_lab/rule', { method: 'POST', headers: W.headers(), body: JSON.stringify({ page: W.S.page, id: item.id }) }).catch(() => null);
       if (!r?.ok) return void (undo.textContent = 'failed, try again');
@@ -442,7 +443,7 @@ export function threadCard(c, fresh = new Set(), focus = false) {
   let actions = null;
   if (W.S.isAdmin || ownKey) {
     actions = W.el('div', { class: 'row acts' });
-    const resolve = W.el('button', { class: 'btn', type: 'button' }, c.resolved ? 'reopen' : 'resolve');
+    const resolve = btn(c.resolved ? 'reopen' : 'resolve');
     const failed = (btn) => (btn.textContent = 'failed, try again');
     resolve.addEventListener('click', async () => {
       try {
@@ -456,20 +457,25 @@ export function threadCard(c, fresh = new Set(), focus = false) {
         failed(resolve);
       }
     });
-    const del = W.el('button', { class: 'btn', type: 'button' }, 'delete');
+    const del = btn('delete');
     // Asked in the card itself, not the browser's dialog: the row swaps to the question, same height, nothing moves.
-    const yes = W.el('button', { class: 'btn danger', type: 'button' }, 'delete');
-    const no = W.el('button', { class: 'btn', type: 'button' }, 'cancel');
+    const yes = btn('delete', ' danger');
+    const no = btn('cancel');
     let was = [resolve, del]; // the row as it was before the question (Do it, board and undo too)
+    // The question stays through a redraw (an agent's answer coming in): it had put the row back, and the delete
+    // pressed next never went, so the pin "came back" (Leo, 27 Nov).
     const back = () => {
+      W.S.del = 0;
       actions.replaceChildren(...was);
       del.focus();
     };
-    del.addEventListener('click', () => {
+    const ask = () => {
+      W.S.del = c.id;
       was = [...actions.children];
       actions.replaceChildren(W.el('span', { class: 'ask' }, W.repliesOf(c.id).length ? 'delete thread?' : 'delete comment?'), yes, no);
       no.focus();
-    });
+    };
+    del.addEventListener('click', ask);
     no.addEventListener('click', back);
     actions.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && yes.isConnected) {
@@ -520,8 +526,7 @@ export function threadCard(c, fresh = new Set(), focus = false) {
       doIt.disabled = true;
       try {
         const { comment } = await W.send({ name, text: 'Do it', parent: c.id, doit: true });
-        W.addComment(comment);
-        W.markSeen([comment]);
+        W.addComment(comment, 1);
         W.render();
       } catch {
         doIt.disabled = false;
@@ -530,6 +535,7 @@ export function threadCard(c, fresh = new Set(), focus = false) {
     });
     actions.append(...(doIt ? [doIt] : []), first, ...(W.S.isAdmin ? [del] : []));
     body.append(actions);
+    if (W.S.del === c.id) ask();
   }
   // Phones: step through the threads from the sheet (J and K on a keyboard).
   if (W.coarse) {
@@ -541,7 +547,7 @@ export function threadCard(c, fresh = new Set(), focus = false) {
     fresh.sort((p, q) => (p[1] > here ? 0 : 1) - (q[1] > here ? 0 : 1) || p[1] - q[1]);
     const nav = W.el('div', { class: 'row nav' });
     if (fresh.length) {
-      const b = W.el('button', { class: 'btn', type: 'button' }, `new · ${fresh.length} ›`);
+      const b = btn(`new · ${fresh.length} ›`);
       b.addEventListener('pointerdown', (e) => e.preventDefault()); // an open keyboard stays open (see goTo)
       b.addEventListener('click', () => W.goTo(fresh[0][0]));
       nav.append(b);
@@ -559,8 +565,7 @@ export function threadCard(c, fresh = new Set(), focus = false) {
       attach: true,
       onSubmit: async (name, text, att) => {
         const { comment } = await W.send({ name, text, parent: c.id, ...att });
-        W.addComment(comment);
-        W.markSeen([comment]);
+        W.addComment(comment, 1);
         // Writing in a done thread reopens it (the lab does the same): it shows as open at once, pin and buttons.
         if (c.resolved) {
           c.resolved = false;
@@ -623,8 +628,7 @@ function sendPick(c, ask, n: number, name: string) {
   W.send({ name, text, parent: ask.id, to: ask.id, picked: n }).then(
     ({ comment }) => {
       drop();
-      W.addComment(comment);
-      W.markSeen([comment]);
+      W.addComment(comment, 1);
       W.render();
     },
     (err) => {
