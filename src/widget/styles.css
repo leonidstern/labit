@@ -589,9 +589,11 @@ kbd::before { content: '('; } kbd::after { content: ')'; } /* read as a hint: ch
      behind the home bar, the keyboard and Safari's toolbar, so nothing of the page shows below the box. */
   :host { --_safe: env(safe-area-inset-bottom, 0px); --_kb: var(--lab-kb, 0px);
           --_sheet-max: calc(min(72dvh, var(--lab-vh, 100dvh) - 24px) + var(--_kb)); --_pb: calc(12px + var(--_safe) + var(--_kb));
-          /* A thread opens taller than the chat, the list and the switcher (which keep --_sheet-max): more of a long thread
-             in view, the top 120px of the screen still the page's. On a phone on its side the same height as the rest. */
-          --_thread-max: calc(min(88dvh, var(--lab-vh, 100dvh) - 120px) + var(--_kb)); }
+          /* A thread opens at a bit over half the screen, so its pin and what it is on show above it (Leo, 27 Nov: "open
+             maybe shorter screen so i can see more where is pin"); pulled up it fills the screen (.full, sheets.ts
+             swipeDown), and with the keyboard up it fills what the screen shows. On a phone on its side the same height as
+             the rest. */
+          --_thread-max: calc(min(55dvh, var(--lab-vh, 100dvh) * .55) + var(--_kb)); }
   @media (max-height: 500px) { :host { --_thread-max: var(--_sheet-max); } }
   :host([data-kb]) { --_safe: 0px; --_kb: 0px; --_pb: 10px; }
   /* Keyboard up: a thread, the list and the chat fill exactly what the screen shows, like a native composer, so iOS
