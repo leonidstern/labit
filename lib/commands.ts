@@ -526,10 +526,13 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
         return false;
       }
     };
-    if (!hit && deleted()) {
+    // Said, and with --wait the listening goes on as after any answer.
+    const dropped = async () => {
       console.log(deletedNote);
+      if (opts.wait) await listen();
       process.exit(0);
-    }
+    };
+    if (!hit && deleted()) return dropped();
     if (!hit) die(`No open comment ${ref || ''}${want ? ` on ${want}` : ''}. See .lab/comments.md.`);
     // thread <id>: the whole thread, every message, resolved or not (a long one is cut short in a hand-off, #425).
     if (cmd === 'thread') {
@@ -567,7 +570,7 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
       if (typeof opts.progress !== 'string' || !opts.progress.trim()) die(`Progress text is missing: ${CMD} reply <id> --progress "what you're on now"`);
       if (words.length || opts.done || opts['on-it'] || opts.question || opts.resolve) die('--progress is only the line, with no answer text, --done, --on-it, --question or --resolve: those are answers, and an answer clears it.');
       const out = await call('/_lab/api/comments', { page: hit.page, action: 'progress', id: hit.id, text: opts.progress });
-      if (out.status === 410) return void (console.log(deletedNote), process.exit(0));
+      if (out.status === 410) return dropped();
       if (out.status >= 300) die(`Could not note progress: ${out.text}`);
     } else if (cmd === 'reply') {
       if (!words.length) die(`Reply text is missing: ${CMD} reply <id> "what you did"`);
@@ -590,7 +593,7 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
         .pop()?.id;
       const out = await call('/_lab/api/comments', { page: hit.page, parent: hit.id, nonce: nonceOf(hit.page, hit.id, hit.to, said, words.join(' ')), ...(hit.to ? { to: hit.to } : {}), name: signed(), text: words.join(' '), ...(typeof opts['suggest-rule'] === 'string' ? { suggest: opts['suggest-rule'] } : {}), ...(intent ? { intent } : {}), ...(typeof opts.checked === 'string' ? { checked: opts.checked } : {}), ...asked });
-      if (out.status === 410) return void (console.log(deletedNote), process.exit(0));
+      if (out.status === 410) return dropped();
       if (out.status >= 300) die(`Could not reply: ${out.text}`);
       // The page tries each choice in place of the quoted words: a choice that reaches past them is said here.
       if (asked) for (const note of choiceSpills(data[hit.page]?.[hit.id]?.anchor?.quote, asked.choices)) console.log(`Note: ${note}`);
@@ -600,7 +603,7 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
     }
     if (cmd === 'resolve' || opts.resolve) {
       const out = await call('/_lab/api/comments', { page: hit.page, action: 'resolve', id: hit.id });
-      if (out.status === 410) return void (console.log(deletedNote), process.exit(0));
+      if (out.status === 410) return dropped();
       if (out.status >= 300) die(`Could not resolve: ${out.text}`);
     }
     console.log(`${progress ? 'Progress noted' : cmd === 'reply' ? (opts.resolve ? 'Replied and resolved' : 'Replied') : 'Resolved'} on ${hit.page}.`);

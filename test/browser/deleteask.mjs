@@ -37,11 +37,12 @@ try {
       check(eng, 'delete asks first', (await row(p)) === 'delete comment?|delete|cancel', await row(p));
       await post({ parent: comment.id, name: 'Claude', text: 'More of what?' }, true);
       await p.waitForFunction(`${R}.querySelectorAll('.msg, .message').length > 1 || /More of what/.test(${R}.textContent)`, null, { timeout: 3000 }).catch(() => {});
-      await sleep(300);
+      await p.waitForFunction(`/delete thread\\?/.test(${R}.querySelector('.row.acts')?.textContent || '')`, null, { timeout: 2000 }).catch(() => {});
       check(eng, "an agent's answer coming in keeps the question", (await row(p)) === 'delete thread?|delete|cancel', await row(p));
       await press(p, 'delete');
-      await sleep(600);
-      check(eng, 'the delete goes, with the answer', !(await ids()).includes(comment.id));
+      let gone = false;
+      for (let i = 0; i < 30 && !gone; i++) gone = !(await ids()).includes(comment.id) || (await sleep(100), false);
+      check(eng, 'the delete goes, with the answer', gone);
       await ctx.close();
     } finally {
       await browser.close();

@@ -3215,7 +3215,10 @@ const handler = async (req, res) => {
         for (const name of doomed) fs.rmSync(path.join(ATTACH, name), { force: true });
         if (dropped) dropBoard(...dropped);
         // At once: the files lose the pin now, and labit reply looks here next.
-        if (goneIds.length) goneIds.forEach((id) => deletedPins.set(id, new Date().toISOString())), writeState();
+        if (goneIds.length) {
+          for (const id of goneIds) deletedPins.set(id, new Date().toISOString());
+          writeState();
+        }
         // A done said over words the agent was never handed (a correction sent while it worked) doesn't close the pin:
         // the thread stays open, so the page doesn't show it finished and the safety net still brings it back.
         if (agent && out.status === 201 && comment.intent === 'done' && comment.parent) {
