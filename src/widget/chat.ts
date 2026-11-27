@@ -30,6 +30,27 @@ export const stamped = (bubble, stamp) => {
   bubble.append(stamp);
 };
 
+// A long chat lays out only the messages near the screen (styles.css: content-visibility), each held at a 64 px guess
+// until it is first drawn. Scrolling up the first time, each message drawn for the first time took its real height
+// above what you were reading, and Safari (no scroll anchoring) let all of it jump down: 38, 17, 80 px at a time (iOS 27
+// simulator, 27 Nov; Leo's phone: "open chat and scroll on top its like preloading", fine once scrolled through). So as
+// the chat opens, every message is drawn once, in the frame it opens in, before it is put at its newest: each keeps that
+// height when it is away again (contain-intrinsic-size: auto), and nothing above changes height later. It used to be a
+// batch a frame, paused while a finger was down or the list moving (setting the scroll then stops it): a flick in the
+// first 150 ms ran into messages not drawn yet, 17-253 px a frame with nothing to take it up (iPhone 18 Pro simulator,
+// 27 Nov). The cost, all at once: opening 150 messages (drawChat's most) took 85 ms against 33 (WebKit on a Mac); the
+// newest 60 only, with the rest in batches, still 63 and the jumps further up.
+const warmed = new WeakSet<Element>(); // drawn once: a node kept across redraws keeps its height (drawChat's same())
+function warmChat(box: HTMLElement) {
+  const cold = [...box.children].filter((n): n is HTMLElement => n instanceof HTMLElement && n.classList.contains('msg') && !warmed.has(n));
+  for (const n of cold) {
+    n.classList.add('warm');
+    warmed.add(n);
+  }
+  // Drawn in full in the next frame: their real heights are kept from then on, and they go back to being skipped.
+  if (cold.length) requestAnimationFrame(() => requestAnimationFrame(() => cold.forEach((n) => n.classList.remove('warm'))));
+}
+
 export function drawChat() {
   const byId = new Map(W.S.comments.map((c) => [c.id, c]));
   // Only the chat's own messages (about the page as a whole) and the replies to them: pins live on the page and in the list.
@@ -68,7 +89,7 @@ export function drawChat() {
   const kept = new Map([...(box.children as HTMLCollectionOf<HTMLElement>)].filter((n) => n.dataset.id).map((n) => [n.dataset.id, n]));
   const same = (n) => {
     const old = kept.get(n.dataset?.id);
-    return old && old.outerHTML.replace(' fresh', '') === n.outerHTML ? old : n;
+    return old && old.outerHTML.replace(' fresh', '').replace(/ warm"/, '"') === n.outerHTML ? old : n; // (warm: warmChat's, for a frame)
   };
   const unfolded: Set<string> = (W.S.unfolded ||= new Set());
   const rootId = (m) => m.parent || m.id;
@@ -133,6 +154,7 @@ export function drawChat() {
         },
       }),
     );
+  if (opening) warmChat(box); // before it is put at its newest: the heights above it are real from the first frame
   if (atEnd) {
     box.scrollTop = box.scrollHeight;
     W.S.stayAtEnd?.(box); // and stays at the newest while the sheet and its words settle (comments.js)

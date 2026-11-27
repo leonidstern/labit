@@ -10,6 +10,9 @@
 //   node test/phone/perf/run.mjs bench [--pins 1,7] [--n 7] [--label before]
 //       in the page, by script: for each pin number, n times: scroll it to 237 px from the top, click it (a phone opens the
 //       sheet as a tap does), then click the dimmed page to close it. Prints the medians.
+//   node test/phone/perf/run.mjs bench-new [--n 5] [--x 100 --y 318 --sy 1803] [--label before]
+//       in the page, by script: a new comment held at (x, y) with the page scrolled to sy, lifted, then dropped by a
+//       click on the dimmed page. The open counts from the hold (400 ms after touch-down), its handler is the hold's work.
 //   node test/phone/perf/run.mjs label <name>             names the real touches that follow (sanity runs with the simulator)
 //   node test/phone/perf/run.mjs report [--label x]       medians of every recorded run, by label
 //   node test/phone/perf/run.mjs ask "<js>"               runs JavaScript in the page (`shadow`: the widget's shadow root)
@@ -155,6 +158,13 @@ if (cmd === 'serve') {
   const label = opt('label', '');
   const since = Date.now();
   console.log(await ask(`__perf.bench(${JSON.stringify({ pins, n: Number(opt('n', 7)), label: label ? `${label}:` : '' })})`, 600000));
+  await sleep(800);
+  report(label, since);
+} else if (cmd === 'bench-new') {
+  const label = opt('label', '');
+  const since = Date.now();
+  const o = { n: Number(opt('n', 5)), x: Number(opt('x', 100)), y: Number(opt('y', 318)), sy: Number(opt('sy', 1803)), label: label ? `${label}:` : '' };
+  console.log(await ask(`__perf.benchNew(${JSON.stringify(o)})`, 600000));
   await sleep(800);
   report(label, since);
 } else if (cmd === 'label') {

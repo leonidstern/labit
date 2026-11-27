@@ -29,3 +29,35 @@ export function carry(dist: number, speed: number, cap: number, quick: number): 
  * (iOS's throw: the distance plus the speed carried on at the normal deceleration, 0.998 a ms, so v × 499). A short quick
  * flick closes; a slow long drag closes past halfway; a move back up never does. */
 export const goes = (dy: number, v: number, h: number) => v > -0.1 && dy + Math.max(0, v) * 499 > h / 2;
+/** Which of a drag's samples (times, ms, oldest first) its release speed is measured from: the last 50 ms, as iOS reads a
+ * flick's speed at the end of it (a flick that sped up left at its average over 100 ms, slower than the finger: the sheet
+ * went off at 1.3 px/ms after a finger at 1.6, iOS 27 simulator, 27 Nov); the last 100 ms when the touches come too
+ * seldom for that (fewer than 8 ms between the first and the last). */
+export const releaseFrom = (ts: number[]): number => {
+  const last = ts[ts.length - 1];
+  for (const within of [50, 100]) {
+    const i = ts.findIndex((t) => last - t <= within);
+    if (last - ts[i] >= 8) return i;
+  }
+  return ts.findIndex((t) => last - t <= 100);
+};
+
+// A block's own translate with the page's shift (px down) added to it: its other axes stay as they were (`50px 0` held
+// 50 px across, not 0). `own` is its computed translate ('none', or 1 to 3 lengths, a calc() among them).
+export function withShift(own: string, px: number): string {
+  const parts: string[] = [];
+  let depth = 0;
+  let cur = '';
+  for (const ch of own.trim()) {
+    if (ch === '(') depth++;
+    else if (ch === ')') depth--;
+    if (/\s/.test(ch) && !depth) {
+      if (cur) parts.push(cur);
+      cur = '';
+    } else cur += ch;
+  }
+  if (cur) parts.push(cur);
+  if (!parts.length || parts[0] === 'none') return `0px ${px}px`;
+  const [x, y = '0px', z] = parts;
+  return `${x} calc(${y} + ${px}px)${z ? ` ${z}` : ''}`;
+}

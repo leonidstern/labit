@@ -1,5 +1,6 @@
 // Part of the comment widget (src/comments.js bundles it). Uses the widget's own parts through W, set once at startup.
 import * as move from './sheetmove.ts';
+import { TAP_SLOP } from './lifttap.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let W: any;
@@ -162,23 +163,49 @@ export function slideAway(node, close, ms = 0, speed = 0) {
 // the page and the sheet is thrown about (its top went 331, 182, 234, 197, 267: iOS 27 simulator); scrolled in the lift
 // itself, just before the focus, iOS never took the scroll and the keyboard came up over the sheet. So, as the pin appears
 // under the finger (the hold): the page is put at its new place in one step and drawn where it was (shifted back by as
-// much, --lab-shift on the page's own blocks and on the pins), and when the keyboard starts up that shift runs out, as
-// the sheet's own rise does. Nothing is scrolled while the keyboard is there, and nothing is seen to move before it.
+// much: an inline translate on the page's own blocks, --lab-shift on the pins), and when the keyboard starts up that
+// shift runs out, as the sheet's own rise does. Nothing is scrolled while the keyboard is there, and nothing is seen to move before it.
 let gen = 0; // each shift is the last one's end
+// The shift is written on the page's own blocks (inline) and on the widget's host, never as custom properties on <html>:
+// one there is inherited by every element, so each write restyled the whole page (17-21 ms a write, four or five writes
+// a new comment: iOS 27 simulator, 27 Nov). A block's own translate and transition are put back as they were, longhand by
+// longhand with their !important: a block with only transition-duration inline reads as no `transition` at all, and putting
+// that "" back wiped its duration.
+let easeSettle = ''; // a token: read once
+const WRITTEN = ['translate', 'transition-property', 'transition-duration', 'transition-timing-function', 'transition-delay', 'transition-behavior'];
+type Block = HTMLElement | SVGElement; // an <svg> straight in <body> is moved too, as the page's own blocks are
+const kept = new Map<Block, [string, string][]>();
+const ownTranslate = new Map<Block, string>(); // a block's own (computed) translate: the shift is added to it
+const blocks = () => Array.from(document.body.children).filter((n): n is Block => (n instanceof HTMLElement || n instanceof SVGElement) && n !== W.host && n.localName !== 'script' && n.localName !== 'style' && !n.hasAttribute('data-lab-board-view') && !n.hasAttribute('data-lab-still'));
 const shifted = (px: number, ms: number) => {
-  const de = document.documentElement;
   gen++;
-  de.style.setProperty('--lab-shift-t', `${ms}ms`);
-  de.style.setProperty('--lab-shift-e', getComputedStyle(W.host).getPropertyValue('--_ease-settle').trim() || 'ease');
-  de.style.setProperty('--lab-shift', `${px}px`);
-  de.classList.add('lab-moved'); // (not lab-shift: that is the Shift key's)
+  easeSettle ||= getComputedStyle(W.host).getPropertyValue('--_ease-settle').trim() || 'ease';
+  for (const n of kept.size ? kept.keys() : blocks()) {
+    const st = n.style;
+    if (!kept.has(n)) {
+      kept.set(n, WRITTEN.map((k): [string, string] => [st.getPropertyValue(k), st.getPropertyPriority(k)]));
+      ownTranslate.set(n, getComputedStyle(n).translate);
+    }
+    st.setProperty('translate', move.withShift(ownTranslate.get(n) || 'none', px), 'important');
+    st.setProperty('transition', `translate ${ms}ms ${easeSettle}`, 'important');
+  }
+  const h = W.host.style;
+  h.setProperty('--lab-shift-t', `${ms}ms`);
+  h.setProperty('--lab-shift-e', easeSettle);
+  h.setProperty('--lab-shift', `${px}px`);
+  document.documentElement.classList.add('lab-moved'); // only for overflow-anchor (comments.js); not lab-shift: that is the Shift key's
   W.host.setAttribute('data-shift', '');
 };
 const unshifted = () => {
-  const de = document.documentElement;
   gen++;
-  de.classList.remove('lab-moved');
-  for (const k of ['--lab-shift', '--lab-shift-t', '--lab-shift-e']) de.style.removeProperty(k);
+  document.documentElement.classList.remove('lab-moved');
+  for (const [n, was] of kept) {
+    WRITTEN.forEach((k, i) => (was[i][0] ? n.style.setProperty(k, was[i][0], was[i][1]) : n.style.removeProperty(k)));
+    if (!n.getAttribute('style')) n.removeAttribute('style'); // a block that had none is left with none
+  }
+  kept.clear();
+  ownTranslate.clear();
+  for (const k of ['--lab-shift', '--lab-shift-t', '--lab-shift-e']) W.host.style.removeProperty(k);
   W.host.removeAttribute('data-shift');
   for (const n of document.querySelectorAll('[data-lab-still]')) n.removeAttribute('data-lab-still');
 };
@@ -357,6 +384,7 @@ export function swipeDown(node, close, grows = false) {
   // doesn't press what lands there or pop the keyboard (Vaul's 100 ms and 200 ms).
   let scrolledAt = -1e9;
   let releasedAt = -1e9;
+  let settles = 0; // the newest settle: an older one's end leaves the sheet to it
   node.addEventListener('scroll', () => (scrolledAt = performance.now()), { capture: true, passive: true });
   node.addEventListener('click', (e) => {
     if (performance.now() - releasedAt < 200) {
@@ -447,13 +475,15 @@ export function swipeDown(node, close, grows = false) {
     if (fromScrim !== (e.currentTarget === W.scrim)) return;
     const was = mode;
     mode = null;
-    if (was === 'drag') W.S.sheetDraggedAt = performance.now();
+    // A tap's wobble on the dimmed page (the sheet followed it a few px) is still a tap, which closes (lifttap.ts). `raw` is
+    // in screen px (scaled by the pinch zoom), lifttap's slop in page px: pinch-zoomed, the slop is scaled the same.
+    if (was === 'drag' && !(fromScrim && Math.abs(raw) <= TAP_SLOP * (W.vv?.scale || 1))) W.S.sheetDraggedAt = performance.now();
     if (was !== 'drag') return;
     releasedAt = performance.now();
-    // How fast the finger (v) and the sheet (vs, which a rubber band slows) were going over the last ~100 ms, px/ms, + down;
-    // 0 if it held still before letting go.
+    // How fast the finger (v) and the sheet (vs, which a rubber band slows) were going at the end, px/ms, + down (over the
+    // last 50 ms, or 100 when the touches came seldom: move.releaseFrom); 0 if it held still before letting go.
     const lastMove = samples[samples.length - 1];
-    const from = samples.find((q) => lastMove.t - q.t <= 100);
+    const from = samples[move.releaseFrom(samples.map((q) => q.t))];
     const span = lastMove.t - from.t;
     const quick = e.timeStamp - lastMove.t > 80 || span < 8 ? 0 : 1;
     const v = quick * ((lastMove.y - from.y) / (span || 1));
@@ -473,12 +503,17 @@ export function swipeDown(node, close, grows = false) {
       }
       const [ms, curve] = glide(way, Math.max(0, toward));
       node.style.transition = `transform ${ms}ms ${curve}, height ${ms}ms ${curve}`;
+      // Full to half: the half sheet's max-height (its half height) is not animated, so it cut the height to half at once
+      // while the finger's offset still played out: the sheet dropped past half and rose back to it (iOS 18 Pro simulator,
+      // 27 Nov: 696 to 393 px in one frame, its top at 488 and back up to 313). The cap waits until the height is there.
+      if (full === false) node.style.maxHeight = 'none';
+      const mine = ++settles;
       if (full !== undefined) node.classList.toggle('full', full);
       W.scrim.style.transition = `opacity ${ms}ms var(--_ease-out)`;
       node.style.transform = W.scrim.style.opacity = '';
       W.bar.style.transition = '';
       W.host.style.removeProperty('--lab-p'); // springing back: the bar goes back down with it
-      setTimeout(() => (node.style.transition = W.scrim.style.transition = ''), settled());
+      setTimeout(() => mine === settles && ((node.style.transition = W.scrim.style.transition = ''), (node.style.maxHeight = '')), settled());
     };
     if (grows && !node.classList.contains('full') && (raw < -40 || v < -0.4)) return node.classList.contains('card') && (W.S.cardFull = true), settle(true, -vs);
     if (grows && node.classList.contains('full') && v < 1.2 && (raw > 60 || v > 0.4)) return node.classList.contains('card') && (W.S.cardFull = false), settle(false, vs);
@@ -515,7 +550,12 @@ export function startSheets() {
       // keyboard came out 0 and a new comment sat behind the keyboard's bar (Leo, 16 Nov, "sometimes": only when Safari
       // pans instead of scrolling).
       const seen = (top ? top + r.top : 0) + W.vv.height;
-      const kb = zoomed ? 0 : Math.max(0, Math.round(r.bottom - seen));
+      // A keyboard comes up only for something to type in (an iframe's own field shows as the iframe): the screen getting
+      // shorter without one is Safari's bar (iPhone 18 Pro simulator, 27 Nov: a page scrolled to its top as the chat
+      // opened, 62 px shorter for a frame, and the chat jumped up to fill the screen and slid back). One already up keeps
+      // counting after its field lets go, until the screen is tall again (its way down).
+      const keys = typing || field?.localName === 'iframe' || fit.kbUp;
+      const kb = zoomed || !keys ? 0 : Math.max(0, Math.round(r.bottom - seen));
       const gap = zoomed ? 0 : Math.max(0, Math.round(seen - r.bottom));
       const vh = zoomed ? 0 : Math.round(W.vv.height);
       // Safari 26 doesn't count as "keyboard up" here (its fixed layer ends above the keyboard by itself): the sheet stays
