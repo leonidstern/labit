@@ -16,17 +16,22 @@
 // browser hides a held pin only once its whole element is cut off, so a pin low on a tall element would float outside
 // its box; the script hides it by its spot (anchoring.ts, clippedAt). A box that covers the whole screen (a board's)
 // cuts nothing the screen doesn't.
+// The rules never change once written: each element a pin is held on gets a slot n, and the page's sheet has, per slot, its
+// anchor name (data-lab-anchor="ln") and the place of the pins (::part(ln)) and of a card (::part(ln-card)) on it; where on
+// the element is the pin's own custom properties. Writing the sheet again, by any means (its text, insertRule, another
+// <style>, an adopted sheet), restyles the whole page in Safari: 27-28 ms on the labit homepage, on every new or dropped
+// comment and every pin moved (iOS 27 simulator, 27 Nov); custom properties on the pin cost nothing. The sheet is written
+// again only when the slots run out (twice as many each time).
 let sheet: HTMLStyleElement | null = null;
-const names = new WeakMap<Element, string>(); // an element's anchor name, kept while it lives
-const rules = new Map<HTMLElement, string>(); // a held pin and its rule
+const names = new WeakMap<Element, string>(); // an element's anchor name (its slot, l + n), kept while it lives
 const spots = new Map<HTMLElement, { name: string; node: Element }>(); // a held pin's element and its anchor name
-const boxes = new Map<HTMLElement, string>(); // a card tied to the element its held pin is on, and its rule
-let count = 0;
-let dirty = false;
+const boxes = new Set<HTMLElement>(); // the cards tied to the element their held pin is on
+let count = 0; // slots handed out
+let pool = 0; // slots in the sheet
 // What an element is, read once per placing of the pins (newPass): whether a box cuts it off, it sits in the top layer,
 // or the page gives it an anchor name of its own. Read before any pin is written, so placing many pins lays out once.
 let pass = 0;
-const seen = new WeakMap<Element, { pass: number; no: boolean; moves: boolean }>();
+const seen = new WeakMap<Element, { pass: number; no: boolean; moves: number }>();
 /** A new placing of the pins: what was read about their elements is read again. */
 export const newPass = () => void pass++;
 const cutOff = (node: Element) => {
@@ -41,14 +46,16 @@ const cutOff = (node: Element) => {
 // transformed or animated (a board's frames under its camera, a carousel, a header that slides). Only such a pin is
 // held: a pin on still content is placed in the page by the script and scrolls with it for free, where a held one is
 // laid out again at every scroll step (Leo, 20 Nov, measured: 0 vs 320 ms of layout for 40 pins over one scroll).
+// 2: it, or a box around it, is sticky or fixed: the screen holds it while the page scrolls (stuck, below).
+const touch = matchMedia('(pointer: coarse)');
 const moves = (node: Element) => {
+  let m = 0;
   for (let el: Element | null = node; el && el !== document.body && el !== document.documentElement; el = el.parentElement) {
     const s = getComputedStyle(el);
-    if (s.position === 'sticky' || s.position === 'fixed') return true;
-    if (s.transform !== 'none' || s.translate !== 'none' || s.scale !== 'none' || s.rotate !== 'none') return true;
-    if (s.animationName !== 'none' && el.getAnimations().length) return true;
+    if (s.position === 'sticky' || s.position === 'fixed') return 2;
+    if (s.transform !== 'none' || s.translate !== 'none' || s.scale !== 'none' || s.rotate !== 'none' || (s.animationName !== 'none' && el.getAnimations().length)) m = 1;
   }
-  return false;
+  return m;
 };
 /** A length for a style, to a hundredth of a pixel (thread.ts ties cards with it too). */
 export const px = (n: number) => `${Math.round(n * 100) / 100}px`;
@@ -62,7 +69,7 @@ const inTopLayer = (node: Element) => {
 
 const nameOf = (node: Element) => {
   let name = names.get(node);
-  if (!name) names.set(node, (name = `lab${(++count).toString(36)}`));
+  if (!name) names.set(node, (name = `l${(++count).toString(36)}`));
   return name;
 };
 // What holdPin needs to know about an element, read once a pass. Reading a style after the pins were written lays the
@@ -77,7 +84,7 @@ const readNode = (node: Element) => {
     // window's top), so each drawing after a scroll wrote the sheet again and the whole page was restyled: ~30 ms per
     // thread opened or closed on a phone (iOS 27 simulator, 27 Nov: a pin on a sidebar nav hidden at phone width).
     const hidden = node.checkVisibility?.() === false;
-    seen.set(node, (read = { pass, no: hidden || Boolean(own && own !== 'none' && own !== `--${name}`) || inTopLayer(node) || cutOff(node), moves: !hidden && moves(node) }));
+    seen.set(node, (read = { pass, no: hidden || Boolean(own && own !== 'none' && own !== `--${name}`) || inTopLayer(node) || cutOff(node), moves: hidden ? 0 : moves(node) }));
   }
   return read;
 };
@@ -97,27 +104,26 @@ export function holdPin(pin: HTMLElement, on: boolean, node: Element | null, lef
   }
   const name = nameOf(node);
   const read = readNode(node);
-  if (read.no || (!share && !read.moves)) {
+  // On a phone or tablet a pin on something the screen holds (a sticky bar) is the script's: held, Safari drew it late
+  // while the page scrolled (70-150 px off) and still ~40 px off after it stopped (iPhone simulator, 27 Nov). It fades
+  // while the page scrolls and is placed again when it stops (stuck: styles.css, comments.js data-scrolling).
+  const stuck = !share && read.moves === 2 && touch.matches;
+  if (read.no || stuck || (!share && !read.moves)) {
     letPin(pin);
+    pin.classList.toggle('stuck', stuck);
     return false;
   }
+  pin.classList.remove('stuck');
   if (node.getAttribute('data-lab-anchor') !== name) node.setAttribute('data-lab-anchor', name); // put back after a live patch
-  const part = pin.getAttribute('part') || `lp${(++count).toString(36)}`;
-  pin.setAttribute('part', part);
-  const pct = (n: number) => `${Math.round(n * 10000) / 100}%`;
+  if (pin.getAttribute('part') !== name) pin.setAttribute('part', name);
   // Only an offset needs the element's box: a share doesn't, and reading a box after the last pin was written lays the
   // page out again, once per pin (600 pins on a board: 17 s in Chrome).
   const r = share ? null : node.getBoundingClientRect();
-  const at = !r
-    ? `left:anchor(${pct(share!.x)}, -10000px)!important;top:anchor(${pct(share!.y)}, -10000px)!important`
-    : `left:calc(anchor(left, -10000px) + ${px(left - scrollX - r.left)})!important;top:calc(anchor(top, -10000px) + ${px(top - scrollY - r.top)})!important`;
-  const rule =
-    `[data-lab-anchor="${name}"]{anchor-name:--${name}}` +
-    `[data-lab-comments]::part(${part}){position:fixed!important;position-anchor:--${name};position-visibility:anchors-visible;${at}}`;
-  if (rules.get(pin) !== rule) {
-    rules.set(pin, rule);
-    dirty = true;
-  }
+  const set = (k: string, v: string) => pin.style.getPropertyValue(k) !== v && pin.style.setProperty(k, v);
+  set('--lab-hx', r ? px(left - scrollX - r.left) : '0px');
+  set('--lab-hy', r ? px(top - scrollY - r.top) : '0px');
+  set('--lab-hsx', share ? String(Math.round(share.x * 10000) / 10000) : '0');
+  set('--lab-hsy', share ? String(Math.round(share.y * 10000) / 10000) : '0');
   spots.set(pin, { name, node });
   return true;
 }
@@ -126,57 +132,51 @@ export function holdPin(pin: HTMLElement, on: boolean, node: Element | null, lef
  *  the browser follows a scroll, so a card on the pin would trail by the scroll). The element, or null when the pin isn't
  *  held. Where on it: the card's --lab-cx / --lab-cy / --lab-ay (thread.ts tieToPin). */
 export function holdBox(node: HTMLElement, pin: HTMLElement | null | undefined): Element | null {
-  const at = pin && rules.has(pin) ? spots.get(pin) : null;
+  const at = pin ? spots.get(pin) : null;
   if (!at) {
     letBox(node);
     return null;
   }
-  const part = `${pin!.getAttribute('part')}-card`; // its pin's: a card drawn again keeps its rule, the sheet unwritten
-  node.setAttribute('part', part);
-  const rule =
-    `[data-lab-comments]::part(${part}){position:fixed;position-anchor:--${at.name};` +
-    'left:max(12px,calc(anchor(left, -10000px) + var(--lab-cx)));top:calc(anchor(top, -10000px) + var(--lab-cy))}';
-  if (boxes.get(node) !== rule) {
-    boxes.set(node, rule);
-    dirty = true;
-  }
+  node.setAttribute('part', `${at.name}-card`); // its pin's slot: a card drawn again needs no new rule
+  boxes.add(node);
   return at.node;
 }
 
 /** The card is placed another way again (in the margin, a sheet, untied). */
 export function letBox(node: HTMLElement) {
-  if (!boxes.delete(node)) return;
-  node.removeAttribute('part');
-  dirty = true;
+  if (boxes.delete(node)) node.removeAttribute('part');
 }
 
 /** The script places this pin again (it is dragged, or it can't be held). */
 export function letPin(pin: HTMLElement) {
-  spots.delete(pin);
-  if (!rules.delete(pin)) return;
+  if (!spots.delete(pin)) return;
   pin.removeAttribute('part');
-  dirty = true;
-  flushPins();
+  for (const k of ['--lab-hx', '--lab-hy', '--lab-hsx', '--lab-hsy']) pin.style.removeProperty(k);
 }
 
 /** Whether the browser holds this pin: a scroll needs nothing from the script for it. */
-export const heldPin = (pin?: HTMLElement) => Boolean(pin && rules.has(pin));
+export const heldPin = (pin?: HTMLElement) => Boolean(pin && spots.has(pin));
 
-/** Writes the rules once the pins are drawn; pins gone from the page let go of theirs. */
+const slot = (n: string) =>
+  `[data-lab-anchor="${n}"]{anchor-name:--${n}}` +
+  `[data-lab-comments]::part(${n}){position:fixed!important;position-anchor:--${n};position-visibility:anchors-visible;` +
+  `left:calc(anchor(left, -10000px) + var(--lab-hx) + (anchor(right, -10000px) - anchor(left, -10000px)) * var(--lab-hsx))!important;` +
+  `top:calc(anchor(top, -10000px) + var(--lab-hy) + (anchor(bottom, -10000px) - anchor(top, -10000px)) * var(--lab-hsy))!important}` +
+  `[data-lab-comments]::part(${n}-card){position:fixed;position-anchor:--${n};` +
+  'left:max(12px,calc(anchor(left, -10000px) + var(--lab-cx)));top:calc(anchor(top, -10000px) + var(--lab-cy))}';
+
+/** Once the pins are drawn: pins and cards gone from the page let go; the sheet gets more slots if they ran out. */
 export function flushPins() {
-  for (const map of [rules, boxes])
-    for (const node of map.keys()) {
-      if (node.isConnected) continue;
-      map.delete(node);
-      dirty = true;
-    }
-  for (const pin of spots.keys()) if (!pin.isConnected) spots.delete(pin); // and the elements they were on, let go
-  if (!dirty) return;
-  dirty = false;
+  for (const pin of spots.keys()) if (!pin.isConnected) spots.delete(pin);
+  for (const box of boxes) if (!box.isConnected) boxes.delete(box);
+  if (!count) return;
   if (!sheet) {
     sheet = Object.assign(document.createElement('style'), { id: 'lab-pinhold' });
     sheet.setAttribute('data-lab-own', ''); // the widget's own: no change to the page's words (anchoring.ts pageChanged)
   }
+  if (count > pool) {
+    pool = Math.max(32, pool * 2, count);
+    sheet.textContent = Array.from({ length: pool }, (_, i) => slot(`l${(i + 1).toString(36)}`)).join('');
+  }
   if (!sheet.isConnected) document.head.append(sheet);
-  sheet.textContent = [...rules.values(), ...boxes.values()].join('');
 }
