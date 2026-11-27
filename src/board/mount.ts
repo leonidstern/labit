@@ -377,7 +377,8 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
   // boards pls i cant scroll there zoom or whatever, always show full thing"). Laid out in its device's height first, then the
   // frame is made as tall as the page; whatever grew with it (sized by the window's height: 100vh) is held at the height it
   // had in the device, else such a page grew without end. Later growth (pictures, fonts) follows, once per step: a step the
-  // same as the last is that loop again and stops it. Kept per frame and width, so a reload draws them tall at once.
+  // same as the last that the page only takes with the frame is that loop again and stops it. Kept per frame and width, so a
+  // reload draws them tall at once.
   let eased: ReturnType<typeof setTimeout> | undefined;
   const tallKey = `lab-tall:${name}`;
   const tall: Record<string, number> = ls(tallKey) || {};
@@ -419,7 +420,17 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     w.addEventListener('gesturechange', (e) => pinchTo(e, ...at(e as MouseEvent)));
     new w.ResizeObserver(() => requestAnimationFrame(() => { // (next frame: set inside it, the observer's loop was an error)
       const to = page();
-      if (to > h + 1 && Math.abs(to - h - step) > 1) set(to);
+      if (to <= h + 1) return;
+      // A step the same as the last is the loop only when the page grows with its frame (100vh): asked at the last height
+      // again, that page is shorter by the step, and it stays. A page that grew by itself as much (a picture, a font) is as
+      // tall there too, and the frame follows it (CodeRabbit on #611: two equal steps of growth were left cut off).
+      if (Math.abs(to - h - step) <= 1) {
+        fr.style.height = `${h - step}px`;
+        const back = page();
+        fr.style.height = `${h}px`;
+        if (back < to - 1) return;
+      }
+      set(to);
     })).observe(d.body);
   };
   // Where each frame is drawn: as stored, as tall as its page, and moved down by as much as the frames over it grew (the gap

@@ -15,6 +15,10 @@ const doc = (t, body) => `<!doctype html><meta charset="utf-8"><title>${t}</titl
 fs.writeFileSync(path.join(DIR, 'long.html'), doc('Long', '<h1>Long</h1><div style="height:2400px;background:linear-gradient(#cde,#edc)"></div><p id="end">end</p>'));
 fs.writeFileSync(path.join(DIR, 'hero.html'), doc('Hero', '<section style="min-height:100vh;background:#dfe">hero</section><div style="height:1000px">rest</div><p id="end">end</p>'));
 fs.writeFileSync(path.join(DIR, 'short.html'), doc('Short', '<p>short</p>'));
+// a page that grows by itself after it is up, twice by the same 100 px (pictures, fonts)
+fs.writeFileSync(path.join(DIR, 'steps.html'), doc('Steps', '<div style="height:1200px;background:#ecd"></div><div id="more"></div><p id="end">end</p><script>let n = 0; const add = () => { const x = document.createElement("div"); x.style.height = "100px"; document.getElementById("more").append(x); if (++n < 2) setTimeout(add, 500); }; setTimeout(add, 1500);</script>'));
+// …and one that puts a 100vh section in after it is up: its growth is the frame's own coming back, still not without end
+fs.writeFileSync(path.join(DIR, 'latevh.html'), doc('Late', '<div style="height:800px"></div><script>setTimeout(() => document.body.insertAdjacentHTML("beforeend", "<section style=\\"min-height:100vh;background:#dfe\\">late</section>"), 1500);</script>'));
 // a page with a script of its own: a save reloads it (not patched in place)
 const live = (n) => doc('Live', `<script>window.x = 1</script><h1>Live</h1><div style="height:${n}px;background:#cde"></div><p>end</p>`);
 fs.writeFileSync(path.join(DIR, 'live.html'), live(1200));
@@ -27,6 +31,7 @@ await fetch(`${B}/_lab/api/board?name=full`, { method: 'PUT', headers: { 'conten
   { id: 'c', src: '/short', w: 600, h: 500, x: 1400, y: 0 },
   { id: 'd', src: '/short', w: 600, h: 300, x: 0, y: 660 }, // under a: moved down as a grows, the gap kept
 ] }) });
+await fetch(`${B}/_lab/api/board?name=steps`, { method: 'PUT', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ v: 1, rev: 0, frames: [{ id: 'a', src: '/steps', w: 600, h: 500, x: 0, y: 0 }, { id: 'b', src: '/latevh', w: 600, h: 500, x: 700, y: 0 }] }) });
 await fetch(`${B}/_lab/api/board?name=upd`, { method: 'PUT', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ v: 1, rev: 0, frames: [{ id: 'a', src: '/live', w: 600, h: 500, x: 0, y: 0 }, { id: 'b', src: '/short', w: 600, h: 300, x: 0, y: 660 }] }) });
 try {
   for (const eng of engines()) {
@@ -137,6 +142,18 @@ try {
       const bs = seen.map((x) => Math.round(x.b));
       check(eng, 'the frame under it eases down with it', bs.at(-1) > bs[0] && bs.filter((v) => v > bs[0] + 2 && v < bs.at(-1) - 2).length >= 3, JSON.stringify({ from: bs[0], to: bs.at(-1) }));
       fs.writeFileSync(path.join(DIR, 'live.html'), live(1200));
+      // A page that grows by itself by the same amount twice running: the frame follows every step (a step the same as the
+      // last is the 100vh loop only when the page grows with its frame; CodeRabbit on #611).
+      await p.goto(B + '/_lab/board/steps');
+      await p.waitForFunction(`${V}?.querySelector('iframe[name="lab:a"][data-ready]')`, null, { timeout: 10000 });
+      await sleep(3500);
+      const st = await p.evaluate(`(() => { const box = ${V}.querySelector('#lab-board .f[data-id="a"]'); const d = box.querySelector('iframe').contentDocument; return { boxH: parseFloat(box.style.height), pageH: Math.max(d.documentElement.scrollHeight, d.body.scrollHeight), more: d.getElementById('more').children.length, end: d.getElementById('end').getBoundingClientRect().bottom }; })()`);
+      const lateH = () => p.evaluate(`parseFloat(${V}.querySelector('#lab-board .f[data-id="b"]').style.height)`);
+      const l1 = await lateH();
+      await sleep(1500);
+      const l2 = await lateH();
+      check(eng, 'a 100vh section put in later grows the frame once, not without end', l1 > 800 && l1 < 3000 && l2 === l1, JSON.stringify({ l1, l2 }));
+      check(eng, 'a page that grows by the same amount twice running: the frame follows each step', st.more === 2 && st.boxH === st.pageH && st.end <= st.boxH, JSON.stringify(st));
     } finally {
       await browser.close();
     }
