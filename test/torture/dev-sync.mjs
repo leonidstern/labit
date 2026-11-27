@@ -260,10 +260,12 @@ export async function run(plan, ctx, opts) {
         const text = words(op, i);
         const nonce = `tw${ctx.seed}n${i}`.padEnd(12, '0');
         const rs = await Promise.all(Array.from({ length: op.n }, () => post({ page: op.page, name: 'Leo', text, anchor: H1, nonce })));
-        const ids = new Set(rs.filter((r) => r.status < 300).map((r) => r.json().comment.id));
-        if (rs.some((r) => r.status >= 300)) return refuse(rs.find((r) => r.status >= 300), describe(op));
-        if (ids.size !== 1) ctx.add('silent', 'retry-made-a-second-comment', `${op.n} copies of one pin with one nonce came back as ${ids.size} comments: ${[...ids].join(' ')}`, {});
-        for (const r of rs) note(r.json().comment, i, op.page);
+        const ok = rs.filter((r) => r.status < 300);
+        const ids = new Set(ok.map((r) => r.json().comment.id));
+        // What was said yes to is recorded first, also when another copy was refused (else the audit finds a pin nobody made).
+        for (const r of ok) note(r.json().comment, i, op.page);
+        if (ids.size > 1) ctx.add('silent', 'retry-made-a-second-comment', `${op.n} copies of one pin with one nonce came back as ${ids.size} comments: ${[...ids].join(' ')}`, {});
+        if (ok.length < rs.length) return refuse(rs.find((r) => r.status >= 300), describe(op));
       } else if (op.t === 'bad') {
         const want = { empty: 400, spaces: 400, 'too-big': 413, 'not-json': 400, 'bad-page': 400, 'no-thread': 404, 'no-name': 400 }[op.what];
         const body = { empty: { page: '/index', name: 'Leo', text: '', anchor: H1 }, spaces: { page: '/index', name: 'Leo', text: ' \n\t ', anchor: H1 }, 'bad-page': { page: '/../etc', name: 'Leo', text: 'x', anchor: H1 }, 'no-thread': { page: '/index', parent: '000000000000', name: 'Leo', text: 'x' }, 'no-name': { page: '/index', text: 'x', anchor: H1 } }[op.what];
@@ -313,7 +315,8 @@ export async function run(plan, ctx, opts) {
     })();
     await Promise.all(burst.map(async ([op, i]) => {
       await sleep(op.at);
-      const target = op.to === undefined ? null : made.get(seeds[op.to]?.[1]);
+      // op.to is the seed's own step number (seeds are the plan's first steps): a replay that leaves a seed out has none.
+      const target = op.to === undefined ? null : made.get(op.to);
       if (op.to !== undefined && !target) return;
       const what = op.t.slice(6);
       const text = `burst ${i}`;
@@ -341,9 +344,11 @@ export async function run(plan, ctx, opts) {
     if (/was damaged|no comments; left out/.test(lab.log.split('\n').slice(-12).join('\n'))) ctx.add('loud', 'store-damaged-by-a-kill', lab.log.split('\n').filter((l) => /damaged|left out/.test(l)).join(' / '), tags);
     // And the store still takes a write and keeps it over a normal stop.
     const r = await post({ page: '/index', name: 'Leo', text: 'after the kill', anchor: H1 });
+    // Refused is said as refused; only a pin the lab said yes to has to be there after the next start.
+    if (r.status !== 201) return ctx.add('loud', 'write-refused', `a pin made after the restart: ${r.status} ${r.text.slice(0, 200)}`, { step: 'after-recovery', status: r.status, ...tags });
     await lab.stop('SIGTERM');
     if (!(await lab.start()).ok) return ctx.add('loud', 'lab-did-not-start-after-a-kill', lab.log.slice(-400), tags);
-    if (r.status !== 201 || !(await list('/index')).some((c) => c.text === 'after the kill')) ctx.add('silent', 'acknowledged-write-lost', `a pin made after the restart (${r.status}) is gone after a normal stop and start`, { what: 'pin', when: 'after-recovery', ...tags });
+    if (!(await list('/index')).some((c) => c.text === 'after the kill')) ctx.add('silent', 'acknowledged-write-lost', `a pin made after the restart (${r.status}) is gone after a normal stop and start`, { what: 'pin', when: 'after-recovery', ...tags });
     return;
   }
 

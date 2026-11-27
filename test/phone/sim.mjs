@@ -384,15 +384,16 @@ if (cmd === 'serve') {
 
   if (cmd === 'next') {
     const as = args.includes('--as') ? args[args.indexOf('--as') + 1] : null;
-    if (as && as !== st.as) Object.assign(st, { as, step: 0, off: null });
+    // Saved at once: every read below (snaps, and the ones setup and ask do) is of the browser picked here.
+    if (as && as !== st.as) (Object.assign(st, { as, step: 0, off: null }), save(st));
     const step = steps[st.step];
     if (!step) { console.log('all steps done: node test/phone/sim.mjs report'); process.exit(0); }
     await sleep(400);
-    const s = snaps().at(-1);
+    const s = snaps(st.as).at(-1);
     if (!s) { console.log('the recorder has sent nothing yet: open the page first'); process.exit(1); }
     if (st.step === 0) st.count0 = (await comments()).length;
     if (step.setup) await step.setup();
-    const now = snaps().at(-1); // after a setup the page has changed
+    const now = snaps(st.as).at(-1); // after a setup the page has changed
     st.mark = Date.now();
     console.log(`${st.as} · step ${st.step + 1}/${steps.length} ${step.name}: ${await step.say(now)}`);
     save(st);

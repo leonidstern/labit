@@ -169,7 +169,8 @@ class BrowserDevice {
       this.draft = await this.draftText();
     } else if (this.held) {
       this.held = false;
-      this.draftAtClose = await this.draftText();
+      // Each draft with what its box held as it closed: a later draft must not stand in for a lost one.
+      (this.drafts ||= []).push([this.draft, await this.draftText()]);
       await this.page.keyboard.press('Escape').catch(() => {}); // closes the box and lets its words go: a waiting reload may happen
       await sleep(100);
     }
@@ -408,8 +409,10 @@ export async function run(plan, ctx, opts) {
       if (!s.widget && endsInOpenTag(html)) return null; // (the disk bytes end inside a tag: no widget tag can work)
       if (!s.widget) return ['dead-page', `the page has no widget (title "${s.title}") though ${pageFile} is on disk${gone[pageFile] !== undefined ? ` (it was really missing for ${gone[pageFile]} ms)` : ''}`, { shows: s.notFound ? 'not-found' : 'other', gone: goneBucket(pageFile), ...(cut.has(pageFile) ? { cut: 'page-was-cut-short' } : {}), browser: plan.browser }];
       const want = { html: tokIn(html, /<main id="m" data-v="(\w+)"/) };
+      const onDisk = new Set(); // the stylesheets that are there (maybe cut short or empty), not deleted
       for (const { file } of loadsOf(pageFile)) {
         const text = read(file);
+        if (text !== null && file.endsWith('.css')) onDisk.add(file);
         if (file === 's.css') want.s = tokIn(text, /--v:(\w+)/);
         else if (file === 'base.css') want.b = tokIn(text, /--b:(\w+)/);
         else if (file.endsWith('.css')) want.p = tokIn(text, /--p:(\w+)/);
@@ -419,8 +422,9 @@ export async function run(plan, ctx, opts) {
       }
       const fileOf = { html: pageFile, s: 's.css', b: 'base.css', p: PAGES[plan.devices[i].page].css.find((c) => /[pd]\.css$/.test(c)) ? (plan.devices[i].page === 'deep' ? 'sub/deep/p.css' : 'docs/d.css') : 's.css', js: 'app.js', mod: 'mod/main.js', dep: 'mod/dep.js' };
       const kindOf = { html: 'html', s: 'css', b: 'css-import', p: 'css', js: 'js', mod: 'js', dep: 'js-import' };
-      // A file cut short may hold no token at all: then only a token of an older version showing is wrong.
-      for (const [k, tok] of Object.entries(want)) if (tok && s[k] !== tok) return [kindOf[k].startsWith('css') && !s.links ? 'page-lost-its-stylesheets' : 'stale-content', `${plan.browser} shows ${k}=${s[k]} of ${fileOf[k]}, the disk has ${tok}${kindOf[k].startsWith('css') ? ` (its stylesheets now: ${s.links || 'none'}; at ${s.url})` : ''}`, kindOf[k].startsWith('css') && !s.links ? { browser: plan.browser } : { res: kindOf[k], ...why(fileOf[k], kindOf[k]), browser: plan.browser }];
+      // A file cut short may hold no token at all: then only a token of an older version showing is wrong. A stylesheet
+      // still there with no token (cut, or emptied) must not keep showing its old one.
+      for (const [k, tok] of Object.entries(want)) if (tok ? s[k] !== tok : kindOf[k].startsWith('css') && onDisk.has(fileOf[k]) && s[k] != null) return [kindOf[k].startsWith('css') && !s.links ? 'page-lost-its-stylesheets' : 'stale-content', `${plan.browser} shows ${k}=${s[k]} of ${fileOf[k]}, the disk has ${tok}${kindOf[k].startsWith('css') ? ` (its stylesheets now: ${s.links || 'none'}; at ${s.url})` : ''}`, kindOf[k].startsWith('css') && !s.links ? { browser: plan.browser } : { res: kindOf[k], ...why(fileOf[k], kindOf[k]), browser: plan.browser }];
       return null;
     }
     if ((d.dead || d.status !== 200) && d.status === 200 && endsInOpenTag(html)) return null; // (cut inside a tag: no widget tag can work)
@@ -453,7 +457,13 @@ export async function run(plan, ctx, opts) {
     ctx.add('silent', check, `d${i} on ${plan.devices[i].url} after ${Date.now() - t0} ms: ${detail}`, tags);
   }
   // A draft's words must still be in its box after every save that happened while it was open.
-  for (const d of devices) if (d.real && d.draft && d.draftAtClose !== undefined && d.draftAtClose !== d.draft) ctx.add('silent', 'draft-lost', `typed ${JSON.stringify(d.draft)}, the box held ${JSON.stringify(d.draftAtClose)} after the saves`, { browser: plan.browser });
+  // Every draft closed during the case, and one still open at its end.
+  for (const d of devices) {
+    if (!d.real) continue;
+    const drafts = [...(d.drafts || []), ...(d.held ? [[d.draft, await d.draftText()]] : [])];
+    const lost = drafts.find(([typed, held]) => typed && held !== typed);
+    if (lost) ctx.add('silent', 'draft-lost', `typed ${JSON.stringify(lost[0])}, the box held ${JSON.stringify(lost[1])} after the saves`, { browser: plan.browser });
+  }
   // The lab must also serve the disk's bytes to anyone who asks now.
   if (!bad.length) {
     for (const f of new Set(open.flatMap((i) => [PAGES[plan.devices[i].page].file, ...loadsOf(PAGES[plan.devices[i].page].file).map((o) => o.file)]))) {

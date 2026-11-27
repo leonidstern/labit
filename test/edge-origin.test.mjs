@@ -24,6 +24,7 @@ const raw = (port, p, { method = 'GET', headers = {}, body, host, to = '127.0.0.
     const req = http.request({ host: to, port, path: p, method, headers: { host: host ?? `localhost:${port}`, ...headers } }, (res) => {
       const parts = [];
       res.on('data', (d) => parts.push(d));
+      res.on('error', (e) => done({ status: 0, text: String(e), json: null, headers: {} })); // cut after the headers
       res.on('end', () => {
         const text = Buffer.concat(parts).toString();
         let json = null;
@@ -70,6 +71,7 @@ const page = (name) => {
 after(async () => {
   for (const l of labs) await l.stop();
   for (const d of dirs) fs.rmSync(d, { recursive: true, force: true, maxRetries: 5 });
+  fs.rmSync(ENV.LABIT_HOME, { recursive: true, force: true, maxRetries: 5 });
 });
 const lab = await startLab(page('origin'));
 const PORT = lab.port;
@@ -143,6 +145,7 @@ test('a write is taken from the lab\'s own page only: Origin, Host and Sec-Fetch
 test('reads are not opened to other sites: no CORS headers, and a preflight is refused', async () => {
   for (const p of ['/_lab/api/comments?page=/index', '/_lab/agent/index', '/_lab/state', '/_lab/pages', '/_lab/api/board', '/']) {
     const r = await raw(PORT, p, { headers: { origin: 'https://evil.example' } });
+    assert.equal(r.status, 200, `${p} answered (a failed request has no headers to check)`);
     for (const h of ['access-control-allow-origin', 'access-control-allow-credentials', 'access-control-allow-headers']) assert.equal(r.headers[h], undefined, `${p} sends no ${h}`);
   }
   for (const p of ['/_lab/api/comments', '/_lab/wait', '/_lab/api/board?name=x']) {
@@ -238,9 +241,14 @@ test('a JSON body that is null, a number, a string or a list is the sender\'s mi
 
 test('a path that can\'t be decoded is a bad request (4xx), not a 500 with the error\'s text; NUL and odd paths find nothing', async () => {
   const bad = [];
-  for (const p of ['/%', '/%E0%A4%A', '/%zz', '/_lab/agent/%E0%A4%A', '/_lab/api/comments%', '/index%ff.html', '/a%00b', '/a%00.html', '/index.html%00.png', '/%00', '/..%00/', '/%5C..%5C..%5Cetc%5Cpasswd', '/index.html/', '/index.html/x', '/index/../index',
-    '/_lab/board/%', '/_lab/board/a/%E0', '/_lab/j/%', '/_lab/comments.js%00', '/_lab/../local.mjs', '/_lab/%2e%2e/package.json', '/_lab/..%2f..%2fpackage.json', '/_lab/%2e%2e%2flocal.mjs']) {
+  // Paths that can't be decoded are 400; the odd ones that can find nothing (404), and /index/../index is /index.
+  const undecodable = ['/%', '/%E0%A4%A', '/%zz', '/_lab/agent/%E0%A4%A', '/_lab/api/comments%', '/index%ff.html', '/_lab/board/%', '/_lab/board/a/%E0', '/_lab/j/%'];
+  const odd = ['/a%00b', '/a%00.html', '/index.html%00.png', '/%00', '/..%00/', '/%5C..%5C..%5Cetc%5Cpasswd', '/index.html/', '/index.html/x', '/index/../index',
+    '/_lab/comments.js%00', '/_lab/../local.mjs', '/_lab/%2e%2e/package.json', '/_lab/..%2f..%2fpackage.json', '/_lab/%2e%2e%2flocal.mjs'];
+  for (const p of [...undecodable, ...odd]) {
     const r = await raw(PORT, p);
+    const want = undecodable.includes(p) ? 400 : p === '/index/../index' ? 200 : 404;
+    if (r.status !== want) bad.push(`${p} → ${r.status}, not ${want}`);
     if (r.status >= 500 || r.status === 0 || /URIError|TypeError|ENOENT|\bat /.test(r.text)) bad.push(`${p} → ${r.status} ${r.text.slice(0, 80)}`);
     assert.doesNotMatch(r.text, /"version"|@leonidstern\/labit|root:.*:0:0/, `${p} serves nothing from outside`);
   }

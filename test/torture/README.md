@@ -54,7 +54,7 @@ node test/torture/run.mjs --replay context:423741371 --browser-share 1  # one co
 | `--shrink N` | 12 | at most this many more runs to make the first case of a new signature smaller; 0: off |
 | `--browser-share F` / `--no-browser` | 0.06 | the share of hotswap and agent-sync cases that also drive a real browser (context: 70% of its cases are in real browsers whatever F is; with `--no-browser` all of them are hand-built pins) |
 | `--slow F` | 1 | every bound and settle time times F, for a slow or loaded machine |
-| `--replay area:seed[:steps]`, `--times N` | | one case again |
+| `--replay area:seed[:steps]`, `--times N` | | one case again (`steps`: `0,3,4`, or `none` for no step) |
 | `--verbose` | | a line per case that did not pass, as it happens |
 
 Real browsers need the `playwright` package: from this checkout, from `NODE_PATH`, or from `../.labit-pw-scratch/node_modules`
@@ -85,6 +85,8 @@ Each case ends in one of:
 - **flaky**: it failed, and did not fail again when the same case was run `--confirm` more times. Counted apart, never
   as silent. A race in labit lands here too: the report lists flaky signatures with how many cases hit them, and a
   signature hit by many different cases is a race, not noise (`--replay … --times 30` shows how often).
+- **unconfirmed**: it failed and was not run again (`--confirm 0`, or a signature that did not come back in eight
+  reruns before, so it is not rerun any more). In no column of the table: a line under it says how many.
 - **unclear** is a note, not an outcome: the documented contract does not say what should happen there. The case
   still passes; the report counts the passes that carry such a note and lists the notes.
 - **harness**: this test's own trouble (a lab that did not start on a clean folder, a browser that did not launch, a
@@ -145,7 +147,9 @@ confirmed it; the "waiting" count the page list shows is the number of threads w
 `dev-servers.mjs` (the plan, the steps, the checks) and `dev-servers-templates.mjs` (the projects and their installs).
 The lab is started in front of a real dev server (`labit . --proxy <port>`; in a tenth of the cases with no flag, so
 the lab has to find the dev server itself), on a small project written by hand for each framework. Not in `--area all`
-unless `--with-dev-servers` is given: it installs packages from npm the first time.
+unless `--with-dev-servers` is given: it installs packages from npm the first time. That flag adds this area only: the
+context area (in `--area all`) installs the same frameworks too when Playwright is there, unless it is given
+`--context-frameworks none` (`node test/torture/run.mjs --area all --context-frameworks none` installs nothing).
 
 | framework | project | exact versions | share of the cases |
 | --- | --- | --- | --- |

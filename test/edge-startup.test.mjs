@@ -24,6 +24,7 @@ const raw = (port, p, { method = 'GET', headers = {}, body, to = '127.0.0.1' } =
     const req = http.request({ host: to, port, path: p, method, headers: { host: `localhost:${port}`, ...headers } }, (res) => {
       const parts = [];
       res.on('data', (d) => parts.push(d));
+      res.on('error', (e) => done({ status: 0, text: String(e), json: null, headers: {} })); // cut after the headers
       res.on('end', () => {
         const text = Buffer.concat(parts).toString();
         let json = null;
@@ -65,11 +66,12 @@ const attempt = async (dir, args = [], { env = {}, port, wait = 6000 } = {}) => 
   if (gone()) await sleep(50); // the last of its output
   return { proc, up: Boolean(at), port: at, out: () => out, code: () => proc.exitCode, stop: () => new Promise((r) => (gone() ? r() : (proc.once('exit', r), proc.kill()))) };
 };
-const run = (dir, args, env = {}) => new Promise((done) => execFile(process.execPath, [LAB, ...args], { cwd: dir, env: { ...ENV, ...env } }, (err, stdout, stderr) => done({ code: err?.code ?? 0, out: stdout + stderr })));
+const run = (dir, args, env = {}) => new Promise((done) => execFile(process.execPath, [LAB, ...args], { cwd: dir, env: { ...ENV, ...env } }, (err, stdout, stderr) => done({ code: err ? (Number.isInteger(err.code) ? err.code : 1) : 0, out: stdout + stderr })));
 after(async () => {
   for (const p of procs) if (p.exitCode === null) p.kill('SIGKILL');
   await sleep(100);
   for (const d of dirs) fs.rmSync(d, { recursive: true, force: true, maxRetries: 5 });
+  fs.rmSync(ENV.LABIT_HOME, { recursive: true, force: true, maxRetries: 5 });
 });
 const STACK = /\n\s+at .+:\d+:\d+\)?|Node\.js v\d+|TypeError|RangeError|SyntaxError/;
 const trace = (out) => (STACK.test(out) ? out.split('\n').find((l) => /Error/.test(l)) || 'a stack trace' : '');
@@ -232,14 +234,25 @@ test('a port another lab holds: a lab for another folder takes the next one, and
   await second.stop();
 });
 
-test('--port with something that is no port says so in a line, with no stack trace', async () => {
+// An empty --port is no port given (the default, 4400), not a wrong one: not tried here, it would start on 4400.
+const noPort = async (values) => {
   const bad = [];
-  for (const value of ['abc', '70000', '99999999', '1.5', '0x50', '']) {
+  for (const value of values) {
     const lab = await attempt(folder('badport'), ['.', '--port', value], { wait: 2500 });
     await lab.stop();
-    if (trace(lab.out())) bad.push(`--port ${JSON.stringify(value)}: ${trace(lab.out())}`);
+    const out = lab.out();
+    if (trace(out)) bad.push(`--port ${JSON.stringify(value)}: ${trace(out)}`);
+    if (!out.includes(`[lab] ${value} is not a port: give a number from 1 to 65535`)) bad.push(`--port ${JSON.stringify(value)}: no "is not a port" line in ${JSON.stringify(out.slice(0, 200))}`);
+    if (lab.code() !== 1) bad.push(`--port ${JSON.stringify(value)}: exit ${lab.code()}, not 1`);
   }
-  assert.deepEqual(bad, []);
+  return bad;
+};
+test('--port with something that is no port says so in a line, with no stack trace', async () => {
+  assert.deepEqual(await noPort(['abc', '70000', '99999999', '1.5']), []);
+});
+// Number() reads 0x50 as 80, so the lab tries port 80 instead of saying it is no port.
+test('--port in hex is no port either', { todo: 'local.mjs reads --port 0x50 as port 80' }, async () => {
+  assert.deepEqual(await noPort(['0x50']), []);
 });
 
 const BROKEN_TYPES = { port: 'abc', open: 'yes', batchSeconds: -1, stopListeningAfterMinutes: 'x', remindAfterMinutes: null, archiveAfterDays: 0, updateCheck: 'no', name: 5, model: {}, pagesFolder: [], shortcuts: ['m'], flags: 'on', actions: { name: 'x' }, wifi: 'yes', nope: 1, proxy: '3000', folder: 'x' };

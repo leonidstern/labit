@@ -58,7 +58,7 @@ const alive = (pid) => {
     return false;
   }
 };
-const update = (cwd, e) => new Promise((resolve) => execFile(process.execPath, [LAB, 'update'], { cwd, env: e }, (err, stdout, stderr) => resolve({ code: err?.code ?? 0, text: stdout + stderr })));
+const update = (cwd, e) => new Promise((resolve) => execFile(process.execPath, [LAB, 'update'], { cwd, env: e }, (err, stdout, stderr) => resolve({ code: err ? (Number.isInteger(err.code) ? err.code : 1) : 0, text: stdout + stderr })));
 after(() => {
   for (const s of [server, server2])
     try {

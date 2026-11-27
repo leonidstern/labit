@@ -43,7 +43,7 @@ export const spawnLab = (dir, port, { flags = [], args = [], ...opts } = {}) =>
   spawn(process.execPath, [LAB, '.', '--no-open', ...flags, '--port', String(port), ...args], { cwd: dir, ...opts });
 
 /** Ends a lab and waits until it has exited (it writes to .lab on its way out). */
-export const stop = (lab) => new Promise((r) => (lab.exitCode !== null ? r() : (lab.once('exit', r), lab.kill())));
+export const stop = (lab) => new Promise((r) => (lab.exitCode !== null || lab.signalCode !== null ? r() : (lab.once('exit', r), lab.kill())));
 
 /**
  * Waits until `url` answers and gives the answer: `tries` times, 100 ms apart. When it never does, `fail` says what
@@ -64,9 +64,10 @@ export const up = async (url, { tries = 80, fail = 'lab did not start' } = {}) =
 /** A lab's .lab/server.json: port, pid, token (the person's key), agent (the agent's key). */
 export const serverJson = (dir) => JSON.parse(fs.readFileSync(path.join(dir, '.lab/server.json'), 'utf8'));
 
-/** A labit command in a folder, run to its end: its exit code and everything it printed. */
+/** A labit command in a folder, run to its end: its exit code (1 when a signal ended it, never 0) and everything it
+    printed. */
 export const cli = (args, opts = {}, lab = LAB) =>
-  new Promise((resolve) => execFile(process.execPath, [lab, ...args], opts, (err, stdout, stderr) => resolve({ code: err?.code ?? 0, out: stdout + stderr })));
+  new Promise((resolve) => execFile(process.execPath, [lab, ...args], opts, (err, stdout, stderr) => resolve({ code: err ? (Number.isInteger(err.code) ? err.code : 1) : 0, out: stdout + stderr })));
 
 /** call(path, body, who, signal): a POST to the lab as the agent, signed with its key (key() reads it), from session `who`. */
 export const agentCall = (port, key) => (p, body, who, signal) =>
@@ -86,6 +87,19 @@ export const H1 = { selector: 'h1', x: 0.1, y: 0.5, docX: 0.1, docY: 20, width: 
 /** post(text, page): Leo's pin on a page's h1. */
 export const pinPost = (B) => (text, page = '/index') =>
   fetch(B + '/_lab/api/comments', { method: 'POST', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ page, name: 'Leo', text, anchor: H1 }) }).then((r) => r.json());
+
+/** A live stream's events, whole: give each read (text or bytes) to the function this returns, and on(data) gets the
+    text of every complete `data:` line. A read can end inside a line: the rest waits for the next read. */
+export const sseReader = (on) => {
+  const dec = new TextDecoder();
+  let rest = '';
+  return (chunk) => {
+    rest += typeof chunk === 'string' ? chunk : dec.decode(chunk, { stream: true });
+    const lines = rest.split('\n');
+    rest = lines.pop();
+    for (const l of lines) if (l.startsWith('data: ')) on(l.slice(6).replace(/\r$/, ''));
+  };
+};
 
 /** A page held open (tab t1): its live stream, read and thrown away. destroy() closes the page. */
 export const openTab = (port) => http.get({ host: '127.0.0.1', port, path: '/_lab/live?tab=t1', headers: { host: `localhost:${port}` } }, (r) => r.resume());

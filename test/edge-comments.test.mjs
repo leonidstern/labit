@@ -22,6 +22,7 @@ const raw = (port, p, { method = 'GET', headers = {}, body, host } = {}) =>
     const req = http.request({ host: '127.0.0.1', port, path: p, method, headers: { host: host ?? `localhost:${port}`, ...headers } }, (res) => {
       const parts = [];
       res.on('data', (d) => parts.push(d));
+      res.on('error', (e) => done({ status: 0, text: String(e), json: null, headers: {} })); // cut after the headers
       res.on('end', () => {
         const text = Buffer.concat(parts).toString();
         let json = null;
@@ -50,6 +51,7 @@ const DIR = tmp('comments');
 after(async () => {
   for (const l of labs) await l.stop();
   fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
+  fs.rmSync(ENV.LABIT_HOME, { recursive: true, force: true, maxRetries: 5 });
 });
 for (const n of ['index', 'other', 'gone']) fs.writeFileSync(path.join(DIR, `${n}.html`), `<!doctype html><title>${n}</title><h1>${n}</h1>`);
 const PORT = await freePort();
@@ -134,7 +136,7 @@ test('missing or wrong-typed fields are the sender\'s mistake (400), never a 500
     { anchor: { selector: 'h1', zw: 0.5, zh: 0.5, ink: { mark: 9, pts: [[1e99, -5, 'x', null, {}], 'line', null, [1, 2]] }, zoneItems: [1, null, {}, 'ok'], quote: { exact: 5 }, moment: { kind: 'loop', at: 'x' } } },
     { anchor: { selector: 'h1', quote: { exact: 'w', prefix: 5, suffix: {}, selected: 'yes', tail: [], line: {}, lineNo: 'x' } } },
     { parent: {} }, { parent: 123 }, { parent: ['x'] }, { nonce: 5 }, { nonce: {} }, { to: {} }, { picked: 'x' }, { choices: 'x', recommend: 'y' }, { intent: {} }, { suggest: [] }, { action: 'nuke' }, { action: 5 }, { id: {} },
-    { __proto__: null, constructor: 'x' },
+    JSON.parse('{"__proto__":null,"constructor":"x"}'), // an own __proto__ field: { __proto__: null } only sets the prototype
   ];
   for (const more of odd) {
     const r = await send({ page: '/index', name: 'A', text: 'odd fields', ...more });
@@ -273,6 +275,7 @@ test('the same action twice: resolve and reopen hold, a second delete is 404, an
   assert.deepEqual([(await act('resolve')).status, (await act('resolve')).status], [200, 200]);
   assert.equal((await list('/index')).find((c) => c.id === comment.id).resolved, true);
   assert.deepEqual([(await act('reopen')).status, (await act('reopen')).status], [200, 200]);
+  assert.ok(!(await list('/index')).find((c) => c.id === comment.id).resolved, 'open again after the two reopens');
   const reply = (await send({ page: '/index', parent: comment.id, name: 'Bo', text: 'a reply' })).json.comment;
   assert.deepEqual([(await act('delete')).status, (await act('delete')).status], [200, 404]);
   assert.equal((await act('resolve')).status, 404);

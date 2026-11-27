@@ -164,12 +164,13 @@ const PLANNERS = {
     P.width = 1000;
     P.phone = r.bool(0.5); // the second device: a phone, or another window of this computer
     const site = makeSite(makeRng(P.seed), P.site);
-    const tgOn = (key) => r.pick([...site.targets.values()].filter((t) => t.page.key === key));
+    const targetsOn = (key) => [...site.targets.values()].filter((t) => t.page.key === key);
     const ops = P.ops;
     let n = 0;
     const err = (d, how = r.weighted([[4, 'throw'], [2, 'reject'], [2, 'img'], [1, 'fetch']])) => ({ t: 'err', d, how, tok: `ce${++n}${r.id(4)}` });
     const read = { t: 'read' };
-    const pin = (d, key) => pinOp(r, tgOn(key), d, ops.length + n, { via: d === 1 && P.phone ? 'hold' : 'click' });
+    // A page of lists with no marked item has nothing to pin: that pin step is a read instead.
+    const pin = (d, key) => (targetsOn(key).length ? pinOp(r, r.pick(targetsOn(key)), d, ops.length + n, { via: d === 1 && P.phone ? 'hold' : 'click' }) : read);
     ops.push({ t: 'open', d: 0, page: '/index' });
     let d1 = null; // where the second device is
     const open1 = (key) => (d1 === key ? [] : ((d1 = key), [{ t: 'open', d: 1, page: key }]));
@@ -762,8 +763,11 @@ export async function run(plan, ctx, opts) {
     return ok;
   };
   const events = []; // { at, what: 'load' | 'fetch' | 'patch' | 'report', key, d }
+  // A page load: to `url`, or (url null) the reload of the page it is on. One navigation either way: a second one after a
+  // reload could clear what the reload left.
   const load = async (d, url) => {
-    await d.page.goto(d.base + url, { waitUntil: 'load', timeout: 30000 }).catch((e) => note(`${d.id}: ${String(e).split('\n')[0].slice(0, 140)}`));
+    const go = url === null ? d.page.reload({ waitUntil: 'load', timeout: 30000 }) : d.page.goto(d.base + url, { waitUntil: 'load', timeout: 30000 });
+    await go.catch((e) => note(`${d.id}: ${String(e).split('\n')[0].slice(0, 140)}`));
     await ready(d);
     d.key = keyOfPath(new URL(d.page.url()).pathname);
     d.loadAt = Date.now();
@@ -1127,6 +1131,7 @@ export async function run(plan, ctx, opts) {
         if (!src && S.file === 'if-said') {
           // (Next draws these on the server: nothing says a pin can name their source. What it does say must be right.)
         } else if (!src) no('source-missing', `no "written at" line for an element ${fw} drew from ${k.file}:${k.lines[0]}${pin.tg.markup ? ` (${pin.tg.markup} markup)` : ''}`, pin.tg.markup ? { markup: pin.tg.markup } : {});
+        else if (!m) no('source-malformed', `written at: ${JSON.stringify(src.slice(0, 160))} is no file, line and column`, {});
         else if (m[1] !== k.file) no('source-names-another-file', `written at: ${src}; the element is written in ${k.file}`, { names: /\.next\/|node_modules|\/chunks\//.test(src) ? 'a-built-file' : 'another-source-file' });
         else if (unlocated) unclear('source-line-not-located', `written at: ${src}; the element is static markup, on line ${k.lines[0]} of ${k.file}: the file is named and the line said to be unknown (not checkable against the file)`, { markup: 'static' });
         else if (S.line && !asServed) {
@@ -1164,7 +1169,8 @@ export async function run(plan, ctx, opts) {
         const c = truth.find((x) => x.id === p.id);
         if (!c || p.state !== 'intact') continue;
         const tags = { device: d.kind, shape: p.tg?.shape || 'route', made: p.d === d.n ? 'here' : 'on-the-other-device' };
-        const pin = i.pins.find((x) => x.label.startsWith(`comment ${c.num ?? '?'} by `) || x.label.startsWith(`comment ${truth.indexOf(c) + 1} by `));
+        // Its own number; the place in the list only when it has none (pin 3 must not stand in for a missing pin 4).
+        const pin = i.pins.find((x) => x.label.startsWith(`comment ${c.num ?? truth.indexOf(c) + 1} by `));
         const r = i.rects[p.E.dt || p.t];
         const isMoved = (pin && /\bmoved\b/.test(pin.cls)) || (!pin && i.moved);
         if (isMoved || !pin) bad.push([isMoved ? 'pin-shown-as-moved-on-an-unchanged-page' : 'pin-not-drawn', `${d.id} (${d.kind}, ${when}): pin ${p.id} (step ${p.op}, ${p.via} on <${p.E.tag}>, ${p.tg?.shape || 'route'}) ${isMoved ? `is listed as moved ("${i.moved}")` : `is not drawn (pins: ${i.pins.map((x) => x.label).join(' | ') || 'none'})`}; its element is on the page as it was`, tags, 'silent']);
@@ -1222,7 +1228,8 @@ export async function run(plan, ctx, opts) {
           const strip = (c) => c && JSON.stringify({ ...c, key: undefined });
           if (strip(kept) !== strip(live)) push('silent', 'files-differ-from-the-lab', `pin ${pin.id}: .lab/comments/${storeName(key)} holds ${kept ? 'another record than the lab gives' : 'no such comment'} (${JSON.stringify(kept?.anchor)?.slice(0, 160)} / ${JSON.stringify(live?.anchor)?.slice(0, 160)})`, {});
           const inMd = [b.title, ...b.lines].join('\n');
-          if (md && !md.includes(inMd)) push('silent', 'comments-md-differs-from-the-agent-text', `pin ${pin.id}: .lab/comments.md does not hold its block as /_lab/agent${key} gives it (first line that is not there: ${JSON.stringify([b.title, ...b.lines].find((l) => !md.includes(l)) || '(the lines are there, apart)')})`, { what: `a-pin's-${(startOf([b.title, ...b.lines].find((l) => !md.includes(l)) || '') || 'block').replace(/\s+/g, '-')}-line` });
+          // (A missing or empty comments.md holds no block either: that is the same finding.)
+          if (!md.includes(inMd)) push('silent', 'comments-md-differs-from-the-agent-text', `pin ${pin.id}: .lab/comments.md ${md ? 'does not hold' : 'is missing or empty, so it lacks'} its block as /_lab/agent${key} gives it (first line that is not there: ${JSON.stringify([b.title, ...b.lines].find((l) => !md.includes(l)) || '(the lines are there, apart)')})`, { what: `a-pin's-${(startOf([b.title, ...b.lines].find((l) => !md.includes(l)) || '') || 'block').replace(/\s+/g, '-')}-line` });
         }
         // Errors: every line known by its word.
         const has = (x, tok) => new RegExp(`${tok}(?![0-9a-z])`).test(x); // (…n1 is not …n10)
@@ -1308,7 +1315,9 @@ export async function run(plan, ctx, opts) {
         const elsewhere = A.pins.filter((x) => x !== b).some((x) => x.lines.some((l) => l.includes(m.word))) || A.head.some((l) => l.includes(m.word));
         if (elsewhere) push('silent', 'agent-text-field-broke-out', `the word ${m.word} (${m.field} of pin ${pin.id}) stands outside its pin's block in /_lab/agent${key}`, { field: m.field });
         if (m.line === null || m.dropped) {
-          if (lines.length && m.field === 'junk') push('silent', 'unknown-anchor-field-kept', `pin ${pin.id}: a field the lab does not know reached the agent's text: ${lines[0].slice(0, 120)}`, {});
+          // A word of the spot before a move must be gone from the block, not only from other pins' blocks.
+          if (lines.length && m.was) push('silent', 'old-spot-kept-after-a-move', `pin ${pin.id}: the word ${m.word} of its ${m.field} is still in its block after the move: ${JSON.stringify(lines[0].slice(0, 120))}`, { field: m.field.replace(/ \(before the move\)$/, '') });
+          else if (lines.length && m.field === 'junk') push('silent', 'unknown-anchor-field-kept', `pin ${pin.id}: a field the lab does not know reached the agent's text: ${lines[0].slice(0, 120)}`, {});
           continue;
         }
         // (A "spot changed" line names the pin's section too.)
@@ -1344,8 +1353,7 @@ export async function run(plan, ctx, opts) {
       else if (d.real && d.key !== key) await load(d, pages.get(key).url);
     } else if (op.t === 'goto' || op.t === 'reload') {
       if (!d?.opened || !d.real) return;
-      if (op.t === 'reload') await d.page.reload({ waitUntil: 'load', timeout: 30000 }).catch(() => {});
-      await load(d, op.t === 'reload' ? new URL(d.page.url()).pathname : pages.get(keyOfName(op.page)).url);
+      await load(d, op.t === 'reload' ? null : pages.get(keyOfName(op.page)).url);
       d.clientNav = false;
     } else if (op.t === 'nav') {
       if (!d?.opened || !fwp.routes[op.to]) return;

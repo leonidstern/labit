@@ -111,7 +111,7 @@ test('the experiments switch: owner only, saved in your settings, on the page an
 });
 
 test('`labit settings` names the flags that are on', async () => {
-  const cli = (cwd, cfg) => new Promise((resolve) => execFile(process.execPath, [LAB, 'settings'], { cwd, env: { ...process.env, PORT: '', XDG_CONFIG_HOME: cfg } }, (err, out) => resolve({ code: err?.code ?? 0, out })));
+  const cli = (cwd, cfg) => new Promise((resolve) => execFile(process.execPath, [LAB, 'settings'], { cwd, env: { ...process.env, PORT: '', XDG_CONFIG_HOME: cfg } }, (err, out) => resolve({ code: err ? (Number.isInteger(err.code) ? err.code : 1) : 0, out })));
   const dir = tmp();
   const cfg = tmp();
   assert.match((await cli(dir, cfg)).out, /^flags\s+none on\s+default$/m);

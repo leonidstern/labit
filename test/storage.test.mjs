@@ -85,7 +85,7 @@ test('a lab with the old comments.json is not started over it: it says how to mo
   fs.mkdirSync(path.join(dir, '.lab'));
   fs.writeFileSync(path.join(dir, '.lab/comments.json'), '{}');
   const port = String(nextPort());
-  const out = await new Promise((resolve) => execFile(process.execPath, [LAB, '.', '--no-open', '--port', port], { cwd: dir, env: { ...process.env, PORT: port } }, (err, o, e) => resolve({ code: err?.code ?? 0, text: o + e })));
+  const out = await new Promise((resolve) => execFile(process.execPath, [LAB, '.', '--no-open', '--port', port], { cwd: dir, env: { ...process.env, PORT: port } }, (err, o, e) => resolve({ code: err ? (Number.isInteger(err.code) ? err.code : 1) : 0, text: o + e })));
   assert.notEqual(out.code, 0);
   assert.match(out.text, /labit@0\.6\.2/);
   assert.ok(!fs.existsSync(path.join(dir, '.lab/comments')), 'nothing started beside it');
@@ -182,7 +182,7 @@ test("a page's comments follow its file when it is renamed or moved, while the l
   fs.writeFileSync(path.join(dir, 'pricing.html'), '<!doctype html><h1>Pricing</h1>');
   let lab = await start(dir);
   const { comment } = await lab.post({ page: '/pricing', name: 'Leo', text: 'cheaper', anchor });
-  await until(() => readJson(path.join(dir, '.lab/comments/pricing.json')).fid, 'the page file says which file it is');
+  await until(() => fs.existsSync(path.join(dir, '.lab/comments/pricing.json')) && readJson(path.join(dir, '.lab/comments/pricing.json')).fid, 'the page file says which file it is');
   assert.equal(readJson(path.join(dir, '.lab/comments/pricing.json')).file, 'pricing.html');
   await lab.stop();
   // Renamed while the lab is stopped.
@@ -369,7 +369,7 @@ test("a renamed page takes its board along (its of, the frames that are the page
   const { comment } = await lab.post({ page: '/pricing', name: 'Leo', text: 'tighter on the phone', anchor: { kind: 'board', board: 'pb', frame: 'b', fx: 10, fy: 20, bx: 10, by: 20, selector: '', x: 0, y: 0, docX: 0, docY: 0, width: 1000 } });
   await fetch(`${lab.B}/_lab/api/reads`, { method: 'POST', headers: own, body: JSON.stringify({ name: 'Leo', page: '/pricing', ids: [comment.id] }) });
   await lab.post({ page: '/pricing', name: 'Leo', text: 'warm', anchor }); // (the page's file must say which file it is)
-  await until(() => readJson(path.join(dir, '.lab/comments/pricing.json')).fid, 'the page file says which file it is');
+  await until(() => fs.existsSync(path.join(dir, '.lab/comments/pricing.json')) && readJson(path.join(dir, '.lab/comments/pricing.json')).fid, 'the page file says which file it is');
   await fetch(`${lab.B}/_lab/pages`).catch(() => {}); // opens the page list
   assert.equal((await board('pb')).home, '/pricing', 'the board lives on its page');
   fs.mkdirSync(path.join(dir, 'plans'));

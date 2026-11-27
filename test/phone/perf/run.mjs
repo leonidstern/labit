@@ -72,6 +72,8 @@ function measure(r) {
   }
   const rafs = r.frames.map((f) => f.raf);
   const gaps = [];
+  // From the dispatch to the first frame too, when no frame came before it (else that wait counts nowhere).
+  if (rafs.length && rafs[0] >= r.t0 && (last == null || rafs[0] <= last + 34)) gaps.push(rafs[0] - r.t0);
   for (let i = 1; i < rafs.length; i++) if (rafs[i] >= r.t0 && (last == null || rafs[i] <= last + 34)) gaps.push(rafs[i] - rafs[i - 1]);
   return {
     label: r.label + (r.label.endsWith(':open') || r.label.endsWith(':close') ? '' : opening ? ':open' : ':close'),

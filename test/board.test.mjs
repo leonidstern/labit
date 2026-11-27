@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import http from 'node:http';
-import { LAB, claimPort, tmp, rm, spawnLab, sleep, up as answers } from './harness.mjs';
+import { LAB, claimPort, tmp, rm, spawnLab, sleep, up as answers, sseReader } from './harness.mjs';
 
 const mk = (flags) => {
   const dir = fs.realpathSync(tmp('board'));
@@ -35,9 +35,7 @@ const live = (base) =>
     const req = http.get({ host: '127.0.0.1', port: u.port, path: u.pathname, headers: { host: u.host } }, (res) => {
       res.setEncoding('utf8');
       const seen = [];
-      res.on('data', (d) => {
-        for (const l of d.split('\n')) if (l.startsWith('data: ')) seen.push(JSON.parse(l.slice(6)));
-      });
+      res.on('data', sseReader((d) => seen.push(JSON.parse(d))));
       resolve({ seen, close: () => req.destroy() });
     });
   });

@@ -21,9 +21,9 @@ const wait = () =>
   });
 // A page is open while it holds the live stream.
 const openPage = (tab) =>
-  new Promise((resolve) => {
+  new Promise((resolve, reject) => {
     const req = http.get({ host: '127.0.0.1', port: PORT, path: '/_lab/live' + (tab ? `?tab=${tab}` : ''), headers: { host: `localhost:${PORT}` } }, (res) => resolve(() => res.destroy()));
-    req.on('error', () => {});
+    req.on('error', reject); // after the stream is open, a later error leaves resolve's result as it was
   });
 
 test('server starts', async () => {

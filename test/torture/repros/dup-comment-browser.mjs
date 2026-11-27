@@ -2,7 +2,8 @@
 // stream + /changes already brought the same comment (src/comments.js send() / src/widget/thread.ts onSubmit push it blindly).
 // One browser, one pin, one reply; the only "fault" is a delay on the POST's answer (DELAY ms, default 300; the lab
 // has already saved and broadcast by then). Usage: node dup-comment-browser.mjs [delayMs]   (ENGINES=chromium,webkit)
-// Prints PASS (no duplicate) or BUG per engine, with what the card, the lab and .lab hold; exits 0 either way.
+// Prints PASS (one reply everywhere), BUG (a duplicate) or ERROR (no reply made) per engine, with what the card, the lab
+// and .lab hold; exits 0 either way.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,6 +15,7 @@ const { playwright, engines, tmp, labEnv, startLab, labUp, sleep } = await impor
 const DELAY = Number(process.argv[2] ?? process.env.DELAY ?? 300);
 const pw = playwright();
 let bug = false;
+let error = false; // a reply that was never made: no verdict
 for (const eng of engines()) {
   // A lab of its own per engine: each starts with one pin and no replies.
   const dir = tmp('labit-dupcomment-');
@@ -41,7 +43,8 @@ for (const eng of engines()) {
     });
     const shadow = async (fn) => p.evaluate(([f]) => new Function('r', f)([...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim'))?.shadowRoot), [fn.toString().replace(/^[^{]*{|}$/g, '')]);
     const until = async (fn) => { for (let i = 0; i < 100; i++) { if (await shadow(fn).catch(() => false)) return; await sleep(100); } };
-    const open = async () => { await until(() => { return !!r && r.querySelectorAll('button.pin').length > 0; }); await shadow(() => { r.querySelector('button.pin').click(); }); await until(() => { return !!r.querySelector('.card textarea'); }); };
+    // (After a reload the widget opens the thread that was open again: a click then would close it.)
+    const open = async () => { await until(() => { return !!r && r.querySelectorAll('button.pin').length > 0; }); await sleep(300); await shadow(() => { if (!r.querySelector('.card textarea')) r.querySelector('button.pin').click(); }); await until(() => { return !!r.querySelector('.card textarea'); }); };
     const bubbles = () => shadow(() => { return [...r.querySelectorAll('.card .msg')].filter((m) => m.textContent.includes('hello twice')).length; });
     await p.goto(B + '/');
     await open();
@@ -56,10 +59,15 @@ for (const eng of engines()) {
     await p.unroute('**/_lab/api/comments');
     await p.reload();
     await open();
-    const after = await bubbles();
+    // The thread's messages can come a moment after its card opens.
+    let after = 0;
+    for (let i = 0; i < 30 && !after; i++) (after = await bubbles()) || (await sleep(100));
+    // PASS only for the one reply everywhere; a reply that never got made is no pass either, and no duplicate.
     const dup = shown > 1;
+    const missing = !dup && (shown !== 1 || stored !== 1 || after !== 1);
     bug ||= dup;
-    console.log(`${dup ? 'BUG ' : 'PASS'} ${eng} delay=${DELAY}ms: bubbles on screen ${shown}, lab holds ${stored}, .lab files hold ${onDisk}, bubbles after reload ${after}`);
+    error ||= missing;
+    console.log(`${dup ? 'BUG ' : missing ? 'ERROR (the reply did not get made: no verdict)' : 'PASS'} ${eng} delay=${DELAY}ms: bubbles on screen ${shown}, lab holds ${stored}, .lab files hold ${onDisk}, bubbles after reload ${after}`);
   } finally {
     await browser?.close();
     server.kill();
@@ -67,5 +75,5 @@ for (const eng of engines()) {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 }
-console.log(bug ? 'BUG' : 'PASS');
+console.log(bug ? 'BUG' : error ? 'ERROR' : 'PASS');
 process.exit(0);

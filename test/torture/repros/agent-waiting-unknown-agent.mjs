@@ -22,9 +22,13 @@ try {
   const r = await cli(['reply', comment.id, 'looking at it', '--on-it'], { cwd: DIR, env: { ...clean, LAB_AGENT: 'aider' } });
   await sleep(150);
   const after = await waiting();
-  const thread = (await fetch(`${B}/_lab/api/comments?page=/index`, { headers: { origin: B } }).then((x) => x.json())).comments.map((c) => `${c.parent ? 'reply' : 'pin'} by "${c.name}"${c.session ? ' (session)' : ''}`);
+  const all = (await fetch(`${B}/_lab/api/comments?page=/index`, { headers: { origin: B } }).then((x) => x.json())).comments;
+  const thread = all.map((c) => `${c.parent ? 'reply' : 'pin'} by "${c.name}"${c.session ? ' (session)' : ''}`);
   console.log(`reply exit ${r.code}; waiting before reply: ${before}, after the agent answered: ${after} (expected 0); ${thread.join(', ')}`);
-  console.log(after === 0 ? 'PASS' : 'BUG: an answered thread of an unlisted agent still counts as waiting');
+  // The verdict needs the agent's answer there, as the agent's (a session's): else the thread still waits for a reason.
+  const answer = all.find((c) => c.parent === comment.id && c.text === 'looking at it');
+  if (r.code !== 0 || !answer?.session) console.log(`ERROR: the agent's reply was not made as the agent's (exit ${r.code}, ${answer ? 'no session on it' : 'no reply'}): ${r.out.trim().slice(0, 200)}`);
+  else console.log(after === 0 ? 'PASS' : 'BUG: an answered thread of an unlisted agent still counts as waiting');
 } finally {
   await stop(lab);
   rm([DIR, HOME], { maxRetries: 5 });

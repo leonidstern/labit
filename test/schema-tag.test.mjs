@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import http from 'node:http';
-import { site, claimPort, tmp, rm, spawnLab, up as answers } from './harness.mjs';
+import { site, claimPort, tmp, rm, spawnLab, up as answers, sseReader } from './harness.mjs';
 import { VERSION } from '../lib/schema.mjs';
 
 const { DIR, PORT, B } = site('schema', 9200, 90);
@@ -28,12 +28,13 @@ procs.push(server, server2);
 after(() => { procs.forEach((p) => p.kill()); upstream.close(); rm([DIR]); });
 const up = async (base) => void (await answers(base + '/_lab/state'));
 const tagOf = (html) => [...html.matchAll(/<script\b[^>]*\/_lab\/comments\.js[^>]*>/g)].map((m) => m[0]);
-const sse = (base) => new Promise((resolve) => {
+const sse = (base) => new Promise((resolve, reject) => {
   const u = new URL(base + '/_lab/live');
   const req = http.get({ host: '127.0.0.1', port: u.port, path: u.pathname, headers: { host: u.host } }, (res) => {
     res.setEncoding('utf8');
-    res.once('data', (d) => { req.destroy(); resolve(JSON.parse(d.split('\n').find((l) => l.startsWith('data: ')).slice(6))); });
+    res.on('data', sseReader((d) => { req.destroy(); resolve(JSON.parse(d)); }));
   });
+  req.on('error', reject);
 });
 
 test('plain pages, nested pages, pages with their own tag, pages without body carry data-schema once', async () => {
@@ -60,8 +61,12 @@ test('state and stream carry the schema', async () => {
 });
 
 test('listing page', async () => {
-  const html = await (await fetch(B + '/sub/')).text().catch(() => '');
-  console.log('listing has widget tag:', /comments\.js/.test(html));
+  // A folder listing is the lab's own page: it lists the files and carries no widget, so no tag to mark.
+  const res = await fetch(B + '/sub/');
+  assert.equal(res.status, 200);
+  const html = await res.text();
+  assert.match(html, /a\.html|\/sub\/a/, 'the listing names the page in the folder');
+  assert.deepEqual(tagOf(html), []);
 });
 
 test('dev-server proxy', async () => {
