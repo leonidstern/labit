@@ -1415,7 +1415,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
         if (appear && !S.stepping) card.classList.add('in');
         // Reduced motion: the page's scroll to the pin is instant, so the card is drawn again within its fade: it keeps the fade (a fresh node has no class).
         if (appear) S.inAt = performance.now();
-        if (appear) noteOpened(c.id); // ⇧W walks back through these (list.ts)
+        if (appear) noteOpened(c.id); // ⌥W walks back through these (list.ts)
         else if (still.matches && performance.now() - S.inAt < 200) card.classList.add('in');
         if (prevHeight) card.style.minHeight = `min(${prevHeight}px, var(--_thread-max))`;
         S.stepping = S.keepKeys = false;
@@ -1787,27 +1787,28 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
     e.composedPath().some((n) => n instanceof HTMLElement && (n.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName)));
   const onDocKey = (e) => {
     const inOtherWidget = document.activeElement?.localName.includes('-') && document.activeElement !== host; // e.g. an input in a closed shadow root
-    if (actionOf(e) === 'toggle' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat && !typing(e) && !inOtherWidget) {
+    const bare = !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey; // no modifier held
+    if (actionOf(e) === 'toggle' && bare && !e.repeat && !typing(e) && !inOtherWidget) {
       e.preventDefault();
       setOn(!S.on);
       return;
     }
     // 1 to 6 answer an open question with that choice (thread.ts): before 1 is comment / pointer, which it keeps when no
     // question is open. Not while a text box has the focus.
-    if (S.on && !coarse && /^Digit[1-6]$/.test(e.code) && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.repeat && !typing(e) && !inOtherWidget && pickByKey(Number(e.code.slice(5)))) {
+    if (S.on && !coarse && /^Digit[1-6]$/.test(e.code) && bare && !e.repeat && !typing(e) && !inOtherWidget && pickByKey(Number(e.code.slice(5)))) {
       e.preventDefault();
       return;
     }
     // ArrowDown / ArrowUp move the ticked row of an open question (tried in the page like pointing), stopping at the ends;
     // the page does not scroll while they are taken. Same rules as Enter.
-    if (S.on && !coarse && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && !typing(e) && !inOtherWidget
+    if (S.on && !coarse && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && bare && !typing(e) && !inOtherWidget
       && moveTicked(e.key === 'ArrowDown' ? 1 : -1)) {
       e.preventDefault();
       return;
     }
     // Enter takes the agent's pick of an open question (the ticked row), the same path as a tap. Not in a text box, nor
     // on a button or link (Enter presses that), and only when a row is ticked.
-    if (S.on && !coarse && e.key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.repeat && !typing(e) && !inOtherWidget
+    if (S.on && !coarse && e.key === 'Enter' && bare && !e.repeat && !typing(e) && !inOtherWidget
       && !e.composedPath().some((n) => n instanceof HTMLElement && /^(BUTTON|A)$/.test(n.tagName)) && pickTicked()) {
       e.preventDefault();
       return;
@@ -1817,37 +1818,39 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
       e.preventDefault();
       return void undoLast();
     }
-    // ⌥W (Leo 18 Nov: w does nothing in a text box) or Control-D goes to the next new comment from the widget's text boxes
-    // too, where a plain W types a letter; Shift: back through the ones read. By the key's place: Option turns W into ∑ on a Mac.
-    const nextKey = (e.altKey && !e.ctrlKey && e.code === 'KeyW') || (e.ctrlKey && !e.altKey && e.code === 'KeyD');
-    if (S.on && nextKey && !e.metaKey && !(typing(e) && !e.composedPath().includes(host))) {
+    // ⌥W (Leo, 27 Nov) goes back to the comment read before; Control-D goes to the next new one. Both work from the
+    // widget's own text boxes too, where a plain W types a letter (Leo 18 Nov), and type nothing there. ⌥W is the next
+    // key's place with Option (actionOf: Option turns W into ∑ on a Mac, so the key's place, not its letter). Shift stays
+    // free: it selects text.
+    const backKey = e.altKey && !e.ctrlKey && actionOf(e) === 'next';
+    if (S.on && (backKey || (e.ctrlKey && !e.altKey && e.code === 'KeyD')) && !e.metaKey && !e.shiftKey && !(typing(e) && !e.composedPath().includes(host))) {
       e.preventDefault();
       // Words typed in a reply box aren't thrown away: it nudges instead, send or clear them first.
       const typed = /** @type {HTMLTextAreaElement | null} */ (root.querySelector('.card textarea, .float textarea'));
       if (typed?.value.trim()) return shake(typed.closest('.card, .float'));
-      return e.shiftKey ? stepBack() : stepNew(1);
+      return backKey ? stepBack() : stepNew(1);
     }
     const act = actionOf(e);
     // The list's keys, with comments shown and nothing typed: L list, T chat, J/K next/previous, R reply, E resolve.
     // By the key's place, not its letter, so the keys work with any layout (Russian, Greek…): the C key is C (keyOf).
-    // The keys (Leo, 2026-11-15/16), marked in the bar's words: cha(t) (C was chat until 19 Nov), ne(w) (Shift-W: back to the one read before),
+    // The keys (Leo, 2026-11-15/16), marked in the bar's words: cha(t) (C was chat until 19 Nov), ne(w) (⌥W: back to the one read before, above),
     // P pause, M hide, E show/hide done. With a thread open: R reply, E resolve (done's own key).
-    // Shift is only for next (Shift-W: back through the ones read); ⇧D, ⇧B and the rest belong to the board.
+    // Shift takes none of these (it selects text): ⇧D draws straight, ⇧B and the rest belong to the board.
     // H folds the bar into the rabbit or opens it (Leo, 26 Nov). Computers only.
     // C and V (Leo, 26 Nov): the pin (comment on links and buttons too) or the arrow (use the page), as in the bar, with
     // comments shown. Computers only.
-    if (!coarse && !typing(e) && !inOtherWidget && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.repeat && (act === 'fold' || (S.on && act.endsWith('Tool')))) {
+    if (!coarse && !typing(e) && !inOtherWidget && bare && !e.repeat && (act === 'fold' || (S.on && act.endsWith('Tool')))) {
       e.preventDefault();
       return act === 'fold' ? setFolded(!host.hasAttribute('data-folded')) : setMode(act === 'arrowTool' ? 'use' : 'comment');
     }
-    if (S.on && !typing(e) && !inOtherWidget && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat && ['pause', 'slow', 'chat', 'next', 'draw', 'done', 'reply', 'walkie'].includes(act) && (act === 'next' || act === 'draw' || !e.shiftKey)) { // ⇧D draws too: Shift straightens (below)
+    if (S.on && !typing(e) && !inOtherWidget && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat && ['pause', 'slow', 'chat', 'next', 'draw', 'done', 'reply', 'walkie'].includes(act) && (act === 'draw' || !e.shiftKey)) { // ⇧D draws too: Shift straightens (below)
       const k = act;
       e.preventDefault();
       if (k === 'pause') return void loadMotion().then((m) => m?.setPause(!S.paused));
       if (k === 'slow') return void loadMotion().then((m) => m?.setSlow(!S.slow));
       if (k === 'chat') return chatBtn.click();
       if (k === 'walkie') return walkieBtn.hidden || S.openId || S.draft || walkieBtn.click(); // not over an open card: its keys stay its own
-      if (k === 'next') return e.shiftKey ? stepBack() : stepNew(1);
+      if (k === 'next') return stepNew(1);
       if (k === 'draw') return void ((S.dKey = true), (S.drew = false), part('draw')); // held, D draws (draw.ts); ⇧D tapped alone stays the board's
       // E (Leo, 21 Nov: "another key its clashing now with draw, move to E"): done threads show or hide; with a thread open it is its resolve (the same key, the thread open first).
       if (k === 'done' && !S.openId) return toggleDone();
