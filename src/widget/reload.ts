@@ -8,6 +8,9 @@ export function reloader({ W, reload, loaded, samePath, idOf, selDirty, board, s
   // moves or closes. The saved file's own <link>s, or every same-site one when it's pulled in another way (@import).
   let swapN = 0;
   const swapCss = (files) => {
+    // A saved stylesheet this page never loaded (another page's) leaves it alone: it used to swap every sheet here, taking
+    // it for an @import. One pulled in by @import is in the page's list of what it loaded too (live.ts loaded).
+    if (files.length && !files.some((f) => loaded(f))) return;
     if (restyled) return reload(); // a sheet loaded again would bring the old picture's address back
     // A clone still loading from an earlier save is skipped (its original is swapped instead) and dropped once a newer one is in.
     const links = [...(document.querySelectorAll('link[rel~="stylesheet"][href]:not([data-lab-swap])') as NodeListOf<HTMLLinkElement>)].filter((l) => new URL(l.href, location.href).origin === location.origin);
@@ -24,11 +27,21 @@ export function reloader({ W, reload, loaded, samePath, idOf, selDirty, board, s
       next.dataset.labSwap = '' + n; // newer saves have higher numbers: a clone never removes one newer than itself
       const path = url.pathname;
       // The old one goes a frame after the new one has loaded, not in the same task: livereload-js waits a few ms there in WebKit.
-      next.addEventListener('load', () => requestAnimationFrame(() => {
-        if (!next.isConnected) return; // another clone of the same file took it out first
-        for (const l of (document.querySelectorAll('link[rel~="stylesheet"][href]') as NodeListOf<HTMLLinkElement>)) if (l !== next && !(+l.dataset.labSwap! > n) && new URL(l.href, location.href).pathname === path) l.remove();
-        delete next.dataset.labSwap;
-      }), { once: true });
+      // It loads switched off (media "not all": fetched, not applied) and is switched on once loaded, with the pins placed
+      // again in that frame: Chrome applied a loaded sheet and drew the page before its load event ran, so a layout it
+      // moved showed the pins off their spots for a frame or two (488 px for ~28 ms, 27 Nov).
+      const media = link.getAttribute('media');
+      next.media = 'not all';
+      next.addEventListener('load', () => {
+        if (media) next.media = media;
+        else next.removeAttribute('media');
+        requestAnimationFrame(() => {
+          if (!next.isConnected) return; // another clone of the same file took it out first
+          for (const l of (document.querySelectorAll('link[rel~="stylesheet"][href]') as NodeListOf<HTMLLinkElement>)) if (l !== next && !(+l.dataset.labSwap! > n) && new URL(l.href, location.href).pathname === path) l.remove();
+          delete next.dataset.labSwap;
+        });
+        W.reflow();
+      }, { once: true });
       next.addEventListener('error', () => next.remove(), { once: true });
       link.after(next);
     }

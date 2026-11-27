@@ -1570,8 +1570,9 @@ const fileSaved = (file) => {
     else version = { ...version, files: version.files + 1, changed, ...(hot.length ? { hot: (version.hot || 0) + 1, hotFiles: hot } : {}) };
     broadcast();
     // While the agent works it often saves several files for one fix: wait for 400 ms of quiet so the page updates
-    // once. A person saving by hand gets it after 80 ms.
-  }, mode === 'working' ? 400 : 80);
+    // once. A person saving by hand gets it after 30 ms: an editor's own writes (a temporary copy, then the file) come
+    // within a few ms of each other, and its temporary files are left out (EDITOR_TEMP).
+  }, mode === 'working' ? 400 : 30);
 };
 if (!PROXY) linksOf();
 if (!PROXY) watchTree(ROOT, (event, file) => {
