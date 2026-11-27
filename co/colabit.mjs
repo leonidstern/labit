@@ -9,8 +9,9 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const here = path.dirname(new URL(import.meta.url).pathname);
+const here = path.dirname(fileURLToPath(import.meta.url)); // a folder with spaces in its name too
 const file = path.join(here, 'vercel.json');
 const deploy = process.argv.includes('--deploy') || process.argv[2] === 'deploy';
 const NAME = /^[a-z0-9][a-z0-9-]{0,29}$/; // the first part of a page's path, as the comments API takes it

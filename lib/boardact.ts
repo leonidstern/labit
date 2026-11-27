@@ -3,12 +3,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { imageInfo, MAX_IMAGE } from './images.mjs';
-import { MAX_FRAMES, NAME, addImage, counted, heightFor, insert, nextId, labPath, names, nameOf, one, read, save, frameFile, writeAtomic, type Board, type Frame } from './board.ts';
+import { MAX_FRAMES, NAME, addImage, check, counted, heightFor, insert, nextId, labPath, names, nameOf, one, read, save, frameFile, writeAtomic, type Board, type Frame } from './board.ts';
 
 export const MAX_VARIANTS = 6;
 /** The query parameter that tells a live page which variant it is drawing (boards of a page that cannot be copied). */
 export const VARIANT = 'lab-variant';
-const live = (f: Frame) => f.src.includes(`?${VARIANT}=`);
+const live = (f: Frame) => new RegExp(`[?&]${VARIANT}=`).test(f.src);
 const LIVE_SAID = `Each variant frame is the live page with ?${VARIANT}=<frame>; branch on new URLSearchParams(location.search).get('${VARIANT}') in the page's source (frame a is the page as it is: leave it). Remove the branching when one is picked.`;
 /** The text a person gave, as a board name: "Pricing hero" is pricing-hero. */
 export const slug = (t: string) => dashed(t).slice(0, 60) || 'board';
@@ -115,7 +115,7 @@ export function act(action: string, a: Ask, e: Env): Done {
       if (e.proxied || !/\.html?$/i.test(rel!)) {
         // Behind a dev server (or a page that is no plain .html file) it cannot be copied: each variant is the live page
         // itself with ?lab-variant=<frame>, and the page's own source branches on it.
-        for (let i = 0; i < n; i++) add({ src: `${page}?${VARIANT}=${nextId(b.frames)}`, w: 1280 });
+        for (let i = 0; i < n; i++) add({ src: `${page}${page.includes('?') ? '&' : '?'}${VARIANT}=${nextId(b.frames)}`, w: 1280 });
       } else {
         const html = fs.readFileSync(path.join(e.root, rel!), 'utf8');
         for (let i = 0; i < n; i++) {
@@ -133,6 +133,9 @@ export function act(action: string, a: Ask, e: Env): Done {
       if (!pages.length || pages.length > MAX_FRAMES || pages.some((p) => !labPath(p))) return no('--flow takes pages of this lab in order: --flow /cart,/checkout,/thanks');
       pages.forEach((p, i) => add({ src: p, w: 1280, label: `${i + 1} ${e.titleOf(p) || p.slice(1) || 'home'}` }));
     } // else it starts empty: the person or agent adds what goes on it (Leo, 24 Nov: a new board "should be empty").
+    // Saved only as the reader takes it (a board it would put aside as damaged is never written).
+    const bad = check({ ...b, rev: 1 }, into);
+    if (typeof bad === 'string') return no(`Not saved: ${bad}.`);
     save(e.root, { ...b, rev: 1 });
     const done = read(e.root, into)!;
     return { text: view(done, page ? e.fileOf(page) : null), board: done };
@@ -140,6 +143,9 @@ export function act(action: string, a: Ask, e: Env): Done {
   const b = a.name ? read(e.root, a.name) : null;
   if (!b) return no(a.name ? `No board ${a.name}. See: labit board list` : 'Name the board first: labit board <new|add|move|pick> <board> …');
   const done = (t: string, extra: Partial<Done> = {}): Done => {
+    // Saved only as the reader takes it: no more than MAX_FRAMES counted, no page of the lab's own (/_lab/…).
+    const bad = check(b, b.name, read(e.root, b.name));
+    if (typeof bad === 'string') return no(`Not saved: ${bad}.`);
     b.rev++;
     save(e.root, b);
     return { text: t, board: b, ...extra };
@@ -181,7 +187,7 @@ export function act(action: string, a: Ask, e: Env): Done {
     const bytes = isFile && size <= MAX_IMAGE ? fs.readFileSync(file) : null;
     const pic = bytes && imageInfo(bytes);
     if (bytes && pic) {
-      const added = addImage(e.root, b, bytes, pic, undefined, { label: a.label, after: a.after });
+      const added = addImage(e.root, b, bytes, pic, undefined, { label: a.label, after: a.after, width: w });
       return 'error' in added ? no(added.error) : { text: `Added ${added.frame.id} (${shown(b, added.frame)})${a.after ? ` after ${a.after}` : ''}.`, board: b };
     }
     if (labPath(t) && !isFile) f.src = t;

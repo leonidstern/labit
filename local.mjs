@@ -102,6 +102,11 @@ const die = (msg) => {
 if (unknownFlags.length) die(`Unknown option ${unknownFlags[0]}. See: ${CMD} --help`);
 if (windowsPagePath(opts)) die(/** @type {string} */ (windowsPagePath(opts)));
 
+// The lab's own files it reads at the start (the tab icon, lab.css): read before a takeover, so a build missing one stops
+// here and the lab it would replace keeps running.
+const FAVICON = fs.readFileSync(path.join(REPO, 'public/_lab/favicon.svg'), 'utf8');
+const LAB_CSS = (fs.existsSync(path.join(REPO, 'public/_lab/lab.css')) ? fs.readFileSync(path.join(REPO, 'public/_lab/lab.css')) : brotliDecompressSync(fs.readFileSync(path.join(REPO, 'public/_lab/lab.css.br')))).toString(); // the npm package has it packed
+
 // A lab moving onto a newer build starts this one in its place: say it loaded (it parsed, its imports resolved), then
 // wait for that lab to be gone, so its folder and port are free. A build that can't load never says so: the lab stays.
 if (process.env.LABIT_TAKEOVER) {
@@ -192,7 +197,7 @@ if (pos[0] && !fs.existsSync(pos[0])) die(`No folder ${pos[0]}. Run ${CMD} in yo
 // PORT or labit.json: each is said in a line. They were Node's own errors, with a stack trace.
 if (pos[0] && !fs.statSync(pos[0]).isDirectory()) die(`${pos[0]} is a file, not a folder. Run ${CMD} in your project, or name a folder (see --help)`);
 const askedPort = Number(opts.port || process.env.PORT || 4400);
-if (!Number.isInteger(askedPort) || askedPort < 0 || askedPort > 65535) die(`[lab] ${opts.port || process.env.PORT} is not a port: give a number from 1 to 65535 (--port, PORT, or "port" in labit.json)`);
+if (!Number.isInteger(askedPort) || askedPort < 1 || askedPort > 65535) die(`[lab] ${opts.port || process.env.PORT} is not a port: give a number from 1 to 65535 (--port, PORT, or "port" in labit.json)`);
 const proxyUrl = (p) => (/^\d+$/.test(p) ? `http://localhost:${p}` : p);
 if (typeof opts.proxy === 'string' && opts.proxy && !URL.canParse(proxyUrl(opts.proxy))) die(`[lab] ${opts.proxy} is not a dev server's address: give its port (--proxy 3000) or its URL (--proxy http://localhost:3000)`);
 const ROOT = fs.realpathSync(path.resolve(pos[0] || '.'));
@@ -410,7 +415,12 @@ for (let tries = 0; !takeLock(); tries++) {
   const stale = !held ? age > 5000 : !Number.isInteger(held.pid) || !alive(held.pid) || (Date.now() - (Number(held.at) || 0) > 60000 && tries >= 2);
   if (stale && JSON.stringify(readLock()) === JSON.stringify(held)) {
     fs.rmSync(LOCK, { force: true });
-    if (takeLock()) break;
+    // Two labs taking over the same stale lock at once: the later one's remove can take away the lock the other just
+    // made. A moment later the one whose pid the lock holds has it; the other waits like any lab starting second.
+    if (takeLock()) {
+      await new Promise((r) => setTimeout(r, 200));
+      if (readLock()?.pid === process.pid) break;
+    }
   }
   if (tries >= 40) die(`[lab] another lab is starting for this folder (pid ${held?.pid}) and hasn't answered. If it hangs, stop it, or delete ${LOCK}.`);
   await new Promise((r) => setTimeout(r, 250)); // another lab is starting here: it will answer in a moment
@@ -731,6 +741,8 @@ function rehome() {
       for (const [id, c] of db.get(`lab:comments:${page}`)) there.set(id, c);
       db.set(`lab:comments:${to}`, there);
       db.delete(`lab:comments:${page}`);
+      unsaved.add(to);
+      unsaved.add(page);
     }
     homes.delete(page);
     homes.set(to, [fileIndex.get(to), fid]);
@@ -1104,6 +1116,7 @@ function persist(page) {
 const SAVE_RETRY_MS = Number(process.env.LAB_SAVE_RETRY_MS || 5000);
 let saveRetry = null;
 let saveFailing = false;
+let mdFailing = false;
 function flush() {
   if (writing) {
     again = true;
@@ -1114,8 +1127,12 @@ function flush() {
     do {
       again = false;
       failed = 0;
-      // Only the pages that changed: one comment rewrites its own page's file, not every page's.
-      for (const p of Array.from(unsaved)) {
+      // Only the pages that changed: one comment rewrites its own page's file, not every page's. Files are written before
+      // any is removed, and none is removed once a write failed: comments moved to another page (a renamed file) are on
+      // disk at their new name before the old file goes.
+      const gone = (p) => !db.get(`lab:comments:${p}`)?.size;
+      for (const p of Array.from(unsaved).sort((a, b) => Number(gone(a)) - Number(gone(b)))) {
+        if (failed && gone(p)) continue;
         try {
           savePage(p);
           unsaved.delete(p);
@@ -1143,7 +1160,16 @@ function flush() {
           ? `Nobody is listening on ${deaf.map((p) => `${p.page} (${p.waiting} waiting)`).join(', ')}. ` +
             `Those pins wait until a session listens there: \`${CMD} wait --pages ${deaf.map((p) => p.page.replace(/^\//, '')).join(',')}\`\n\n`
           : '');
-      writeChanged(MD, head + (all.map((p) => texts.get(p)).filter(Boolean).join('\n') || 'No comments yet.\n'));
+      // comments.md not written (a full disk): tried again with the comments, every few seconds, until it is.
+      try {
+        writeChanged(MD, head + (all.map((p) => texts.get(p)).filter(Boolean).join('\n') || 'No comments yet.\n'));
+        mdFailing = false;
+      } catch (e) {
+        if (!mdFailing) console.error(`[lab] could not write comments.md (${/** @type {Error} */ (e).message}): tried again every ${SAVE_RETRY_MS / 1000} s`);
+        mdFailing = true;
+        saveRetry ??= setTimeout(() => ((saveRetry = null), flush().catch(() => {})), SAVE_RETRY_MS).unref();
+        break;
+      }
     } while (again || dirty.size || (unsaved.size && !failed));
   })().finally(() => (writing = null));
   return writing;
@@ -1273,13 +1299,12 @@ const guestOk = (req) => {
 const mayIn = (req) => isLoopback(req) || !WIFI || !!guestOk(req);
 // The labit mark (the cut for small sizes), drawn in the text colour: on the lab's own screens. Its shape is the tab icon's
 // (public/_lab/favicon.svg), read from there; the widget has the same shapes split into parts (src/widget/live.ts).
-const MARK = /\bd="([^"]+)"/.exec(fs.readFileSync(path.join(REPO, 'public/_lab/favicon.svg'), 'utf8'))?.[1];
+const MARK = /\bd="([^"]+)"/.exec(FAVICON)?.[1];
 const markSvg = (size, style = '') =>
   `<svg width="${size}" height="${size}" viewBox="0 0 64 64" aria-hidden="true"${style ? ` style="${style}"` : ''}><path transform="translate(-1 -.5)" fill="currentColor" fill-rule="evenodd" d="${MARK}"/></svg>`;
 // Someone at this screen isn't let in yet, so nothing of the lab loads for them: the tab icon and the lab's design system
 // (/_lab/lab.css, light or dark as the device is) ride in the page.
-const GATE_ICON = `data:image/svg+xml,${encodeURIComponent(fs.readFileSync(path.join(REPO, 'public/_lab/favicon.svg'), 'utf8'))}`;
-const LAB_CSS = (fs.existsSync(path.join(REPO, 'public/_lab/lab.css')) ? fs.readFileSync(path.join(REPO, 'public/_lab/lab.css')) : brotliDecompressSync(fs.readFileSync(path.join(REPO, 'public/_lab/lab.css.br')))).toString(); // the npm package has it packed
+const GATE_ICON = `data:image/svg+xml,${encodeURIComponent(FAVICON)}`;
 const gate = (res, why = 'This lab opens with a one-time link.') =>
   res.writeHead(403, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }).end(
     `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
@@ -2453,6 +2478,16 @@ const labInfo = () => {
     }),
   };
 };
+// Another lab's server.json (its keys), once that lab is shown to be the one on its port: the file names the pid and
+// port the registry has, and what answers there serves that folder. A port left in the registry, now another program's,
+// never gets a key. Throws otherwise.
+const serverOf = async (lab) => {
+  const srv = JSON.parse(fs.readFileSync(path.join(lab.root, '.lab/server.json'), 'utf8'));
+  if (srv.port !== lab.port || srv.pid !== lab.pid) throw new Error('not that lab');
+  const r = await fetch(`http://localhost:${lab.port}/_lab/pages`, { redirect: 'manual', signal: AbortSignal.timeout(1500) });
+  if (!r.ok || (await r.json()).root !== lab.root) throw new Error('not that lab');
+  return srv;
+};
 // GET /_lab/api/board?name=<n> or ?page=/x (the board of that page) is the board with every drawn frame placed (x, y; auto
 // when the lab chose them); no query lists the boards. PUT (this computer, JSON) replaces it: it carries the rev it was
 // made from (409 when the file moved on) and may not drop a frame. POST {action, …} is the agent's (labit board …): new,
@@ -2483,6 +2518,9 @@ const boardApi = async (req, res, url) => {
   const name = url.searchParams.get('name') || (page && B.nameOf(page));
   if (req.method === 'GET' && !name) return json(200, { boards: (boardList ??= B.names(ROOT).flatMap((n) => boardGet(n) || [])).map(({ name, of, title, frames }) => ({ name, of, title, frames: frames.length })) });
   if (!name || !B.NAME.test(name) || (page && !B.labPath(page))) return json(400, { error: 'name a board (?name=) or a page (?page=/x)' });
+  // Asked by page: the board of that name must be about that page (an older board of another page can hold the name).
+  const other = page && !url.searchParams.get('name') && boardGet(name)?.of;
+  if (other && boardPage(other.split(/[?#]/)[0]) !== boardPage(page.split(/[?#]/)[0])) return json(409, { error: `board ${name} is about ${other}` });
   if (req.method === 'GET') {
     const was = boardGet(name);
     if (was) return json(200, { ...B.place(was), exists: true, home: boardHome(was), status: boardStatus(was) });
@@ -2962,13 +3000,13 @@ const handler = async (req, res) => {
       const lab = runningLabs().find((l) => l.port === n && n !== PORT);
       if (!lab) return plain(res, 404, 'no such lab running');
       try {
-        const srv = JSON.parse(fs.readFileSync(path.join(lab.root, '.lab/server.json'), 'utf8'));
+        const srv = await serverOf(lab);
         const r = await fetch(`http://localhost:${n}/_lab/invite`, {
-          method: 'POST', signal: AbortSignal.timeout(3000),
+          method: 'POST', signal: AbortSignal.timeout(3000), redirect: 'manual',
           headers: { 'content-type': 'application/json', 'x-lab-admin': srv.agent || srv.token, 'x-lab-agent': '1', origin: `http://localhost:${n}` },
           body: JSON.stringify({ name: nameFor(req) || '', page: url.searchParams.get('to') || '/' }),
         });
-        if (!r.ok) return res.writeHead(r.status, { 'content-type': 'text/plain' }).end(await r.text());
+        if (!r.ok) return res.writeHead(r.status >= 400 ? r.status : 502, { 'content-type': 'text/plain' }).end(await r.text());
         const { links } = await r.json();
         // The same address the phone used here (the Mac's .local name or its wifi address), on the other lab's port.
         const host = String(req.headers.host || '').replace(/:\d+$/, '');
@@ -3031,8 +3069,8 @@ const handler = async (req, res) => {
         const lab = runningLabs().find((l) => l.port === n);
         if (!lab) return res.writeHead(404).end('no lab on that port');
         try {
-          const key = JSON.parse(fs.readFileSync(path.join(lab.root, '.lab/server.json'), 'utf8')).token;
-          const r = await fetch(`http://localhost:${n}/_lab/labs`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-lab-admin': key }, body: JSON.stringify({ action, port: n, page }), signal: AbortSignal.timeout(3000) });
+          const key = (await serverOf(lab)).token;
+          const r = await fetch(`http://localhost:${n}/_lab/labs`, { method: 'POST', redirect: 'manual', headers: { 'content-type': 'application/json', 'x-lab-admin': key }, body: JSON.stringify({ action, port: n, page }), signal: AbortSignal.timeout(3000) });
           return res.writeHead(r.status, { 'content-type': 'application/json' }).end(await r.text());
         } catch {
           return res.writeHead(502).end('that lab did not answer');
@@ -3090,7 +3128,7 @@ const handler = async (req, res) => {
     if (pathname.startsWith('/_lab/attachments/') && (req.method === 'GET' || req.method === 'HEAD')) {
       const file = /^\/_lab\/attachments\/([a-f0-9]{12}-[1-4]\.(png|jpg|webp|gif))$/.exec(pathname)?.[1];
       if (!file || !fs.existsSync(path.join(ATTACH, file))) return notFound(req, res, pathname);
-      return sendFile(req, res, path.join(ATTACH, file), { 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; sandbox", 'cross-origin-resource-policy': 'same-origin', 'cache-control': 'private, max-age=31536000, immutable' });
+      return sendFile(req, res, path.join(ATTACH, file), { 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; sandbox", 'cross-origin-resource-policy': 'same-origin', 'cache-control': 'private, no-cache' });
     }
     if (pathname.startsWith('/_lab/agent/')) {
       res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
@@ -3177,7 +3215,7 @@ const handler = async (req, res) => {
           if (b?.attachments !== undefined) {
             const tokens = b.attachments;
             if (agent || !Array.isArray(tokens) || tokens.length > MAX_IMAGES || tokens.some((t) => !/^[a-f0-9]{24}$/.test(t))) return answer(res, { error: 'bad attachments' }, 400);
-            const replay = typeof b.nonce === 'string' && db.has(`lab:nonce:${b.page}:${b.nonce}`); // a retry of a comment already saved: its pictures are in place
+            const replay = typeof b.nonce === 'string' && db.has(`lab:nonce:${pagePath(b.page) || b.page}:${b.nonce}`); // a retry of a comment already saved: its pictures are in place
             if (!replay) {
               staged = tokens.map(stagedFile);
               const lost = tokens.filter((t, i) => !staged[i]);
@@ -3211,7 +3249,26 @@ const handler = async (req, res) => {
         const { comment } = JSON.parse(text);
         // The pictures of the comment just made move to their names before anyone is told of it, so no device asks for one
         // that is not there yet; a delete takes its pictures away (an archived comment's stay where they are).
-        if (out.status === 201 && staged.length) staged.forEach((f, i) => { try { fs.renameSync(f.file, path.join(ATTACH, `${comment.id}-${i + 1}.${f.type}`)); } catch (e) { console.error('[lab] could not keep a picture:', e.message); } });
+        // All of them or none: when one can't be moved, the comment is taken back and the moved ones go back where they were
+        // sent, so the person is told and their send can be tried again whole.
+        if (out.status === 201 && staged.length) {
+          const moved = [];
+          try {
+            staged.forEach((f, i) => {
+              const to = path.join(ATTACH, `${comment.id}-${i + 1}.${f.type}`);
+              fs.renameSync(f.file, to);
+              moved.push([to, f.file]);
+            });
+          } catch (e) {
+            console.error('[lab] could not keep a picture, the comment is not saved:', e.message);
+            for (const [to, from] of moved) try { fs.renameSync(to, from); } catch {}
+            for (const [k, m] of db) {
+              if (k.startsWith('lab:comments:') && m instanceof Map && m.delete(comment.id)) pageChanged(k.slice('lab:comments:'.length));
+              else if (k.startsWith('lab:nonce:') && m === comment.id) db.delete(k);
+            }
+            return answer(res, { error: 'could not keep the pictures: try again' }, 500);
+          }
+        }
         for (const name of doomed) fs.rmSync(path.join(ATTACH, name), { force: true });
         if (dropped) dropBoard(...dropped);
         // At once: the files lose the pin now, and labit reply looks here next.

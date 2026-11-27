@@ -50,6 +50,7 @@ test('imageInfo: the type and size come from the first bytes, and nothing else i
   assert.equal(imageInfo(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"></svg>')), null);
   assert.equal(imageInfo(Buffer.from('<!doctype html><script>1</script>')), null);
   assert.equal(imageInfo(png(8, 6).subarray(0, 20)), null, 'cut off');
+  assert.equal(imageInfo(png(8, 6).subarray(0, 50)), null, 'cut off after its header: no IEND');
   const heic = Buffer.alloc(40);
   heic.write('ftypheic', 4);
   assert.equal(imageInfo(heic), null, 'heic');
@@ -218,4 +219,15 @@ test('a JPEG whose frame says zero wide is refused at once, not read forever (li
   const jpg = Buffer.from([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x00, 0x0a, 0x00, 0x00, 0x03, 0x01, 0x22, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01]);
   assert.equal(imageInfo(jpg), null);
   assert.equal(coInfo(jpg), null);
+});
+
+test('board names: /a/b and /a--b never share one; frames placed by the lab never land on one placed by hand', async () => {
+  const B = await import('../lib/board.ts');
+  assert.equal(B.nameOf('/a/b'), 'a--b');
+  assert.notEqual(B.nameOf('/a--b'), B.nameOf('/a/b'));
+  assert.match(B.nameOf('/a--b'), B.NAME);
+  // A frame put near the board's last places: the lab's frames go above it, not under it (past 1e6) or over it.
+  const board = { v: 1, name: 'x', rev: 1, frames: [{ id: 'a', src: '/a', w: 1280, h: 800, x: 0, y: 999000 }, { id: 'b', src: '/b', w: 1280, h: 800 }] };
+  const b = B.place(board).frames[1];
+  assert.ok(b.y + b.h <= 999000 - 80, `above it: ${b.y}`);
 });

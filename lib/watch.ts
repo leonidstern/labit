@@ -35,7 +35,8 @@ export function watchTree(root: string, onEvent: Handler, skip: (rel: string) =>
         const sub = path.join(dir, String(name));
         onEvent(event, path.join(rel, String(name)));
         if (event !== 'rename') return;
-        drop(sub); // a folder that went, or was replaced: its old watcher follows what is gone
+        // A folder that went, or was replaced: its old watchers, and those of every folder in it, follow what is gone.
+        for (const d of [...watchers.keys()]) if (d === sub || d.startsWith(sub + path.sep)) drop(d);
         try {
           if (fs.statSync(sub).isDirectory()) add(sub, true);
         } catch {}

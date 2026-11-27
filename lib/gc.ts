@@ -7,6 +7,8 @@ import { knownRoots } from './labs.ts';
 import { imageName, imagesOf } from './schema.mjs';
 
 const kb = (n: number) => `${Math.ceil(n / 1024)} KB`;
+// labit's own unfinished writes: a file it writes (<name>.json, .md, a picture, the lock or key) with .tmp after it.
+const TMP = /(^|\/)([^/]+\.(json|jsonl|md|html|png|jpg|webp|gif)|lock|key)\.tmp$/;
 
 export const gcReport = () =>
   knownRoots()
@@ -22,9 +24,18 @@ export const gcReport = () =>
       const named = new Set<string>();
       let size = 0;
       let could = 0;
-      const files = (fs.readdirSync(lab, { recursive: true }) as string[]).flatMap((rel) => {
-        const s = fs.lstatSync(path.join(lab, rel));
-        if (!s.isFile()) return [];
+      // Entries as they are (a link to a folder is not followed), each path with / on every system; a file gone between
+      // the listing and its look is skipped.
+      const files = fs.readdirSync(lab, { recursive: true, withFileTypes: true }).flatMap((e) => {
+        if (!e.isFile()) return [];
+        const full = path.join(e.parentPath, e.name);
+        const rel = path.relative(lab, full).split(path.sep).join('/');
+        let s: fs.Stats;
+        try {
+          s = fs.lstatSync(full);
+        } catch {
+          return [];
+        }
         size += s.size;
         if (/^(comments|archive)\/[^/]+\.json$/.test(rel))
           try {
@@ -35,7 +46,7 @@ export const gcReport = () =>
         return [{ rel, s }];
       });
       for (const { rel, s } of files)
-        if (Date.now() - s.mtimeMs > 30 * 60e3 && (rel.endsWith('.tmp') || rel.startsWith('attachments/.staged/') || (/^attachments\/[^/]+$/.test(rel) && !named.has('*') && !named.has(rel.slice(12))))) could += s.size;
+        if (Date.now() - s.mtimeMs > 30 * 60e3 && (TMP.test(rel) || rel.startsWith('attachments/.staged/') || (/^attachments\/[^/]+$/.test(rel) && !named.has('*') && !named.has(rel.slice(12))))) could += s.size;
       return `${root}  ${kb(size)}, ${kb(could)} could go`;
     })
     .join('\n') || 'No labs known on this computer yet.';
