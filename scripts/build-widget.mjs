@@ -39,8 +39,9 @@ const minifiedCss = {
 // Each built file has its local names given again by terser (the same escapes for letters outside ASCII, the licence
 // comment kept). esbuild numbers a nested function's names after its parents', so deep code gets two-letter names;
 // terser gives each function the shortest names it does not itself use, the same few letters over and over, which gzip
-// packs about 4% smaller (the page script: 3 KB). terser's compress runs too, in two passes, as for the command line
-// (scripts/build-cli.mjs): it folds what esbuild leaves, 0.4 KB of the package's brotli (26 Nov). It writes some
+// packs about 4% smaller (the page script: 3 KB). terser's compress runs too, as for the command line
+// (scripts/build-cli.mjs): it folds what esbuild leaves, 0.4 KB of the package's brotli (26 Nov). One pass, not the
+// command line's two: a second pass made the page script 0.12 KB bigger gzipped and 0.07 KB brotli (27 Nov). It writes some
 // constants out where they are used, which brotli takes in its stride and gzip doesn't: evaluate, sequences and join_vars
 // stay off, so the page script's gzip barely moves. pure_getters off: a property read
 // is never taken for free, so a read that only makes the browser lay out (el.offsetHeight) stays. ecma 2020: the source
@@ -51,7 +52,7 @@ const shortNames = {
     const { format } = build.initialOptions;
     build.onEnd(async (result) => {
       for (const file of result.outputFiles || []) {
-        const { code } = await terser.minify(file.text, { ecma: 2020, compress: { passes: 2, pure_getters: false, evaluate: false, sequences: false, join_vars: false }, mangle: true, module: format === 'esm', format: { comments: /^!/, ascii_only: true } });
+        const { code } = await terser.minify(file.text, { ecma: 2020, compress: { passes: 1, pure_getters: false, evaluate: false, sequences: false, join_vars: false }, mangle: true, module: format === 'esm', format: { comments: /^!/, ascii_only: true } });
         await fs.promises.mkdir(path.dirname(file.path), { recursive: true });
         await fs.promises.writeFile(file.path, code + '\n');
       }
@@ -89,7 +90,7 @@ const options = {
 // version covers them (widgetRev in local.mjs), so a change to one reloads open pages too.
 // boardview is the one board: a view over the page that links it, and the board's own page (/_lab/board/<name>) loads
 // the same file.
-const PARTS = { components: 'src/widget/components.ts', switcher: 'src/widget/switcher.ts', draw: 'src/widget/draw.ts', motion: 'src/widget/motion.ts', boardview: 'src/board/overlay.ts', pics: 'src/widget/pics.ts', attach: 'src/widget/attach.ts', reload: 'src/widget/reload.ts', walkie: 'src/widget/walkie.ts' };
+const PARTS = { components: 'src/widget/components.ts', switcher: 'src/widget/switcher.ts', draw: 'src/widget/draw.ts', motion: 'src/widget/motion.ts', boardview: 'src/board/overlay.ts', pics: 'src/widget/pics.ts', attach: 'src/widget/attach.ts', reload: 'src/widget/reload.ts', walkie: 'src/widget/walkie.ts', tryout: 'src/widget/tryout.ts', goto: 'src/widget/goto.ts' };
 const builds = [
   options,
   ...Object.entries(PARTS).map(([name, entry]) => ({ ...options, entryPoints: [entry], format: 'esm', outfile: path.join(path.dirname(outfile), `${name}.js`) })),

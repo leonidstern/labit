@@ -12,10 +12,10 @@ const pw = playwright({ ciFails: true });
 const WIDGET = fileURLToPath(new URL('../../src/widget/', import.meta.url));
 const TMP = tmp('labit-anchoring-');
 const OUT = path.join(TMP, 'anchoring.js');
-// The anchoring module with the part that tries a question's choices in the page (trial.ts), in one bundle: they share
-// the module's state, as they do in the widget.
+// The anchoring module with the part that tries a question's choices in the page (trial.ts, and its swap, tryout.ts,
+// handed over as the widget's part() would), in one bundle: they share the module's state, as they do in the widget.
 const SRC = path.join(TMP, 'entry.ts');
-fs.writeFileSync(SRC, `export * from ${JSON.stringify(WIDGET + 'anchoring.ts')};\nexport { bindTrial, tryRow, untry } from ${JSON.stringify(WIDGET + 'trial.ts')};\n`);
+fs.writeFileSync(SRC, `export * from ${JSON.stringify(WIDGET + 'anchoring.ts')};\nexport { bindTrial, tryRow, untry } from ${JSON.stringify(WIDGET + 'trial.ts')};\nexport * as tryout from ${JSON.stringify(WIDGET + 'tryout.ts')};\n`);
 execFileSync('npx', ['--yes', 'esbuild@0.25.12', SRC, '--bundle', '--format=iife', '--global-name=A', `--outfile=${OUT}`, '--log-level=warning']);
 const BUNDLE = fs.readFileSync(OUT, 'utf8');
 
@@ -29,7 +29,7 @@ const open = async (ctx, body) => {
     document.documentElement.append(host);
     const el = (tag) => document.createElement(tag);
     A.bindAnchoring({ host, layer: host, el, store: { get: () => '', set: () => {} } });
-    A.bindTrial({ host });
+    A.bindTrial({ host, part: async () => A.tryout });
     // The middle of a word on the page, in window pixels.
     window.wordAt = (word, root = document.body) => {
       const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -304,7 +304,7 @@ try {
       // 11. A question's choice tried in the sentence (trial.ts) moves no pin: the other pins stay on their words, the
       // page is as it was after, and the quoted words are found again (the words' places are read again, not remembered).
       p = await open(ctx, '<p id="up">Above the claim.</p><p id="claim">labit puts the <a href="#x">full guide</a> on the page, not in chat. And a second sentence.</p><p id="low">A word after: special.</p>');
-      r = await p.evaluate(() => {
+      r = await p.evaluate(async () => {
         const at = (w) => { const m = wordAt(w); return A.anchorAt(m.x, m.y); };
         const quote = at('guide');
         quote.quote = { exact: 'the full guide on the page', prefix: 'labit puts ', suffix: ', not in chat' };
@@ -312,7 +312,7 @@ try {
         const where = () => Object.fromEntries(Object.entries({ ...pins, quote }).map(([k, a]) => [k, A.position(a)]));
         const html = document.body.innerHTML;
         const before = where();
-        A.tryRow({ id: 'c', anchor: quote }, { id: 'q' }, 0, 'this short guide on the page, which is a longer way to say it and wraps the line', {});
+        await A.tryRow({ id: 'c', anchor: quote }, { id: 'q' }, 0, 'this short guide on the page, which is a longer way to say it and wraps the line', {}); // the first try waits for its part
         const during = where();
         const tried = document.getElementById('claim').textContent;
         const lowWord = wordAt('special');
