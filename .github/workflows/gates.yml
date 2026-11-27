@@ -42,19 +42,16 @@ jobs:
       - run: (cd base && npm run build) && (cd pr && npm run build)
 
       - name: Measure base
-        if: hashFiles('base/ci/metrics.mjs') != '' # skip until the judge exists on base
         env:
           JUDGE_METRICS: base/ci/metrics.mjs
         run: bash base/ci/measure.sh base "$RUNNER_TEMP/base.json" pr
 
       - name: Measure PR
-        if: hashFiles('base/ci/metrics.mjs') != '' # skip until the judge exists on base
         env:
           JUDGE_METRICS: base/ci/metrics.mjs
         run: bash base/ci/measure.sh pr "$RUNNER_TEMP/pr.json"
 
       - name: Compare PR with base
-        if: hashFiles('base/ci/metrics.mjs') != '' # skip until the judge exists on base
         env:
           ALLOW_GROWTH: ${{ contains(github.event.pull_request.labels.*.name, 'size-approved') && '1' || '0' }}
         run: |
