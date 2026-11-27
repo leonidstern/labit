@@ -785,6 +785,10 @@ kbd::before { content: '('; } kbd::after { content: ')'; } /* read as a hint: ch
       animation-range: 0 16px, calc(100% - 32px) 100%; }
   }
   :is(.chatwin .chat, .card > .foot) .box { --_box-bg: var(--_bg); backdrop-filter: none; }
+  /* The last message's room for its words under it (.waits: "on it", "quiet") is the 12 px gap above the box, so the
+     bubble ends 12 px above the box there too, not 27 (the sim check, 27 Nov); its words sit 3 px higher, right under it, to fit there. */
+  .chatwin .msgs > .msg.waits:last-child { margin-bottom: 0; }
+  .chatwin .msgs > .msg.waits:last-child .stamp .state { top: calc(100% + 6px); }
 }
 @keyframes lab-scrolled-end { from { mask-size: 100% calc(100% + 16px), 100% 100%; } to { mask-size: 100% calc(100% + 16px), 100% calc(100% + 32px); } }
 /* Feedback on an agent's answer (src/widget/thread.ts): the button under the answer, the bar over the reply box while
