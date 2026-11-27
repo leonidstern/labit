@@ -176,9 +176,10 @@ const claude = (args, cwd) => new Promise((done) => execFile('claude', args, { c
     done({ result: String(out || err) });
   }
 }));
+// Two files, or two folders (every file in them, new and deleted ones too, without the CHECK=1 look's own files).
 const diffOf = (a, b) => {
   try {
-    execFileSync('diff', ['-u', a, b]);
+    execFileSync('diff', ['-ruN', '-x', 'shot.mjs', '-x', 'shot.png', '-x', 'shots.log', a, b]);
     return '';
   } catch (e) {
     return String(e.stdout);
@@ -187,11 +188,12 @@ const diffOf = (a, b) => {
 // The look an agent gets with CHECK=1: the page at a width, as a picture it can read; each look is logged.
 const SHOT = `import { createRequire } from 'node:module';
 import { appendFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 const { chromium } = createRequire(${JSON.stringify(join(ROOT, 'package.json'))})('playwright-core');
 const [file, width = '1280'] = process.argv.slice(2);
 const b = await chromium.launch(${process.env.CHROMIUM ? '{}' : "{ channel: 'chrome' }"});
 const p = await b.newPage({ viewport: { width: Number(width), height: 900 } });
-await p.goto('file://' + process.cwd() + '/' + file);
+await p.goto(pathToFileURL(file).href);
 await p.screenshot({ path: 'shot.png', fullPage: true });
 await b.close();
 appendFileSync('shots.log', file + ' ' + width + '\\n');
@@ -210,6 +212,10 @@ const run = async ({ s, n }) => {
   try {
     cpSync(join(OUT, `${s.id}-files`), dir, { recursive: true });
   } catch {}
+  // The folder as the agent finds it, so the grader sees every file it changed, not only the page.
+  const before = `${dir}-start`;
+  rmSync(before, { recursive: true, force: true });
+  cpSync(dir, before, { recursive: true });
   if (CHECK) writeFileSync(join(dir, 'shot.mjs'), SHOT);
   // The lab's own lines that point at its folder (where to answer, the live link) are left out: the agent works in its own copy.
   const pins = readFileSync(join(OUT, `${s.id}.txt`), 'utf8').split('\n').filter((l) => !/^(to answer|always up to date): /.test(l)).join('\n');
@@ -218,7 +224,7 @@ const run = async ({ s, n }) => {
   const t0 = Date.now();
   const j = await claude(['-p', prompt, '--output-format', 'json', '--model', MODEL, '--permission-mode', 'acceptEdits', '--allowedTools', `Read,Edit,Write,Grep,Glob${CHECK ? ',Bash(node shot.mjs:*)' : ''}`], dir);
   const said = String(j.result || '').trim().split('\n').filter(Boolean).at(-1) || '';
-  const diff = diffOf(join(OUT, `${s.id}-start.html`), join(dir, `${s.id}.html`));
+  const diff = diffOf(before, dir);
   const words = String(j.result || '').trim().slice(-1500); // a question's answer is all its words, not only the last line
   const g = await claude(['-p', `You grade a coding agent's edit for a design review benchmark. Reply with JSON only:\n{"verdict":"right|partial|wrong|nothing","unrelated":<changes that have nothing to do with it>,"why":"<one short line>"}\n\nWhat the reviewer meant: ${s.problem}\nDone when: ${s.done_when}\nThe agent's words (the end): ${words}\n\nThe diff (empty = nothing changed):\n${diff.slice(0, 12000) || '(empty)'}`, '--output-format', 'json', '--model', 'sonnet', '--allowedTools', ''], OUT);
   let grade = {};

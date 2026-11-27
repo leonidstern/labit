@@ -33,6 +33,10 @@ for (let i = 0; i < 40; i++) {
 
 const browser = await chromium.launch({ channel: 'chrome' });
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+// The arrow mode: an Option-click pins there (in the comment mode it is the page's own click).
+await page.addInitScript(() => { localStorage.setItem('lab-name', 'leo'); localStorage.setItem('lab-on', '1'); localStorage.setItem('lab-mode', 'use'); });
+// The comment's save, set up before the key that sends it.
+const saved = () => page.waitForResponse((r) => r.url().endsWith('/_lab/api/comments') && r.request().method() === 'POST', { timeout: 8000 }).catch(() => null);
 const fresh = async () => {
   await page.goto(`http://localhost:${PORT}/app`);
   await page.waitForTimeout(1200);
@@ -79,8 +83,9 @@ for (const s of SCEN) {
   await page.waitForTimeout(1600);
   await page.keyboard.up('d');
   await page.waitForTimeout(300);
+  let save = saved();
   await page.keyboard.press('Enter'); // the box opens with the lines: Enter sends the drawing as it is, no words
-  await page.waitForTimeout(700);
+  await save;
   const drawn = await newest();
   writeFileSync(join(OUT, `${s.id}.draw.txt`), drawn);
   // Typed: a click on the same element (Option-click, which pins links and controls too), the words, Enter.
@@ -91,8 +96,9 @@ for (const s of SCEN) {
   await page.keyboard.up('Alt');
   await page.waitForTimeout(400);
   await page.keyboard.type(s.text, { delay: 10 });
+  save = saved();
   await page.keyboard.press('Enter');
-  await page.waitForTimeout(900);
+  await save;
   const typed = await newest();
   writeFileSync(join(OUT, `${s.id}.text.txt`), typed);
   const read = /drawn: (.*)/.exec(drawn)?.[1] || '(nothing sent)';

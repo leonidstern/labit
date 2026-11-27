@@ -3,8 +3,9 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { apiOn, callApi, sendFile } from '../lib/dev.ts';
-const REPO = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 process.env.LAB_COMMENTS_ADMIN_TOKEN ??= 'admintoken';
 const api = await apiOn(new Map());
 const port = Number(process.env.PORT || 4321);
@@ -37,4 +38,4 @@ http.createServer(async (req, res) => {
     if (res.headersSent) res.destroy();
     else res.writeHead(500).end(String(e));
   }
-}).listen(port, () => { console.log(`http://localhost:${port}${AT}/`); globalThis.__ready(); });
+}).listen(port, '127.0.0.1', () => { console.log(`http://localhost:${port}${AT}/`); globalThis.__ready(); }); // this machine only: the bench's API takes writes without a login

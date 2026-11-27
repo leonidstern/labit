@@ -4,7 +4,8 @@
 // An agent answering bench/situations-2-task.md must not read this file.
 import fs from 'node:fs';
 import path from 'node:path';
-const SITE = path.join(path.dirname(new URL(import.meta.url).pathname), 'situations');
+import { fileURLToPath } from 'node:url';
+const SITE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'situations');
 const read = (f) => fs.readFileSync(path.join(SITE, f), 'utf8').replace(/\n$/, '').split('\n');
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, '&#39;');
 

@@ -131,7 +131,9 @@ for (const c of checks) console.log(c.ok ? 'ok  ' : 'FAIL', c.name, '·', c.got)
 if (process.env.ARTIFACT_URL) {
   const r = await fetch(process.env.ARTIFACT_URL, { headers: { 'user-agent': 'Mozilla/5.0' } });
   const html = await r.text();
-  const visible = html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  // Newlines kept: score() splits the text on "\n## ". An <h2> counts as one of those headings.
+  const visible = html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/g, '').replace(/<h2\b[^>]*>/gi, '\n## ').replace(/<[^>]+>/g, ' ')
+    .replace(/[^\S\n]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{2,}/g, '\n').trim();
   const art = score(visible);
   const comments = Object.values(truth).filter((t) => visible.includes(t.ask)).length;
   const result = { link: process.env.ARTIFACT_URL, status: r.status, bytes: Buffer.byteLength(html), visibleText: visible.slice(0, 200), commentsFound: comments, passed: art.filter((c) => c.ok).length, total: art.length, checks: art };

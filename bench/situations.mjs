@@ -6,16 +6,21 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
-const HERE = path.dirname(new URL(import.meta.url).pathname);
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SITE = path.join(HERE, 'situations');
 process.env.PORT ||= '4391';
 process.env.BENCH_SITE = 'bench/situations';
 process.env.BENCH_AT = '/sit';
 process.env.LAB_COMMENTS_PER_HOUR ||= '1000';
-process.env.LABIT_HOME ||= fs.mkdtempSync(path.join(os.tmpdir(), 'labit-bench-'));
+if (!process.env.LABIT_HOME) {
+  // A home of its own for this run, removed when it ends.
+  const home = (process.env.LABIT_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'labit-bench-')));
+  process.on('exit', () => fs.rmSync(home, { recursive: true, force: true }));
+}
 const { ready } = await import('./serve.mjs');
 await ready;
 const BASE = `http://localhost:${process.env.PORT}`;
@@ -163,10 +168,12 @@ async function open(browser, pagePath, { name = 'Leo', context = {} } = {}) {
       await page.mouse.up();
       if (alt) await page.keyboard.up('Alt');
     },
+    // Each wait has a deadline: a video that never loads or seeks fails this situation, not the whole run.
     seek: (sel, t) => page.locator(sel).evaluate(async (v, time) => {
-      if (v.readyState < 1) await new Promise((r) => v.addEventListener('loadedmetadata', r, { once: true }));
+      const until = (p, what) => Promise.race([p, new Promise((_, j) => setTimeout(() => j(new Error(`video ${what} took over 10 s`)), 10000))]);
+      if (v.readyState < 1) await until(new Promise((r) => v.addEventListener('loadedmetadata', r, { once: true })), 'metadata');
       v.pause();
-      await new Promise((r) => { v.addEventListener('seeked', r, { once: true }); v.currentTime = time; });
+      await until(new Promise((r) => { v.addEventListener('seeked', r, { once: true }); v.currentTime = time; }), 'seek');
     }, t),
   };
 }
@@ -549,21 +556,28 @@ const pages = [...new Set(done.map((s) => s.page))];
 let all = '';
 const blocks = {};
 const stored = {};
+const get = async (url) => {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`${url}: ${r.status} ${await r.text()}`);
+  return r;
+};
 for (const p of pages) {
-  const text = await (await fetch(`${BASE}/_lab/agent${p}`)).text();
+  const text = await (await get(`${BASE}/_lab/agent${p}`)).text();
   all += `===== ${BASE}/_lab/agent${p} =====\n${text}\n`;
   for (const b of text.split('\n## ').slice(1)) blocks[b.match(/^comment: (.*)$/m)?.[1]] = b;
-  for (const c of (await (await fetch(`${BASE}/_lab/api/comments?page=${encodeURIComponent(p)}`)).json()).comments) stored[c.text] = c.anchor;
+  for (const c of (await (await get(`${BASE}/_lab/api/comments?page=${encodeURIComponent(p)}`)).json()).comments) stored[c.text] = c.anchor;
 }
 fs.mkdirSync(path.join(HERE, 'results'), { recursive: true });
 fs.writeFileSync(path.join(HERE, OUT.text), all);
 
 // ---------- the truth, and the sanity check: is what an agent needs in the text? ----------
 let surprises = 0;
+let complete = 0;
 const truth = done.map((s) => {
   const block = blocks[s.comment] || '';
   const recorded = s.needs.map((need) => { const [what, ok, got] = need(block); return { what, ok: Boolean(ok), got }; });
   const enough = Boolean(block) && recorded.every((r) => r.ok);
+  if (enough) complete++;
   if (enough === Boolean(s.gap)) surprises++;
   console.log(`${enough ? 'ok  ' : s.gap ? 'gap ' : 'FAIL'} ${s.id.padEnd(30)} ${recorded.map((r) => `${r.ok ? '✓' : '✗'} ${r.what} · ${r.got}`).join('\n' + ' '.repeat(36))}${enough && s.gap ? '\n' + ' '.repeat(36) + 'expected a gap here, but the text has it now' : ''}`);
   return {
@@ -576,7 +590,7 @@ const truth = done.map((s) => {
 });
 fs.writeFileSync(path.join(HERE, OUT.truth), JSON.stringify({ fixtures: 'bench/situations', agent_text: `bench/${OUT.text}`, situations: truth }, null, 2) + '\n');
 const gaps = truth.filter((t) => t.expected_gap).length;
-console.log(`${truth.length} situations pinned · ${truth.length - gaps} with everything in the agent text · ${gaps} expected gaps · ${Buffer.byteLength(all)} bytes of agent text`);
+console.log(`${truth.length} situations pinned · ${complete} with everything in the agent text · ${gaps} expected gaps · ${Buffer.byteLength(all)} bytes of agent text`);
 if (surprises) console.log(`${surprises} did not go as expected (FAIL, or a gap that closed): see above`);
 if (process.env.KEEP) console.log(`pages stay up at ${BASE}${Object.keys(situations)[0].split('#')[0]} (KEEP=1)`);
 else process.exit(surprises ? 1 : 0);

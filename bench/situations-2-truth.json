@@ -842,8 +842,8 @@
       "expect": {
         "file": "src/calendar/reminders.ts",
         "lines": [
-          23,
-          32
+          24,
+          31
         ]
       },
       "in_agent_text": [

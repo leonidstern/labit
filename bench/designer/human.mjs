@@ -113,9 +113,13 @@ for (const s of SCEN) {
   rows.push(row);
   console.log(`${s.id.padEnd(26)} ${s.mark.padEnd(9)} draw ${row.draw}s  text ${row.text}s  both ${row.both}s  (ink ${row.inkPx}px, ${row.chars} chars)`);
 }
-const avg = (k) => Math.round((rows.reduce((a, r) => a + r[k], 0) / rows.length) * 10) / 10;
-const sum = { draw: avg('draw'), text: avg('text'), both: avg('both'), think: PACE.think / 1000, pace: PACE };
+// Over the saved ones only: one that never saved (NaN) would make the average NaN. How many didn't is said.
+const saved = (k) => rows.map((r) => r[k]).filter(Number.isFinite);
+const avg = (k) => (saved(k).length ? Math.round((saved(k).reduce((a, v) => a + v, 0) / saved(k).length) * 10) / 10 : null);
+const sum = { draw: avg('draw'), text: avg('text'), both: avg('both'), notSaved: Object.fromEntries(['draw', 'text', 'both'].map((k) => [k, rows.length - saved(k).length])), think: PACE.think / 1000, pace: PACE };
 console.log(`average to saved: draw ${sum.draw}s · text ${sum.text}s · both ${sum.both}s (plus ${sum.think}s to think, each)`);
+const lost = Object.entries(sum.notSaved).filter(([, n]) => n);
+if (lost.length) console.log(`not saved, left out of the averages: ${lost.map(([k, n]) => `${k} ${n}`).join(', ')}`);
 writeFileSync(join(HERE, 'human.json'), JSON.stringify({ rows, sum }, null, 2));
 await browser.close();
 lab.kill();

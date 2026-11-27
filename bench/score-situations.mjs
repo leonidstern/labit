@@ -5,7 +5,8 @@
 // An agent answering the task must not read this file.
 import fs from 'node:fs';
 import path from 'node:path';
-const HERE = path.dirname(new URL(import.meta.url).pathname);
+import { fileURLToPath } from 'node:url';
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const flag = args.indexOf('--batch');
 const batch = flag >= 0 ? args.splice(flag, 2)[1] : null;
@@ -19,11 +20,26 @@ const truthFile = (n) => (String(n) === '1' ? 'situations-truth.json' : `situati
 const truths = (batch ? [truthFile(batch)] : fs.readdirSync(HERE).filter((f) => /^situations(-\d+)?-truth\.json$/.test(f)).sort())
   .map((f) => ({ f, situations: JSON.parse(fs.readFileSync(path.join(HERE, f), 'utf8')).situations }))
   .map((t) => ({ ...t, hits: t.situations.filter((x) => answers.some((a) => key(a.comment) === key(x.comment))).length }));
-const picked = truths.sort((a, b) => b.hits - a.hits)[0];
+truths.sort((a, b) => b.hits - a.hits);
+if (truths.length > 1 && truths[0].hits === truths[1].hits) {
+  console.error(`the answer matches ${truths[0].hits} comments of ${truths[0].f} and of ${truths[1].f}: say which with --batch`);
+  process.exit(2);
+}
+const picked = truths[0];
 const { situations } = picked;
 console.log(`truth: bench/${picked.f} (${picked.hits} of its ${situations.length} comments are in the answer)\n`);
 const file = (f) => String(f || '').replace(/\\/g, '/').replace(/^https?:\/\/[^/]+\/sit\//, '').replace(/^.*bench\/situations\//, '').replace(/^\.?\/+/, '');
 const tokens = (s) => String(s || '').toLowerCase().replace(/[’‘]/g, "'").split(/\s+/).map((t) => t.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '')).filter(Boolean);
+// How many of want's words are in got in the same order (the longest common subsequence), each used once.
+const inOrder = (want, got) => {
+  let row = Array.from({ length: got.length + 1 }, () => 0);
+  for (const w of want) {
+    const next = [0];
+    for (let j = 0; j < got.length; j++) next.push(w === got[j] ? row[j] + 1 : Math.max(row[j + 1], next[j]));
+    row = next;
+  }
+  return row[got.length];
+};
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : NaN);
 const overlap = (a, b) => {
   const w = Math.min(a[2], b[2]) - Math.max(a[0], b[0]), h = Math.min(a[3], b[3]) - Math.max(a[1], b[1]);
@@ -38,23 +54,25 @@ function score(t, a) {
   const parts = [];
   const part = (name, ok, got, want) => parts.push({ name, ok: Boolean(ok), got, want });
   const f = file(a.file);
-  part('file', e.files ? f in e.files : f === e.file, f || '—', e.files ? Object.keys(e.files).join(' | ') : e.file);
+  part('file', e.files ? Object.hasOwn(e.files, f) : f === e.file, f || '—', e.files ? Object.keys(e.files).join(' | ') : e.file);
   if (e.lines) part('line', num(a.line) >= Math.min(...e.lines) && num(a.line) <= Math.max(...e.lines), a.line ?? '—', [...new Set(e.lines)].join('–'));
   if (e.words) {
     // The words under the pin or inside the area: nearly all of them, and not much around them
     // (so naming the whole paragraph for a comment on three words does not count).
-    const want = tokens(e.words), got = tokens(a.words), left = [...got];
-    const found = want.filter((w) => { const i = left.indexOf(w); if (i < 0) return false; left.splice(i, 1); return true; }).length;
+    // In their order: the same words shuffled are other words.
+    const want = tokens(e.words), got = tokens(a.words);
+    const found = inOrder(want, got);
     part('words', found / want.length >= 0.8 && got.length <= Math.max(want.length + 4, Math.round(want.length * 1.5)), `${got.length} words, ${found}/${want.length} of the right ones`, `${want.length} words`);
   }
   // Text without spaces between words (Japanese): the answer has to hold the word and little around it.
   if (e.phrase) part('words', String(a.words || '').includes(e.phrase) && [...String(a.words || '').trim()].length <= [...e.phrase].length + 6, a.words ? `"${a.words}"` : '—', `"${e.phrase}" and at most 6 more characters`);
   if (e.box) {
     // Pixels are in the answered file's own size; the box is in e.size pixels (a srcset variant is the same picture, scaled).
-    const size = e.files ? e.files[f] : e.size;
-    const k = size ? e.size[0] / size[0] : NaN;
-    const [x, y] = [num(a.x) * k, num(a.y) * k];
-    part('spot', x >= e.box[0] && x <= e.box[2] && y >= e.box[1] && y <= e.box[3], `${a.x ?? '—'},${a.y ?? '—'}`, `inside ${e.box.map((v) => Math.round(v / k) || v).join(',')}`);
+    // Across and down each by its own ratio: a variant may be cropped, not only scaled.
+    const size = e.files ? (Object.hasOwn(e.files, f) ? e.files[f] : undefined) : e.size;
+    const [kx, ky] = size ? [e.size[0] / size[0], e.size[1] / size[1]] : [NaN, NaN];
+    const [x, y] = [num(a.x) * kx, num(a.y) * ky];
+    part('spot', x >= e.box[0] && x <= e.box[2] && y >= e.box[1] && y <= e.box[3], `${a.x ?? '—'},${a.y ?? '—'}`, `inside ${e.box.map((v, i) => Math.round(v / (i % 2 ? ky : kx)) || v).join(',')}`);
   }
   if (e.area) part('area', overlap([a.x, a.y, a.x2, a.y2].map(num), e.area) >= 0.5, [a.x, a.y, a.x2, a.y2].map((v) => v ?? '—').join(','), `overlaps ${e.area.join(',')} by half or more`);
   if (e.from !== undefined) part('time', num(a.seconds) >= e.from && num(a.seconds) < e.to, a.seconds ?? '—', `${e.from}–${e.to} s`);

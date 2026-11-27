@@ -10,10 +10,10 @@ const answer = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 let points = 0;
 const rows = Object.entries(truth).map(([ask, t]) => {
   const a = answer.find((x) => x.comment === ask) || {};
-  const said = `${a.file} ${a.what_is_there}`;
+  const said = `${a.file ?? ''} ${a.what_is_there ?? ''}`;
   const parts = [];
   if (t.line) parts.push(['file', a.file === t.file], ['line', a.line === t.line]);
-  else parts.push(['asset', said.includes(t.asset)], ['spot', a.x >= t.box[0] && a.x <= t.box[2] && a.y >= t.box[1] && a.y <= t.box[3]]);
+  else parts.push(['asset', new RegExp(`(^|[^\\w-])${t.asset}([^\\w-]|$)`, 'i').test(said)], ['spot', a.x >= t.box[0] && a.x <= t.box[2] && a.y >= t.box[1] && a.y <= t.box[3]]);
   if (t.from !== undefined) parts.push(['time', a.seconds >= t.from && a.seconds < t.to]);
   points += parts.filter(([, ok]) => ok).length;
   return `${ask}: ${parts.map(([n, ok]) => `${n} ${ok ? 'ok' : 'MISS'}`).join(', ')}`;

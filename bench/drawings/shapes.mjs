@@ -15,7 +15,13 @@ export const SHAPES = {
     return [[[l, t], [r, t], [r, d], [l, d], [l, t + 4]]];
   },
   side: (b) => [[[b.x - 12, b.y], [b.x - 12, b.y + b.h]]],
-  arrow: (b, to) => [[[b.x + b.w / 2, b.y + b.h / 2], [to.x + to.w / 2, to.y + to.h / 2]], [[to.x + to.w / 2 - 12, to.y + to.h / 2 - 10], [to.x + to.w / 2, to.y + to.h / 2], [to.x + to.w / 2 - 14, to.y + to.h / 2 + 6]]],
+  // The head turned to the line's direction (its wings as drawn for a line going right).
+  arrow: (b, to) => {
+    const [x0, y0, x1, y1] = [b.x + b.w / 2, b.y + b.h / 2, to.x + to.w / 2, to.y + to.h / 2];
+    const a = Math.atan2(y1 - y0, x1 - x0);
+    const wing = (dx, dy) => [x1 + dx * Math.cos(a) - dy * Math.sin(a), y1 + dx * Math.sin(a) + dy * Math.cos(a)];
+    return [[[x0, y0], [x1, y1]], [wing(-12, -10), [x1, y1], wing(-14, 6)]];
+  },
   // Under the gap above the item, its tip at the item's top left: add a line here (between this item and the one before).
   caret: (b) => [[[b.x - 8, b.y + 14], [b.x, b.y - 2], [b.x + 8, b.y + 14]]],
 };
