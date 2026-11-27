@@ -523,7 +523,9 @@ const MUTATIONS = {
 
   // Gone: the element, replaced by a new and different one, its block, its section. The pin must say so (L).
   delete: edit((m) => take(parentOf(m.root, m.t), m.t)),
-  replace: edit((m) => { const p = parentOf(m.root, m.t); p.kids[p.kids.indexOf(m.t)] = fresh(m.t, m.r); }),
+  // Replaced in its place by one of its kind with other words (a status, a label rewritten): still the pin's spot (Leo,
+  // 27 Nov: "if changed it's right to put it back on the new change, for tracking"), so staying on it and lost are both fair.
+  replace: edit((m) => { const p = parentOf(m.root, m.t); const n = fresh(m.t, m.r); n.attrs['data-t'] = m.t.attrs['data-t']; p.kids[p.kids.indexOf(m.t)] = n; }),
   'delete-unit': edit((m) => (m.unit === m.t ? false : take(m.home, m.unit))),
   'delete-block': edit((m) => (m.blk === m.t ? false : take(m.sec, m.blk))),
   'delete-sec': edit((m) => take(m.main, m.sec)),
@@ -539,7 +541,7 @@ const MUTATIONS = {
 };
 const WIDTH = { 'width-1400': 1400, 'width-600': 600, 'width-390': 390 };
 // Mutations after which the pinned element (or its words) is gone.
-const GONE = new Set(['delete', 'replace', 'delete-unit', 'delete-block', 'delete-sec']);
+const GONE = new Set(['delete', 'delete-unit', 'delete-block', 'delete-sec']);
 // An identical copy right beside the pinned thing: the page alone cannot say which of the two was pinned (the same
 // HTML comes out of sib-before and sib-after), only the change itself can.
 const AMBIGUOUS = new Set(['sib-before', 'sib-after', 'dup-sec-before', 'dup-sec-after']);
@@ -568,7 +570,7 @@ for (const flavour of FLAVOURS) {
         const wordGone = Boolean(base.truth.word) && Boolean(done.truth) && !done.truth.word;
         // An element whose every word is new reads exactly like a new element in its place (replace): staying on it
         // and saying it is gone are both fair.
-        const accept = !done.truth ? 'L' : wordGone || (mut === 'rewrite' && !done.truth.word) ? 'RL' : 'R';
+        const accept = !done.truth ? 'L' : wordGone || ((mut === 'rewrite' || mut === 'replace') && !done.truth.word) ? 'RL' : 'R';
         if (GONE.has(mut) !== !done.truth) throw new Error(`${key}: the pinned element is ${done.truth ? 'still there' : 'gone'}`);
         cases.push({ key, mut, kind, flavour, seed, base, html: done.html, truth: done.truth, accept, width: WIDTH[mut] || 1000 });
         if (ONE && process.env.TORTURE_OUT) {
@@ -1245,7 +1247,7 @@ function knownToday() {
     'move-unit': { img: 'W:twins', button: 'W:twins' },
     'move-block': { para: 'W:twins' },
     'delete': { img: 'W:twins' },
-    'replace': { cell: 'W:plain,hashed,twins', img: 'W:twins', cardbtn: 'W:ids' },
+    'replace': { word: 'W:twins', quote: 'W:twins', cell: 'W:plain,hashed,twins', img: 'W:twins', cardbtn: 'W:ids' },
     'delete-unit': { cell: 'W:twins', cardbtn: 'W:plain,ids,bare,hashed' },
   };
 }

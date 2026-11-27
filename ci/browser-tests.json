@@ -99,5 +99,6 @@
   "ipadtap": 14,
   "ipadchat": 10,
   "deleteask": 4,
-  "boarddraw": 20
+  "boarddraw": 20,
+  "anchoring-usecases": 200
 }
