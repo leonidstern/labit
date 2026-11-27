@@ -343,8 +343,9 @@ test('a labit.json with unknown settings, wrong types and settings that are not 
 test('a labit.json whose values have the right type but can\'t be used says so in a line, with no stack trace', async () => {
   const bad = [];
   for (const [what, json, args] of [
-    ['a proxy that is no address', { proxy: 'nonsense' }, ['.', '--port', '0']],
-    ['a proxy port past the last one', { proxy: '99999' }, ['.', '--port', '0']],
+    ['a proxy that is no address', { proxy: 'nonsense' }, ['.', '--port', String(await freePort())]],
+    ['a proxy port past the last one', { proxy: '99999' }, ['.', '--port', String(await freePort())]],
+    ['port 0', {}, ['.', '--port', '0']],
     ['a port past the last one', { port: 99999 }, ['.']],
     ['a port and a half', { port: 4400.5 }, ['.']],
     ['a folder that is not there', { folder: 'missing-folder' }, []],

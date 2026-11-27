@@ -61,8 +61,11 @@ export function proxy({ PROXY, origin: originNow, widget, keyFor, isLoopback, na
       if (to && to.protocol === PROXY.protocol && to.port === PROXY.port && (to.host === PROXY.host || (LOCAL.test(to.hostname) && LOCAL.test(PROXY.hostname)))) {
         r.headers.location = origin + to.pathname + to.search + to.hash;
       }
+      // The cookies the lab set on this answer (its own, a guest's) go out with the app's, whatever the answer is.
+      const ours = res.getHeader('set-cookie');
+      const cookies = ours ? { 'set-cookie': [...[ours].flat().map(String), ...(r.headers['set-cookie'] || [])] } : {};
       if (!html) {
-        res.writeHead(r.statusCode || 502, r.headers);
+        res.writeHead(r.statusCode || 502, { ...r.headers, ...cookies });
         return void r.pipe(res);
       }
       // The page is read in the charset the dev server named and goes on as UTF-8, so the header says so.
@@ -72,9 +75,7 @@ export function proxy({ PROXY, origin: originNow, widget, keyFor, isLoopback, na
       delete out['content-encoding'];
       delete out['content-security-policy']; // it would block the widget's script
       delete out['x-frame-options']; // it would leave a page blank when it sits in a frame (a board)
-      // The cookies the lab set on this answer (its own, a guest's) go out with the app's.
-      const ours = res.getHeader('set-cookie');
-      if (ours) out['set-cookie'] = [...[ours].flat().map(String), ...(r.headers['set-cookie'] || [])];
+      Object.assign(out, cookies);
       res.writeHead(r.statusCode || 502, out);
       // Streamed through as it arrives (Next, Astro and React stream their pages), so nothing waits for the end.
       // The widget's script goes after the page; a copy of it the page already loads is taken out, and so is colabit's

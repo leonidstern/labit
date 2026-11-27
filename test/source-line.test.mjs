@@ -62,3 +62,9 @@ test('written at: only its own line of the pin it belongs to; a pin without word
   assert.equal(out[0], 'written at: src/e.astro:2:3');
   assert.match(out[1], /^written at: src\/e\.astro:1:1 \(line from when it was pinned; not checked/);
 });
+
+test('written at: every place the tag opens on the line is tried, and the words stop at the element\'s end', () => {
+  write('src/d.astro', ['<main>', '  <span>Price</span> <span>Buy it now today</span>', '  <b>Short</b> rest of the line', '</main>']);
+  assert.equal(said(pin('span', 'Buy it now today', 'src/d.astro:2:3')), 'src/d.astro:2:3'); // the second <span> on the line
+  assert.doesNotMatch(said(pin('b', 'Short rest of the', 'src/d.astro:3:3')), /^src\/d\.astro:3:3$/); // words past </b> are not its own
+});

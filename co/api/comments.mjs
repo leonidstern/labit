@@ -65,7 +65,7 @@ async function handle(request, page, nonce, call) {
   if (set.length) writes.push(['HSET', key, ...set]);
   const gone = [...was.keys()].filter((id) => !now.has(id));
   if (gone.length) writes.push(['HDEL', key, ...gone]);
-  if (nonceKey && !earlier && db.get(nonceKey)) writes.push(['SET', nonceKey, db.get(nonceKey), 'EX', '900']);
+  if (nonceKey && db.get(nonceKey) && db.get(nonceKey) !== earlier) writes.push(['SET', nonceKey, db.get(nonceKey), 'EX', '900']);
   if (writes.length) await redis(writes);
   return res;
 }
@@ -107,12 +107,14 @@ export async function POST(request) {
   const page = under(site(request), body.page);
   if (!site(request) || !page) return json({ error: 'bad page' }, 400);
   const owner = isOwner(request);
+  const nonce = typeof body.nonce === 'string' && /^[\w-]{8,40}$/.test(body.nonce) ? body.nonce : '';
   try {
-    if (!owner && !body.action && (await tooMany(request))) return json({ error: 'too many comments, try again later' }, 429);
+    // A retry of a comment already saved (its nonce is known) gets that comment back, not counted again or refused.
+    const replay = nonce && !body.action && (await redis([['GET', `lab:nonce:${page}:${nonce}`]]))[0];
+    if (!owner && !body.action && !replay && (await tooMany(request))) return json({ error: 'too many comments, try again later' }, 429);
   } catch (e) {
     return json({ error: `could not reach the store: ${e.message}` }, 503);
   }
-  const nonce = typeof body.nonce === 'string' && /^[\w-]{8,40}$/.test(body.nonce) ? body.nonce : '';
   const sent = JSON.stringify({ ...body, page });
   return withCors(await inTurn(() => handle(request, page, nonce, () => save(inner(request, owner, { method: 'POST', body: sent })))));
 }

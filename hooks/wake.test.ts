@@ -1,6 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing';
 
-// A lab at /p/.lab/server.json; the session is /p/sub; /_lab/pending answers what each test sets.
+// A lab at /p/.lab/server.json (running: its registry file names the same pid); the session is /p/sub; /_lab/pending
+// answers what each test sets.
 // `more` changes the world: another folder for the session (`cwd`), more files (`files`: path -> text), `pending` per port.
 const world = (on: any, pending: Record<string, unknown>, me = 'S1', more: { submit?: (e: any) => any; cwd?: string; files?: Record<string, string>; byPort?: Record<number, Record<string, unknown>> } = {}) => {
   const sent: string[] = [];
@@ -8,7 +9,11 @@ const world = (on: any, pending: Record<string, unknown>, me = 'S1', more: { sub
   const looked = { n: 0 };
   const posts: any[] = [];
   const heads: string[] = []; // the urls looked at
-  const files: Record<string, string> = { '/p/.lab/server.json': JSON.stringify({ port: 4400, agent: 'k' }), ...more.files };
+  const files: Record<string, string> = {
+    '/p/.lab/server.json': JSON.stringify({ port: 4400, pid: 1, agent: 'k' }),
+    '/home/u/.labit/servers/4400.json': JSON.stringify({ port: 4400, pid: 1, root: '/p', name: 'x' }),
+    ...more.files,
+  };
   on('session.start', (_: any, e: any) => ({ cwd: e.cwd }));
   on('session.cwd', () => ({ value: more.cwd || '/p/sub' }));
   on('session.id', () => ({ value: me }));
@@ -172,6 +177,17 @@ test('the registry is only believed when the lab at that folder is that port; la
   });
   await $.session.start({ cwd: '/elsewhere', surface: 'terminal', isInteractive: true } as any);
   await clock.advance(12000);
+  expect(w.asked).toEqual([]);
+  expect(w.sent.length).toBe(0);
+});
+
+test('a server.json a stopped lab left behind is not believed: its key goes nowhere', async ($, on) => {
+  const clock = mock.clock(on);
+  const w = world(on, { fresh: 1, pages: ['/a'], key: 'k1' }, 'S1', {
+    files: { '/home/u/.labit/servers/4400.json': JSON.stringify({ port: 4400, pid: 2, root: '/p', name: 'x' }) }, // another lab on that port now
+  });
+  await $.session.start({ cwd: '/p/sub', surface: 'terminal', isInteractive: true } as any);
+  await clock.advance(8000);
   expect(w.asked).toEqual([]);
   expect(w.sent.length).toBe(0);
 });
