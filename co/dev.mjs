@@ -39,7 +39,10 @@ http.createServer(async (req, res) => {
   }
   const to = people.get(url.pathname.split('/')[1]);
   if (!to) return res.writeHead(404, { 'content-type': 'text/plain' }).end(`No one at this path. People: ${[...people.keys()].map((n) => '/' + n).join(', ')}`);
-  const got = await fetch(to + url.pathname + url.search).catch(() => null);
+  // The way it was asked: a form's POST goes on as a POST, with its body and type.
+  const sends = req.method !== 'GET' && req.method !== 'HEAD';
+  const body = sends ? Buffer.concat(await Array.fromAsync(req)) : undefined;
+  const got = await fetch(to + url.pathname + url.search, { method: req.method, body, headers: sends && req.headers['content-type'] ? { 'content-type': req.headers['content-type'] } : {} }).catch(() => null);
   if (!got) return res.writeHead(502).end(`${to} did not answer`);
   res.writeHead(got.status, { 'content-type': got.headers.get('content-type') || 'text/html' });
   res.end(Buffer.from(await got.arrayBuffer()));

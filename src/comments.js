@@ -9,6 +9,7 @@ import styles from './widget/styles.css';
 import {
   bindAnchoring,
   anchorAt,
+  lookedUp,
   drawZone,
   foundAt,
   fillAt,
@@ -552,11 +553,11 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
   // writing one — mid-sentence the page's own pointer is what you want, not a second pin waiting to be dropped.
   const setPinning = () => {
     const placing = S.on && !anyWriting() && !S.draft && !using(); // an open new comment, empty or not, gives the page its own pointer (Leo, 18 Nov); so does the arrow (Leo, 26 Nov)
-    // A phone's new comment covers the page with its sheet and dimmed layer: nothing on the page can be pointed at, held or
-    // selected until it closes, so the page's rules stay as they are. Each flip of this attribute restyles the whole page
-    // (its rules are on every element: html:has(...) body *), ~11 ms on the iOS 27 simulator, twice a new comment (27 Nov).
-    // Writing in a thread or the chat still flips it, as before.
-    const covered = Boolean(S.draft) && S.on && !using() && coarse && sheetMode.matches && host.hasAttribute('data-sheet');
+    // A phone's sheet (a new comment, a thread, the chat, the list) covers the page with its dimmed layer: nothing on the page
+    // can be pointed at, held or selected until it closes, so the page's rules stay as they are. Each flip of this attribute
+    // restyles the whole page (its rules are on every element: html:has(...) body *), 12-16 ms on the iOS 27 simulator: twice
+    // a new comment (27 Nov), and on the first key in a reply and on clearing it (20 and 25 ms a key, 6 for the others).
+    const covered = S.on && !using() && coarse && sheetMode.matches && host.hasAttribute('data-sheet');
     host.toggleAttribute('data-lab-pinning', placing || covered); // not a class on <html>: a framework that hydrates the page (Next) reports it
     sayMode();
     recheck();
@@ -667,6 +668,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
     const moment = payload.anchor && !payload.action && !payload.anchor.moment ? mo?.momentFor(payload.anchor) : undefined;
     if (moment) payload = { ...payload, anchor: { ...payload.anchor, moment } };
     if ((S.slow || mo?.anySlow()) && payload.anchor && !payload.action) payload = { ...payload, anchor: { ...payload.anchor, slow: true } }; // at ¼ speed
+    if (payload.anchor && !payload.action) payload = { ...payload, anchor: lookedUp(payload.anchor) }; // looks left for now (anchorAt)
     if (!payload.action && !payload.nonce) payload = { ...payload, nonce: Math.random().toString(36).slice(2) + Date.now().toString(36) };
     // The page it was written on, for every try: the app may move to another page while it waits to try again.
     const body = JSON.stringify({ page: S.page, ...payload });
@@ -2064,7 +2066,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
           setTimeout(() => (S.afterDrag = false), 800);
           showAgain();
           S.openId = null;
-          pinned(() => begin(anchorAt(x, y)));
+          pinned(() => begin(anchorAt(x, y, false, null, true)));
           // 400 ms: before iOS's own long press (~500 ms), which selects text and cancels the touch. At 500 ms the two
           // raced, and the hold sometimes gave a text selection instead of a pin (iOS 27 simulator, 16 Nov).
         }, 400),
@@ -2211,7 +2213,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
     showAgain();
     if (S.dKey && S.drew) return; // D held and something drawn (or cancelled): a click is part of that, not a pin
     if (S.dKey) S.drew = true; // a click with D held is a pin: letting D go then doesn't also show or hide done pins
-    pinned(() => begin(anchorAt(e.clientX, e.clientY)));
+    pinned(() => begin(anchorAt(e.clientX, e.clientY, false, null, true)));
   }
   // While a patched-in save cross-fades (live.ts) the browser hits nothing but <html> under a point: the pin is made once it is done.
   const pinned = (go) => (W.fade ? W.fade.then(go) : go());

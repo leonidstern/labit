@@ -27,7 +27,8 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
     let config = { version: '0.0.1', configurations: [] };
     if (fs.existsSync(file)) {
       // The app writes this file too, and allows comments and trailing commas in it (they don't survive this rewrite).
-      const jsonc = (t) => t.replace(/("(?:\\.|[^"\\])*")|\/\/[^\n]*|\/\*[\s\S]*?\*\//g, (m, str) => str || '').replace(/,(\s*[}\]])/g, '$1');
+      // Strings are kept as they are in both passes: a "," or "//" inside one is text.
+      const jsonc = (t) => t.replace(/("(?:\\.|[^"\\])*")|\/\/[^\n]*|\/\*[\s\S]*?\*\//g, (m, str) => str || '').replace(/("(?:\\.|[^"\\])*")|,(\s*[}\]])/g, (m, str, tail) => str || tail);
       try {
         config = JSON.parse(jsonc(fs.readFileSync(file, 'utf8')));
       } catch {
@@ -77,9 +78,20 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
     const from = fs.realpathSync(src);
     const within = (a: string, b: string) => a.startsWith(b + path.sep);
     if (within(from, dest) || within(dest, from)) die(`${src} and its place in the pages lab (${dest}) are inside one another. Publish it from another folder, or under another --name.`);
+    // Copied beside it first, then swapped in: a copy that fails half way (a full disk) leaves the old one as it was.
     if (from !== dest) {
-      fs.rmSync(dest, { recursive: true, force: true });
-      fs.cpSync(src, dest, { recursive: true });
+      const staged = path.join(root, `.${path.basename(dest)}.new-${process.pid}`);
+      const old = path.join(root, `.${path.basename(dest)}.old-${process.pid}`);
+      fs.rmSync(staged, { recursive: true, force: true });
+      try {
+        fs.cpSync(src, staged, { recursive: true });
+      } catch (e) {
+        fs.rmSync(staged, { recursive: true, force: true });
+        die(`Could not copy ${src} into the pages lab: ${(e as Error).message}. The published copy is as it was.`);
+      }
+      if (fs.existsSync(dest)) fs.renameSync(dest, old);
+      fs.renameSync(staged, dest);
+      fs.rmSync(old, { recursive: true, force: true });
     }
     let lab = runningLabs().find((l) => l.root === root);
     if (!lab) {
@@ -592,7 +604,7 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
         .filter((c) => (c.id === hit.id || c.parent === hit.id) && !c.session)
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
         .pop()?.id;
-      const out = await call('/_lab/api/comments', { page: hit.page, parent: hit.id, nonce: nonceOf(hit.page, hit.id, hit.to, said, words.join(' ')), ...(hit.to ? { to: hit.to } : {}), name: signed(), text: words.join(' '), ...(typeof opts['suggest-rule'] === 'string' ? { suggest: opts['suggest-rule'] } : {}), ...(intent ? { intent } : {}), ...(typeof opts.checked === 'string' ? { checked: opts.checked } : {}), ...asked });
+      const out = await call('/_lab/api/comments', { page: hit.page, parent: hit.id, nonce: nonceOf(hit.page, hit.id, hit.to, said, words.join(' '), intent || '', opts.checked ?? '', opts['suggest-rule'] ?? '', JSON.stringify(asked || null)), ...(hit.to ? { to: hit.to } : {}), name: signed(), text: words.join(' '), ...(typeof opts['suggest-rule'] === 'string' ? { suggest: opts['suggest-rule'] } : {}), ...(intent ? { intent } : {}), ...(typeof opts.checked === 'string' ? { checked: opts.checked } : {}), ...asked });
       if (out.status === 410) return dropped();
       if (out.status >= 300) die(`Could not reply: ${out.text}`);
       // The page tries each choice in place of the quoted words: a choice that reaches past them is said here.

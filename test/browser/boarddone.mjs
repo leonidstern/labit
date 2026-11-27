@@ -1,6 +1,7 @@
 // A board pin's new mark and its done look (Leo, 26 Nov). One open of an unread pin on a board reads it: its new mark goes
-// and stays gone after a reload ("i needed to read new twice" was two pins on one spot, each new). A done (resolved) pin is
-// see-through: no white disc over the frame or the board under it ("should be transparent"), on a page as on a board.
+// and stays gone after a reload ("i needed to read new twice" was two pins on one spot, each new). A done (resolved) pin has
+// no white disc over the frame or the board under it ("should be transparent"), on a page as on a board, but is not see-through
+// either (27 Nov, "why so transparent"): frosted pale green, faded like any done pin.
 // Not part of `npm test`. Run: node test/browser/boarddone.mjs (needs playwright; NODE_PATH can point at a node_modules that has it).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -34,20 +35,22 @@ try {
       const R = '[...document.querySelectorAll("*")].find((n) => n.shadowRoot?.querySelector(".scrim")).shadowRoot';
       // the open (unread) one: the only board pin that is not done
       const pin = () => p.evaluate(`(() => { const b = ${R}.querySelector('button.pin.onb:not(.resolved)'); if (!b) return null; const q = b.getBoundingClientRect(); const cs = getComputedStyle(b); return { cls: b.className, x: q.x + q.width / 2, y: q.y + q.height / 2, bg: cs.backgroundColor }; })()`);
-      const pins = () => p.evaluate(`[...${R}.querySelectorAll('button.pin')].map((b) => ({ id: b.dataset.id, cls: b.className, bg: getComputedStyle(b).backgroundColor }))`);
+      const pins = () => p.evaluate(`[...${R}.querySelectorAll('button.pin')].map((b) => ({ id: b.dataset.id, cls: b.className, bg: getComputedStyle(b).backgroundColor, op: getComputedStyle(b).opacity }))`);
       // a done pin on the page itself
       await p.goto(B + '/pricing');
       await p.waitForFunction(`Boolean(${R}?.querySelector('button.pin'))`, null, { timeout: 8000 });
       await sleep(600);
       const onPage = (await pins()).find((x) => /resolved/.test(x.cls) && !/\bonb\b/.test(x.cls));
-      check(eng, 'a done pin on a page is see-through (no white disc)', onPage && /rgba\(0, 0, 0, 0\)|transparent/.test(onPage.bg), JSON.stringify(onPage));
+      // frosted: a colour with some alpha, never white, never clear
+      const frosted = (x) => x && /\/ 0\.\d+\)|rgba\(\d+, \d+, \d+, 0\.\d+\)/.test(x.bg) && !/rgba\(0, 0, 0, 0\)|transparent/.test(x.bg);
+      check(eng, 'a done pin on a page is frosted (no white disc, not see-through)', frosted(onPage), JSON.stringify(onPage));
       await p.goto(B + '/pricing#board=done');
       await p.reload();
       await p.waitForFunction(() => document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board .f[data-id="a"] iframe[data-ready]'), null, { timeout: 10000 });
       await sleep(1200);
       const all = await pins();
       const d = all.find((x) => /resolved/.test(x.cls) && /\bonb\b/.test(x.cls));
-      check(eng, 'a done pin on a board is see-through (no white disc)', d && /rgba\(0, 0, 0, 0\)|transparent/.test(d.bg), JSON.stringify(all));
+      check(eng, 'a done pin on a board is frosted (no white disc, not see-through)', frosted(d), JSON.stringify(all));
       const n0 = await pin();
       check(eng, 'an unread board pin wears the new mark', n0 && /\bnew\b/.test(n0.cls), JSON.stringify(n0));
       await p.mouse.click(n0.x, n0.y);

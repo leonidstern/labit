@@ -188,7 +188,10 @@ function editPersonal(key: string, edit: (data: Record<string, unknown>) => void
   let src: string | null = null;
   try {
     src = fs.readFileSync(file, 'utf8');
-  } catch {}
+  } catch (e) {
+    // Only a file that isn't there starts empty: one that can't be read now (no permission, a folder) is not written over.
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error(`${file} can't be read (${(e as Error).message}): fix it, then ${key} can be saved`);
+  }
   if (src !== null) {
     try {
       data = JSON.parse(src);

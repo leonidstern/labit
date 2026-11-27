@@ -9,7 +9,8 @@
 
 const KINDS = ['loop', 'anim', 'video', 'gif'];
 const num = (v, max) => (Number.isFinite(v) ? Math.min(Math.max(v, 0), max) : undefined);
-const cut = (v, n) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '') || undefined;
+// Cut by code points, so an emoji is never split in two.
+const cut = (v, n) => (typeof v === 'string' ? [...v.replace(/\s+/g, ' ').trim()].slice(0, n).join('') : '') || undefined;
 
 /** A moment from a page, checked: anything else is dropped. */
 export function cleanMoment(m) {
