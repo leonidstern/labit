@@ -9,11 +9,11 @@ const extent = (b: Box[]) => {
   const lo = { x: Math.min(...b.map((f) => f.x)), y: Math.min(...b.map((f) => f.y)) };
   return { ...lo, w: Math.max(...b.map((f) => f.x + f.w)) - lo.x, h: Math.max(...b.map((f) => f.y + f.h)) - lo.y };
 };
-/** The zoom that fits all of them with room round, never above 100%. */
+/** The zoom that fits all of them with room round, never above 100%. A view no wider than the room still gets a zoom (1%), never 0 or less. */
 const fitZ = (b: Box[], v: { w: number; h: number }) => {
   if (!b.length) return 1;
   const e = extent(b);
-  return Math.min(1, (v.w - PAD) / e.w, (v.h - PAD) / e.h);
+  return Math.max(0.01, Math.min(1, (v.w - PAD) / e.w, (v.h - PAD) / e.h));
 };
 // Further out than everything fitted (Leo, 19 Nov: "do more zoom out"): to 10 %, or a quarter of the fit when that is less.
 const minZ = (b: Box[], v: { w: number; h: number }) => Math.min(0.1, fitZ(b, v) / 4);
@@ -39,9 +39,11 @@ const hold = (c: number, lo: number, len: number, view: number, z: number, was?:
   if (was !== undefined) [min, max] = [Math.min(min, was), Math.max(max, was)];
   return min > max ? (min + max) / 2 : Math.min(max, Math.max(min, c));
 };
+// The zoom is held to its limits only when it changes: a zoom already below the least one (the view grew, frames went) stays
+// as it was for a pan or a resize, until the person zooms.
 export const clamp = (c: Cam, b: Box[], v: { w: number; h: number }, was?: Cam): Cam => {
   if (!b.length) return c;
-  const z = Math.min(MAX_Z, Math.max(minZ(b, v), c.z));
+  const z = was && c.z === was.z ? Math.min(MAX_Z, c.z) : Math.min(MAX_Z, Math.max(minZ(b, v), c.z));
   const e = extent(b);
   const same = was && Math.abs(was.z - z) < 1e-9 ? was : undefined;
   return { z, x: hold(c.x, e.x, e.w, v.w, z, same?.x), y: hold(c.y, e.y, e.h, v.h, z, same?.y) };
