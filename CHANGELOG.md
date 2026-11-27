@@ -2,6 +2,10 @@
 
 Versions follow [semver](https://semver.org). Before 1.0, a minor version can change how things work.
 
+## Unreleased
+
+- **Agent pins on the spot.** The skill tells agents to pin the exact spot on an image or a big element with `--at x,y`, and `pin` says so when one lands in a picture's centre.
+
 ## 0.8.5 · 2026-11-26
 
 Boards show whole pages and pan like a canvas, pins keep to their element, and one lab runs per dev server. Plus a right-click menu and pin or arrow in the bar.
