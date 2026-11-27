@@ -546,11 +546,11 @@ import { isTap, liftTarget } from './widget/lifttap.ts';
   // writing one — mid-sentence the page's own pointer is what you want, not a second pin waiting to be dropped.
   const setPinning = () => {
     const placing = S.on && !anyWriting() && !S.draft && !using(); // an open new comment, empty or not, gives the page its own pointer (Leo, 18 Nov); so does the arrow (Leo, 26 Nov)
-    // A phone's sheet (a new comment, a thread, the chat) covers the page with its dimmed layer: nothing on the page can be
-    // pointed at, held or selected until it closes, so the page's rules stay as they are. Each flip of this attribute
-    // restyles the whole page (its rules are on every element: html:has(...) body *), ~11 ms on the iOS 27 simulator, twice
-    // a new comment (27 Nov).
-    const covered = S.on && !using() && coarse && sheetMode.matches && host.hasAttribute('data-sheet');
+    // A phone's new comment covers the page with its sheet and dimmed layer: nothing on the page can be pointed at, held or
+    // selected until it closes, so the page's rules stay as they are. Each flip of this attribute restyles the whole page
+    // (its rules are on every element: html:has(...) body *), ~11 ms on the iOS 27 simulator, twice a new comment (27 Nov).
+    // Writing in a thread or the chat still flips it, as before.
+    const covered = Boolean(S.draft) && S.on && !using() && coarse && sheetMode.matches && host.hasAttribute('data-sheet');
     host.toggleAttribute('data-lab-pinning', placing || covered); // not a class on <html>: a framework that hydrates the page (Next) reports it
     sayMode();
     recheck();
@@ -1971,33 +1971,40 @@ import { isTap, liftTarget } from './widget/lifttap.ts';
   // click that ends such a pull isn't a tap.
   S.sheetDraggedAt = -1e9;
   scrim.addEventListener('click', () => performance.now() - S.sheetDraggedAt > 300 && closeOrNudge());
-  // iOS's sheet curve: a move on the dimmed page is the sheet's, once it is one (past TAP_SLOP). A finger's few pixels of
-  // wobble in a tap stay a tap.
-  scrim.addEventListener('touchmove', (e) => S.liftTap?.at !== scrim && e.cancelable && e.preventDefault(), { passive: false });
+  scrim.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false }); // iOS's sheet curve
   // Phones: a tap on a pin or on the dimmed page acts on the finger's lift, not on the click iOS makes of it afterwards.
   // iOS sends a tap's mouse events first and holds its click back when something on the page appears meanwhile (a demo
   // that animates, a pin's tip on :hover): 3 taps in 60 did nothing (iOS 27 simulator, 27 Nov: touchend, then mouseover,
   // and no mousedown or click). The lift's default is stopped, so no click follows to do it a second time.
-  S.liftTap = null;
-  root.addEventListener('touchstart', /** @param {TouchEvent} e */ (e) => {
+  // Only the touch that began on a pin or on the dimmed page is followed, on that element alone (a touch's events all go
+  // to where it began): a scroll or a pull anywhere else in the widget (a thread, the chat) has nothing of this in its way.
+  /** @param {TouchEvent} e */
+  const liftFrom = (e) => {
     const t = e.touches.length === 1 ? e.changedTouches[0] : null;
     const at = t && liftTarget(e.composedPath());
-    S.liftTap = at ? { at, x: t.clientX, y: t.clientY, t: performance.now(), id: t.identifier } : null;
-  }, { passive: true, capture: true });
-  root.addEventListener('touchmove', /** @param {TouchEvent} e */ (e) => {
-    const p = S.liftTap;
-    const t = p && [...e.changedTouches].find((x) => x.identifier === p.id);
-    if (t && !isTap(p, t.clientX, t.clientY, p.t)) S.liftTap = null;
-  }, { passive: true, capture: true });
-  root.addEventListener('touchcancel', () => (S.liftTap = null), { passive: true, capture: true });
-  root.addEventListener('touchend', /** @param {TouchEvent} e */ (e) => {
-    const p = S.liftTap;
-    S.liftTap = null;
-    const t = p && !e.touches.length && [...e.changedTouches].find((x) => x.identifier === p.id);
-    if (!t || !p.at.isConnected || !isTap(p, t.clientX, t.clientY, performance.now()) || !e.cancelable) return;
-    e.preventDefault();
-    p.at.click(); // its own click handler, and the page's click listeners, as for the click iOS would have sent
-  }, { passive: false });
+    if (!t || !at) return;
+    const down = { x: t.clientX, y: t.clientY, t: performance.now() };
+    const mine = (/** @type {TouchEvent} */ ev) => [...ev.changedTouches].find((x) => x.identifier === t.identifier);
+    const done = () => (at.removeEventListener('touchmove', move), at.removeEventListener('touchend', end), at.removeEventListener('touchcancel', done));
+    /** @param {TouchEvent} ev */
+    const move = (ev) => { const m = mine(ev); if (m && !isTap(down, m.clientX, m.clientY, down.t)) done(); };
+    /** @param {TouchEvent} ev */
+    const end = (ev) => {
+      const m = mine(ev);
+      if (!m) return;
+      done();
+      if (ev.touches.length || !at.isConnected || !ev.cancelable || !isTap(down, m.clientX, m.clientY, performance.now())) return;
+      ev.preventDefault();
+      // Its own click handler, and the page's click listeners, as for the click iOS would have sent; after the sheet's own
+      // handling of this lift (a wobble it followed springs back first, sheets.ts swipeDown).
+      setTimeout(() => at.isConnected && at.click(), 0);
+    };
+    at.addEventListener('touchmove', move, { passive: true });
+    at.addEventListener('touchend', end, { passive: false });
+    at.addEventListener('touchcancel', done, { passive: true });
+  };
+  scrim.addEventListener('touchstart', liftFrom, { passive: true });
+  layer.addEventListener('touchstart', liftFrom, { passive: true }); // the pins
   // Android's back gesture closes an open sheet first, like a native one, instead of leaving the page (CloseWatcher,
   // Chrome 120+; elsewhere back works as before). With something typed it nudges, as a tap on the dimmed page does.
   S.backWatcher = null;

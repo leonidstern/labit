@@ -6,7 +6,8 @@
 //   thread opened and closed flips nothing (each flip restyled the whole page);
 // - a tap on a pin or on the dimmed page acts on the finger's lift, so a click the browser holds back (iOS does, when
 //   something on the page appears as it sends the tap's mouse events) loses nothing, and no second click does it twice;
-// - a finger's few pixels of wobble on the dimmed page is still a tap that closes the sheet, not a pull.
+// - a finger's few pixels of wobble on the dimmed page is still a tap that closes the sheet, not a pull; a touch in the
+//   sheet itself (its messages scrolled, the sheet pulled) is left to the sheet.
 // Run: node test/browser/phonenew.mjs (needs playwright). Not part of `npm test`; CI runs it in the `browser` job.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -108,6 +109,19 @@ try {
       }, dy);
       await p.tap(pin1);
       await sleep(800);
+      // A touch in the open thread itself (where its messages scroll and its sheet is pulled) is left to the sheet: no lift
+      // handling, its end not stopped (Leo's phone, 27 Nov: scrolling the chat and pulling a sheet down glitched with it).
+      const inSheet = await p.evaluate(async () => {
+        const body = document.querySelector('[data-lab-comments]').shadowRoot.querySelector('.card .body');
+        try { new Touch({ identifier: 4, target: body, clientX: 1, clientY: 1 }); } catch { return 'no Touch'; }
+        const r = body.getBoundingClientRect();
+        const t = new Touch({ identifier: 4, target: body, clientX: r.left + 40, clientY: r.top + 40 });
+        body.dispatchEvent(new TouchEvent('touchstart', { bubbles: true, composed: true, cancelable: true, touches: [t], targetTouches: [t], changedTouches: [t] }));
+        const end = new TouchEvent('touchend', { bubbles: true, composed: true, cancelable: true, touches: [], targetTouches: [], changedTouches: [t] });
+        body.dispatchEvent(end);
+        return end.defaultPrevented ? 'stopped' : 'left alone';
+      });
+      if (inSheet !== 'no Touch') check(eng, 'a touch inside the open thread is left to the sheet (its end not stopped)', inSheet === 'left alone', inSheet);
       const t1 = await touchOn(40);
       await sleep(900);
       const afterPull = await open();

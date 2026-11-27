@@ -431,7 +431,6 @@ export function swipeDown(node, close, grows = false) {
       const down = t.clientY - y0;
       const across = t.clientX - x0;
       if (!down && !across) return; // iOS sends moves for pressure changes too
-      if (fromScrim && Math.hypot(down, across) <= TAP_SLOP) return; // a tap's wobble on the dimmed page: still a tap, which closes (lifttap.ts)
       const sideways = Math.abs(across) > Math.abs(down);
       // The sheet's top quarter pulls it down too, messages and all, as does the dimmed page above it (Leo, 15 Nov);
       // below that a pull scrolls the messages until they reach their top.
@@ -467,7 +466,8 @@ export function swipeDown(node, close, grows = false) {
     if (fromScrim !== (e.currentTarget === W.scrim)) return;
     const was = mode;
     mode = null;
-    if (was === 'drag') W.S.sheetDraggedAt = performance.now();
+    // A tap's wobble on the dimmed page (the sheet followed it a few px) is still a tap, which closes (lifttap.ts).
+    if (was === 'drag' && !(fromScrim && Math.abs(raw) <= TAP_SLOP)) W.S.sheetDraggedAt = performance.now();
     if (was !== 'drag') return;
     releasedAt = performance.now();
     // How fast the finger (v) and the sheet (vs, which a rubber band slows) were going over the last ~100 ms, px/ms, + down;
