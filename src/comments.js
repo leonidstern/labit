@@ -2347,7 +2347,10 @@ import { bindKeys } from './widget/keys.ts';
   };
   // The Navigation API says when the current entry changed (pushState, replaceState, back and forward alike), so the
   // page's own history is left as it is.
-  /** @type {any} */ (window).navigation.addEventListener('currententrychange', () => queueMicrotask(navigated));
+  // Without it (Safari before 26.2, older Firefox): back and forward still say so; a pushState alone waits for the next load.
+  const nav = /** @type {any} */ (window).navigation;
+  if (nav?.addEventListener) nav.addEventListener('currententrychange', () => queueMicrotask(navigated));
+  else addEventListener('popstate', () => queueMicrotask(navigated));
   document.addEventListener('astro:after-swap', navigated);
   // A framework's hot update that writes the whole <body> again (or swaps it) takes the widget out with it, and with it an
   // unsent comment (issue 428): it is put back at once, its words and cursor as they were. Only <html>'s and <body>'s own

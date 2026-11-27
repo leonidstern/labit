@@ -1691,9 +1691,14 @@ function moveState(from, to) {
     archivedPages.delete(from);
   }
   if (claims.has(from)) {
-    claims.set(to, Math.max(claims.get(from), claims.get(to) || 0));
+    // The newer claim wins whole: its time and its session together (a time from one and an owner from the other
+    // would wake one session for the other's pins).
+    if (!(claims.get(to) > claims.get(from))) {
+      claims.set(to, claims.get(from));
+      if (claimOwner.has(from)) claimOwner.set(to, claimOwner.get(from));
+      else claimOwner.delete(to);
+    }
     claims.delete(from);
-    if (claimOwner.has(from)) claimOwner.set(to, claimOwner.get(from));
     claimOwner.delete(from);
   }
   for (const mine of Object.values(reads)) {

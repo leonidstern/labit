@@ -24,7 +24,7 @@ test('colabit\'s tag and the lab\'s own are found however they are written, and 
     '<script src="/_lab/comments.js" defer></script>',
     '<script src="/_lab/comments.js?v=3" defer></script>',
   ]) assert.equal(stripTags(`<p>a</p>${tag}<p>b</p>`), '<p>a</p><p>b</p>', tag);
-  for (const keep of ['<script src="/app/co.js"></script>', '<script src="/_lab/co.json.js"></script>', '<p>/_lab/co.js in words</p>']) {
+  for (const keep of ['<script src="/app/co.js"></script>', '<script src="/app.js" data-src="/_lab/co.js"></script>', '<script src="/_lab/co.json.js"></script>', '<p>/_lab/co.js in words</p>']) {
     assert.equal(stripTags(keep), keep, keep);
   }
 });
