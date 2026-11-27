@@ -299,6 +299,10 @@ export function roomFor(top: number, lessOnly = false) {
   const own = (de.scrollHeight > innerHeight + 1 ? de.scrollHeight : de.offsetHeight) - had;
   const room = top <= 0 ? 0 : Math.max(0, Math.ceil(top + innerHeight - own));
   if (lessOnly && room >= had) return;
+  // Only a new value is written: a custom property on <html> is inherited by every element of the page, so each change
+  // restyles all of it (17-21 ms on a phone, iOS 27 simulator, 27 Nov). No room, none was there: nothing to write.
+  if (room === had && de.style.getPropertyValue('--lab-room') !== '') return;
+  if (room === 0 && !had) return void de.classList.remove('lab-room');
   de.style.setProperty('--lab-room', `${room}px`);
   de.classList.toggle('lab-room', room > 0);
 }

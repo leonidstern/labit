@@ -72,7 +72,12 @@ const readNode = (node: Element) => {
   if (read?.pass !== pass) {
     const name = nameOf(node);
     const own = (getComputedStyle(node) as CSSStyleDeclaration & { anchorName?: string }).anchorName;
-    seen.set(node, (read = { pass, no: Boolean(own && own !== 'none' && own !== `--${name}`) || inTopLayer(node) || cutOff(node), moves: moves(node) }));
+    // An element that isn't shown (display:none at this width, a closed details) has no box to tie a pin to: its pin is
+    // placed by the script, where its spot was. Held, its rule carried the scroll in its offset (the box read as 0 × 0 at the
+    // window's top), so each drawing after a scroll wrote the sheet again and the whole page was restyled: ~30 ms per
+    // thread opened or closed on a phone (iOS 27 simulator, 27 Nov: a pin on a sidebar nav hidden at phone width).
+    const hidden = node.checkVisibility?.() === false;
+    seen.set(node, (read = { pass, no: hidden || Boolean(own && own !== 'none' && own !== `--${name}`) || inTopLayer(node) || cutOff(node), moves: !hidden && moves(node) }));
   }
   return read;
 };
@@ -168,7 +173,10 @@ export function flushPins() {
   for (const pin of spots.keys()) if (!pin.isConnected) spots.delete(pin); // and the elements they were on, let go
   if (!dirty) return;
   dirty = false;
-  if (!sheet) sheet = Object.assign(document.createElement('style'), { id: 'lab-pinhold' });
+  if (!sheet) {
+    sheet = Object.assign(document.createElement('style'), { id: 'lab-pinhold' });
+    sheet.setAttribute('data-lab-own', ''); // the widget's own: no change to the page's words (anchoring.ts pageChanged)
+  }
   if (!sheet.isConnected) document.head.append(sheet);
   sheet.textContent = [...rules.values(), ...boxes.values()].join('');
 }
