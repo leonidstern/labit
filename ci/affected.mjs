@@ -11,8 +11,8 @@
 // - Everything else, including anything not listed here: every test. So src/comments.js, styles.css, the server
 //   (local.mjs, lib/), package.json, the build script, test.yml, this file, test helpers, and new folders all run the
 //   full set. Unknown means all: a missed test costs more than a run.
-// A merge to main (--main) runs nothing unless it bumps the version, a release, which runs everything; a run started by
-// hand runs everything (--all).
+// A merge to main (--main) runs no browser test (a release ran them all in its PR, which changes the version); a run
+// started by hand runs everything (--all).
 //
 //   node ci/affected.mjs <base> <head>    prints {"tests":"all"|"a b c","native":bool,"bench":bool,"jobs":[…],"why":[…]}
 //   node ci/affected.mjs --main <before> <after>
@@ -393,12 +393,12 @@ export function affected(files, { tests = groupTests(), reach = REACH, diffOf = 
   return { tests: [...pick].sort().join(' '), native, bench, first: [...first], why };
 }
 
-// A merge to main was already tested in its PR, so main runs browser tests only for a release: a merge that changes
-// package.json's version (Leo, 20 Nov: "test whole only on tags"; the tag comes from that merge).
-export function onMain(packageDiff) {
-  return /^[+-]\s*"version"\s*:/m.test(packageDiff)
-    ? { tests: 'all', native: true, bench: true, why: ['package.json: a new version, a release runs every test'] }
-    : { tests: '', native: false, bench: false, why: ['main: tested in its PR; only a release (a version bump) runs the browsers'] };
+// A release is tested whole in its own PR, before it merges: a PR that changes package.json's version runs every
+// browser test in both engines and every unit test on Node 22, 24 and 26 (Leo, 27 Nov: fast but safe releases; it used
+// to run after the merge, while publish.yml was already putting it on npm). So a merge to main runs no browser test.
+export const bumpsVersion = (packageDiff) => /^[+-]\s*"version"\s*:/m.test(packageDiff);
+export function onMain() {
+  return { tests: '', native: false, bench: false, why: ['main: tested in its PR (a release in its release PR)'] };
 }
 
 // The files changed from base to head; with no head, to the working tree, uncommitted and new files included.
@@ -454,21 +454,24 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const main = process.argv[2] === '--main';
   const [a, b] = process.argv.slice(main ? 3 : 2);
   const diffOf = (f) => execFileSync('git', ['diff', '-U0', a, b, '--', f], { cwd: ROOT, encoding: 'utf8' });
+  const release = !main && a !== '--all' && !!a && !!b && bumpsVersion(diffOf('package.json'));
   const out = a === '--all' || !a || !b ? { tests: 'all', native: true, bench: true, why: ['full run'] }
-    : main ? onMain(diffOf('package.json'))
+    : release ? { tests: 'all', native: true, bench: true, why: ['package.json: a new version, a release PR runs every test in both engines'] }
+    : main ? onMain()
     : affected(changedFiles(a, b), { diffOf, ...reachFor(a, b) });
-  const unitOut = a === '--all' || !a || !b || main ? { unit: 'all', why: [] } : unitAffected(changedFiles(a, b), reachFor(a, b));
+  const unitOut = a === '--all' || !a || !b || main || release ? { unit: 'all', why: [] } : unitAffected(changedFiles(a, b), reachFor(a, b));
+  out.release = release;
   out.unit = unitOut.unit;
   out.unitWhy = unitOut.why;
   const unitCount = out.unit === 'all' ? unitFiles().length : out.unit.split(' ').filter(Boolean).length;
   // Unit files over up to three jobs, about eight files a job; none picked, no job.
   out.unitShards = unitCount ? Array.from({ length: Math.min(3, Math.ceil(unitCount / 8)) }, (_, i) => i + 1) : [];
-  const engines = (process.env.ENGINES || 'webkit').split(',');
+  const engines = release ? ['webkit', 'chromium'] : (process.env.ENGINES || 'webkit').split(',');
   out.jobs = out.tests || out.bench || out.native ? shards(out.tests, { engines, bench: out.bench, native: out.native, first: out.first || [] }) : [];
   console.log(JSON.stringify(out, null, 2));
   if (process.env.GITHUB_OUTPUT) {
     const jobs = out.jobs.map(({ secs, ...j }) => j);
-    fs.appendFileSync(process.env.GITHUB_OUTPUT, `tests=${out.tests}\nnative=${out.native}\nbench=${out.bench}\njobs=${JSON.stringify(jobs)}\nunit=${out.unit}\nunitShards=${JSON.stringify(out.unitShards)}\nunitShardCount=${out.unitShards.length}\n`);
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `tests=${out.tests}\nnative=${out.native}\nbench=${out.bench}\njobs=${JSON.stringify(jobs)}\nunit=${out.unit}\nunitShards=${JSON.stringify(out.unitShards)}\nunitShardCount=${out.unitShards.length}\nrelease=${release}\n`);
   }
   if (process.env.GITHUB_STEP_SUMMARY) {
     const head = out.tests === 'all' ? 'Every browser test' : out.tests ? `Browser tests: ${out.tests}` : 'No browser tests';

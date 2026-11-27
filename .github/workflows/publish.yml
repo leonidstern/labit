@@ -41,9 +41,8 @@ jobs:
           echo "release=$release" >> "$GITHUB_OUTPUT"
           echo "release: $([ $release = 1 ] && echo "$version → latest" || echo "none, $version is on npm")" >> "$GITHUB_STEP_SUMMARY"
 
-      - run: npm test
-        if: steps.v.outputs.release == '1'
-
+      # No tests here: a release is tested whole in its release PR (both engines, Node 22/24/26), and main's rule
+      # merges it only green (Leo, 27 Nov: fast releases). The merge goes to npm in about a minute.
       # Trusted publishing needs npm 11.5.1 or newer.
       - name: Release (latest)
         if: steps.v.outputs.release == '1'

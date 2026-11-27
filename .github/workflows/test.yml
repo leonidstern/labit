@@ -8,7 +8,7 @@ concurrency:
   group: test-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
-  # Node 22 (the oldest labit supports) on every PR; 24 and 26 only on main, where they rarely differ. A PR runs the unit
+  # Node 22 (the oldest labit supports) on every PR; 24 and 26 on a release PR and on main, where they rarely differ. A PR runs the unit
   # test files the plan picked from the reach map (the lines each file runs), over up to three jobs (node --test-shard);
   # main runs them all.
   test:
@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node: ${{ fromJSON(github.event_name == 'pull_request' && '[22]' || '[22, 24, 26]') }}
+        node: ${{ fromJSON(github.event_name == 'pull_request' && needs.plan.outputs.release != 'true' && '[22]' || '[22, 24, 26]') }}
         shard: ${{ fromJSON(needs.plan.outputs.unitShards) }}
     name: test (${{ matrix.node }}, ${{ matrix.shard }}/${{ needs.plan.outputs.unitShardCount }})
     steps:
@@ -80,6 +80,7 @@ jobs:
       unit: ${{ steps.pick.outputs.unit }}
       unitShards: ${{ steps.pick.outputs.unitShards }}
       unitShardCount: ${{ steps.pick.outputs.unitShardCount }}
+      release: ${{ steps.pick.outputs.release }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -102,12 +103,11 @@ jobs:
       - id: pick
         env:
           # A PR runs Safari's engine only (Leo, 20 Nov: half the work per PR; Safari is where labit is used most).
-          # main runs both for a release, and "Run workflow" runs both by hand.
+          # A release PR (a version bump) runs both, ci/affected.mjs adds Chrome's; "Run workflow" runs both by hand.
           ENGINES: ${{ github.event_name == 'pull_request' && 'webkit' || 'webkit,chromium' }}
         run: |
-          # A PR: its merge with base (HEAD^1 is base). A merge to main was tested in its PR, so it runs the browsers only
-          # when it bumps the version, a release (Leo, 20 Nov: "test whole only on tags"; publish.yml tags that merge,
-          # and a tag pushed with the workflow's token starts no run of its own).
+          # A PR: its merge with base (HEAD^1 is base). A merge to main was tested in its PR, so it runs no browser
+          # test: a release ran every one in its release PR, before publish.yml put it on npm (Leo, 27 Nov).
           if [ "${{ github.event_name }}" = pull_request ]; then
             node ci/affected.mjs HEAD^1 HEAD
           elif [ "${{ github.ref }}" = refs/heads/main ] && git cat-file -e "${{ github.event.before }}^{commit}" 2>/dev/null; then
@@ -136,7 +136,7 @@ jobs:
       BROWSER_JOBS: 2 # two test files at a time: the runner's cores sit idle while a test waits on its browser
       # anchoring-torture: one seed of generated pages on a PR (about 35 s in WebKit), both on main and by hand, where
       # its KNOWN list is kept.
-      TORTURE_SEEDS: ${{ github.event_name == 'pull_request' && '1' || '1,2' }}
+      TORTURE_SEEDS: ${{ github.event_name == 'pull_request' && needs.plan.outputs.release != 'true' && '1' || '1,2' }}
     steps:
       - run: echo "Running ${{ matrix.files || 'nothing' }}${{ matrix.bench && ' and the bench' || '' }}" | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/checkout@v4
@@ -165,7 +165,18 @@ jobs:
       - if: matrix.native
         run: node ci/native.mjs
 
-  # One required check name for branch protection, green only when every browser job is, or when the plan picked no
+  # One required check name for main's rule, green only when every unit job is, or when the plan picked no unit test.
+  unit:
+    if: always()
+    needs: [plan, test]
+    runs-on: ubuntu-latest
+    name: unit
+    steps:
+      - run: |
+          test "${{ needs.plan.result }}" = success
+          test "${{ needs.test.result }}" = success || { test "${{ needs.test.result }}" = skipped && test '${{ needs.plan.outputs.unitShards }}' = '[]'; }
+
+  # One required check name for main's rule, green only when every browser job is, or when the plan picked no
   # browser test at all (a docs or CI-only PR).
   browser-all:
     if: always()
