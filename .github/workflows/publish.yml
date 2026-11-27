@@ -54,6 +54,12 @@ jobs:
           V: v${{ steps.v.outputs.version }}
         run: git tag "$V" && git push origin "$V" || echo "tag $V already exists"
 
+      # Colabits load the widget from labit's latest release through jsDelivr (co/vercel.json): its copy of
+      # @latest is dropped at once, so every colabit has the new one within minutes instead of jsDelivr's 12 hours.
+      - name: Colabits on the new release
+        if: steps.v.outputs.release == '1'
+        run: curl -fsS https://purge.jsdelivr.net/gh/leonidstern/labit@latest/co/co.js || echo "couldn't purge jsDelivr (colabits update within 12 hours)"
+
       - name: Waste check on the tag
         if: steps.v.outputs.release == '1'
         env:
