@@ -637,27 +637,32 @@ export class Device {
       return;
     }
     if (this.opening) return; // one navigation, however many times it is asked for
+    this.opening = true; // now, not in the work below: two asks before it runs are still one reload
     this.reloads++;
     this.note('reload', why);
     this.go(async () => {
-      if (widgetFixed()) {
-        // fixed (live.ts now): the page is asked for first. With its dev server down the lab answers a plain 502, with its file
-        // gone its page list (200, for a folder) or "not found": none has a widget. The page stays where it is and asks again
-        // in 2 s, instead of reloading onto that.
-        this.opening = true;
-        const r = await this.ask({ path: this.url, headers: { accept: 'text/html' }, page: true }).catch(() => null);
-        if (!r || r.status >= 400 || !/<script\b[^>]*\bdata-live\b/i.test(r.text)) {
-          this.opening = false;
-          this.waiting = true;
-          const gen = this.gen;
-          this.reloadTimer ||= setTimeout(() => {
-            this.reloadTimer = null;
-            if (gen === this.gen && this.waiting && !this.closed) this.reload(why);
-          }, 2000);
-          return;
+      try {
+        if (widgetFixed()) {
+          // fixed (live.ts now): the page is asked for first. With its dev server down the lab answers a plain 502, with its file
+          // gone its page list (200, for a folder) or "not found": none has a widget. The page stays where it is and asks again
+          // in 2 s, instead of reloading onto that.
+          const r = await this.ask({ path: this.url, headers: { accept: 'text/html' }, page: true }).catch(() => null);
+          if (!r || r.status >= 400 || !/<script\b[^>]*\bdata-live\b/i.test(r.text)) {
+            this.opening = false;
+            this.waiting = true;
+            const gen = this.gen;
+            this.reloadTimer ||= setTimeout(() => {
+              this.reloadTimer = null;
+              if (gen === this.gen && this.waiting && !this.closed) this.reload(why);
+            }, 2000);
+            return;
+          }
         }
+        await this.open();
+      } catch (e) {
+        this.opening = false;
+        throw e;
       }
-      await this.open();
     });
   }
   /** A draft is opened (true), or sent or closed (false): a reload that waited happens once the page is left alone. */

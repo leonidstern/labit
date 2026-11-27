@@ -386,7 +386,9 @@ export async function ensureInstalled(names, say = () => {}) {
       try {
         fs.mkdirSync(lock);
         break;
-      } catch {
+      } catch (e) {
+        // Only a lock that is there means another run: a cache that can't be written is said, not waited on forever.
+        if (e?.code !== 'EEXIST') return void (out[fw] = { ok: false, ms: Date.now() - t0, error: `can't take the install lock ${lock}: ${e?.message || e}` });
         // Another run is installing it (or one died doing so, more than ten minutes ago).
         try {
           if (Date.now() - fs.statSync(lock).mtimeMs > 600e3) fs.rmSync(lock, { recursive: true, force: true });
@@ -396,11 +398,15 @@ export async function ensureInstalled(names, say = () => {}) {
       }
     }
     try {
+      // Another run may have installed it between the look above and taking the lock: then its files stay as they are.
+      if (isInstalled(fw)) return void (out[fw] = { ok: true, ms: Date.now() - t0 });
       if (!Object.keys(FRAMEWORKS[fw].deps).length) {
         fs.writeFileSync(path.join(dir, '.stamp'), stampOf(fw));
         return void (out[fw] = { ok: true, ms: 0 });
       }
       say(`installing ${fw} (${Object.entries(FRAMEWORKS[fw].deps).map(([k, v]) => `${k}@${v}`).join(', ')}) into ${dir}`);
+      // The old stamp goes first: an install that fails half way must not leave a stamp that says the cache is whole.
+      fs.rmSync(path.join(dir, '.stamp'), { force: true });
       fs.rmSync(path.join(dir, 'node_modules'), { recursive: true, force: true });
       fs.rmSync(path.join(dir, 'package-lock.json'), { force: true });
       fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: `torture-cache-${fw}`, private: true, dependencies: FRAMEWORKS[fw].deps }, null, 2));

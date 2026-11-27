@@ -69,14 +69,20 @@ export function plan(rng, opts) {
       const reallyPlain = plain && intent !== 'done';
       const same = t.round === r ? reallyPlain && t.plain && rng.bool(0.7) : rng.bool(0.35); // its round is taken by something else: this one goes after
       const base = { to: t.op, text: oddText(rng, `m${ops.length}`) };
+      let resolves = false;
       if (what === 'reply') push({ t: 'reply', d, ...base }, same);
       else if (what === 'retry') push({ t: 'retry', d, ...base }, same);
-      else if (what === 'areply') push({ t: 'areply', s, ...base, intent, cli: rng.bool(0.35), andResolve: intent === null && rng.bool(0.15) }, same);
-      else if (what === 'killreply') push({ t: 'killreply', s, ...base, after: rng.pick([0, 20, 60, 110, 160]) }, same);
+      else if (what === 'areply') {
+        const cli = rng.bool(0.35);
+        resolves = intent === null && rng.bool(0.15);
+        // A reply with --resolve is two requests (the answer, then the resolve): not plain, so no other reply shares its
+        // thread's round (a person's reply in between reopens the thread).
+        push({ t: 'areply', s, ...base, intent, cli, andResolve: resolves }, same && !(resolves && t.round === r));
+      } else if (what === 'killreply') push({ t: 'killreply', s, ...base, after: rng.pick([0, 20, 60, 110, 160]) }, same);
       else if (what === 'progress') push({ t: 'progress', s, to: t.op, text: `on it ${ops.length}`, cli: rng.bool(0.35) }, same);
       else if (what === 'aresolve') push({ t: 'aresolve', s, to: t.op, cli: rng.bool(0.35) }, same);
       else push({ t: what, d, to: t.op }, same);
-      mark(t, reallyPlain && (what === 'reply' || what === 'areply'));
+      mark(t, reallyPlain && !resolves && (what === 'reply' || what === 'areply'));
       if (what === 'delete' && devices[d].kind === 'laptop') t.gone = true; // the laptop may delete any; a phone mostly may not
       continue;
     }
@@ -185,13 +191,16 @@ export async function run(plan, ctx, opts) {
       return ctx.add('harness', 'browser-did-not-start', `${plan.browser}: ${e.message}`);
     }
     const phone = plan.browser === 'webkit' && wifi;
-    const bctx = await taken.browser.newContext(phone ? { ...taken.devices['iPhone 13'] } : { viewport: { width: 1000, height: 700 } });
-    const page = await bctx.newPage();
+    // The slot goes back, and a context that was made is closed, also when making the context or its page fails.
+    let bctx = null;
+    let page = null;
     ctx.onEnd(async () => {
-      await page.goto('about:blank').catch(() => {});
-      await bctx.close().catch(() => {});
+      await page?.goto('about:blank').catch(() => {});
+      await bctx?.close().catch(() => {});
       taken.release();
     });
+    bctx = await taken.browser.newContext(phone ? { ...taken.devices['iPhone 13'] } : { viewport: { width: 1000, height: 700 } });
+    page = await bctx.newPage();
     await bctx.addInitScript(() => {
       try {
         localStorage.setItem('lab-name', 'Watcher');
@@ -214,6 +223,7 @@ export async function run(plan, ctx, opts) {
   const T = new Map(); // thread id -> { resolved: true | false | null (unknown), progress: true | false | null, chat }
   const byOp = new Map(); // a step's index -> the thread it made
   const unsure = new Set(); // texts of answers that may or may not have landed (a killed command, a restart under it)
+  const saidByCli = new Map(); // text -> { root, op }: answers a labit reply that exited 0 made, which must be there at the end
   let restarts = 0;
   let lastSig = '';
   let labDown = false;
@@ -245,7 +255,13 @@ export async function run(plan, ctx, opts) {
     const lines = new Map();
     const ids = idsIn(text, lines);
     handed.push({ s: s.name, text, ids, lines, acked, at: Date.now(), ...countsIn(text) });
-    ctx.note(`wait of ${s.name} got ${[...ids].join(' ')} (${acked === true ? 'confirmed' : acked ? 'killed after printing it' : 'NOT confirmed'})`);
+    ctx.note(`wait of ${s.name} got ${[...ids].join(' ')} (${acked === true ? 'confirmed' : acked ? 'the ack was sent, its answer lost' : 'NOT confirmed'})`);
+  };
+  // A hand-off the wait printed, then its ack: confirmed only when the lab said yes (204). A refused ack is not; one
+  // whose answer was lost may or may not have reached the lab ('maybe').
+  const takeAndAck = async (s, r) => {
+    const a = await agentRq(lab, sessOf(s), '/_lab/ack', { id: r.headers['x-lab-delivery'] }).catch(() => null);
+    took(s, r.text, a ? a.status === 204 : 'maybe');
   };
   let ending = false;
   const listen = (s) => {
@@ -292,8 +308,7 @@ export async function run(plan, ctx, opts) {
           s.wanted = false; // it died with them in hand: no ack, no more waits until it is told to listen again
           return again(false);
         }
-        took(s, r.text, true);
-        await agentRq(lab, sessOf(s), '/_lab/ack', { id: r.headers['x-lab-delivery'] }).catch(() => {});
+        await takeAndAck(s, r);
         return again(true);
       }
       s.ended.push(`${r.status} ${r.text.slice(0, 80)}`);
@@ -419,11 +434,19 @@ export async function run(plan, ctx, opts) {
         if (r.code !== 0) return M.get(root).gone ? ctx.note(`   refused as it should be: ${r.out.trim()}`) : loud('agent-command-failed', `labit reply on ${root}: ${r.out.trim().slice(0, 300)}`, { step: 'reply', restart: restarts ? 1 : 0 });
         if (M.get(root).gone) return void ctx.add('silent', 'accepted-what-should-be-refused', `labit reply on the deleted thread ${root} said: ${r.out.trim()}`, { step: 'areply' });
         unsure.add(text); // the command printed no id: the reply is found by its words at the end
+        saidByCli.set(text, { root, op: i });
       } else {
         const r = await agentPost(s, { page, parent: root, name: signed(s), text, ...(intent ? { intent } : {}) });
         if (r.status !== 201) return M.get(root).gone ? null : loud('agent-answer-refused', `an answer on ${root}: ${r.status} ${r.text.slice(0, 200)}`, { status: r.status });
         add(r.json().comment, i, page, true, op.s);
-        if (op.andResolve) await agentPost(s, { page, action: 'resolve', id: root });
+        if (op.andResolve) {
+          // The answer stands; the thread is resolved only when the lab said yes to the resolve too.
+          const res = await agentPost(s, { page, action: 'resolve', id: root });
+          if (res.status !== 200) {
+            said(root, true, intent);
+            return loud('agent-answer-refused', `the resolve after an answer on ${root}: ${res.status} ${res.text.slice(0, 200)}`, { status: res.status, step: 'resolve' });
+          }
+        }
       }
       said(root, true, intent);
       if (op.andResolve) Object.assign(T.get(root), { resolved: true, progress: false });
@@ -525,9 +548,8 @@ export async function run(plan, ctx, opts) {
             if (r.status !== 204) loud('wait-failed', `the last wait of ${s.name} answered ${r.status}: ${r.text.slice(0, 200)}`, { status: r.status });
             break;
           }
-          took(s, r.text, true);
+          await takeAndAck(s, r);
           got = true;
-          await agentRq(lab, sessOf(s), '/_lab/ack', { id: r.headers['x-lab-delivery'] }).catch(() => {});
         }
       }
     }
@@ -551,6 +573,11 @@ export async function run(plan, ctx, opts) {
   const all = PAGES.flatMap((p) => truth[p].map((c) => ({ ...c, page: p })));
   // Answers the model could not be sure of (a command that printed no id, or died): found by their words.
   for (const c of all) if (!M.has(c.id) && c.session && unsure.has(c.text)) add(c, -1, c.page, true, -1);
+  // A labit reply that exited 0 said yes: its answer is in its thread (unless the thread was deleted since).
+  for (const [text, { root, op }] of saidByCli) {
+    if (M.get(root)?.gone || all.some((c) => c.parent === root && c.text === text)) continue;
+    ctx.add('silent', 'acknowledged-comment-missing', `an agent's reply "${text.slice(0, 60)}" (step ${op}): labit reply exited 0 and the reply is not in thread ${root}`, { who: 'agent', via: 'cli', ...(restarts ? { restart: lastSig } : {}) });
+  }
   const tags = { ...(restarts ? { restart: lastSig } : {}) };
 
   // 1. The lab holds exactly what was said yes to.

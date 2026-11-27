@@ -17,6 +17,7 @@ const DELAY = Number(process.argv[2] ?? process.env.DELAY ?? 400);
 const MODE = process.argv[3] ?? process.env.MODE ?? 'first';
 const pw = playwright();
 let bug = false;
+let error = false; // the start the verdict needs did not happen
 for (const eng of engines()) {
   const dir = tmp('labit-reorder-');
   const port = claimPort(23000, 1800);
@@ -58,7 +59,12 @@ for (const eng of engines()) {
     // A resolved pin is gone from the page, or stays with "done" in its label (a thread being read keeps its pin).
     const pins = () => shadow(() => { return [...r.querySelectorAll('button.pin')].filter((b) => !/, done/.test(b.getAttribute('aria-label') || '')).length; });
     await p.goto(B + '/');
-    await until(() => { return !!r && r.querySelectorAll('button.pin').length > 0; });
+    // No verdict without the start: the pin on the page (and, below, the card's resolve button).
+    if (!(await until(() => { return !!r && r.querySelectorAll('button.pin').length > 0; }))) {
+      error = true;
+      console.log(`ERROR ${eng} ${MODE}: the pin never showed on the page`);
+      continue;
+    }
     await sleep(1500); // the page has settled: its live stream has said its first message
     if (MODE === 'first') {
       await api({ action: 'resolve', id: comment.id }); // lab: resolved; the page asks changes #1 (held)
@@ -66,7 +72,11 @@ for (const eng of engines()) {
       await api({ action: 'reopen', id: comment.id }); // lab: open again; the page asks changes #2 (at once)
     } else {
       await shadow(() => { r.querySelector('button.pin').click(); });
-      await until(() => { return !![...r.querySelectorAll('.card .btn')].find((b) => b.textContent === 'resolve'); });
+      if (!(await until(() => { return !![...r.querySelectorAll('.card .btn')].find((b) => b.textContent === 'resolve'); }))) {
+        error = true;
+        console.log(`ERROR ${eng} ${MODE}: the pin's card showed no resolve button`);
+        continue;
+      }
       await shadow(() => { [...r.querySelectorAll('.card .btn')].find((b) => b.textContent === 'resolve').click(); }); // POST held DELAY ms
       await sleep(100);
       await api({ action: 'reopen', id: comment.id });
@@ -84,5 +94,5 @@ for (const eng of engines()) {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 }
-console.log(bug ? 'BUG' : 'PASS');
+console.log(bug ? 'BUG' : error ? 'ERROR' : 'PASS');
 process.exit(0);

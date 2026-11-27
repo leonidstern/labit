@@ -55,11 +55,27 @@
   visualViewport.addEventListener('resize', () => busy('vv-resize'));
   visualViewport.addEventListener('scroll', () => busy('vv-scroll'));
   addEventListener('pagehide', () => { snap('pagehide'); flush(true); });
+  // A beacon or a keepalive fetch refuses a body over 64 KiB (all such bodies on the way count together).
+  const LIMIT = 48000;
   const flush = (last) => {
     if (!q.length) return;
-    const body = JSON.stringify({ ua: navigator.userAgent, lines: q.splice(0) });
-    if (last && navigator.sendBeacon) navigator.sendBeacon(SINK, body);
-    else fetch(SINK, { method: 'POST', body, keepalive: true, headers: { 'content-type': 'text/plain' } }).catch(() => {});
+    const lines = q.splice(0);
+    const of = (from, n) => JSON.stringify({ ua: navigator.userAgent, lines: lines.slice(from, from + n) });
+    if (!last) {
+      // While the page runs: a plain request, any size. A batch that fails goes back for the next flush.
+      fetch(SINK, { method: 'POST', body: of(0, lines.length), headers: { 'content-type': 'text/plain' } })
+        .then((r) => { if (!r.ok) throw new Error(r.status); })
+        .catch(() => q.unshift(...lines));
+      return;
+    }
+    // Leaving the page: in pieces under the limit, a keepalive fetch for a piece the beacon refuses.
+    for (let i = 0; i < lines.length; ) {
+      let n = lines.length - i;
+      while (n > 1 && new TextEncoder().encode(of(i, n)).length > LIMIT) n = Math.ceil(n / 2);
+      const part = of(i, n);
+      if (!navigator.sendBeacon?.(SINK, part)) fetch(SINK, { method: 'POST', body: part, keepalive: true, headers: { 'content-type': 'text/plain' } }).catch(() => {});
+      i += n;
+    }
   };
   setInterval(flush, 300);
   addEventListener('load', () => busy('load'));

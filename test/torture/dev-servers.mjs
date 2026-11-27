@@ -739,10 +739,15 @@ export async function run(plan, ctx, opts) {
       const text = l.buf.toString('utf8');
       const widgets = (text.match(/<script src="\/_lab\/comments\.js"/g) || []).length;
       if (widgets !== 1) return silent(widgets ? 'widget-mounted-twice' : 'widget-missing', `GET ${spec.path} through the lab (${l.status}): the page's HTML holds ${widgets} widget tags`, { when: 'as-served', ...(widgets ? {} : { shows: l.status >= 400 ? 'an-error-page' : 'the-page' }) });
-      if (stable((x) => x.buf?.toString('base64')) && d1.buf && text.replace(HOLD, '').replace(WIDGET, '') !== d1.buf.toString('utf8')) {
+      if (stable((x) => x.buf?.toString('base64')) && d1.buf) {
+        // The holder is there, once: taking out one that isn't there would leave the page as it was and pass.
+        const holders = (text.match(HOLD) || []).length;
+        if (holders !== 1) return bad('reload-holder', `GET ${spec.path} through the lab (${l.status}): the page's HTML holds ${holders} reload holders, not one`);
         const [a, b] = [text.replace(HOLD, '').replace(WIDGET, ''), d1.buf.toString('utf8')];
-        const at = [...a].findIndex((ch, k) => ch !== b[k]);
-        return bad('page-body', `the page without the lab's two tags differs from the dev server's at ${at}: ${JSON.stringify(a.slice(Math.max(0, at - 30), at + 50))} for ${JSON.stringify(b.slice(Math.max(0, at - 30), at + 50))}`);
+        if (a !== b) {
+          const at = [...a].findIndex((ch, k) => ch !== b[k]);
+          return bad('page-body', `the page without the lab's two tags differs from the dev server's at ${at}: ${JSON.stringify(a.slice(Math.max(0, at - 30), at + 50))} for ${JSON.stringify(b.slice(Math.max(0, at - 30), at + 50))}`);
+        }
       }
       // (cache-control, content-length, content-encoding and the Content-Security-Policy are the lab's to change on a page: lib/proxy.ts.)
       for (const h of ['content-type', 'location']) if (stable((x) => x.headers[h]) && l.headers[h] !== d1.headers[h]) {
@@ -771,7 +776,13 @@ export async function run(plan, ctx, opts) {
     }
     for (const h of new Set([...Object.keys(d1.headers), ...Object.keys(l.headers)])) {
       if (HOP.includes(h) || h === 'set-cookie' || !stable((x) => x.headers[h])) continue;
-      if (h === 'location' && l.headers[h] && !String(l.headers[h]).includes(`localhost:${dev.port}`)) continue; // a redirect to the dev server's own address comes back as the lab's
+      // A redirect to the dev server's own address may come back as the lab's: only that origin may change, the path,
+      // query and fragment stay.
+      if (h === 'location' && d1.headers[h] !== undefined) {
+        const devOrigin = new RegExp(`^https?://(localhost|127\\.0\\.0\\.1|\\[::1\\]):${dev.port}(?=[/?#]|$)`);
+        const asLab = [lab.base, `http://${from === 'lan' ? LAN : 'localhost'}:${lab.port}`].map((o) => String(d1.headers[h]).replace(devOrigin, o));
+        if (l.headers[h] === d1.headers[h] || asLab.includes(l.headers[h])) continue;
+      }
       if (JSON.stringify(l.headers[h]) !== JSON.stringify(d1.headers[h])) return bad(`header-${h}`, `${h}: ${JSON.stringify(l.headers[h])} through the lab, ${JSON.stringify(d1.headers[h])} directly (status ${l.status})`);
     }
   };
@@ -990,7 +1001,8 @@ export async function run(plan, ctx, opts) {
       const info = await d.info();
       if (info.error) return;
       const num = (await list(m.key)).find((c) => c.id === root)?.num;
-      const drawn = op.via === 'widget' && !broken.size && info.pins?.some((p) => p.label.startsWith(`comment ${num} by `));
+      // Pin numbers count per page: pin 1 here is another thread than pin 1 on the thread's own page.
+      const drawn = op.via === 'widget' && !broken.size && key(d, info) === m.key && info.pins?.some((p) => p.label.startsWith(`comment ${num} by `));
       if (drawn) {
         // Through the widget: the pin is opened, the words typed into its thread, Enter.
         await d.page.evaluate((n) => [...document.querySelectorAll('[data-lab-comments]')][0]?.shadowRoot.querySelector(`button.pin[aria-label^="comment ${n} by "]`)?.click(), num);
@@ -1002,6 +1014,7 @@ export async function run(plan, ctx, opts) {
         await d.page.keyboard.press('Escape').catch(() => {});
         await sleep(150);
         if (!c) return silent('widget-pin-not-saved', `step ${i}: a reply typed into the thread ${root} and sent with Enter is on no page of the lab`, { reached: d.clientNav ? 'client-side' : 'page-load', ...where(d) });
+        if (c.parent !== root) return silent('reply-in-wrong-thread', `step ${i}: a reply typed into pin ${num} (thread ${root} on ${m.key}) was saved under ${c.parent || 'no thread'} on ${c.key}`, { reached: d.clientNav ? 'client-side' : 'page-load', ...where(d) });
         add(c, c.key, i, { via: 'widget' });
       } else {
         const r = await inPage(d, { page: m.key, parent: root, name: d.name, text: op.text });
@@ -1063,8 +1076,9 @@ export async function run(plan, ctx, opts) {
       const loads = d.loads;
       await d.both((p) => p.click(`#nav-${route}`, { timeout: 4000 }));
       const there = async (control) => until(async () => (await d.info(control)).route === route, BOUND, 150);
-      const controlThere = d.control ? await there(true) : true;
-      if (!(await there(false))) return controlThere ? silent('page-click-swallowed', `${d.id}: a click on the link to ${route} changed nothing through the lab (still ${(await d.info()).url}); on the control it went to ${route}`, { what: 'link', ...where(d) }) : void note('   (the link did nothing on the control either)');
+      // A device with no control (the phone) can't say the framework went there: that is no finding, only a note.
+      const controlThere = d.control ? await there(true) : null;
+      if (!(await there(false))) return controlThere ? silent('page-click-swallowed', `${d.id}: a click on the link to ${route} changed nothing through the lab (still ${(await d.info()).url}); on the control it went to ${route}`, { what: 'link', ...where(d) }) : void note(controlThere === null ? `   (the link did nothing through the lab; no control to compare with)` : '   (the link did nothing on the control either)');
       d.clientNav = d.loads === loads ? true : false; // the address changed with no page load: a client-side navigation
       if (!d.clientNav) st.counts.delete(d.id);
       await after(d, d.clientNav ? 'a-client-side-navigation' : 'a-page-load');
@@ -1120,8 +1134,12 @@ export async function run(plan, ctx, opts) {
       // (Not judged when the page loaded again between the clicks: a count starts over then.)
       if (d.control && d.loads === loads && grew(before[1], now[1]) === op.k && grew(before[0], now[0]) !== op.k) silent('page-click-swallowed', `${d.id}: ${op.k} clicks on the page's own button counted ${grew(before[0], now[0])} through the lab and ${op.k} on the control`, { what: 'button', ...where(d) });
       st.counts.set(d.id, true);
-      st.editsSinceCount = new Set();
-      st.labRestartSinceCount = false;
+      // The saves and restarts since a count are the laptop's (the one with a control, which the end compares): the
+      // phone counting does not clear what happened since the laptop's count.
+      if (d.control) {
+        st.editsSinceCount = new Set();
+        st.labRestartSinceCount = false;
+      }
     } else if (op.t === 'dev-restart') {
       const t0 = Date.now();
       devDown = true;
@@ -1315,8 +1333,12 @@ export async function run(plan, ctx, opts) {
         continue;
       }
       // What does the same page do with no lab in front? Only what the control gets right is the lab's.
-      const c = laptop ? await laptop.info(true) : null;
+      // The control counts only on the same route: the laptop's control on / says nothing of the phone's /about.
+      const control = laptop ? await laptop.info(true) : null;
+      const otherRoute = Boolean(control && !control.error && control.url && routeOf(control.url) !== routeOf(i.url));
+      const c = otherRoute ? null : control;
       const controlWrong = c && !c.error ? (c.route ? check(c, routeOf(c.url)) : [{ k: 'page' }]) : null;
+      const noControl = otherRoute ? `(the control is on another route, ${control.url}: nothing to compare)` : '(no control on this device)';
       const cause = devRestarts && labRestarts ? 'both-restarted' : devRestarts ? 'dev-server-restarted' : labRestarts ? 'lab-restarted' : 'no-restart';
       // A page that shows no route at all: what does the dev server itself answer at that address? Its own "not found"
       // or error page (a route it has not picked up) is the framework's, with or without the lab.
@@ -1335,8 +1357,8 @@ export async function run(plan, ctx, opts) {
       // address shows the same). What the lab must do is serve the page on a reload, as a person would.
       else if (d.routeDeletedUnder && !i.route && own?.status === 200 && (await d.page.reload({ waitUntil: 'load', timeout: 20000 }).then(() => until(async () => (await d.info()).route, 4000 * slow, 150)).catch(() => false))) ctx.add('unclear', 'framework-keeps-not-found-after-the-route-came-back', `${fw}: ${d.id} sat on ${i.url} when its file was deleted; after the file came back the tab still shows ${JSON.stringify(i.text.slice(0, 40))} (the dev server answers the page, and a reload through the lab shows it)`, {});
       else if (own && (own.status !== 200 || (!F.spa && fw !== 'webpack' && !/id="tok-page"/.test(own.buf?.toString('utf8') || '')))) ctx.add('unclear', 'framework-shows-no-page-without-the-lab', `${fw}: ${i.url} asked of the dev server directly answers ${own.status} with no page of the project either`, {});
-      else if (!i.route) silent('page-blank-or-error-through-proxy', `${d.id} after ${Date.now() - lastSave} ms: ${i.url} through the lab shows no page (title "${i.title}", ${i.overlay ? 'an error overlay' : 'no overlay'}, text ${JSON.stringify(i.text.slice(0, 80))}), the control shows ${c ? `${c.route} at ${JSON.stringify(c.v)}` : '(no control on this device)'}`, { cause, ...where(d) });
-      else silent('stale-through-proxy', `${d.id} after ${Date.now() - lastSave} ms on ${i.url}: ${wrong.map((w) => `${w.k} shows ${w.got}, the disk has ${w.tok}`).join('; ')}; the control page (no lab) ${c && !c.error ? `shows ${JSON.stringify(c.v)}` : 'could not be read'}\n      the page loaded ${d.loads} times (the control ${laptop?.cloads ?? '-'}), ${i.overlay ? 'shows an error overlay' : 'shows no error overlay'}; its last console errors: ${d.errors.slice(-3).map((e) => `[${e.at - ctx.t0} ms] ${e.text.replace(/\s+/g, ' ').slice(0, 160)}`).join(' | ') || 'none'}`, { res: wrong.every((w) => w.got === null) ? 'the-page-s-scripts-did-not-run' : wrong[0].k, cause, ...where(d) });
+      else if (!i.route) silent('page-blank-or-error-through-proxy', `${d.id} after ${Date.now() - lastSave} ms: ${i.url} through the lab shows no page (title "${i.title}", ${i.overlay ? 'an error overlay' : 'no overlay'}, text ${JSON.stringify(i.text.slice(0, 80))}), the control shows ${c ? `${c.route} at ${JSON.stringify(c.v)}` : noControl}`, { cause, ...(otherRoute ? { control: 'other-route' } : {}), ...where(d) });
+      else silent('stale-through-proxy', `${d.id} after ${Date.now() - lastSave} ms on ${i.url}: ${wrong.map((w) => `${w.k} shows ${w.got}, the disk has ${w.tok}`).join('; ')}; the control page (no lab) ${c && !c.error ? `shows ${JSON.stringify(c.v)}` : otherRoute ? noControl : 'could not be read'}\n      the page loaded ${d.loads} times (the control ${laptop?.cloads ?? '-'}), ${i.overlay ? 'shows an error overlay' : 'shows no error overlay'}; its last console errors: ${d.errors.slice(-3).map((e) => `[${e.at - ctx.t0} ms] ${e.text.replace(/\s+/g, ' ').slice(0, 160)}`).join(' | ') || 'none'}`, { res: wrong.every((w) => w.got === null) ? 'the-page-s-scripts-did-not-run' : wrong[0].k, cause, ...(otherRoute ? { control: 'other-route' } : {}), ...where(d) });
     }
     for (const d of reals()) await after(d, 'the-end');
     // The agent's answers are in their threads on the page: the open pin's thread shows the words.

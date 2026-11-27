@@ -4,7 +4,8 @@
 // version, so nothing tells the widget the list is older than that first message. The gap is the time from the list's
 // GET to the stream's first message (a phone that sleeps or loses the wifi right after a reload makes it long; the torture
 // test's "reload, then offline" steps make it exactly that). Here the stream's connection is held by the test.
-// Run: node test/torture/repros/agent-widget-first-message.mjs   (needs playwright; prints PASS or BUG, exits 0 either way)
+// Run: node test/torture/repros/agent-widget-first-message.mjs   (needs playwright; prints PASS or BUG, or ERROR when the
+// race was not set up, exits 0 either way)
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -41,9 +42,15 @@ try {
   const held = new Promise((r) => (letGo = r));
   let streamAsked = false;
   await page.route('**/_lab/live**', async (route) => { streamAsked = true; await held; await route.continue().catch(() => {}); });
+  // The race needs both: the page's (empty) list loaded, and its live stream held before it said anything.
+  const listed = page.waitForResponse((r) => new URL(r.url()).pathname === '/_lab/api/comments' && r.request().method() === 'GET', { timeout: 10000 }).then(() => true, () => false);
   await page.goto(B + '/index', { waitUntil: 'load' });
   for (let i = 0; i < 50 && !streamAsked; i++) await sleep(100);
-  await sleep(500); // the page has loaded its (empty) list; its live stream is on its way but has not said anything yet
+  if (!streamAsked || !(await listed)) {
+    console.log(`ERROR: the race was not set up (${streamAsked ? '' : 'the live stream was not asked for; '}${(await listed) ? '' : 'the comment list was not loaded'})`);
+    throw Object.assign(new Error('setup'), { quiet: true });
+  }
+  await sleep(100); // the list's answer is applied
   const made = await fetch(B + '/_lab/api/comments', { method: 'POST', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ page: '/index', name: 'Leo', text: 'made while the stream was connecting', anchor: H1 }) });
   if (made.status !== 201) throw new Error('pin: ' + made.status);
   letGo(); // the stream connects now: its first message says "comments: 1"
@@ -55,6 +62,8 @@ try {
   await sleep(1500);
   console.log(`after a second pin through the open stream the page says ${await pins(page)} new (the lab holds 2): the first stays missing until a reload`);
   console.log(shown === 1 ? 'PASS' : 'BUG: a comment made between the list GET and the first live message never reaches the page');
+} catch (e) {
+  if (!e.quiet) throw e;
 } finally {
   await browser?.close().catch(() => {});
   await stop(lab);
