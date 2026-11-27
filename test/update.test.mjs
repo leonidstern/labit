@@ -43,9 +43,11 @@ const HOME2 = path.join(TMP, 'home2');
 fs.mkdirSync(DIR2);
 fs.mkdirSync(HOME2);
 fs.writeFileSync(path.join(DIR2, 'index.html'), '<!doctype html><title>two</title><h1>two</h1>');
-fs.writeFileSync(path.join(HOME2, 'latest.json'), JSON.stringify({ version: '0.0.1', at: Date.now() }));
+// Kept as if npm was just asked (a day ahead, so this test never asks npm itself); it looks again every 300 ms.
+const latest2 = (version) => fs.writeFileSync(path.join(HOME2, 'latest.json'), JSON.stringify({ version, at: Date.now() + 864e5 }));
+latest2('0.0.1');
 const PORT2 = String(claimPort(8600, 90));
-const env2 = { ...env, LABIT_HOME: HOME2 };
+const env2 = { ...env, LABIT_HOME: HOME2, LABIT_UPDATE_CHECK_MS: '300' };
 spawnLab(DIR2, PORT2, { env: env2, detached: true, stdio: 'ignore' }).unref();
 const server2 = () => serverJson(DIR2);
 const alive = (pid) => {
@@ -139,4 +141,16 @@ test('labit update (the agent, asked from the menu) moves the lab onto that rele
   assert.notEqual(server().pid, pid, 'a new lab took over');
   assert.equal(fs.readFileSync(path.join(TMP, 'asked'), 'utf8').trim(), '@leonidstern/labit@9.9.9');
   assert.match(await page(), /<h1>index<\/h1>/);
+});
+
+test('a release that comes out while the lab runs is offered too, on the next page load', async () => {
+  const B2 = `http://localhost:${PORT2}/`;
+  assert.doesNotMatch(await (await fetch(B2)).text(), /data-update=/);
+  latest2('9.9.9');
+  let html = '';
+  for (let i = 0; i < 60 && !/data-update=/.test(html); i++) {
+    await sleep(100);
+    html = await (await fetch(B2)).text();
+  }
+  assert.match(html, /data-update="\{&quot;version&quot;:&quot;9\.9\.9&quot;/);
 });

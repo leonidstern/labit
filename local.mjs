@@ -3301,15 +3301,18 @@ function skipLabs(port) {
   while (held.has(port)) port++;
   return port;
 }
-// A newer labit on npm: said once when the lab starts. Checked at most once a day (kept in ~/.labit/latest.json)
-// with a short timeout, never in CI or with LABIT_NO_UPDATE_CHECK=1. The request names only the package.
+// A newer labit on npm: looked for when the lab starts and again every 3 hours while it runs, so a lab left up for days
+// still offers what came out since (27 Nov: a lab started on 0.8.2 never heard of 0.8.3-0.8.5). Pages take it on their
+// next load. npm is asked at most once per 3 hours (kept in ~/.labit/latest.json) with a short timeout, never in CI or
+// with LABIT_NO_UPDATE_CHECK=1. The request names only the package.
+const UPDATE_CHECK_MS = Number(process.env.LABIT_UPDATE_CHECK_MS) || 108e5;
 async function newerVersion() {
   if (process.env.LABIT_NO_UPDATE_CHECK || (process.env.CI && !process.env.LABIT_OFFER_UPDATE)) return null;
   const file = path.join(path.dirname(REGISTRY), 'latest.json');
   let latest = null;
   try {
     const kept = JSON.parse(fs.readFileSync(file, 'utf8'));
-    if (Date.now() - kept.at < 864e5) latest = kept.version;
+    if (Date.now() - kept.at < UPDATE_CHECK_MS) latest = kept.version;
   } catch {}
   if (!latest) {
     try {
@@ -3323,14 +3326,18 @@ async function newerVersion() {
   }
   return newer(latest, VERSION) ? latest : null;
 }
+let saidNewer = null;
+async function lookForUpdate() {
+  const v = await newerVersion();
+  if (!v || v === saidNewer) return;
+  saidNewer = v;
+  const offer = CMD.startsWith('npx') || process.env.LABIT_OFFER_UPDATE; // a clone or a build updates its own way
+  console.log(`[lab] labit ${v} is out (you have ${VERSION}): ${offer ? 'update from the ⋯ menu' : 'npx @leonidstern/labit@latest'}`);
+  if (offer) UPDATE = { version: v, notes: (await fetchNotes(v, VERSION)) || [] };
+}
 server.on('listening', async () => {
-  newerVersion().then(async (v) => {
-    if (!v) return;
-    const offer = CMD.startsWith('npx') || process.env.LABIT_OFFER_UPDATE; // a clone or a build updates its own way
-    console.log(`[lab] labit ${v} is out (you have ${VERSION}): ${offer ? 'update from the ⋯ menu' : 'npx @leonidstern/labit@latest'}`);
-    if (!offer) return;
-    UPDATE = { version: v, notes: (await fetchNotes(v, VERSION)) || [] };
-  });
+  lookForUpdate();
+  setInterval(lookForUpdate, UPDATE_CHECK_MS).unref();
   origin = `http://localhost:${PORT}`;
   if (process.env.LABIT_LOG_TIMES === '1') console.log(`[lab] listening on ${PORT}`);
   saveServer();
