@@ -433,11 +433,14 @@ import { bindKeys } from './widget/keys.ts';
   // A box has the cursor (not a pin: a pin now stays the same element across redraws, so in Chrome, where a clicked
   // button keeps focus, a clicked pin held every later redraw back).
   const typed = () => /^(textarea|input)$/.test(root.activeElement?.localName || '') || Boolean(/** @type {HTMLElement | null} */ (root.activeElement)?.isContentEditable) || [...root.querySelectorAll('textarea')].some((t) => t.value.trim());
+  let loads = 0; // a load that answers after a newer one (the app moved on to another page, or back) is dropped
   async function load() {
+    const mine = ++loads;
     try {
       const res = await fetch(`${API}?page=${encodeURIComponent(S.page)}`, { headers: headers(), cache: 'no-store' });
       if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
+      if (mine !== loads) return;
       S.comments = data.comments || [];
       S.rev = res.headers.has('x-lab-rev') ? Number(res.headers.get('x-lab-rev')) : null; // the lab's comments version this list is as of
       S.isAdmin = Boolean(data.admin);
@@ -654,10 +657,12 @@ import { bindKeys } from './widget/keys.ts';
     if (moment) payload = { ...payload, anchor: { ...payload.anchor, moment } };
     if ((S.slow || mo?.anySlow()) && payload.anchor && !payload.action) payload = { ...payload, anchor: { ...payload.anchor, slow: true } }; // at ¼ speed
     if (!payload.action && !payload.nonce) payload = { ...payload, nonce: Math.random().toString(36).slice(2) + Date.now().toString(36) };
+    // The page it was written on, for every try: the app may move to another page while it waits to try again.
+    const body = JSON.stringify({ page: S.page, ...payload });
     for (let tries = 0; !res; tries++) {
       try {
         // A pick (thread.ts) may go as the page is hidden or closed: keepalive lets the request finish.
-        res = await fetch(API, { method: 'POST', headers: headers(), body: JSON.stringify({ page: S.page, ...payload }), keepalive: payload.picked !== undefined });
+        res = await fetch(API, { method: 'POST', headers: headers(), body, keepalive: payload.picked !== undefined });
       } catch {
         if (tries >= 150) throw new Error("couldn't reach the lab; your text is still here");
         await new Promise((r) => setTimeout(r, 2000));

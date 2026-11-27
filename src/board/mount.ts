@@ -603,7 +603,7 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
     zoomBox.append(b);
   }
   root.append(zoomBox);
-  const ours = (e: Event) => inside(e, zoomBox); // its own clicks, not the board's
+  const ours = (e: Event) => inside(e, zoomBox) || inside(e, done); // its own clicks (zoom, done), not the board's
 
   // ---------- input: the board owns its surface (these run before the widget's own listeners) ----------
   // Points are the box's own: the screen's less where the box is.
@@ -1161,8 +1161,10 @@ export function mountBoard(root: HTMLElement, name: string, opts: MountOpts = {}
      *  screen. A frame is drawn whole now, so a spot far down it is far down the board, never inside a frame that scrolls. */
     look: (a: { frame?: string; fx?: number; fy?: number; bx?: number; by?: number }) => {
       measure();
-      const f = find(a.frame || '')?.f;
-      const [wx, wy] = f && a.fx !== undefined ? [f.x + a.fx / kx(f), f.y + (a.fy || 0) / ky(f)] : [a.bx || 0, a.by || 0];
+      const c = find(a.frame || '');
+      const f = c?.f;
+      const p = inFrame(c, a as FramePin); // where its element is now, as spot draws it (an edit may have moved it far)
+      const [wx, wy] = f && p ? [f.x + p[0] / kx(f), f.y + p[1] / ky(f)] : [a.bx || 0, a.by || 0];
       const [sx, sy] = [(wx + cam.x) * cam.z, (wy + cam.y) * cam.z];
       if (sx < 40 || sy < 60 || sx > view.w - 40 || sy > view.h - 60) go({ ...cam, x: view.w / 2 / cam.z - wx, y: view.h / 3 / cam.z - wy });
     },

@@ -329,6 +329,7 @@ export function startLive() {
       who.hidden = false;
     };
     let commentsRev = null; // the lab's comments version this page has (not the read marks, `seen`)
+    let catchWant: number | null = null; // the version a page still loading its list waits to catch up to
     let readsAt = null;
     let hotAt = W.script.dataset.hot ? +W.script.dataset.hot : null; // the lab's hot count when this page was served: a save since then is still caught up
     const samePath = (u, paths) => {
@@ -450,10 +451,17 @@ export function startLive() {
         // The page's list of comments isn't in yet (the page just loaded): a comment made between that list being read
         // and this state is in this state's version but not in the list, and no later state would name it again. Once
         // the list is in, whatever is newer than it is fetched.
-        if (!W.S.loaded) {
-          const want = v.comments;
-          const after = () => (W.S.loaded ? W.S.rev != null && W.S.rev < want && W.loadChanges(W.S.rev) : setTimeout(after, 100));
-          after();
+        // One wait at a time, for the newest version named; never in a board's frame, whose list is the board's and never loads.
+        if (!W.S.loaded && !frame) {
+          const first = catchWant === null;
+          catchWant = Math.max(catchWant ?? 0, v.comments);
+          const after = () => {
+            if (!W.S.loaded) return void setTimeout(after, 100);
+            const want = catchWant!;
+            catchWant = null;
+            if (W.S.rev != null && W.S.rev < want) W.loadChanges(W.S.rev);
+          };
+          if (first) after();
         }
         commentsRev ??= W.S.rev ?? null; // the list's own version: what was written since it was read is fetched below, not lost
         // One version on and it names the pages it changed, none of them this one: nothing to fetch. (An older lab sends
