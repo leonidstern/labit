@@ -31,7 +31,7 @@ let pool = 0; // slots in the sheet
 // What an element is, read once per placing of the pins (newPass): whether a box cuts it off, it sits in the top layer,
 // or the page gives it an anchor name of its own. Read before any pin is written, so placing many pins lays out once.
 let pass = 0;
-const seen = new WeakMap<Element, { pass: number; no: boolean; moves: number }>();
+const seen = new WeakMap<Element, { pass: number; no: boolean; moves: boolean }>();
 /** A new placing of the pins: what was read about their elements is read again. */
 export const newPass = () => void pass++;
 const cutOff = (node: Element) => {
@@ -46,16 +46,14 @@ const cutOff = (node: Element) => {
 // transformed or animated (a board's frames under its camera, a carousel, a header that slides). Only such a pin is
 // held: a pin on still content is placed in the page by the script and scrolls with it for free, where a held one is
 // laid out again at every scroll step (Leo, 20 Nov, measured: 0 vs 320 ms of layout for 40 pins over one scroll).
-// 2: it, or a box around it, is sticky or fixed: the screen holds it while the page scrolls (stuck, below).
-const touch = matchMedia('(pointer: coarse)');
 const moves = (node: Element) => {
-  let m = 0;
   for (let el: Element | null = node; el && el !== document.body && el !== document.documentElement; el = el.parentElement) {
     const s = getComputedStyle(el);
-    if (s.position === 'sticky' || s.position === 'fixed') return 2;
-    if (s.transform !== 'none' || s.translate !== 'none' || s.scale !== 'none' || s.rotate !== 'none' || (s.animationName !== 'none' && el.getAnimations().length)) m = 1;
+    if (s.position === 'sticky' || s.position === 'fixed') return true;
+    if (s.transform !== 'none' || s.translate !== 'none' || s.scale !== 'none' || s.rotate !== 'none') return true;
+    if (s.animationName !== 'none' && el.getAnimations().length) return true;
   }
-  return m;
+  return false;
 };
 /** A length for a style, to a hundredth of a pixel (thread.ts ties cards with it too). */
 export const px = (n: number) => `${Math.round(n * 100) / 100}px`;
@@ -84,7 +82,7 @@ const readNode = (node: Element) => {
     // window's top), so each drawing after a scroll wrote the sheet again and the whole page was restyled: ~30 ms per
     // thread opened or closed on a phone (iOS 27 simulator, 27 Nov: a pin on a sidebar nav hidden at phone width).
     const hidden = node.checkVisibility?.() === false;
-    seen.set(node, (read = { pass, no: hidden || Boolean(own && own !== 'none' && own !== `--${name}`) || inTopLayer(node) || cutOff(node), moves: hidden ? 0 : moves(node) }));
+    seen.set(node, (read = { pass, no: hidden || Boolean(own && own !== 'none' && own !== `--${name}`) || inTopLayer(node) || cutOff(node), moves: !hidden && moves(node) }));
   }
   return read;
 };
@@ -104,16 +102,10 @@ export function holdPin(pin: HTMLElement, on: boolean, node: Element | null, lef
   }
   const name = nameOf(node);
   const read = readNode(node);
-  // On a phone or tablet a pin on something the screen holds (a sticky bar) is the script's: held, Safari drew it late
-  // while the page scrolled (70-150 px off) and still ~40 px off after it stopped (iPhone simulator, 27 Nov). It fades
-  // while the page scrolls and is placed again when it stops (stuck: styles.css, comments.js data-scrolling).
-  const stuck = !share && read.moves === 2 && touch.matches;
-  if (read.no || stuck || (!share && !read.moves)) {
+  if (read.no || (!share && !read.moves)) {
     letPin(pin);
-    pin.classList.toggle('stuck', stuck);
     return false;
   }
-  pin.classList.remove('stuck');
   if (node.getAttribute('data-lab-anchor') !== name) node.setAttribute('data-lab-anchor', name); // put back after a live patch
   if (pin.getAttribute('part') !== name) pin.setAttribute('part', name);
   // Only an offset needs the element's box: a share doesn't, and reading a box after the last pin was written lays the

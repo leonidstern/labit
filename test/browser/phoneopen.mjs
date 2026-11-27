@@ -61,7 +61,7 @@ try {
         window.__hook = hook;
       });
       const nav = await p.evaluate(() => ({ anchored: document.getElementById('side').hasAttribute('data-lab-anchor'), bar: document.getElementById('bar').hasAttribute('data-lab-anchor') }));
-      check(eng, 'a pin on an element not shown at this width is not tied to it (nor, on a phone, the sticky bar\'s: the script places it)', !nav.anchored && !nav.bar, JSON.stringify(nav));
+      check(eng, 'a pin on an element not shown at this width is not tied to it (the sticky bar\'s is)', !nav.anchored && nav.bar, JSON.stringify(nav));
       const navPin = await p.evaluate((sel) => { const n = document.querySelector('[data-lab-comments]').shadowRoot.querySelector(sel.replace('[data-lab-comments] ', '')); return { part: n?.getAttribute('part') || '', vis: n && getComputedStyle(n).visibility }; }, label(1));
       check(eng, 'and its pin is the script\'s, out of sight', !navPin.part && navPin.vis === 'hidden', JSON.stringify(navPin));
 

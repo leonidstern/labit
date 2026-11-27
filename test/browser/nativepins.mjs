@@ -210,10 +210,7 @@ try {
       await m.evaluate(() => document.getElementById('box').scrollIntoView({ block: 'center' }));
       await settle(m);
       const mRest = await where(m);
-      // On a phone the sticky header's pin is the script's too: held, Safari drew it late while the page scrolled and off its
-      // spot after (pinhold.ts, stuck). It fades while the page scrolls and is placed again when it stops.
-      const stuck = await m.evaluate(() => [...document.querySelector('[data-lab-comments]').shadowRoot.querySelectorAll('button.pin.stuck')].map((b) => b.getAttribute('aria-label').split(' by')[0]));
-      check(tag, 'on a phone: no pin held by the browser on still content or the sticky header; the sticky one is marked to fade while scrolling', phoneNames.filter((k) => k !== 'shifted').every((k) => mRest[k]?.held === false) && stuck.length === 1, JSON.stringify({ mRest, stuck }));
+      check(tag, 'on a phone: the pin on the sticky header held by the browser, the pins on still content the script\'s', phoneNames.filter((k) => k !== 'shifted').every((k) => mRest[k]?.held === MOVING.has(k)), JSON.stringify(mRest));
       const boxTop = await m.evaluate(() => document.getElementById('box').scrollTop);
       await m.evaluate((t) => (document.getElementById('box').scrollTop = t + 50), boxTop);
       await settle(m);
@@ -221,9 +218,6 @@ try {
       check(tag, 'on a phone, the box scrolls: every pin stays on its spot', same(mRest, mBoxed, phoneNames).length === 0, JSON.stringify(same(mRest, mBoxed, phoneNames)));
       const top0 = await m.evaluate(() => scrollY);
       await m.evaluate((y) => scrollTo(0, y + 160), top0);
-      const faded = await m.evaluate(async () => { await new Promise((r) => setTimeout(r, 80)); const r = document.querySelector('[data-lab-comments]').shadowRoot; return r.host.hasAttribute('data-scrolling') && +getComputedStyle(r.querySelector('button.pin.stuck')).opacity < 0.5; });
-      check(tag, 'on a phone, while the page scrolls the sticky header\'s pin is faded out', faded);
-      await sleep(400); // placed again 150 ms after the scroll stops
       await settle(m);
       const mPaged = await where(m);
       check(tag, "on a phone, the page scrolls: every pin stays on its spot, the sticky header's on screen", same(mRest, mPaged, phoneNames).length === 0 && mPaged.sticky.y >= -30 && mPaged.sticky.y < 60, JSON.stringify({ sticky: mPaged.sticky, off: same(mRest, mPaged, phoneNames) }));
