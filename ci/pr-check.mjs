@@ -7,7 +7,7 @@
 //   npm run check -- --no-browser  skip the browser tests (no playwright here)
 import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { affected, changedFiles, readTimes } from './affected.mjs';
+import { affected, changedFiles, reachFor, readTimes } from './affected.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const args = process.argv.slice(2);
@@ -27,7 +27,8 @@ if (base.startsWith('origin/')) {
   } catch {} // offline: the last fetched one
 }
 const from = execFileSync('git', ['merge-base', base, 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim();
-const picked = affected(changedFiles(from), { diffOf: (f) => execFileSync('git', ['diff', '-U0', from, '--', f], { cwd: ROOT, encoding: 'utf8' }) });
+// With ci/reach-map.json (node ci/reach.mjs, or one downloaded from reach.yml), by the lines changed, as CI picks.
+const picked = affected(changedFiles(from), { diffOf: (f) => execFileSync('git', ['diff', '-U0', from, '--', f], { cwd: ROOT, encoding: 'utf8' }), ...reachFor(from) });
 
 step('build', 'npm', ['run', '--silent', 'build']);
 step('checks', process.execPath, ['ci/reuse.mjs']);

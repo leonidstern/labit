@@ -31,8 +31,9 @@ jobs:
       - name: The newest map
         env:
           GH_TOKEN: ${{ github.token }}
+        # Finished runs, failed ones too: a night with a failed part still uploads its map (those tests always run).
         run: |
-          for id in $(gh run list -R "$GITHUB_REPOSITORY" -w reach.yml -b main -s success -L 10 --json databaseId --jq '.[].databaseId'); do
+          for id in $(gh run list -R "$GITHUB_REPOSITORY" -w reach.yml -b main -s completed -L 10 --json databaseId --jq '.[].databaseId'); do
             gh run download "$id" -R "$GITHUB_REPOSITORY" -n reach-map -D old 2>/dev/null && { echo "from run $id"; break; }
           done
       - if: hashFiles('old/reach-map.json') != ''

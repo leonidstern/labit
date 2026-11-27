@@ -23,41 +23,32 @@ for (const paths of [undefined, (process.env.NODE_PATH || '').split(path.delimit
 
 const seen = new Map(); // url -> Set of generated lines that ran
 const classes = new Set(); // every class an element in labit's shadow roots wore while the test ran: what its CSS styled
-const lineStarts = new Map(); // url -> offsets where each line starts
 
 function record(entries) {
   for (const e of entries) {
     if (!/\/_lab\/[\w-]+\.js(\?|$)/.test(e.url) || !e.source) continue;
     const url = e.url.replace(/^https?:\/\/[^/]+/, '').replace(/\?.*$/, '');
-    let starts = lineStarts.get(url);
-    if (!starts) {
-      starts = [0];
-      for (let i = 0; i < e.source.length; i++) if (e.source.charCodeAt(i) === 10) starts.push(i + 1);
-      lineStarts.set(url, starts);
-    }
-    // Block coverage: ranges nest, the innermost one says whether its code ran. Painted outermost first.
+    // Block coverage: ranges nest, the innermost one says whether its code ran. Painted per character, outermost
+    // first; a line ran when any of its characters (not spaces) did, so a branch not taken on a line that ran doesn't
+    // erase it. The same as linesRan in ci/reach.mjs.
+    const src = e.source;
+    const paint = new Uint8Array(src.length);
     const ranges = e.functions.flatMap((f) => f.ranges).sort((a, b) => a.startOffset - b.startOffset || b.endOffset - a.endOffset);
-    const ran = new Uint8Array(starts.length);
-    const paint = new Int8Array(starts.length).fill(-1);
-    const lineOf = (off) => {
-      let lo = 0;
-      let hi = starts.length - 1;
-      while (lo < hi) {
-        const mid = (lo + hi + 1) >> 1;
-        if (starts[mid] <= off) lo = mid;
-        else hi = mid - 1;
-      }
-      return lo;
-    };
-    for (const r of ranges) {
-      const a = lineOf(r.startOffset);
-      const b = lineOf(Math.max(r.startOffset, r.endOffset - 1));
-      for (let l = a; l <= b; l++) paint[l] = r.count > 0 ? 1 : 0;
+    for (const r of ranges) paint.fill(r.count > 0 ? 1 : 0, r.startOffset, r.endOffset);
+    const ran = [];
+    let line = 1;
+    let on = false;
+    for (let i = 0; i <= src.length; i++) {
+      const c = i < src.length ? src.charCodeAt(i) : 10;
+      if (c === 10) {
+        if (on) ran.push(line);
+        line++;
+        on = false;
+      } else if (c > 32 && paint[i]) on = true;
     }
-    for (let l = 0; l < paint.length; l++) if (paint[l] === 1) ran[l] = 1;
     let set = seen.get(url);
     if (!set) seen.set(url, (set = new Set()));
-    ran.forEach((v, l) => v && set.add(l + 1));
+    for (const l of ran) set.add(l);
   }
 }
 

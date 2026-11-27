@@ -95,8 +95,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # The newest successful run that has the map (a run can end without one).
-          for id in $(gh run list -R "$GITHUB_REPOSITORY" -w reach.yml -b main -s success -L 5 --json databaseId --jq '.[].databaseId' || true); do
+          # The newest finished run that has the map: a run can end without one, and a night with a failed part ends
+          # red with a map (the failed part's tests always run).
+          for id in $(gh run list -R "$GITHUB_REPOSITORY" -w reach.yml -b main -s completed -L 10 --json databaseId --jq '.[].databaseId' || true); do
             gh run download "$id" -R "$GITHUB_REPOSITORY" -n reach-map -D ci 2>/dev/null && { echo "reach map from run $id"; break; }
           done
           [ -f ci/reach-map.json ] || echo "no reach map: every test runs"
@@ -164,6 +165,8 @@ jobs:
       # it takes none of the five macOS runners of its own.
       - if: matrix.native
         run: node ci/native.mjs
+        env:
+          ENGINES: webkit,chromium # both engines, whatever this shard's engine is
 
   # One required check name for main's rule, green only when every unit job is, or when the plan picked no unit test.
   unit:

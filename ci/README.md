@@ -27,7 +27,8 @@ Built so a PR, mostly opened by agents, hears back in about 3 minutes, and a fai
 
 - **Only what the PR can break.** `ci/affected.mjs` picks the browser tests from the files a PR changes (the plan job's
   summary says why). Docs and CI-only PRs run none; a release runs all of them in both engines.
-- **The reach map.** Each night `reach.yml` runs every browser test in Chromium and every unit file on GitHub's runners
+- **The reach map.** Each night `reach.yml` runs every browser test in Chromium (but anchoring-torture, too many pages
+  to follow: it runs when `src/widget/anchoring.ts` changes) and every unit file on GitHub's runners
   (`ci/reach.mjs`, eight jobs side by side, about 3 min); after a merge it only carries the map to the new commit
   (lines moved through the diff, no test run, seconds). It keeps which lines of `src/`, `local.mjs` and `lib/` each one ran, and which widget CSS
   classes it showed. A PR's change to those files runs the tests that reached its changed lines or CSS rules. Every
@@ -37,7 +38,8 @@ Built so a PR, mostly opened by agents, hears back in about 3 minutes, and a fai
   `ci/reach-map.json`, which `ci/affected.mjs` and `npm run check` use.
 - **Even shards.** `ci/browser-tests.json` lists every browser test CI runs with its WebKit time on a CI runner (seconds).
   The plan packs the picked tests into shards of about a minute: WebKit on up to 5 macOS jobs, Chromium on Linux. A new browser test goes in
-  this list, or it never runs in CI; refresh a time from a run's log ("<test> took N s") when it drifts.
+  this list, or it never runs in CI; refresh a time from a run's log ("<test> took N s") when it drifts. A test CI runs
+  in parts (`SPLIT` in `ci/affected.mjs`, e.g. `anchoring-torture@1/3`) logs each part: its time is the parts' sum.
 - **Unit tests by the map too.** The map also keeps the lines each unit test file runs (its labs' included). A PR
   runs the unit files that reach its changed lines (a few for code most of them run), a changed test file itself, and
   the files that name a changed non-code file; over up to three jobs (`node --test-shard`). Main runs them all.

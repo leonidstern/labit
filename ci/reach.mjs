@@ -17,6 +17,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { execFileSync, spawn } from 'node:child_process';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -109,24 +110,24 @@ function mapOf(file) {
 }
 
 // ---------- V8 coverage of a file's own text -> lines that ran ----------
-function linesRan(source, functions) {
-  const starts = [0];
-  for (let i = 0; i < source.length; i++) if (source.charCodeAt(i) === 10) starts.push(i + 1);
-  const lineOf = (off) => {
-    let lo = 0;
-    let hi = starts.length - 1;
-    while (lo < hi) {
-      const mid = (lo + hi + 1) >> 1;
-      if (starts[mid] <= off) lo = mid;
-      else hi = mid - 1;
-    }
-    return lo;
-  };
-  const paint = new Int8Array(starts.length).fill(-1);
+// Block coverage: ranges nest, the innermost one says whether its code ran. Painted per character, outermost first; a
+// line ran when any of its characters (not spaces) did, so a branch not taken on a line that ran doesn't erase it.
+// The same in ci/reach-hook.mjs.
+export function linesRan(source, functions) {
+  const paint = new Uint8Array(source.length);
   const ranges = functions.flatMap((f) => f.ranges).sort((a, b) => a.startOffset - b.startOffset || b.endOffset - a.endOffset);
-  for (const r of ranges) for (let l = lineOf(r.startOffset), b = lineOf(Math.max(r.startOffset, r.endOffset - 1)); l <= b; l++) paint[l] = r.count > 0 ? 1 : 0;
+  for (const r of ranges) paint.fill(r.count > 0 ? 1 : 0, r.startOffset, r.endOffset);
   const out = [];
-  paint.forEach((v, l) => v === 1 && out.push(l + 1));
+  let line = 1;
+  let ran = false;
+  for (let i = 0; i <= source.length; i++) {
+    const c = i < source.length ? source.charCodeAt(i) : 10;
+    if (c === 10) {
+      if (ran) out.push(line);
+      line++;
+      ran = false;
+    } else if (c > 32 && paint[i]) ran = true;
+  }
   return out;
 }
 
@@ -213,6 +214,8 @@ function reduce(dir, maps) {
   return out;
 }
 
+const MAIN = import.meta.url === pathToFileURL(process.argv[1] || '').href;
+
 // ---------- carrying a map to a newer commit, without running a test ----------
 // Each changed file's lines move through the diff (git diff -U0 old new): a line outside a change shifts; a line a
 // change rewrote becomes the new lines that replaced it; lines only added count as run when both lines around them
@@ -244,11 +247,26 @@ export function carryLines(text, diff) {
   return toRanges([...out]);
 }
 
-if (import.meta.url === `file://${process.argv[1]}` && CARRY) {
+if (MAIN && CARRY) {
   const map = JSON.parse(fs.readFileSync(CARRY, 'utf8'));
   const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim();
   const git = (...x) => execFileSync('git', x, { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 << 20 });
-  const changed = git('diff', '--name-only', '--no-renames', map.commit, head).split('\n').filter((f) => CODE.test(f));
+  const files = git('diff', '--name-only', '--no-renames', map.commit, head).split('\n').filter(Boolean);
+  const changed = files.filter((f) => CODE.test(f));
+  // A test changed since the map may run other lines now: it always runs until the night's map (as a failed one).
+  const browserRead = (n) => {
+    try {
+      return fs.readFileSync(path.join(ROOT, 'test/browser', `${n}.mjs`), 'utf8');
+    } catch {
+      return '';
+    }
+  };
+  const edited = files.map((f) => f.match(/^test\/browser\/([\w-]+)\.mjs$/)?.[1]).filter(Boolean);
+  // And the tests that run a changed one as part of themselves (behaviours-choices.mjs imports behaviours.mjs).
+  const stale = Object.keys(map.tests || {}).filter((n) => edited.includes(n) || edited.some((t) => browserRead(n).includes(`'./${t}.mjs'`)));
+  const staleUnit = Object.keys(map.unit || {}).filter((n) => files.includes(`test/${n}.test.mjs`));
+  map.failed = [...new Set([...(map.failed || []), ...stale])];
+  map.unitFailed = [...new Set([...(map.unitFailed || []), ...staleUnit])];
   for (const f of changed) {
     const gone = !fs.existsSync(path.join(ROOT, f));
     const diff = gone ? '' : git('diff', '-U0', '--no-renames', map.commit, head, '--', f);
@@ -261,12 +279,12 @@ if (import.meta.url === `file://${process.argv[1]}` && CARRY) {
   const from = map.commit;
   Object.assign(map, { commit: head, carriedFrom: map.carriedFrom || from, made: new Date().toISOString() });
   fs.writeFileSync(OUT, JSON.stringify(map) + '\n');
-  console.log(`${OUT}: carried from ${from.slice(0, 8)} to ${head.slice(0, 8)} through ${changed.length} changed code file${changed.length === 1 ? '' : 's'}`);
+  console.log(`${OUT}: carried from ${from.slice(0, 8)} to ${head.slice(0, 8)} through ${changed.length} changed code file${changed.length === 1 ? '' : 's'}${stale.length || staleUnit.length ? `; changed tests (run them always): ${[...stale, ...staleUnit].join(' ')}` : ''}`);
   process.exit(0);
 }
 
 // --merge part.json…: the parts as one map (same commit), written to --out.
-if (import.meta.url === `file://${process.argv[1]}` && MERGE) {
+if (MAIN && MERGE) {
   const parts = MERGE.map((f) => JSON.parse(fs.readFileSync(f, 'utf8')));
   const commits = new Set(parts.map((p) => p.commit));
   if (commits.size !== 1) (console.error(`parts from different commits: ${[...commits].join(' ')}`), process.exit(1));
@@ -277,10 +295,11 @@ if (import.meta.url === `file://${process.argv[1]}` && MERGE) {
   process.exit(0);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (MAIN) {
   const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim();
-  if (execFileSync('git', ['status', '--porcelain', '--', 'src', 'lib', 'local.mjs'], { cwd: ROOT, encoding: 'utf8' }).trim()) {
-    console.error('src/, lib/ or local.mjs has changes not committed: the map must match a commit.');
+  // Every folder the map keeps lines of (CODE), so the lines match the commit.
+  if (execFileSync('git', ['status', '--porcelain', '--', 'src', 'lib', 'local.mjs', 'hooks', 'ci', 'bench', 'scripts'], { cwd: ROOT, encoding: 'utf8' }).trim()) {
+    console.error('src/, lib/, local.mjs, hooks/, ci/, bench/ or scripts/ has changes not committed: the map must match a commit.');
     process.exit(1);
   }
   const only = ONLY;

@@ -21,6 +21,7 @@
 // $ENGINES, default webkit), and the reasons and shards to the job summary.
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -157,8 +158,10 @@ const readTest = (n) => {
 // ---------- the reach map (ci/reach.mjs): the lines of the widget and the server each browser test runs ----------
 // A covered file's change runs the tests that ran one of its changed lines (in Chromium, on the map's commit). Not
 // known, so every test: no map, a line the map can't place, or a widget line no test ran (it may be one only WebKit
-// runs). A server line (local.mjs, lib/) no browser test runs is left to the unit tests. A test the map has no lines for (new, or it failed
-// while the map was made) always runs.
+// runs), even beside lines some test ran. A widget's blank, comment, import or type line is in no test's lines: isCode
+// leaves it out.
+// A server line (local.mjs, lib/) no browser test runs is left to the unit tests. A test the map has no lines for (new,
+// or it failed while the map was made) always runs.
 const COVERED = /^(src\/.+\.(ts|js)|local\.mjs|lib\/.+\.(ts|mjs))$/;
 export const readMap = (file = process.env.REACH_MAP || path.join(ROOT, 'ci/reach-map.json')) => {
   try {
@@ -210,13 +213,14 @@ function sample(names, file, map, times) {
   const quickest = [...names].filter((n) => !widest.includes(n)).sort((a, b) => (times[a] ?? 60) - (times[b] ?? 60) || a.localeCompare(b)).slice(0, SAMPLE.quickest);
   return [...widest, ...quickest];
 }
-export function reachOf(file, lines, map, tests, times = readTimes()) {
+export function reachOf(file, lines, map, tests, times = readTimes(), isCode = () => true) {
   if (!map || !lines?.length) return null;
   const mapped = Object.keys(map.tests).filter((n) => tests.has(n));
   const pick = new Set();
   let reached = false;
   for (const l of lines) {
     const ran = mapped.filter((n) => inRanges(map.tests[n][file], [l]));
+    if (!ran.length && file.startsWith('src/') && isCode(l)) return null;
     if (!ran.length) continue;
     reached = true;
     for (const n of ran.length > mapped.length * SHARED ? sample(ran, file, map, times) : ran) pick.add(n);
@@ -226,8 +230,8 @@ export function reachOf(file, lines, map, tests, times = readTimes()) {
   return [...pick];
 }
 
-// The classes a stylesheet's lines style: for each line, the selectors of the rules it sits in (an @media's too).
-export function classesAt(css, lines) {
+// Each line of a stylesheet with the selectors of the rules it sits in (an @media's too).
+function selectorsAt(css) {
   const stack = [];
   const at = [];
   let head = '';
@@ -243,8 +247,29 @@ export function classesAt(css, lines) {
     at[i + 1] = [...inside, ...opened, ...stack, head].join(' ');
     head += ' ';
   });
+  return at;
+}
+const CLASS = /\.(-?[_a-zA-Z][\w-]*)/g;
+// The classes a stylesheet's lines style.
+export function classesAt(css, lines) {
+  const at = selectorsAt(css);
   const out = new Set();
-  for (const l of lines) for (const m of (at[l] || '').matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)) out.add(m[1]);
+  for (const l of lines) for (const m of (at[l] || '').matchAll(CLASS)) out.add(m[1]);
+  return [...out];
+}
+// The same, or null when one of the lines styles no class (@font-face, :host, a keyframe): no class to go by, so every
+// test. Blank and comment lines don't count.
+export function classesOrNull(css, lines) {
+  const at = selectorsAt(css);
+  const text = css.split('\n');
+  const out = new Set();
+  for (const l of lines) {
+    const own = (text[l - 1] || '').replace(/\/\*.*?\*\//g, '').trim();
+    if (!own || own.startsWith('/*') || own.startsWith('*')) continue;
+    const found = [...(at[l] || '').matchAll(CLASS)];
+    if (!found.length) return null;
+    for (const m of found) out.add(m[1]);
+  }
   return [...out];
 }
 export function cssReach(classes, map, tests, times = readTimes()) {
@@ -273,6 +298,7 @@ const unitSource = (n) => fs.readFileSync(path.join(ROOT, 'test', `${n}.test.mjs
 export function unitAffected(files, { map = null, linesOf = () => null, all = unitFiles(), source = unitSource } = {}) {
   const why = [];
   const pick = new Set();
+  let code = false;
   const everything = (reason) => ({ unit: 'all', why: [...why, reason] });
   for (const f of files) {
     const t = f.match(/^test\/([\w-]+)\.test\.mjs$/)?.[1];
@@ -286,6 +312,7 @@ export function unitAffected(files, { map = null, linesOf = () => null, all = un
       if (!map?.unit) return everything(`${f}: no reach map, every unit test`);
       const lines = linesOf(f);
       if (!lines?.length) return everything(`${f}: the reach map can't place its change, every unit test`);
+      code = true;
       const mapped = Object.keys(map.unit).filter((n) => all.includes(n));
       const ran = new Set();
       for (const l of lines) {
@@ -301,11 +328,12 @@ export function unitAffected(files, { map = null, linesOf = () => null, all = un
     for (const n of naming) pick.add(n);
     why.push(naming.length ? `${f}: named by ${naming.join(' ')}` : `${f}: no unit test reads it`);
   }
-  if (map?.unit) for (const n of all) if (!map.unit[n] || map.unitFailed?.includes(n)) if (pick.size) pick.add(n);
+  // A file the map has no lines for (new, or it failed while the map was made) may run the changed code: it runs.
+  if (map?.unit && (code || pick.size)) for (const n of all) if (!map.unit[n] || map.unitFailed?.includes(n)) pick.add(n);
   return { unit: [...pick].sort().join(' '), why };
 }
 
-export function affected(files, { tests = groupTests(), reach = REACH, diffOf = () => '', map = null, linesOf = () => null, classesOf = () => [] } = {}) {
+export function affected(files, { tests = groupTests(), reach = REACH, diffOf = () => '', map = null, linesOf = () => null, classesOf = () => [], isCode = () => () => true } = {}) {
   const why = [];
   const pick = new Set();
   const first = new Set(); // the PR's own test files: run first in their shard, so a red PR shows red early
@@ -358,7 +386,7 @@ export function affected(files, { tests = groupTests(), reach = REACH, diffOf = 
     }
     if (map && COVERED.test(f)) {
       const lines = linesOf(f);
-      const ran = reachOf(f, lines, map, tests);
+      const ran = reachOf(f, lines, map, tests, undefined, isCode(f));
       if (ran) {
         for (const n of ran) pick.add(n);
         why.push(`${f}: ${lines.length} changed line${lines.length === 1 ? '' : 's'} reached by ${ran.length} test${ran.length === 1 ? '' : 's'} (reach map ${map.commit.slice(0, 8)})`);
@@ -369,13 +397,14 @@ export function affected(files, { tests = groupTests(), reach = REACH, diffOf = 
         why.push(`${f}: no browser test runs its changed lines (reach map ${map.commit.slice(0, 8)}); the unit tests do`);
         continue;
       }
-      why.push(`${f}: the reach map can't place its change, so every test`);
+      why.push(lines?.length && f.startsWith('src/') ? `${f}: a changed line the map can't place or no test ran in Chromium (maybe WebKit's alone), so every test` : `${f}: the reach map can't place its change, so every test`);
       all = true;
       continue;
     }
-    if (reach[f]) {
+    // A module whose listed tests CI no longer runs: nothing would guard it, so every test.
+    if (reach[f] && reach[f].some((r) => tests.has(r))) {
       for (const r of reach[f]) if (tests.has(r)) pick.add(r);
-      why.push(`${f}: runs ${reach[f].filter((r) => tests.has(r)).join(' ') || 'nothing (its tests left the groups)'}`);
+      why.push(`${f}: runs ${reach[f].filter((r) => tests.has(r)).join(' ')}`);
       continue;
     }
     if (/^public\/_lab\/[^/]+\.js$/.test(f) && srcChanged) {
@@ -383,7 +412,7 @@ export function affected(files, { tests = groupTests(), reach = REACH, diffOf = 
       continue;
     }
     all = true;
-    why.push(`${f}: runs every test`);
+    why.push(reach[f] ? `${f}: its tests (${reach[f].join(' ')}) aren't in ci/browser-tests.json, so every test` : `${f}: runs every test`);
   }
   // A test the map can't follow runs when a file it is about changes (anchoring-torture: anchoring.ts).
   if (map?.unmapped) for (const [n, about] of Object.entries(map.unmapped)) if (tests.has(n) && files.some((f) => about.includes(f))) (pick.add(n), why.push(`${n}: about ${about.join(' ')}, changed here`));
@@ -408,9 +437,9 @@ export function changedFiles(base, head) {
   return [...new Set([...git('diff', '--name-only', '--no-renames', base), ...git('ls-files', '--others', '--exclude-standard')])];
 }
 
-// The map and the changed lines in its numbers, for a PR whose base is `base`. The map's commit is fetched if this
-// checkout doesn't have it; without it, no map.
-function reachFor(base, head = "HEAD") {
+// The map and the changed lines in its numbers, for a PR whose base is `base`; with no head, the working tree's changes
+// (npm run check). The map's commit is fetched if this checkout doesn't have it; without it, no map.
+export function reachFor(base, head) {
   const map = readMap();
   if (!map) return {};
   const git = (...x) => execFileSync('git', x, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
@@ -425,32 +454,43 @@ function reachFor(base, head = "HEAD") {
   }
   const show = (rev, f) => {
     try {
-      return git('show', `${rev}:${f}`);
+      return rev ? git('show', `${rev}:${f}`) : fs.readFileSync(path.join(ROOT, f), 'utf8');
     } catch {
       return '';
     }
   };
-  // A stylesheet's changed rules, on both sides: what they styled before and what they style now.
+  const diff = (f) => git('diff', '-U0', base, ...(head ? [head] : []), '--', f);
+  // A stylesheet's changed rules, on both sides: what they styled before and what they style now. A changed line that
+  // styles no class: none, so every test.
   const classesOf = (f) => {
     try {
-      const hs = hunks(git('diff', '-U0', base, head, '--', f));
-      const old = classesAt(show(base, f), hs.flatMap(({ a, b }) => Array.from({ length: b }, (_, i) => a + i)));
-      const now = classesAt(show(head, f), hs.flatMap(({ c, d }) => Array.from({ length: d }, (_, i) => c + i)));
-      return [...new Set([...old, ...now])];
+      const hs = hunks(diff(f));
+      const old = classesOrNull(show(base, f), hs.flatMap(({ a, b }) => Array.from({ length: b }, (_, i) => a + i)));
+      const now = classesOrNull(show(head, f), hs.flatMap(({ c, d }) => Array.from({ length: d }, (_, i) => c + i)));
+      return old && now ? [...new Set([...old, ...now])] : [];
     } catch {
       return [];
     }
   };
-  return { map, classesOf, linesOf: (f) => {
+  // A line of the map's commit the build makes code of: not blank, not only a comment, not an import or a type (those
+  // are in no test's lines).
+  const isCode = (f) => {
+    const text = show(map.commit, f).split('\n');
+    return (l) => {
+      const t = (text[l - 1] || '').trim();
+      return !!t && !/^(\/\/|\/\*|\*|import\b|(export )?(type|interface) )/.test(t);
+    };
+  };
+  return { map, classesOf, isCode, linesOf: (f) => {
     try {
-      return backTo(touched(git("diff", "-U0", base, head, "--", f)), git('diff', '-U0', map.commit, base, '--', f));
+      return backTo(touched(diff(f)), git('diff', '-U0', map.commit, base, '--', f));
     } catch {
       return null;
     }
   } };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   const main = process.argv[2] === '--main';
   const [a, b] = process.argv.slice(main ? 3 : 2);
   const diffOf = (f) => execFileSync('git', ['diff', '-U0', a, b, '--', f], { cwd: ROOT, encoding: 'utf8' });
