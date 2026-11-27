@@ -16,7 +16,9 @@ export function bindActions(W: any) {
     anchor.act = act.slice(0, 120);
     if (t.hasAttribute('data-lab-confirm')) anchor.confirm = true;
     const note = t.dataset.labActionNote?.trim();
-    W.store.set(`lab-typing:${W.S.page}:new`, note ? `${act}\n${note}` : act); // the new comment's box starts with these words
+    // The new comment's box starts with these words, unless words not yet sent are in it: those stay.
+    const key = `lab-typing:${W.S.page}:new`;
+    if (!W.store.get(key)?.trim()) W.store.set(key, note ? `${act}\n${note}` : act);
     W.S.openId = null;
     W.begin(anchor);
   }, true);

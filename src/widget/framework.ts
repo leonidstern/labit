@@ -9,13 +9,17 @@ let W: any;
 // Which component drew what a pin is on (components.ts, React, Vue, Svelte): its own file, loaded once the page shows
 // it was drawn by one of them: at start, at load, or the first element the pointer goes over that says so. A pin
 // reads it at once (anchorAt doesn't wait), so it is there before the first click.
+let failed = 0; // its file didn't load (offline, a restarting lab): the pointer looks again in a while, a few times
 const drawnByFramework = (n: any) => Boolean(n && (n.__vueParentComponent || n.__svelte_meta || Object.keys(n).some((k) => k.startsWith('__react'))));
 const lookForFramework = (nodes: Iterable<Element | EventTarget | null>) => {
   if (W.S.components) return;
   for (const n of nodes) {
     if (!drawnByFramework(n)) continue;
     removeEventListener('pointerover', overFramework, true);
-    W.S.components = W.part('components').then((m) => readComponents(m.componentAt), () => (W.S.components = null));
+    W.S.components = W.part('components').then((m) => readComponents(m.componentAt), () => {
+      W.S.components = null;
+      if (++failed < 3) setTimeout(() => addEventListener('pointerover', overFramework, { capture: true, passive: true }), 5000);
+    });
     return;
   }
 };
