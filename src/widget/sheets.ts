@@ -412,9 +412,11 @@ export function swipeDown(node, close, grows = false) {
   let mode = null; // 'drag' the sheet, 'hold' (sideways on a part that doesn't scroll), 'off' (the browser's)
   let box = null; // the scrolling part the touch began in
   let fromScrim = false; // the touch began on the dimmed page under the sheet: that pulls the sheet too
+  let t0 = 0; // when the touch began, for a flick (end)
   const onStart = (e) => {
     fromScrim = e.currentTarget === W.scrim;
     const t = e.touches[0];
+    t0 = e.timeStamp;
     x0 = t.clientX;
     y0 = t.clientY;
     dy = raw = 0;
@@ -492,6 +494,15 @@ export function swipeDown(node, close, grows = false) {
     // A tap's wobble on the dimmed page (the sheet followed it a few px) is still a tap, which closes (lifttap.ts). `raw` is
     // in screen px (scaled by the pinch zoom), lifttap's slop in page px: pinch-zoomed, the slop is scaled the same.
     if (was === 'drag' && !(fromScrim && Math.abs(raw) <= TAP_SLOP * (W.vv?.scale || 1))) W.S.sheetDraggedAt = performance.now();
+    // A phone: a quick flick down on the messages closes the sheet even while they are scrolled down (Leo, 27 Nov, picked on
+    // "can fast swipe of chat/comment act to close drawer like on ios drawer?"); a slower pull still scrolls them. Fast:
+    // 60 px or more, mostly downward, at 0.8 px/ms or more, and still moving as the finger lifts. Not a tablet's windows.
+    const lift = e.changedTouches?.[0];
+    if (was === 'off' && box && box.localName !== 'textarea' && lift && W.sheetMode.matches && !fromScrim) {
+      const down = lift.clientY - y0;
+      const speed = down / Math.max(1, e.timeStamp - t0);
+      if (down >= 60 && Math.abs(lift.clientX - x0) < down / 2 && speed >= 0.8 && e.timeStamp - last.at < 60) return slideAway(node, close, W.ms('slow'), speed);
+    }
     if (was !== 'drag') return;
     releasedAt = performance.now();
     // How fast the finger (v) and the sheet (vs, which a rubber band slows) were going at the end, px/ms, + down (over the
