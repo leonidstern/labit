@@ -13,6 +13,7 @@ import { read as readBoard } from './board.ts';
 import { dashed } from './boardact.ts';
 import { numberOf, UNMATCHED } from './schema.mjs';
 import { loadSettings } from './settings.ts';
+import { keepOutOfGit } from './shipping.ts';
 
 type Ctx = { pos: string[]; opts: Opts; HERE: string; CMD: string; ME: string; die: (msg: string) => never };
 
@@ -44,6 +45,11 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, JSON.stringify(config, null, 2) + '\n');
     console.log(`Added "lab" to ${file}.`);
+    // The entry names this computer's path to labit (or npx): it is for this computer, not the project's repository.
+    // A launch.json labit made is kept out of git here; one already in git is the project's, and only said.
+    const git = keepOutOfGit(file);
+    if (git === 'excluded') console.log('Kept out of git on this computer (.git/info/exclude): the "lab" entry is for this computer only.');
+    if (git === 'tracked') console.log(`${path.relative(root, file)} is in git: the "lab" entry${CMD.startsWith('npx') ? '' : ` names a path on this computer (${ME})`}. Leave it out of your commit unless the team wants it.`);
     console.log('Open this folder in the Claude desktop app and ask Claude to start the "lab" preview.');
     console.log(`Then: run \`${CMD} wait\` in the background and answer the comments.`);
     process.exit(0);
