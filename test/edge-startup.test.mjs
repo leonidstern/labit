@@ -251,7 +251,7 @@ test('--port with something that is no port says so in a line, with no stack tra
   assert.deepEqual(await noPort(['abc', '70000', '99999999', '1.5']), []);
 });
 // Number() reads 0x50 as 80, so the lab tries port 80 instead of saying it is no port.
-test('--port in hex is no port either', { todo: 'local.mjs reads --port 0x50 as port 80' }, async () => {
+test('--port in hex is no port either', async () => {
   assert.deepEqual(await noPort(['0x50']), []);
 });
 

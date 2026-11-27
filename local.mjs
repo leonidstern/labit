@@ -193,7 +193,8 @@ if (pos[0] && !fs.existsSync(pos[0])) die(`No folder ${pos[0]}. Run ${CMD} in yo
 // PORT or labit.json: each is said in a line. They were Node's own errors, with a stack trace.
 if (pos[0] && !fs.statSync(pos[0]).isDirectory()) die(`${pos[0]} is a file, not a folder. Run ${CMD} in your project, or name a folder (see --help)`);
 const askedPort = Number(opts.port || process.env.PORT || 4400);
-if (!Number.isInteger(askedPort) || askedPort < 1 || askedPort > 65535) die(`[lab] ${opts.port || process.env.PORT} is not a port: give a number from 1 to 65535 (--port, PORT, or "port" in labit.json)`);
+// Digits only: Number() reads "0x50" as 80 and "1e3" as 1000.
+if (!/^\d+$/.test(String(opts.port || process.env.PORT || 4400)) || !Number.isInteger(askedPort) || askedPort < 1 || askedPort > 65535) die(`[lab] ${opts.port || process.env.PORT} is not a port: give a number from 1 to 65535 (--port, PORT, or "port" in labit.json)`);
 const proxyUrl = (p) => (/^\d+$/.test(p) ? `http://localhost:${p}` : p);
 if (typeof opts.proxy === 'string' && opts.proxy && !URL.canParse(proxyUrl(opts.proxy))) die(`[lab] ${opts.proxy} is not a dev server's address: give its port (--proxy 3000) or its URL (--proxy http://localhost:3000)`);
 const ROOT = fs.realpathSync(path.resolve(pos[0] || '.'));

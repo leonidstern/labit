@@ -194,7 +194,7 @@ test('line breaks that are not \\n (U+2028, U+2029) do not start a line the lab 
   assert.deepEqual(await breaksLeft({ 'U+2028': '\u2028', 'U+2029': '\u2029' }), []);
 });
 // Python's splitlines() and some terminals end a line at NEL, VT and FF too.
-test('NEL, vertical tab and form feed do not start a line the lab did not write either', { todo: 'the agent text keeps NEL, VT and FF as they are' }, async () => {
+test('NEL, vertical tab and form feed do not start a line the lab did not write either', async () => {
   assert.deepEqual(await breaksLeft({ NEL: '\u0085', VT: '\v', FF: '\f' }), []);
 });
 
