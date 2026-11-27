@@ -3327,17 +3327,24 @@ async function newerVersion() {
   return newer(latest, VERSION) ? latest : null;
 }
 let saidNewer = null;
+// The next look is 3 hours after this one ends, not on a clock from the start: kept from a fetch that ended a moment
+// after a fixed tick, latest.json would still be fresh at the next tick and npm would wait two rounds (6 hours).
 async function lookForUpdate() {
-  const v = await newerVersion();
-  if (!v || v === saidNewer) return;
-  saidNewer = v;
-  const offer = CMD.startsWith('npx') || process.env.LABIT_OFFER_UPDATE; // a clone or a build updates its own way
-  console.log(`[lab] labit ${v} is out (you have ${VERSION}): ${offer ? 'update from the ⋯ menu' : 'npx @leonidstern/labit@latest'}`);
-  if (offer) UPDATE = { version: v, notes: (await fetchNotes(v, VERSION)) || [] };
+  try {
+    const v = await newerVersion();
+    if (!v || v === saidNewer) return;
+    saidNewer = v;
+    const offer = CMD.startsWith('npx') || process.env.LABIT_OFFER_UPDATE; // a clone or a build updates its own way
+    console.log(`[lab] labit ${v} is out (you have ${VERSION}): ${offer ? 'update from the ⋯ menu' : 'npx @leonidstern/labit@latest'}`);
+    if (offer) UPDATE = { version: v, notes: (await fetchNotes(v, VERSION)) || [] };
+  } catch {
+    // offline or npm misbehaving: the next round tries again
+  } finally {
+    setTimeout(lookForUpdate, UPDATE_CHECK_MS).unref();
+  }
 }
 server.on('listening', async () => {
   lookForUpdate();
-  setInterval(lookForUpdate, UPDATE_CHECK_MS).unref();
   origin = `http://localhost:${PORT}`;
   if (process.env.LABIT_LOG_TIMES === '1') console.log(`[lab] listening on ${PORT}`);
   saveServer();
