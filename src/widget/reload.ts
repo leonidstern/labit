@@ -7,6 +7,7 @@ export function reloader({ W, reload, loaded, samePath, idOf, selDirty, board, s
   // A CSS save: load the new stylesheet next to the old one and drop the old one once it's in, so nothing flashes,
   // moves or closes. The saved file's own <link>s, or every same-site one when it's pulled in another way (@import).
   let swapN = 0;
+  const swapOf = new WeakMap<HTMLLinkElement, HTMLLinkElement>(); // a clone -> the link it replaces
   const swapCss = (files) => {
     // A saved stylesheet this page never loaded (another page's) leaves it alone: it used to swap every sheet here, taking
     // it for an @import. One pulled in by @import is in the page's list of what it loaded too (live.ts loaded).
@@ -25,7 +26,7 @@ export function reloader({ W, reload, loaded, samePath, idOf, selDirty, board, s
       next.href = url.href;
       const n = ++swapN;
       next.dataset.labSwap = '' + n; // newer saves have higher numbers: a clone never removes one newer than itself
-      const path = url.pathname;
+      swapOf.set(next, link);
       // The old one goes a frame after the new one has loaded, not in the same task: livereload-js waits a few ms there in WebKit.
       // It loads switched off (media "not all": fetched, not applied) and is switched on once loaded, with the pins placed
       // again in that frame: Chrome applied a loaded sheet and drew the page before its load event ran, so a layout it
@@ -37,7 +38,9 @@ export function reloader({ W, reload, loaded, samePath, idOf, selDirty, board, s
         else next.removeAttribute('media');
         requestAnimationFrame(() => {
           if (!next.isConnected) return; // another clone of the same file took it out first
-          for (const l of (document.querySelectorAll('link[rel~="stylesheet"][href]') as NodeListOf<HTMLLinkElement>)) if (l !== next && !(+l.dataset.labSwap! > n) && new URL(l.href, location.href).pathname === path) l.remove();
+          // Only this link and its own older clones: another link to the same file (another query or media) stays.
+          link.remove();
+          for (const l of (document.querySelectorAll('link[rel~="stylesheet"][href]') as NodeListOf<HTMLLinkElement>)) if (l !== next && swapOf.get(l) === link && !(+l.dataset.labSwap! > n)) l.remove();
           delete next.dataset.labSwap;
         });
         W.reflow();
@@ -48,7 +51,11 @@ export function reloader({ W, reload, loaded, samePath, idOf, selDirty, board, s
   };
   // The address as the file wrote it, with a version on the end: a later patch of the page knows it for the same one.
   const plain = (u) => u.replace(/[?&]lab-v=\w+/g, '');
-  const fresh = (u) => plain(u) + (plain(u).includes('?') ? '&' : '?') + 'lab-v=' + Date.now().toString(36);
+  // Before a #fragment (an SVG sprite's #icon), never after it.
+  const fresh = (u) => {
+    const [a, ...hash] = plain(u).split('#');
+    return a + (a.includes('?') ? '&' : '?') + 'lab-v=' + Date.now().toString(36) + (hash.length ? '#' + hash.join('#') : '');
+  };
   // A picture or SVG: every element that shows it gets the new file (img, srcset, poster, SVG image/use, the tab
   // icon). With no paths: every picture. Returns how many it swapped (none: it's a CSS background, so the stylesheets are).
   const swapImages = (paths) => {
@@ -157,7 +164,6 @@ export function reloader({ W, reload, loaded, samePath, idOf, selDirty, board, s
   };
   // An HTML page: fetch it and change only what differs, in place (scroll, open things and typed text stay). A
   // changed script or stylesheet list can't be patched safely: then it's a normal reload.
-  const ownStyles = () => new Set([W.pageStyle, W.pinCursorStyle]);
   const sheetsOf = (doc) => [...doc.querySelectorAll('link[rel~="stylesheet"]:not([data-lab-swap])')].map((l) => { try { return new URL(l.getAttribute('href'), location.href).pathname; } catch { return ''; } });
   // What the morph touched, to be outlined for a moment: the person sees what the agent's save changed.
   const touched = new Set<Element>();
@@ -237,10 +243,13 @@ export function reloader({ W, reload, loaded, samePath, idOf, selDirty, board, s
   const morphPage = async () => {
     if (board) return;
     const run = ++morphRun;
+    // The page it was fetched for: the app may move to another one (pushState) before it is applied, and then it isn't.
+    const at = location.href.split('#')[0];
+    const gone = () => run !== morphRun || location.href.split('#')[0] !== at;
     try {
-      const res = await fetch(location.href, { cache: 'no-store', headers: { accept: 'text/html', 'x-lab': '1' } });
+      const res = await fetch(at, { cache: 'no-store', headers: { accept: 'text/html', 'x-lab': '1' } });
       const html = await res.text();
-      if (run !== morphRun) return; // a newer save is already being fetched: only the latest is applied
+      if (gone()) return; // a newer save is already being fetched (only the latest is applied), or another page is shown
       const doc = new DOMParser().parseFromString(html, 'text/html');
       // The file is gone for now (a build that clears its folder): the lab answers with its own screen, which has no
       // widget and nobody to hear the file come back. This page stays and follows the file when it is saved again.
@@ -263,15 +272,15 @@ export function reloader({ W, reload, loaded, samePath, idOf, selDirty, board, s
       const markTop = mark?.getBoundingClientRect().top;
       // The browser cross-fades the old page into the new one (View Transitions, Safari 18+ and Chrome; others just swap).
       const apply = () => {
+        if (gone()) return;
         // The page's own new title, with the "(3)" of new messages kept in front.
         if (doc.title !== W.tabTitle.base) {
           W.tabTitle.base = doc.title;
           document.title = doc.title; // drawList puts the "(3)" back in front
           W.drawList();
         }
-        const mine = ownStyles();
-        // The lab's own (data-lab) are the widget's, not the page's.
-        const olds = [...document.head.querySelectorAll('style:not([data-lab])')].filter((x) => !mine.has(x));
+        // The lab's own (data-lab) and the widget's (data-lab-own: the page style, the pointer, the held pins' rules) are not the page's.
+        const olds = [...document.head.querySelectorAll('style:not([data-lab]):not([data-lab-own])')];
         const news = [...doc.head.querySelectorAll('style:not([data-lab])')];
         news.forEach((n, i) => (olds[i] ? olds[i].textContent !== n.textContent && (olds[i].textContent = n.textContent) : document.head.append(document.importNode(n, true))));
         for (const o of olds.slice(news.length)) o.remove();

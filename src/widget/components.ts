@@ -22,7 +22,7 @@ export function componentAt(el) {
     const st = f?._debugStack?.stack;
     if (typeof st !== 'string') return '';
     for (const line of st.split('\n').slice(1)) {
-      const m = /((?:https?|webpack-internal|file):\/\/[^\s()]+?):(\d+):\d+\)?\s*$/.exec(line);
+      const m = /((?:https?|webpack-internal|file):\/\/[^\s]+?):(\d+):\d+\)?\s*$/.exec(line); // (Next's webpack-internal:///(app-pages-browser)/… has parentheses)
       if (m && !/node_modules|react-dom|react-jsx|jsx-dev-runtime|react-server|scheduler/.test(m[1])) return BUILT.test(m[1]) ? '' : `${repoPath(m[1])} (line ${m[2]} as served, may differ from the source)`;
     }
     return '';

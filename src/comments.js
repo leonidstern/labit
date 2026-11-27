@@ -444,7 +444,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
       const res = await fetch(`${API}?page=${encodeURIComponent(S.page)}`, { headers: headers(), cache: 'no-store' });
       if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
-      if (mine !== loads) return;
+      if (mine !== loads) return true; // the newer load brings the list
       S.comments = data.comments || [];
       S.rev = res.headers.has('x-lab-rev') ? Number(res.headers.get('x-lab-rev')) : null; // the lab's comments version this list is as of
       S.isAdmin = Boolean(data.admin);
@@ -460,8 +460,11 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
       setTimeout(found, 3000);
     } catch {
       // Keep what is already on screen when a refresh fails.
+      shownAgain();
+      return false;
     }
     shownAgain();
+    return true;
   }
   // A pin found again somewhere else than its saved path (the page changed around it) says where it is now, so the
   // next look and the agent's text start from there. Once per pin and page load, once the page has settled, and only
@@ -491,10 +494,11 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
     setTimeout(() => (isTrying() ? relook() : found()), 500);
   };
   // Only what changed since comments version `since` (local labs): a reply costs ~1 KB, not the page's whole list.
-  // Anything odd (a gap, an error, an old lab) falls back to the whole list.
+  // Anything odd (a gap, an error, an old lab) falls back to the whole list. Says whether either came in (live.ts asks
+  // the same again on the next state when neither did).
   // One at a time, in the order asked: two answers on the way (wifi) may arrive the other way round, and the older would
   // then overwrite what the newer one brought (a pin resolved, then reopened, shown resolved; a deleted pin back).
-  let changesChain = Promise.resolve();
+  let changesChain = /** @type {Promise<boolean | void>} */ (Promise.resolve());
   const loadChanges = (since) => (changesChain = changesChain.then(() => changesSince(since)));
   async function changesSince(since) {
     try {
@@ -513,6 +517,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
       return load();
     }
     shownAgain();
+    return true;
   }
   function shownAgain() {
     setTimeout(found, 400, true); // an agent's new pin is looked at at once (labit pin waits for it)
@@ -580,7 +585,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
     const ro = 'ResizeObserver' in window ? new ResizeObserver(end) : null;
     ro?.observe(box);
     for (const k of box.children) ro?.observe(k);
-    const timer = setTimeout(() => ro?.disconnect(), 1100);
+    const timer = setTimeout(() => cancel(), 1100); // done: it leaves `stays` too
     const cancel = () => {
       stop();
       ro?.disconnect();
@@ -1251,7 +1256,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
       if (moved) {
         if (!c.resolved && !autoShut.has(c.id) && workState(c)[0] === 'done' && mayResolve(c)) {
           autoShut.add(c.id);
-          send({ action: 'resolve', id: c.id, edit: store.get(`lab-edit:${c.id}`) || undefined }).then(({ comment }) => (Object.assign(c, comment), render()), () => {});
+          send({ action: 'resolve', id: c.id, edit: store.get(`lab-edit:${c.id}`) || undefined }).then(({ comment }) => (Object.assign(c, comment), render()), () => autoShut.delete(c.id)); // failed: tried again on a later render
         }
         if (S.openId !== c.id) return;
       }
@@ -2399,6 +2404,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
     S.comments = [];
     S.draft = null;
     S.openId = null;
+    S.loaded = false; // the new page's list is a first load: its half-written thread or unsent comment comes back
     render();
     load();
   };
