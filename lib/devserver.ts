@@ -1,5 +1,5 @@
-// Finding the project's dev server, for a lab that goes in front of it. Loaded by local.mjs only when it has to look:
-// a bare --proxy, or a project whose package.json has a dev script or a framework. A folder of pages never reads it.
+// Finding the project's dev server, for a lab that goes in front of it. local.mjs looks only for a bare --proxy, or a
+// project whose package.json has a dev script or a framework: a folder of pages never asks.
 import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';

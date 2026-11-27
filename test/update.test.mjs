@@ -80,7 +80,7 @@ test('a newer release is offered in the page, and nothing moves on its own', asy
     await sleep(100);
     html = await page();
   }
-  assert.match(html, /data-update="\{&quot;version&quot;:&quot;9\.9\.9&quot;/);
+  assert.match(html, /data-update="\{&#34;version&#34;:&#34;9\.9\.9&#34;/);
   // Several of the lab's follow rounds (LABIT_FOLLOW_MS) later, it is the same lab and npx was never asked.
   const { pid } = server();
   await sleep(1500);
@@ -152,5 +152,5 @@ test('a release that comes out while the lab runs is offered too, on the next pa
     await sleep(100);
     html = await (await fetch(B2)).text();
   }
-  assert.match(html, /data-update="\{&quot;version&quot;:&quot;9\.9\.9&quot;/);
+  assert.match(html, /data-update="\{&#34;version&#34;:&#34;9\.9\.9&#34;/);
 });

@@ -32,7 +32,7 @@ const INK_ACTIONS = [
   [/^arrow/, 'Move it: take what the arrow starts on and put it where the arrow points, beside what is there (not in place of it).'],
   [/^caret/, "Add something at the caret's tip: what is missing there, from the context (a list item, a word). Make your best guess and say what you added."],
 ];
-export const inkAction = (mark = '') => INK_ACTIONS.find(([re]) => re.test(mark))?.[1] || '';
+const inkAction = (mark = '') => INK_ACTIONS.find(([re]) => re.test(mark))?.[1] || '';
 
 export function useStore(map) {
   db = map;
@@ -339,9 +339,7 @@ function asText(path, comments, origin, whole = false, all = comments) {
     // about the page, with nothing saying it came from the board).
     if (a.kind === 'page') lines.push(a.board ? `on: the board ${a.board}${path.startsWith('/_board/') ? '' : ' over this page'} as a whole (sent from the chat with it open; no spot)` : 'on: the page as a whole (no spot)');
     else if (a.kind === 'board') {
-      // A board pin's board (pin-<id>, +board): which pin it is, by its number, so the thread finds the pin's references.
-      const owner = (a.board || '').startsWith('pin-') && comments.find((x) => x.id === a.board.slice(4));
-      lines.push(a.board && !path.startsWith('/_board/') ? `on: the board ${a.board} over this page${owner ? ` (the board of pin ${numberOf(owner, all)})` : ''}, not the page itself` : 'on: the board, not a page');
+      lines.push(a.board && !path.startsWith('/_board/') ? `on: the board ${a.board} over this page, not the page itself` : 'on: the board, not a page');
       const [dx, dy] = [a.fx ?? 0, a.fy ?? 0];
       lines.push(a.frame ? `near: frame ${a.frame}${a.fx === undefined ? '' : `, ${Math.abs(dx)} px ${dx < 0 ? 'left of' : 'right of'} its left edge, ${Math.abs(dy)} px ${dy < 0 ? 'above' : 'below'} its top`}${a.lay ? ` (made on a phone, the page laid out ${a.lay} px wide: the spot is scaled to the frame's size above)` : ''}` : `at: ${a.bx ?? 0},${a.by ?? 0} on the board (px from its origin)`);
       // A pin on a page's frame keeps what it is on in that page too (src/board/mount.ts): the element and words below, which

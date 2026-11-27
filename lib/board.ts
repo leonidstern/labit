@@ -3,7 +3,11 @@
 // /_lab/board/<name>/<frame>. The lab places frames; callers only give an order.
 import fs from 'node:fs';
 import path from 'node:path';
+import { putAside, writeAtomic } from './files.ts';
 import { IMAGE_FILE, imageInfo } from './images.mjs';
+
+// lib/replies.ts takes the writer from here until the reply rules go (their own PR).
+export { writeAtomic };
 
 export type Frame = { id: string; src: string; kind?: 'image'; file?: string; iw?: number; ih?: number; pv?: number[]; guest?: boolean; w: number; h: number; x?: number; y?: number; label?: string; variantOf?: string; state?: 'live' | 'picked' | 'archived'; auto?: boolean };
 export type Board = { v: 1; name: string; rev: number; title?: string; of?: string; frames: Frame[] };
@@ -125,13 +129,6 @@ export const imageFile = (root: string, name: string, file: string) => {
   return path.join(dirOf(root), safeName(name), file);
 };
 const ser = (b: Board) => `{"v":1,"name":${JSON.stringify(b.name)},"rev":${b.rev}${b.title ? `,"title":${JSON.stringify(b.title)}` : ''}${b.of ? `,"of":${JSON.stringify(b.of)}` : ''},\n"frames":[\n${b.frames.map((f) => '  ' + JSON.stringify({ ...f, auto: undefined })).join(',\n')}\n]}\n`;
-/** Writes a whole file or none of it (through a .tmp beside it), making its folder first. Also the settings' and the
- *  reply rules' writer. */
-export const writeAtomic = (file: string, text: string | Buffer) => {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file + '.tmp', text);
-  fs.renameSync(file + '.tmp', file);
-};
 /** The stored board; null when there is none; a file that can't be read is put aside (never overwritten) and counts as none. */
 export function read(root: string, name: string): Board | null {
   if (!NAME.test(name)) return null; // no board has such a name
@@ -150,7 +147,7 @@ export function read(root: string, name: string): Board | null {
     }
   })();
   if (typeof b === 'string') {
-    fs.renameSync(file, `${file}.broken-${Date.now()}`);
+    putAside(file);
     console.log(`[lab] board ${name} was damaged (${b}); moved it aside`);
     return null;
   }

@@ -174,7 +174,7 @@ test('a lab started with a labit.json: its port, its shortcuts on the page, its 
     if (!html) await sleep(100);
   }
   assert.ok(html, `the lab answers on ${port}, the port in labit.json`);
-  assert.match(html, /data-keys='\{"chat":"x"\}'/, 'only the changed key goes to the page');
+  assert.match(html, /data-keys="\{&#34;chat&#34;:&#34;x&#34;\}"/, 'only the changed key goes to the page');
   const waiting = cli(proj, ['wait', '--timeout', '10'], { XDG_CONFIG_HOME: cfg });
   await sleep(500);
   const t0 = Date.now();
@@ -239,8 +239,8 @@ test('actions in labit.json reach the page, over the list in your settings; the 
     html = await fetch(B + '/').then((r) => r.text(), () => '');
     if (!html) await sleep(100);
   }
-  const attr = html.match(/data-actions='([^']*)'/)?.[1] || '';
-  assert.deepEqual(JSON.parse(attr.replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&amp;/g, '&')), mine, "the project's list, in its order");
+  const attr = html.match(/data-actions="([^"]*)"/)?.[1] || '';
+  assert.deepEqual(JSON.parse(attr.replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))), mine, "the project's list, in its order");
   const key = html.match(/data-admin="([^"]+)"/)?.[1] || '';
   const put = await fetch(B + '/_lab/api/actions', { method: 'PUT', headers: { 'content-type': 'application/json', 'x-lab-admin': key }, body: JSON.stringify({ actions: [] }) });
   assert.equal(put.status, 404, 'no editor on the page, so no endpoint');

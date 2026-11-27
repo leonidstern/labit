@@ -1,5 +1,5 @@
-// The commands that answer and exit: preview, add / remove, list, pages (the labs on this computer) and the agent's
-// wait, reply, resolve, pin, invite. Loaded by local.mjs only for these, so starting a lab never reads it.
+// The commands that answer and exit: preview, publish, gc, list, pages (the labs on this computer), board, update / use,
+// and the agent's wait, reply, resolve, thread, pin, invite.
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
@@ -15,9 +15,9 @@ import { numberOf, UNMATCHED } from './schema.mjs';
 import { loadSettings } from './settings.ts';
 import { keepOutOfGit } from './shipping.ts';
 
-type Ctx = { pos: string[]; opts: Opts; HERE: string; CMD: string; ME: string; die: (msg: string) => never };
+type Ctx = { pos: string[]; opts: Opts; HERE: string; CMD: string; ME: string; die: (msg: string) => never; model: string };
 
-export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promise<void> {
+export async function runCommand({ pos, opts, HERE, CMD, ME, die, model }: Ctx): Promise<void> {
   // ---------- the Claude desktop app's preview pane ----------
   // It starts servers from .claude/launch.json in the session's folder and hands them a free port in PORT.
   if (pos[0] === 'preview') {
@@ -186,7 +186,7 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
     const lab = myLab();
     const arg = action === 'new' ? { topic: [first, ...rest].filter(Boolean).join(' ') } : action === 'list' ? { name: first } : action === 'pick' ? { name: first, frames: rest } : action === 'move' ? { name: first, frame: rest[0] } : { name: first, target: rest[0] };
     if (!['new', 'add', 'move', 'pick', 'list'].includes(action)) die(`Usage: ${CMD} board new "<topic>" [--of /page] [--variants 3 | --widths 390,820,1280 | --flow /a,/b] | add <board> <frame|/page|file.html|image> [--label "…"] [--width N] [--after <frame>] | move <board> <frame> --after <frame> (or --first) | pick <board> <frame>… | list [<board>]`);
-    const out = await labCall(lab.server, '/_lab/api/board', { action, ...arg, of: opts.of, variants: opts.variants, widths: opts.widths, flow: opts.flow, label: opts.label, width: opts.width, after: opts.after, first: opts.first }, mySession(opts.name, opts.model)).catch(() => null);
+    const out = await labCall(lab.server, '/_lab/api/board', { action, ...arg, of: opts.of, variants: opts.variants, widths: opts.widths, flow: opts.flow, label: opts.label, width: opts.width, after: opts.after, first: opts.first }, mySession(opts.name, model)).catch(() => null);
     if (!out) die(`The lab server for ${lab.dir} isn't running. Start it: ${CMD}`);
     let said = out.text;
     try {
@@ -229,7 +229,7 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die }: Ctx): Promis
     const lab = myLab();
     const { dir } = lab;
     let { server } = lab;
-    const session = mySession(opts.name, opts.model);
+    const session = mySession(opts.name, model);
     const gone = () =>
       die(
         process.env.CODEX_SANDBOX_NETWORK_DISABLED

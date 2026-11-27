@@ -32,8 +32,9 @@ function agentNow(env: NodeJS.ProcessEnv = process.env): { kind: string; name: s
 // agent has them (Claude Code: CLAUDE_CODE_SESSION_ID; Codex: CODEX_THREAD_ID; Amp: AMP_CURRENT_THREAD_ID; Cursor:
 // CURSOR_CONVERSATION_ID; opencode 2: OPENCODE_SESSION_ID, the ids their hooks get). Any other agent says its session in
 // LAB_SESSION_ID (Cursor's start hook still sets it, though the Cursor CLI doesn't pass it on to shells).
-// The model the session runs on, for the page: "Sonnet 5.5" from --model, LAB_MODEL or ANTHROPIC_MODEL, where an id
-// like claude-sonnet-5-5 reads as "Sonnet 5.5". Agents don't put their model in the shell's environment: they say it.
+// The model the session runs on, for the page: "Sonnet 5.5" from the model setting (--model, LAB_MODEL or your own
+// settings, lib/settings.ts) or ANTHROPIC_MODEL, where an id like claude-sonnet-5-5 reads as "Sonnet 5.5".
+// Agents don't put their model in the shell's environment: they say it.
 const modelName = (m: unknown = ''): string => {
   const w = String(m).trim().replace(/\[.*\]$/, '');
   const id = /^(?:claude-)?(opus|sonnet|haiku|fable)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?$/i.exec(w);
@@ -52,7 +53,7 @@ export function mySession(asked?: string, model?: string) {
     id,
     name: name.replace(/\s+/g, ' ').slice(0, 40),
     agent: agent.name,
-    model: modelName(model || env.LAB_MODEL || env.ANTHROPIC_MODEL),
+    model: modelName(model || env.ANTHROPIC_MODEL),
     kind: agent.kind,
     url: remote ? `https://claude.ai/code/${remote.replace(/^cse_/, 'session_')}` : agent.kind === 'amp' && safe ? `https://ampcode.com/threads/${id}` : '',
     resume: !safe || remote ? '' : { claude: `claude --resume ${id}`, codex: `codex resume ${id}`, amp: `amp threads continue ${id}`, opencode: `opencode --session ${id}` }[agent.kind || 'claude'] || '',

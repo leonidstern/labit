@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { actionItems, seedFrom, SEED } from './actions.ts';
-import { writeAtomic } from './board.ts';
+import { writeAtomic } from './files.ts';
 
 // The widget's own table (KEYS in src/comments.js), in its order (of two actions on one key the first keeps it), and
 // the one in docs/settings.md: test/settings.test.mjs holds the three together.
