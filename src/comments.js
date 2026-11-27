@@ -2534,7 +2534,10 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
   pageStyle.textContent += '@property --lab-arc { syntax: "<percentage>"; inherits: false; initial-value: 66%; }';
   // The room a phone's sheet made below the page's end (see goTo) stays after the sheet closes, so the page doesn't jump
   // up at the end of the slide; it shrinks away as you scroll back up.
-  pageStyle.textContent += "html.lab-room body::after { content: ''; display: block; height: var(--lab-room, 0px); }";
+  // Registered as not inherited: set on <html> as plain custom property, every element of the page inherited it, and each
+  // change restyled all of it (22 ms on the labit homepage, iOS 27 simulator, 27 Nov). html's own ::after takes it.
+  pageStyle.textContent += '@property --lab-room { syntax: "<length>"; inherits: false; initial-value: 0px; }';
+  pageStyle.textContent += "html.lab-room::after { --lab-room: inherit; content: ''; display: block; height: var(--lab-room); }";
   // While a phone's sheet moves the page (scrolled, then held where it was by --lab-shift), the browser must not move it
   // too: Safari's scroll anchoring took the shift for the page's content moving and scrolled as much again, so a new pin
   // went off screen (Leo's iPhone, 25 Nov, a page with a tall product picture: scrolled 988 for 494).
