@@ -1,6 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@5.66.0/schema.json",
-  "entry": ["local.mjs", "src/comments.js", "src/widget/components.ts", "src/widget/switcher.ts", "src/widget/draw.ts", "src/widget/motion.ts", "src/board/overlay.ts", "src/widget/pics.ts", "src/widget/attach.ts", "src/widget/reload.ts", "src/widget/walkie.ts", "src/widget/tryout.ts", "src/widget/goto.ts", "src/widget/frame.ts", "lib/comments-api.mjs", "lib/board.ts", "lib/build.ts", "lib/boardact.ts", "scripts/*.mjs", "ci/*.mjs", "test/**/*.mjs", "bench/*.mjs", "co/api/comments.mjs", "co/dev.mjs", "co/colabit.mjs"],
+  "entry": ["local.mjs", "src/comments.js", "src/widget/components.ts", "src/widget/switcher.ts", "src/widget/draw.ts", "src/widget/motion.ts", "src/board/overlay.ts", "src/widget/pics.ts", "src/widget/attach.ts", "src/widget/reload.ts", "src/widget/walkie.ts", "src/widget/tryout.ts", "src/widget/goto.ts", "src/widget/frame.ts", "src/widget/chat.ts", "lib/comments-api.mjs", "lib/board.ts", "lib/build.ts", "lib/boardact.ts", "scripts/*.mjs", "ci/*.mjs", "test/**/*.mjs", "bench/*.mjs", "co/api/comments.mjs", "co/dev.mjs", "co/colabit.mjs"],
   "ignore": ["co/api/_lib/**"],
   "project": ["lib/**/*.ts", "lib/**/*.mjs", "src/**/*.{ts,js}", "scripts/**/*.mjs", "ci/**/*.mjs", "co/**/*.mjs"]
 }

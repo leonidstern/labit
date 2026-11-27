@@ -29,14 +29,14 @@ import {
 import { anyWriting, bindComposer, composer } from './widget/composer.ts';
 import { numberOf as pinNumber } from '../lib/schema.mjs';
 import { flushPins, heldPin, holdPin, letPin, newPass, readPins } from './widget/pinhold.ts';
-import { bindMessages, foldRow, foldStatus, isStatus, stampOf } from './widget/messages.ts';
+import { bindMessages, foldRow, foldStatus, isStatus, stamped, stampOf } from './widget/messages.ts';
 import { afterLeave, backFromReveal, bindSheets, backCloses, fromTap, holdKeyboard, leave, letGo, liftedDraft, revealDraft, roomFor, slideAway, startSheets, swipeDown } from './widget/sheets.ts';
 import { bindList, drawList, goTo, lineOf, lineUp, noteOpened, ord, revealOpen, stepBack, stepMoved, stepNew, workState } from './widget/list.ts';
-import { bindChat, drawChat, stamped } from './widget/chat.ts';
-import { bindThread, grab, openAsk, moveTicked, pickByKey, pickTicked, placeBeside, placeCard, threadCard } from './widget/thread.ts';
+import { bindThread, choicesEl, grab, openAsk, moveTicked, pickByKey, pickTicked, placeBeside, placeCard, threadCard } from './widget/thread.ts';
 import { isTrying, pauseTry, relight } from './widget/trial.ts';
 import { bindLive, startLive, MARK_PATHS } from './widget/live.ts';
 import { holdWhileOpen } from './widget/hold.ts';
+import { stickToEnd } from './widget/stick.ts';
 import { inkSvg } from './widget/ink.ts';
 import { bindActions } from './widget/actions.ts';
 import { bindDrag, draftHasText, drawOnce, endDrag, inkSaid, offerSelection, startDrag } from './widget/drag.ts';
@@ -135,6 +135,8 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
     get openSheet() { return openSheet; },
     get part() { return part; },
     patchKids,
+    choicesEl,
+    stickToEnd,
     get pinData() { return pinData; },
     get pinsById() { return pinsById; },
     get pinCursorStyle() { return pinCursorStyle; },
@@ -175,7 +177,6 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
   };
   bindLive(W);
   bindList(W);
-  bindChat(W);
   bindThread(W);
   bindSheets(W);
   const script = /** @type {HTMLScriptElement | null} */ (document.currentScript);
@@ -205,8 +206,8 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
   // styles with it. Asked for once; a module that can't load leaves the rest of the widget as it is.
   const parts = {};
   /** @param {string} name */
-  // colabit is one script: the parts it has (drawing, motion, going to a block) are built into it; the rest it does without.
-  const part = (name) => (parts[name] ??= globalThis.__LAB_CO__ ? (name === 'draw' ? import('./widget/draw.ts') : name === 'motion' ? import('./widget/motion.ts') : name === 'goto' ? import('./widget/goto.ts') : Promise.reject(new Error('not in colabit'))) : import(new URL(`${name}.js`, script?.src || location.href).href));
+  // colabit is one script: the parts it has (drawing, motion, going to a block, the chat) are built into it; the rest it does without.
+  const part = (name) => (parts[name] ??= globalThis.__LAB_CO__ ? (name === 'draw' ? import('./widget/draw.ts') : name === 'motion' ? import('./widget/motion.ts') : name === 'goto' ? import('./widget/goto.ts') : name === 'chat' ? import('./widget/chat.ts') : Promise.reject(new Error('not in colabit'))) : import(new URL(`${name}.js`, script?.src || location.href).href));
   // Shortcuts, action → key: these defaults, with what a project or you changed (labit.json or your settings.json
   // `shortcuts`, passed by the lab as data-keys; docs/settings.md).
   const KEYS = { toggle: 'm', chat: 't', next: 'w', pause: 'p', slow: 's', draw: 'd', done: 'e', reply: 'r', walkie: 'k', pinTool: 'c', arrowTool: 'v', fold: 'h' };
@@ -1133,6 +1134,43 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
   };
   let seekedFor = null; // the open pin whose video was taken back to its frame
   let viewW = 0; // the screen's width without its scrollbar (flipAt)
+  // The chat: its button and count, here on every render; its messages are its own file (src/widget/chat.ts, public/_lab/chat.js),
+  // asked for as the button shows, so it is there by the time the chat opens. Asked to open before it came, it opens
+  // once it has.
+  /** @type {any} */
+  let chatPart = null;
+  /** @type {Promise<any> | null} */
+  let chatAsked = null;
+  const loadChat = () => (chatAsked ??= part('chat').then((m) => (chatPart = m)).catch(() => (chatAsked = null)));
+  function drawChat() {
+    const byId = new Map(S.comments.map((c) => [c.id, c]));
+    // Only the chat's own messages (about the page as a whole) and the replies to them: pins live on the page and in the list.
+    const msgs = S.comments
+      .filter((c) => isPage(c) || (c.parent && isPage(byId.get(c.parent) || {})))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .slice(-150);
+    if (S.on && !chatPart) void loadChat().then((m) => m && S.chatOpen && render());
+    const open = Boolean(S.on && S.chatOpen && chatPart);
+    if (open && chatEl.hidden) S.newFrom = msgs.find(isNew)?.id || null; // opening: a "new" line above the first unread
+    if (!S.chatOpen) S.newFrom = null;
+    if (open) markSeen(msgs.filter(isNew)); // open: what's there is read
+    const fresh = msgs.filter(isNew).length;
+    chatBtn.hidden = !S.on;
+    // "chat" with a count (kept in place, grey 0, when there's nothing new); phones the same, without the key letter.
+    // Phones: the agent's mark sits first on this button (live.ts puts it there). It stays where it is across renders,
+    // so its blink or twitch isn't restarted every time the count is redrawn.
+    const mark = chatBtn.querySelector('.mark');
+    while (chatBtn.lastChild && chatBtn.lastChild !== mark) chatBtn.lastChild.remove();
+    chatBtn.append(coarse ? 'chat' : keyLabel('chat', KEYS.chat), el('b', { class: `cnt${fresh ? '' : ' zero'}` }, String(fresh)));
+    chatBtn.setAttribute('aria-label', `chat, ${fresh} new`);
+    chatBtn.setAttribute('aria-keyshortcuts', KEYS.chat);
+    placeBar(); // the chat button may have just shown: the segment lines follow
+    const opening = chatEl.hidden;
+    chatEl.hidden = !open;
+    if (chatEl.hidden) chatEl.classList.remove('full'); // opens at its lower height again
+    if (chatEl.hidden && chatEl.contains(root.activeElement)) /** @type {HTMLElement} */ (root.activeElement).blur(); // a closed chat keeps no focus, so keys work again
+    if (!chatEl.hidden) chatPart.drawMsgs(W, msgs, byId, opening);
+  }
   function render() {
     // The bar shows from its first drawing on: as it comes in the page's source it holds one empty button with a dot, and that
     // dot stood where the menu comes for as long as the comments took to arrive (Leo, 21 Nov, on his phone over wifi:
@@ -1769,8 +1807,9 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
     if (S.chatOpen) closeOthers(true);
     goOut(hint, () => (hint.hidden = true));
     render();
-    // Computers: the cursor goes in the message box (phones wait for a tap, so the keyboard doesn't cover the chat).
-    if (S.chatOpen && !coarse) /** @type {HTMLElement | null} */ (chatEl.querySelector('.chat textarea'))?.focus({ preventScroll: true });
+    // Computers: the cursor goes in the message box (phones wait for a tap, so the keyboard doesn't cover the chat), once
+    // the chat's part is there (it is, but for a click as the page loads).
+    if (S.chatOpen && !coarse) void loadChat().then(() => S.chatOpen && /** @type {HTMLElement | null} */ (chatEl.querySelector('.chat textarea'))?.focus({ preventScroll: true }));
   });
   // No close cross on the chat: a click outside it, Escape or T closes it (phones: the handle or the dimmed page).
   // On a computer a click outside the chat closes it (phones have the dimmed page for that); what you typed stays.
