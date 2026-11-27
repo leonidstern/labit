@@ -24,6 +24,10 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
+// Where WebKit shards run: GitHub's macOS runners, or Leo's Mac when those are full (test.yml's "Mac overflow" step sets
+// WEBKIT_OS to the Mac runners' labels, a JSON array).
+const WEBKIT_OS = process.env.WEBKIT_OS ? JSON.parse(process.env.WEBKIT_OS) : 'macos-latest';
+
 const ROOT = path.resolve(import.meta.dirname, '..');
 
 // Paths that no browser test reads.
@@ -138,12 +142,12 @@ export function shards(picked, { engines = ['webkit'], times = readTimes(), benc
       const withNative = native && engine === 'webkit' && i === 0;
       // The PR's own test files first, then longest first: a failure shows as early as it can.
       const files = [...b.files.filter((n) => first.includes(n)), ...b.files.filter((n) => !first.includes(n))];
-      if (b.files.length || withBench || withNative) jobs.push({ engine, os: engine === 'webkit' ? 'macos-latest' : 'ubuntu-latest', shard: `${i + 1}/${k}`, files: files.join(' '), bench: withBench, native: withNative, secs: Math.round(b.secs) });
+      if (b.files.length || withBench || withNative) jobs.push({ engine, os: engine === 'webkit' ? WEBKIT_OS : 'ubuntu-latest', shard: `${i + 1}/${k}`, files: files.join(' '), bench: withBench, native: withNative, secs: Math.round(b.secs) });
     });
   }
   // The bench alone, with no WebKit in this run: a job of its own on WebKit.
   // The bench or the native check with no WebKit shard in this run: a job of their own on WebKit.
-  if ((bench || native) && !jobs.some((j) => j.engine === 'webkit' && j.shard.startsWith('1/'))) jobs.push({ engine: 'webkit', os: 'macos-latest', shard: bench ? 'bench' : 'native', files: '', bench, native, secs: 0 });
+  if ((bench || native) && !jobs.some((j) => j.engine === 'webkit' && j.shard.startsWith('1/'))) jobs.push({ engine: 'webkit', os: WEBKIT_OS, shard: bench ? 'bench' : 'native', files: '', bench, native, secs: 0 });
   return jobs;
 }
 

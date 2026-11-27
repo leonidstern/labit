@@ -101,6 +101,27 @@ jobs:
             gh run download "$id" -R "$GITHUB_REPOSITORY" -n reach-map -D ci 2>/dev/null && { echo "reach map from run $id"; break; }
           done
           [ -f ci/reach-map.json ] || echo "no reach map: every test runs"
+      # Mac overflow (Leo, 27 Nov: "take some ci on mac" when the queue is long): GitHub runs 5 macOS jobs at a time for
+      # the account and a PR's WebKit takes up to 5, so a second PR waited for the first. When those are taken, this PR's
+      # WebKit shards go to the runners on Leo's Mac (labels self-hosted + labit-mac). Only while the repository variable
+      # MAC_RUNNERS is "on" (gh variable set MAC_RUNNERS --body off, when the Mac is away), and never for a fork's PR: the
+      # repository is public, and a stranger's PR would run its code on the Mac.
+      - name: Mac overflow
+        if: github.event_name == 'pull_request' && vars.MAC_RUNNERS == 'on' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          busy=0
+          for id in $(gh api "repos/$GITHUB_REPOSITORY/actions/runs?status=in_progress&per_page=30" --jq '.workflow_runs[].id') $(gh api "repos/$GITHUB_REPOSITORY/actions/runs?status=queued&per_page=30" --jq '.workflow_runs[].id'); do
+            [ "$id" = "$GITHUB_RUN_ID" ] && continue
+            n=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs?per_page=100" --jq '[.jobs[] | select((.status == "in_progress" or .status == "queued") and ((.labels // []) | index("macos-latest")))] | length' || echo 0)
+            busy=$((busy + n))
+          done
+          echo "macOS jobs running or waiting: $busy of 5" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$busy" -ge 3 ]; then
+            echo 'WEBKIT_OS=["self-hosted","labit-mac"]' >> "$GITHUB_ENV"
+            echo "WebKit shards run on Leo's Mac this time" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
       - id: pick
         env:
           # A PR runs Safari's engine only (Leo, 20 Nov: half the work per PR; Safari is where labit is used most).
