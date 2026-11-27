@@ -838,8 +838,8 @@ const errorsFor = (page) => (errorList(page).length ? `${ERRORS_HEAD} ${errorLis
 const setErrors = (page, device, list) => {
   const was = errorsFor(page);
   const by = pageErrors.get(page) || new Map();
+  by.delete(device); // a report goes to the end, so two in the same millisecond are still in the order they came (errorList's sort keeps it)
   if (list.length) by.set(device, { list, at: Date.now() });
-  else by.delete(device);
   if (by.size) pageErrors.set(page, by);
   else pageErrors.delete(page);
   if (pageErrors.size > 50) pageErrors.delete(pageErrors.keys().next().value);
