@@ -9,8 +9,10 @@
 name: publish
 
 on:
+  # Only a merge that changes package.json (a release bump) or CHANGELOG.md (late notes) can have anything to do.
   push:
     branches: [main]
+    paths: [package.json, CHANGELOG.md]
   workflow_dispatch:
 
 permissions:
@@ -43,7 +45,8 @@ jobs:
           if npm view "$name@$version" version >/dev/null 2>&1; then release=0; else release=1; fi
           echo "release=$release" >> "$GITHUB_OUTPUT"
           echo "release: $([ $release = 1 ] && echo "$version → latest" || echo "none, $version is on npm")" >> "$GITHUB_STEP_SUMMARY"
-          # The tag apart from npm: a tag push that failed after the publish is made on the next run (a rerun).
+          # The tag apart from npm: a tag push that failed after the publish is made on the next run (a rerun of this
+          # one, or "Run workflow" on main), on the commit that set the version.
           if git ls-remote --exit-code --tags origin "v$version" >/dev/null; then tag=1; else tag=0; fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
