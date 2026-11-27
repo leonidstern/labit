@@ -804,8 +804,7 @@ async function post(pieces) {
   }).join('\n');
   try {
     const { comment } = await W.send({ name: W.store.get('lab-name') || 'walkie-talkie', text, anchor: { kind: 'page', width: innerWidth, height: innerHeight, dpr: devicePixelRatio || 1 } });
-    W.addComment(comment);
-    W.markSeen([comment]);
+    W.addComment(comment, 1);
     W.render();
     sent();
   } catch (err) {

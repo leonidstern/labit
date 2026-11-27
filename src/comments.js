@@ -618,8 +618,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
   // A new comment the lab saved: on the page, its box closed, undo for a moment (takeBack).
   function posted(comment, edit, said, anchor) {
     if (edit) store.set(`lab-edit:${comment.id}`, edit); // lets this browser drag the pin later
-    addComment(comment);
-    markSeen([comment]);
+    addComment(comment, 1);
     S.draft = null;
     keepSpot(null);
     S.openId = null; // once posted, the card closes and the new pin stays (click it to open)
@@ -996,8 +995,10 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
   };
   // A comment this page just sent, added unless it is there already: the live stream and /changes may have brought it
   // before the POST's answer (or a retry of the POST answers with the same comment again).
-  const addComment = (comment) => {
+  // seen: it was written here, so it is read already (markSeen).
+  const addComment = (comment, seen) => {
     if (!S.comments.some((c) => c.id === comment.id)) S.comments.push(comment);
+    if (seen) markSeen([comment]);
   };
   const markSeen = (items) => {
     const fresh = items.filter((item) => !S.seen.has(item.id)).map((item) => item.id);
