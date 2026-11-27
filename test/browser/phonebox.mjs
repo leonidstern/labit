@@ -40,11 +40,15 @@ for (const eng of engines('chromium')) {
     // beside them, fell under the limit and the name came back, then went again (Leo, 24 Nov, iPhone: "jumping").
     await p.evaluate(() => [...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim')).shadowRoot.querySelector('.float textarea').focus());
     // The sheet done settling first (its slide in, the keyboard's room on a slow runner): only the typing is measured.
-    for (let last = -1, same = 0; same < 4; await sleep(100)) {
+    // 10 s at most: a sheet that never holds still fails here, with where it was, and the run goes on to its cleanup.
+    const tops = [];
+    let same = 0;
+    for (const end = Date.now() + 10000; same < 4 && Date.now() < end; await sleep(100)) {
       const top = await p.evaluate(() => Math.round([...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim')).shadowRoot.querySelector('.float').getBoundingClientRect().top));
-      same = top === last ? same + 1 : 0;
-      last = top;
+      same = top === tops.at(-1) ? same + 1 : 0;
+      tops.push(top);
     }
+    check(eng, `${width} px phone: the sheet settles before typing`, same >= 4, tops.slice(-12).join(' '));
     const seen = [];
     for (const ch of 'The sheet should hold still while I type a long comment, line after line, until it scrolls inside. '.repeat(4)) {
       await p.keyboard.type(ch);

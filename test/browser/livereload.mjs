@@ -35,20 +35,29 @@ const until = async (ok, ms = 7000) => {
 const text = (p) => p.evaluate(() => document.getElementById('m')?.textContent ?? null);
 const col = (p) => p.evaluate(() => getComputedStyle(document.getElementById('m')).color);
 
-save('s.css', color(1, 2, 3));
-save('index.html', html('<script type="module" src="main.js"></script>'));
-save('main.js', 'import "./dep.js";');
-save('dep.js', 'document.documentElement.dataset.dep="v1";');
-save('plain.html', html());
-save('imp.html', '<!doctype html><meta charset="utf-8"><title>t</title><link rel="stylesheet" href="top.css"><link rel="stylesheet" href="side.css"><main id="m">imp</main>');
-save('top.css', '@import "base.css";');
-save('base.css', color(1, 2, 3));
-save('side.css', 'i{color:red}');
-save('gone.html', html('', 'v1'));
-save('Caps.html', html());
+// The files as each engine starts: the first one's saves are written back, so the next one sees each save change something.
+const fixtures = () => {
+  save('s.css', color(1, 2, 3));
+  save('index.html', html('<script type="module" src="main.js"></script>'));
+  save('main.js', 'import "./dep.js";');
+  save('dep.js', 'document.documentElement.dataset.dep="v1";');
+  save('plain.html', html());
+  save('imp.html', '<!doctype html><meta charset="utf-8"><title>t</title><link rel="stylesheet" href="top.css"><link rel="stylesheet" href="side.css"><main id="m">imp</main>');
+  save('top.css', '@import "base.css";');
+  save('base.css', color(1, 2, 3));
+  save('side.css', 'i{color:red}');
+  save('gone.html', html('', 'v1'));
+  save('Caps.html', html());
+  fs.rmSync(path.join(DIR, 'other.js'), { force: true });
+};
+fixtures();
 await start();
 try {
-  for (const eng of engines()) {
+  for (const [i, eng] of engines().entries()) {
+    if (i) {
+      fixtures();
+      await sleep(1000); // the lab has seen them before a page opens
+    }
     const browser = await pw[eng].launch();
     try {
       const open = async (url, wait = 1500) => {

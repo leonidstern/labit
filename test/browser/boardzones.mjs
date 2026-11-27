@@ -4,21 +4,22 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { claimPort } from './port.mjs';
-import { playwright, engines, tmp, labEnv, startLab, labUp, sleep, check, finish, withAlt } from './harness.mjs';
+import { playwright, engines, freshLab, sleep, check, finish, withAlt } from './harness.mjs';
 
 const pw = playwright();
-const DIR = tmp('labit-boardzones-');
 const PORT = claimPort(8500, 30);
 const B = `http://localhost:${PORT}`;
-fs.writeFileSync(path.join(DIR, 'pricing.html'), '<!doctype html><meta charset="utf-8"><title>Pricing</title><h1>Pricing one</h1><p>some words</p>');
-fs.writeFileSync(path.join(DIR, 'labit.json'), JSON.stringify({ port: PORT }));
-const server = startLab(DIR, labEnv());
-await labUp(B);
-await fetch(`${B}/_lab/api/board?name=zones`, { method: 'PUT', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ v: 1, rev: 0, frames: [{ id: 'a', src: '/pricing', w: 1440, h: 900 }, { id: 'b', src: '/pricing', w: 820, h: 600 }] }) });
+// Each engine on a lab of its own: the area and drawing the one before saved would be found as this one's.
+const L = freshLab('labit-boardzones-', (dir) => {
+  fs.writeFileSync(path.join(dir, 'pricing.html'), '<!doctype html><meta charset="utf-8"><title>Pricing</title><h1>Pricing one</h1><p>some words</p>');
+  fs.writeFileSync(path.join(dir, 'labit.json'), JSON.stringify({ port: PORT }));
+}, { base: B });
 const comments = async () => (await (await fetch(`${B}/_lab/api/comments?page=/_board/zones`)).json()).comments || [];
 const widget = 'document.querySelector("*") && [...document.querySelectorAll("*")].find((n) => n.shadowRoot?.querySelector(".scrim"))?.shadowRoot';
 try {
   for (const eng of engines()) {
+    await L.up();
+    await fetch(`${B}/_lab/api/board?name=zones`, { method: 'PUT', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ v: 1, rev: 0, frames: [{ id: 'a', src: '/pricing', w: 1440, h: 900 }, { id: 'b', src: '/pricing', w: 820, h: 600 }] }) });
     const browser = await pw[eng].launch();
     try {
       const ctx = await browser.newContext({ viewport: { width: 1200, height: 800 } });
@@ -217,6 +218,6 @@ try {
     }
   }
 } finally {
-  server.kill();
+  await L.stop();
 }
 finish();

@@ -128,16 +128,19 @@ try {
     await sleep(1600);
     const b1 = await look(p);
     check(eng, 'D held, a stroke, then the window loses focus (blur made in the page): the drawing is not lost, it is sent', b1.inkPins === 1 && !b1.live, short({ inkPins: b1.inkPins, live: b1.live }));
-    await p.keyboard.up('d');
     await p.keyboard.press('Escape');
     await sleep(200);
     const b2 = await look(p);
     const c7 = await box(p, 'c'); // clear of the sent drawing
+    // D's keyup has still not come: only the blur can have let it go.
     await stroke(p, [[c7.l, c7.t - 10], [c7.l + 200, c7.b + 10]]);
     await until(p, '.float textarea');
     const b3 = await look(p);
     check(eng, 'after that blur D counts as let go: the next plain drag is a box, not lines, and done pins did not flip', b3.box && b3.zone === 1 && b3.draftInk === 0 && b3.live === 0 && b2.hideDone === b0.hideDone, short({ zone: b3.zone, draftInk: b3.draftInk, hideDone: [b0.hideDone, b2.hideDone] }));
     await p.keyboard.press('Escape');
+    await p.keyboard.up('d'); // the keyup, late
+    await sleep(200);
+    check(eng, '… and the late keyup flips no done pins either', (await look(p)).hideDone === b0.hideDone);
 
     // 8. The browser cancels the pointer mid-stroke (pointercancel made in the page: it takes the stroke for a scroll
     //    or a system gesture). The half stroke is nobody's.

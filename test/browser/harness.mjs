@@ -54,6 +54,36 @@ export function labEnv(extra = {}, { settings = true } = {}) {
 export const startLab = (dir, env, { root, port, args = [], stdio } = {}) =>
   spawn(process.execPath, [LAB, ...(root ? [root] : []), '--new', '--no-open', ...(port ? ['--port', String(port)] : []), ...args], { cwd: dir, env, stdio });
 
+/** Stops a lab and waits till it is gone (its port free again). One that already ended, by a signal too, is gone. */
+export const stopLab = (server) =>
+  server.exitCode !== null || server.signalCode !== null ? Promise.resolve() : new Promise((r) => (server.once('exit', r), server.kill()));
+
+/** A lab started again from scratch for each engine. A local run does WebKit and Chromium in one go: on one lab the
+ *  second engine found the first one's comments, boards and saved files, and passed or failed on them. `up()` stops the
+ *  lab before (and waits), makes a new temp folder, lets `fill(dir)` write the test's files and starts a lab there, on
+ *  the same port (`opts` as startLab's), with a new `env()`. `dir` and `server` are the current ones. CI runs one engine
+ *  per job: there it is the one lab it always was. */
+export function freshLab(prefix, fill, { env = () => labEnv(), base, ...opts } = {}) {
+  const L = {
+    dir: '',
+    /** @type {import('node:child_process').ChildProcess | null} */
+    server: null,
+    async stop() {
+      if (L.server) await stopLab(L.server);
+      L.server = null;
+    },
+    async up() {
+      await L.stop();
+      L.dir = tmp(prefix);
+      fill(L.dir);
+      L.server = startLab(L.dir, env(), opts);
+      if (base) await labUp(base);
+      return L;
+    },
+  };
+  return L;
+}
+
 /** Waits until the lab at `base` answers, 8 s at most (one that never does shows in the checks that follow). */
 export async function labUp(base) {
   for (let i = 0; i < 80; i++) {

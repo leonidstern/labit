@@ -70,7 +70,7 @@ try {
       await sleep(500);
       await p.keyboard.type('the frames look alike');
       await p.keyboard.press('Enter');
-      for (let i = 0; i < 30 && posts.length < 2; i++) await sleep(100);
+      for (let i = 0; i < 30 && !posts.some((x) => x.text === 'the frames look alike'); i++) await sleep(100);
       const said = posts.find((x) => x.text === 'the frames look alike');
       check(eng, 'a chat message sent with the board open names the board', said?.anchor?.kind === 'page' && said.anchor.board === 'pricing', JSON.stringify(said?.anchor));
       await p.keyboard.press('Escape'); // the chat closes

@@ -43,13 +43,19 @@ try {
       await sleep(900);
       const shadow = (fn, arg) => p.evaluate(([f, a]) => new Function('r', 'a', `return (${f})(r, a)`)([...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim')).shadowRoot, a), [fn.toString(), arg]);
       for (const at of [0.35, 0.6]) {
-        await p.reload(); // each case from a closed card
+        await p.reload();
         await p.waitForFunction(() => [...document.querySelectorAll('*')].some((n) => n.shadowRoot?.querySelector('button.pin')), null, { timeout: 8000 });
         await sleep(900);
         // The pin can still be on its way to its spot after a load on a slow runner, and the page's own scroll can come
         // back late after a reload: scroll until the pin sits where this case wants it, click it, and if no card opened
         // (the page moved under the click), do it again; three tries. What is checked is where the card opens.
         const open = () => shadow((r) => [...r.querySelectorAll('.card')].some((n) => !n.classList.contains('out') && n.getBoundingClientRect().width));
+        let placed = null; // where the pin was (its top, px from the window's top) when it was clicked
+        // A reload brings back the card that was open: shut it, or this case would read the case before's card.
+        for (let i = 0; i < 20 && (await open()); i++) {
+          await p.keyboard.press('Escape');
+          await sleep(150);
+        }
         for (let tries = 0; tries < 3 && !(await open()); tries++) {
           for (let i = 0; i < 30; i++) {
             const pinY = await shadow((r) => r.querySelector('button.pin').getBoundingClientRect().top + scrollY);
@@ -59,6 +65,7 @@ try {
           }
           await sleep(500); // a press while the page still scrolls is a scroll's, not a click (as for a person)
           const q = await shadow((r) => { const b = r.querySelector('button.pin').getBoundingClientRect(); return [b.x + 14, b.y + 14]; });
+          placed = q[1] - 14;
           await p.mouse.click(q[0], q[1]);
           for (let i = 0; i < 20 && !(await open()); i++) await sleep(100);
         }
@@ -72,9 +79,12 @@ try {
         const over = card && pin[0] < card[2] && card[0] < pin[2] && pin[1] < card[3] && card[1] < pin[3];
         const dx = card ? Math.max(0, card[0] - pin[2], pin[0] - card[2]) : 1e9;
         const dy = card ? Math.max(0, card[1] - pin[3], pin[1] - card[3]) : 1e9;
+        const want = await p.evaluate((f) => innerHeight * f, at);
+        check(eng, `pin ${at * 100}% down a short window: the pin was there when clicked`, placed !== null && Math.abs(placed - want) < 4, `${placed} for ${want}`);
         check(eng, `pin ${at * 100}% down a short window: the card is open`, Boolean(card), JSON.stringify(s));
         check(eng, `pin ${at * 100}% down a short window: the card is not over its pin`, card && !over, JSON.stringify(s));
-        check(eng, `pin ${at * 100}% down a short window: the card is by its pin`, Math.hypot(dx, dy) < 40, `gap ${dx.toFixed(0)}, ${dy.toFixed(0)} ${JSON.stringify(s)}`);
+        // beside it: level with it (they share some height) and a small gap across
+        check(eng, `pin ${at * 100}% down a short window: the card is beside its pin, level and close`, dy === 0 && dx < 40, `gap ${dx.toFixed(0)}, ${dy.toFixed(0)} ${JSON.stringify(s)}`);
       }
       await p.close();
       await ctx.close();

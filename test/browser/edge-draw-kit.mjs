@@ -39,33 +39,49 @@ export const done = () => {
   process.exit(failed ? 1 : 0);
 };
 
-// One lab: pages is { name: html }, settings go into labit.json beside the port.
+// One lab: pages is { name: html }, settings go into labit.json beside the port. eachEngine starts it again for each
+// engine after the first, on a new folder and the same port: one engine's drawings would be read as the next one's.
+const labs = [];
 export async function lab(pages, settings = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'labit-edraw-'));
   const port = claimPort(8600, 300); // claimed, not random: CI runs several browser tests on one Mac at once
-  for (const [n, html] of Object.entries(pages)) fs.writeFileSync(path.join(dir, `${n}.html`), html);
-  fs.writeFileSync(path.join(dir, 'labit.json'), JSON.stringify({ port, ...settings }));
-  const env = { ...process.env, PORT: '', XDG_CONFIG_HOME: fs.mkdtempSync(path.join(os.tmpdir(), 'labit-cfg-')), LABIT_HOME: fs.mkdtempSync(path.join(os.tmpdir(), 'labit-home-')), LABIT_NO_UPDATE_CHECK: '1', LABIT_EXIT_WITH_PARENT: '1' };
-  const server = spawn(process.execPath, [LAB, '--new', '--no-open'], { cwd: dir, env, stdio: 'ignore' });
   const B = `http://localhost:${port}`;
-  for (let i = 0; i < 100; i++) {
-    try {
-      await fetch(B + '/');
-      break;
-    } catch {
-      await sleep(100);
+  let dir = '';
+  let server = null;
+  const start = async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'labit-edraw-'));
+    for (const [n, html] of Object.entries(pages)) fs.writeFileSync(path.join(dir, `${n}.html`), html);
+    fs.writeFileSync(path.join(dir, 'labit.json'), JSON.stringify({ port, ...settings }));
+    const env = { ...process.env, PORT: '', XDG_CONFIG_HOME: fs.mkdtempSync(path.join(os.tmpdir(), 'labit-cfg-')), LABIT_HOME: fs.mkdtempSync(path.join(os.tmpdir(), 'labit-home-')), LABIT_NO_UPDATE_CHECK: '1', LABIT_EXIT_WITH_PARENT: '1' };
+    server = spawn(process.execPath, [LAB, '--new', '--no-open'], { cwd: dir, env, stdio: 'ignore' });
+    for (let i = 0; i < 100; i++) {
+      try {
+        await fetch(B + '/');
+        break;
+      } catch {
+        await sleep(100);
+      }
     }
-  }
+  };
+  // Gone (its port free) before its folder is removed.
+  const stop = async () => {
+    if (server.exitCode === null && server.signalCode === null) await new Promise((r) => (server.once('exit', r), server.kill()));
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
+  };
+  await start();
   const admin = () => JSON.parse(fs.readFileSync(path.join(dir, '.lab/server.json'), 'utf8')).agent;
   const call = (body, agent) =>
     fetch(`${B}/_lab/api/comments`, { method: 'POST', headers: { 'content-type': 'application/json', origin: B, 'x-lab-admin': admin(), ...(agent ? { 'x-lab-agent': '1' } : {}) }, body: JSON.stringify(body) }).then((r) => r.json());
-  return {
-    B, dir, call,
+  const L = {
+    B, call,
+    get dir() { return dir; },
     // The agent's text for a page, and the page's comments as the store holds them.
     agent: async (page) => (await fetch(`${B}/_lab/agent/${page}`)).text(),
     comments: async (page) => (await (await fetch(`${B}/_lab/api/comments?page=/${page}`)).json()).comments,
+    restart: async () => (await stop(), await start()),
     stop: () => (server.kill(), fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5 })),
   };
+  labs.push(L);
+  return L;
 }
 
 export const root = 'document.querySelector("*") && [...document.querySelectorAll("*")].find((n) => n.shadowRoot?.querySelector(".scrim"))?.shadowRoot';
@@ -178,9 +194,10 @@ export async function penFor(eng, ctx, p) {
   };
 }
 
-// Each engine in turn, one browser at a time.
+// Each engine in turn, one browser at a time, each on labs of its own.
 export async function eachEngine(context, fn) {
-  for (const eng of engines) {
+  for (const [n, eng] of engines.entries()) {
+    if (n) for (const L of labs) await L.restart();
     const browser = await pw[eng].launch();
     try {
       const ctx = await browser.newContext({ viewport: { width: 1000, height: 700 }, ...context });

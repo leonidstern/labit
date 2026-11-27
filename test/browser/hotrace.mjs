@@ -4,25 +4,27 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { claimPort } from './port.mjs';
-import { playwright, engines, tmp, labEnv, startLab, labUp, sleep, check, finish } from './harness.mjs';
+import { playwright, engines, freshLab, sleep, check, finish } from './harness.mjs';
 
 const pw = playwright();
-const DIR = tmp('labit-hotrace-');
 const PORT = claimPort(10900, 30);
 const B = `http://localhost:${PORT}`;
 const svg = (w) => `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="10"><rect width="${w}" height="10" fill="red"/></svg>`;
 const page = (h) => `<!doctype html><html><head><meta charset="utf-8"><title>t</title><link rel="stylesheet" href="s.css"></head><body><main id="m">${h}<img id="i" src="p.svg"></main></body></html>`;
-const w = (f, t) => fs.writeFileSync(path.join(DIR, f), t);
-w('index.html', page('hello'));
-w('s.css', 'main{color:rgb(255,0,0);background:url(bg.svg)}');
-w('bg.svg', svg(10));
-w('p.svg', svg(30));
-w('data.json', '{"n":1}');
-w('labit.json', JSON.stringify({ port: PORT }));
-const server = startLab(DIR, labEnv());
-await labUp(B);
+// Each engine on a lab of its own, from these files: the saves below change them.
+const L = freshLab('labit-hotrace-', (dir) => {
+  const w = (f, t) => fs.writeFileSync(path.join(dir, f), t);
+  w('index.html', page('hello'));
+  w('s.css', 'main{color:rgb(255,0,0);background:url(bg.svg)}');
+  w('bg.svg', svg(10));
+  w('p.svg', svg(30));
+  w('data.json', '{"n":1}');
+  w('labit.json', JSON.stringify({ port: PORT }));
+}, { base: B });
+const w = (f, t) => fs.writeFileSync(path.join(L.dir, f), t);
 try {
   for (const eng of engines()) {
+    await L.up();
     const browser = await pw[eng].launch();
     try {
       const pg = await (await browser.newContext()).newPage();
@@ -72,7 +74,7 @@ try {
       // A picture whose file is deleted and written again a moment later: the old one stays showing meanwhile, then the new one.
       loads = 0;
       const wide = () => pg.evaluate(() => document.getElementById('i').naturalWidth);
-      fs.rmSync(path.join(DIR, 'p.svg'));
+      fs.rmSync(path.join(L.dir, 'p.svg'));
       await sleep(700);
       check(eng, 'a picture whose file is gone stays showing', (await wide()) === 30 && (await pg.getAttribute('#i', 'src')) === 'p.svg', `${await wide()} ${await pg.getAttribute('#i', 'src')}`);
       w('p.svg', svg(50));
@@ -89,5 +91,5 @@ try {
   }
   finish();
 } finally {
-  server.kill();
+  await L.stop();
 }

@@ -39,10 +39,19 @@ try {
       await clean.goto(B + '/clean.html');
       await sleep(2200);
       check(eng, 'a clean page says nothing', !/Page errors/.test(await (await fetch(`${B}/_lab/agent/clean`)).text()));
+      // One more error before the reload, so the report after it is known to be a new one: it has not that error. (The
+      // list is emptied as the page goes, and filled again by the new page.)
+      const errs = async () => (await (await fetch(`${B}/_lab/agent/index`)).text()).match(/^Page errors .*$/m)?.[0] || '';
+      await pg.evaluate(() => setTimeout(() => { throw new Error('one more before the reload'); }));
+      for (let i = 0; i < 40 && !/one more before the reload/.test(await errs()); i++) await sleep(100);
+      const before = await errs();
       await pg.reload();
-      await sleep(600);
-      const again = (await (await fetch(`${B}/_lab/agent/index`)).text()).match(/^Page errors .*$/m)?.[0] || '';
-      check(eng, 'a reload starts the list again (the errors come again once)', (again.match(/boom from the page/g) || []).length <= 1, again);
+      let again = before;
+      for (let i = 0; i < 60 && (/one more before the reload/.test(again) || !/boom from the page/.test(again)); i++) {
+        await sleep(100);
+        again = await errs();
+      }
+      check(eng, 'a reload starts the list again (the errors come again once)', /one more before the reload/.test(before) && !/one more before the reload/.test(again) && (again.match(/boom from the page/g) || []).length === 1, `${before} -> ${again}`);
     } finally {
       await browser.close();
     }

@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { claimPort } from './port.mjs';
-import { playwright, engines, LAB, tmp, labEnv, startLab, sleep, check, finish } from './harness.mjs';
+import { playwright, engines, LAB, tmp, labEnv, startLab, stopLab, sleep, check, finish } from './harness.mjs';
 
 const pw = playwright({ ciFails: true });
 
@@ -51,7 +51,14 @@ async function untilApi(pred, ms) {
 const PART = process.env.BEHAVIOURS_PART || 'page';
 start();
 await up();
-for (const eng of engines()) {
+for (const [n, eng] of engines().entries()) {
+  // The next engine starts with no comments: the one before's would be found as its own (a quote, a chat line).
+  if (n) {
+    await stopLab(server);
+    fs.rmSync(path.join(DIR, '.lab/comments'), { recursive: true, force: true });
+    start();
+    await up();
+  }
   write('index.html', PAGE);
   write('s.css', 'h1{color:rgb(255,0,0)} body{margin:30px}');
   write('scripted.html', SCRIPTED);
@@ -98,7 +105,8 @@ for (const eng of engines()) {
   await until(p, () => Boolean(document.querySelector('#top p')), null, 1600);
     await sleep(200); // the page keeps the place just after the patch
   const now = await under();
-  check(eng, 'what you look at keeps its place', Math.abs(now - was) <= 2, `paragraph at ${was} px → ${now} px`);
+  const patched = await p.evaluate(() => Boolean(document.querySelector('#top p'))); // else nothing moved to keep
+  check(eng, 'what you look at keeps its place', patched && Math.abs(now - was) <= 2, `patched ${patched}, paragraph at ${was} px → ${now} px`);
   write('pic.svg', '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="42"><rect width="320" height="42" fill="#fdc"/></svg>');
   await until(p, () => /lab-v=/.test(document.querySelector('#pic').getAttribute('src')), null, 1300);
   check(eng, 'picture save swaps it, no reload', loads === 1 && /lab-v=/.test(await p.$eval('#pic', (i) => i.getAttribute('src'))));
@@ -408,7 +416,7 @@ for (const eng of engines()) {
     c = await card();
     check(eng, 'pointing at a version tries it and sends nothing', c.on === 0 && !(await (await fetch(`${B}/_lab/api/comments?page=/ask`)).json()).comments.some((x) => x.picked), JSON.stringify([c.on]));
     const tried = await q.evaluate(() => ({ text: document.querySelector('#a').textContent, link: document.querySelector('#lnk') === window.__lnk, linkText: document.querySelector('#lnk')?.textContent, linkIn: document.querySelector('#a').contains(document.querySelector('#lnk')) }));
-    check(eng, 'trying B swaps only the differing words; the link keeps its word', /labit puts this short guide on the page, not in chat/.test(tried.text) && tried.linkIn && tried.linkText === 'guide', JSON.stringify(tried));
+    check(eng, 'trying B swaps only the differing words; the link keeps its word', /labit puts this short guide on the page, not in chat/.test(tried.text) && tried.link && tried.linkIn && tried.linkText === 'guide', JSON.stringify(tried));
     // Stepping through versions of different lengths never moves the page below: the block holds its tallest height
     // from the first try (one settle), then stays.
     const below = await belowAt();

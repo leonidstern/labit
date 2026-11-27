@@ -4,20 +4,21 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { claimPort } from './port.mjs';
-import { playwright, engines, tmp, labEnv, startLab, labUp, sleep, check, finish } from './harness.mjs';
+import { playwright, engines, freshLab, sleep, check, finish } from './harness.mjs';
 
 const pw = playwright();
 
-const DIR = tmp('labit-frame-');
 const PORT = claimPort(7990, 30);
 const B = `http://localhost:${PORT}`;
-fs.writeFileSync(path.join(DIR, 'pricing.html'), '<!doctype html><meta charset="utf-8"><title>p</title><h1 id="t">Pricing one</h1><div style="height:3000px"></div><p id="end">end</p>');
-fs.writeFileSync(path.join(DIR, 'index.html'), '<!doctype html><meta charset="utf-8"><title>k</title><h1>Keys</h1><p>text</p>');
-fs.writeFileSync(path.join(DIR, 'labit.json'), JSON.stringify({ port: PORT }));
-const server = startLab(DIR, labEnv());
-await labUp(B);
+// Each engine on a lab of its own: the save below changes pricing.html, and the next engine must see it change too.
+const L = freshLab('labit-frame-', (dir) => {
+  fs.writeFileSync(path.join(dir, 'pricing.html'), '<!doctype html><meta charset="utf-8"><title>p</title><h1 id="t">Pricing one</h1><div style="height:3000px"></div><p id="end">end</p>');
+  fs.writeFileSync(path.join(dir, 'index.html'), '<!doctype html><meta charset="utf-8"><title>k</title><h1>Keys</h1><p>text</p>');
+  fs.writeFileSync(path.join(dir, 'labit.json'), JSON.stringify({ port: PORT }));
+}, { base: B });
 try {
   for (const eng of engines()) {
+    await L.up();
     const browser = await pw[eng].launch();
     try {
       const ctx = await browser.newContext({ viewport: { width: 1000, height: 700 } });
@@ -44,7 +45,9 @@ try {
       check(eng, 'keys pressed in a frame reach the board', keys.includes('m') && keys.includes('B'), JSON.stringify(keys));
       await A.evaluate(() => scrollTo(0, 400));
       await Bf.evaluate(() => scrollTo(0, 400));
-      fs.writeFileSync(path.join(DIR, 'pricing.html'), fs.readFileSync(path.join(DIR, 'pricing.html'), 'utf8').replace('Pricing one', 'Pricing two'));
+      const was = await Promise.all([A, Bf].map((f) => f.evaluate(() => document.getElementById('t')?.textContent)));
+      check(eng, 'both frames start on the page as written', was.every((t) => t === 'Pricing one'), JSON.stringify(was));
+      fs.writeFileSync(path.join(L.dir, 'pricing.html'), fs.readFileSync(path.join(L.dir, 'pricing.html'), 'utf8').replace('Pricing one', 'Pricing two'));
       let texts = [];
       for (let i = 0; i < 40; i++) {
         texts = await Promise.all([A, Bf].map((f) => f.evaluate(() => [document.getElementById('t')?.textContent, scrollY])));
@@ -60,7 +63,7 @@ try {
   }
 } finally {
   // Gone before its folder is: still writing .lab as it exits, the folder could not be removed (ENOTEMPTY on CI).
-  if (server.exitCode === null) await new Promise((r) => (server.once('exit', r), server.kill()));
-  fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
+  await L.stop();
+  fs.rmSync(L.dir, { recursive: true, force: true, maxRetries: 5 });
 }
 finish();

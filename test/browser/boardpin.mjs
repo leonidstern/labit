@@ -17,23 +17,22 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { claimPort } from './port.mjs';
-import { playwright, engines, tmp, labEnv, startLab, labUp, sleep, check, finish } from './harness.mjs';
+import { playwright, engines, freshLab, sleep, check, finish } from './harness.mjs';
 
 const pw = playwright();
 
-const DIR = tmp('labit-boardpin-');
 const PORT = claimPort(8360, 30);
 const B = `http://localhost:${PORT}`;
 const PAGE = '<!doctype html><meta charset="utf-8"><title>Page d</title>\n<h1>Page d</h1>\n<p id="t">The hero needs pictures</p>\n<p id="b">Pricing goes here</p>\n<div style="height:600px"></div>\n<p>Last</p>\n';
-const FILE = path.join(DIR, 'd.html');
-fs.writeFileSync(FILE, PAGE);
-fs.writeFileSync(path.join(DIR, 'labit.json'), JSON.stringify({ port: PORT }));
-const server = startLab(DIR, labEnv());
-await labUp(B);
-const keys = () => JSON.parse(fs.readFileSync(path.join(DIR, '.lab/server.json'), 'utf8'));
+// Each engine on a lab of its own: the one before left its pins on /d and /s and its boards.
+const L = freshLab('labit-boardpin-', (dir) => {
+  fs.writeFileSync(path.join(dir, 'd.html'), PAGE);
+  fs.writeFileSync(path.join(dir, 'labit.json'), JSON.stringify({ port: PORT }));
+}, { base: B });
+const keys = () => JSON.parse(fs.readFileSync(path.join(L.dir, '.lab/server.json'), 'utf8'));
 const api = (body, as = 'owner') => fetch(B + '/_lab/api/comments', { method: 'POST', headers: { 'content-type': 'application/json', origin: B, ...(as === 'agent' ? { 'x-lab-admin': keys().agent, 'x-lab-agent': '1' } : as === 'owner' ? { 'x-lab-admin': keys().token } : {}) }, body: JSON.stringify({ page: '/d', ...body }) });
 const list = async () => (await (await fetch(`${B}/_lab/api/comments?page=/d`)).json()).comments || [];
-const boardFile = (name) => path.join(DIR, '.lab/boards', `${name}.json`);
+const boardFile = (name) => path.join(L.dir, '.lab/boards', `${name}.json`);
 const until = async (fn, ms = 6000) => {
   for (const end = Date.now() + ms; Date.now() < end; await sleep(100)) if (await fn()) return true;
   return false;
@@ -41,6 +40,7 @@ const until = async (fn, ms = 6000) => {
 
 try {
   for (const eng of engines('chromium,webkit')) {
+    await L.up();
     const browser = await pw[eng].launch();
     try {
       const ctx = await browser.newContext({ viewport: { width: 1000, height: 800 } });
@@ -66,7 +66,7 @@ try {
       const { comment: pin } = await (await api({ name: 'leo', text: 'hero refs', anchor: { kind: 'element', selector: '#t', x: 0.5, y: 0.5, docX: 0.1, docY: 60, width: 1000 } })).json();
       const name = `pin-${pin.id}`;
       await fetch(B + '/_lab/api/board', { method: 'POST', headers: { 'content-type': 'application/json', origin: B, 'x-lab-admin': keys().token }, body: JSON.stringify({ action: 'new', name, of: `/d#${name}`, topic: 'hero refs' }) });
-      check(eng, '1. nothing is written into the page', fs.readFileSync(FILE, 'utf8') === PAGE);
+      check(eng, '1. nothing is written into the page', fs.readFileSync(path.join(L.dir, 'd.html'), 'utf8') === PAGE);
       await p.reload();
       await sleep(1500);
 
@@ -155,14 +155,14 @@ try {
       // ----- 4 again: with its board's threads closed, deleting it takes the board too
       await api({ action: 'resolve', id: th.comment.id });
       const del = await api({ action: 'delete', id: pin.id });
-      check(eng, '4. with no open thread on its board, deleting it takes the board and its folder too', del.ok && !fs.existsSync(boardFile(name)) && !fs.existsSync(path.join(DIR, '.lab/boards', name)), String(del.status));
+      check(eng, '4. with no open thread on its board, deleting it takes the board and its folder too', del.ok && !fs.existsSync(boardFile(name)) && !fs.existsSync(path.join(L.dir, '.lab/boards', name)), String(del.status));
       for (const c of (await list()).filter((x) => !x.parent)) await api({ action: 'delete', id: c.id });
 
       check(eng, 'no page errors', !errors.length, errors.join(' | '));
 
       // ----- 9. never stray out of view
       for (const c of (await list()).filter((x) => !x.parent)) await api({ action: 'delete', id: c.id });
-      fs.writeFileSync(path.join(DIR, 's.html'), '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>s</title><style>body{margin:0;overflow-x:hidden}</style>\n<h1>Page s</h1>\n<div style="width:1500px"><span id="far" style="margin-left:1400px">far right</span></div>\n<p id="hid">in a menu</p>\n<div style="height:900px"></div>\n');
+      fs.writeFileSync(path.join(L.dir, 's.html'), '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>s</title><style>body{margin:0;overflow-x:hidden}</style>\n<h1>Page s</h1>\n<div style="width:1500px"><span id="far" style="margin-left:1400px">far right</span></div>\n<p id="hid">in a menu</p>\n<div style="height:900px"></div>\n');
       const sApi = (body) => fetch(B + '/_lab/api/comments', { method: 'POST', headers: { 'content-type': 'application/json', origin: B, 'x-lab-admin': keys().token }, body: JSON.stringify({ page: '/s', ...body }) }).then((r) => r.json());
       const mk = async (sel, text) => {
         const { comment } = await sApi({ name: 'leo', text, anchor: { kind: 'element', selector: sel, x: 0.5, y: 0.5, width: 1000, height: 800 } });
@@ -206,7 +206,7 @@ try {
     }
   }
 } finally {
-  server.kill();
-  fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
+  await L.stop();
+  fs.rmSync(L.dir, { recursive: true, force: true, maxRetries: 5 });
 }
 finish();

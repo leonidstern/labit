@@ -104,15 +104,19 @@ for (const [n, eng] of engines('chromium').entries()) {
     const after = await shadow(() => { return { card: Boolean(r.querySelector('.card:not(.out)')), undo: Boolean(r.querySelector('.btn.undo')) }; });
     check(eng, 'left alone, after 3 s the undo has gone and the pin is kept', !after.card && !after.undo && (await L.comments()).length === had + 1, JSON.stringify(after));
 
-    // A reply in an existing thread keeps its card open (only the first comment of a new pin closes it).
+    // Opened again, its card has no undo either (a closed card shows no undo whether or not it went).
     await shadow(() => { r.querySelector('.pin:not(.draft)').click(); });
     await until(() => shadow(() => { return Boolean(r.querySelector('.card textarea')); }), 1500);
+    const reopened = await shadow(() => { return { card: Boolean(r.querySelector('.card:not(.out)')), undo: Boolean(r.querySelector('.btn.undo')) }; });
+    check(eng, '… and opened again, its card offers no undo', reopened.card && !reopened.undo, JSON.stringify(reopened));
+
+    // A reply in an existing thread keeps its card open (only the first comment of a new pin closes it).
     await shadow(() => { r.querySelector('.card textarea').focus(); });
     await p.keyboard.type('and a reply');
     await p.keyboard.press('Enter');
-    await until(async () => (await L.comments()).some((c) => c.text === 'and a reply'), 3000);
+    const replied = await until(async () => (await L.comments()).some((c) => c.text === 'and a reply'), 3000);
     await sleep(500);
-    check(eng, 'a reply in an open thread keeps the card open', await shadow(() => { return Boolean(r.querySelector('.card:not(.out)')); }));
+    check(eng, 'a reply in an open thread is saved and keeps the card open', replied && (await shadow(() => { return Boolean(r.querySelector('.card:not(.out)')); })), `saved ${replied}`);
     await p.keyboard.press('Escape');
     await sleep(300);
     // A guest (not this computer: the page carries no admin key, so the lab takes them for anyone) holds the new pin's

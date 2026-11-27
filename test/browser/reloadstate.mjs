@@ -5,11 +5,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { claimPort } from './port.mjs';
-import { playwright, engines, tmp, labEnv, startLab, labUp, sleep, check, finish } from './harness.mjs';
+import { playwright, engines, freshLab, sleep, check, finish } from './harness.mjs';
 
 const pw = playwright();
 
-const DIR = tmp('labit-reloadstate-');
 const PORT = claimPort(10600, 30);
 const B = `http://localhost:${PORT}`;
 const lines = (n) => Array.from({ length: n }, (_, i) => `<p>Paragraph number ${i} with some words in it.</p>`).join('\n');
@@ -21,21 +20,23 @@ const page = (word) => `<!doctype html><meta charset="utf-8"><title>t</title>
 <select id="sel"><option>a<option>b<option>c</select>
 <div id="box" style="height:200px;overflow:auto">${lines(60)}</div>
 ${lines(40)}<h2 id="target">Target</h2>${lines(80)}<script>window.own = 1</script>`;
-const save = (f, text) => fs.writeFileSync(path.join(DIR, f), text);
-save('index.html', page('one'));
 const app = `setTimeout(() => (document.getElementById('late').innerHTML = ${JSON.stringify(lines(150))}), 700);`;
-save('app.js', app);
-save('late.html', '<!doctype html><meta charset="utf-8"><title>l</title><h1>Late</h1><div id="late"></div><script src="app.js"></script>');
-// #428: a page with a script of its own, saved while a drawing is being drawn; and a plain page that misses saves.
 const drawPage = (word) => `<!doctype html><meta charset="utf-8"><title>${word}</title><h1>Draw ${word}</h1>${lines(20)}<script>window.own = 1</script>`;
-save('drawhold.html', drawPage('one'));
-save('plain.html', `<!doctype html><meta charset="utf-8"><title>p</title><h1>Plain</h1>${lines(20)}`);
-save('labit.json', JSON.stringify({ port: PORT }));
-const server = startLab(DIR, labEnv());
-await labUp(B);
+const save = (f, text) => fs.writeFileSync(path.join(L.dir, f), text);
+// Each engine on a lab of its own, from these files: the one before it saved them and left a drawing on /drawhold.
+const L = freshLab('labit-reloadstate-', () => {
+  save('index.html', page('one'));
+  save('app.js', app);
+  save('late.html', '<!doctype html><meta charset="utf-8"><title>l</title><h1>Late</h1><div id="late"></div><script src="app.js"></script>');
+  // #428: a page with a script of its own, saved while a drawing is being drawn; and a plain page that misses saves.
+  save('drawhold.html', drawPage('one'));
+  save('plain.html', `<!doctype html><meta charset="utf-8"><title>p</title><h1>Plain</h1>${lines(20)}`);
+  save('labit.json', JSON.stringify({ port: PORT }));
+}, { base: B });
 const post = (page, id, tag = 'p') => fetch(B + '/_lab/api/comments', { method: 'POST', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ page, name: 'tester', text: 'Comment', anchor: { selector: '#' + id, x: 0.3, y: 0.5, docX: 0.3, docY: 900, width: 1000, element: `<${tag} id="${id}">` } }) });
 try {
   for (const eng of engines()) {
+    await L.up();
     const browser = await pw[eng].launch();
     try {
       const ctx = await browser.newContext({ viewport: { width: 1000, height: 700 } });
@@ -152,7 +153,7 @@ try {
     }
   }
 } finally {
-  server.kill();
-  fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
+  await L.stop();
+  fs.rmSync(L.dir, { recursive: true, force: true, maxRetries: 5 });
 }
 finish();

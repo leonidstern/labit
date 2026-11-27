@@ -5,22 +5,22 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { claimPort } from './port.mjs';
-import { playwright, engines, tmp, labEnv, startLab, labUp, check, finish } from './harness.mjs';
+import { playwright, engines, freshLab, check, finish } from './harness.mjs';
 
 const pw = playwright({ ciFails: true });
 
-const DIR = tmp('labit-draw-');
 const PORT = claimPort(7960, 30);
 const B = `http://localhost:${PORT}`;
 const PAGE = '<!doctype html><meta charset="utf-8"><title>d</title><style>body{margin:40px;font:20px/1.5 sans-serif} h1{margin:0 0 80px} p{width:600px;margin:0 0 60px}</style><h1 id="h">Pricing</h1><p id="a">Plans start small and grow with you</p><p id="b">Cancel any time from your account</p>';
-for (const n of ['circle', 'x', 'arrow', 'under', 'strike', 'box', 'caret', 'side', 'scribble']) fs.writeFileSync(path.join(DIR, `${n}.html`), PAGE);
 // Lines whose letters are wide: a line through them must read as crossed out wherever along the letter it passes (the
 // caret stands at the nearer edge, so on a letter's far half it is the next letter's: draw.ts letterAt reads both).
 const WIDE = { cjk: '这是一个很长的中文句子用来测试笔画的位置', emoji: 'ab 🎧🎧🎧🎧🎧🎧🎧🎧🎧🎧🎧🎧 cd', wide: 'WWWWWWWWWWWWWWWWWWWW MMMMMMMMMMMMMMMMMMMM' };
-for (const [n, t] of Object.entries(WIDE)) fs.writeFileSync(path.join(DIR, `${n}.html`), PAGE.replace(/<p id="a">.*?<\/p>/, `<p id="a">${t}</p>`));
-fs.writeFileSync(path.join(DIR, 'labit.json'), JSON.stringify({ port: PORT }));
-const server = startLab(DIR, labEnv());
-await labUp(B);
+// Each engine on a lab of its own: the drawings the one before sent stay on its pages.
+const L = freshLab('labit-draw-', (dir) => {
+  for (const n of ['circle', 'x', 'arrow', 'under', 'strike', 'box', 'caret', 'side', 'scribble']) fs.writeFileSync(path.join(dir, `${n}.html`), PAGE);
+  for (const [n, t] of Object.entries(WIDE)) fs.writeFileSync(path.join(dir, `${n}.html`), PAGE.replace(/<p id="a">.*?<\/p>/, `<p id="a">${t}</p>`));
+  fs.writeFileSync(path.join(dir, 'labit.json'), JSON.stringify({ port: PORT }));
+}, { base: B });
 const root = 'document.querySelector("*") && [...document.querySelectorAll("*")].find((n) => n.shadowRoot?.querySelector(".scrim"))?.shadowRoot';
 const has = (p, sel) => p.evaluate(([r, s]) => Boolean(new Function(`return ${r}`)()?.querySelector(s)), [root, sel]);
 const inks = (p) => p.evaluate((r) => new Function(`return ${r}`)()?.querySelectorAll('.pin.ink').length || 0, root);
@@ -63,6 +63,7 @@ const ring = (cx, cy, rx, ry) => Array.from({ length: 22 }, (_, i) => [cx + rx *
 
 try {
   for (const eng of engines()) {
+    await L.up();
     const browser = await pw[eng].launch();
     try {
       const ctx = await browser.newContext({ viewport: { width: 1000, height: 700 } });
@@ -212,9 +213,8 @@ try {
     }
   }
 } finally {
-  server.kill();
   // the lab may still be writing as it ends: wait for it to exit before removing its folder
-  if (server.exitCode === null && server.signalCode === null) await new Promise((r) => server.once('exit', r));
-  fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
+  await L.stop();
+  fs.rmSync(L.dir, { recursive: true, force: true, maxRetries: 5 });
 }
 finish();

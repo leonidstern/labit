@@ -9,27 +9,28 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { claimPort } from './port.mjs';
-import { playwright, engines, tmp, labEnv, startLab, labUp, sleep, check, finish, withAlt } from './harness.mjs';
+import { playwright, engines, freshLab, sleep, check, finish, withAlt } from './harness.mjs';
 
 const pw = playwright();
 
-const DIR = tmp('labit-boardframes-');
 const PORT = claimPort(8290, 30);
 const B = `http://localhost:${PORT}`;
 const page = (title, h1) => `<!doctype html><meta charset="utf-8"><title>${title}</title><h1>${h1}</h1><div style="height:150px"></div>`;
-fs.writeFileSync(path.join(DIR, 'pricing.html'), page('Pricing', 'Pricing one'));
-fs.writeFileSync(path.join(DIR, 'checkout.html'), page('Checkout', 'Checkout one'));
-fs.writeFileSync(path.join(DIR, 'index.html'), page('k', 'Keys'));
-fs.writeFileSync(path.join(DIR, 'labit.json'), JSON.stringify({ port: PORT }));
-const server = startLab(DIR, labEnv());
-await labUp(B);
+// Each engine on a lab of its own: the one before it saved pricing.html and left a pin on the board.
+const L = freshLab('labit-boardframes-', (dir) => {
+  fs.writeFileSync(path.join(dir, 'pricing.html'), page('Pricing', 'Pricing one'));
+  fs.writeFileSync(path.join(dir, 'checkout.html'), page('Checkout', 'Checkout one'));
+  fs.writeFileSync(path.join(dir, 'index.html'), page('k', 'Keys'));
+  fs.writeFileSync(path.join(dir, 'labit.json'), JSON.stringify({ port: PORT }));
+}, { base: B });
 const put = (name, frames) => fetch(`${B}/_lab/api/board?name=${name}`, { method: 'PUT', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ v: 1, rev: 0, frames }) }).then((r) => r.json());
-await put('two', [{ id: 'a', src: '/pricing', w: 400, h: 400, x: 0, y: 0 }, { id: 'b', src: '/checkout', w: 400, h: 400, x: 500, y: 0 }]);
-// a on its own at the left, nine more far to the right: going to those puts a to sleep
-await put('many', [{ id: 'a', src: '/pricing', w: 300, h: 300, x: 0, y: 0 }, ...Array.from({ length: 9 }, (_, i) => ({ id: 'n' + i, src: '/checkout', w: 300, h: 300, x: 5000 + (i % 3) * 340, y: Math.floor(i / 3) * 340 }))]);
-const save = (f, text) => fs.writeFileSync(path.join(DIR, f), text);
+const save = (f, text) => fs.writeFileSync(path.join(L.dir, f), text);
 try {
   for (const eng of engines()) {
+    await L.up();
+    await put('two', [{ id: 'a', src: '/pricing', w: 400, h: 400, x: 0, y: 0 }, { id: 'b', src: '/checkout', w: 400, h: 400, x: 500, y: 0 }]);
+    // a on its own at the left, nine more far to the right: going to those puts a to sleep
+    await put('many', [{ id: 'a', src: '/pricing', w: 300, h: 300, x: 0, y: 0 }, ...Array.from({ length: 9 }, (_, i) => ({ id: 'n' + i, src: '/checkout', w: 300, h: 300, x: 5000 + (i % 3) * 340, y: Math.floor(i / 3) * 340 }))]);
     const browser = await pw[eng].launch();
     try {
       const ctx = await browser.newContext({ viewport: { width: 1200, height: 800 } });
@@ -49,12 +50,13 @@ try {
       await keep('a');
       await keep('b');
       const c0 = await cam();
+      const a0 = await frameDoc('a');
       save('pricing.html', page('Pricing', 'Pricing two'));
       let a1;
       for (let i = 0; i < 40 && a1?.h1 !== 'Pricing two'; i++) { await sleep(150); a1 = await frameDoc('a'); }
       await sleep(800);
       const b1 = await frameDoc('b');
-      check(eng, 'the saved page\'s frame shows the change', a1?.h1 === 'Pricing two', JSON.stringify(a1));
+      check(eng, 'the saved page\'s frame shows the change', a0?.h1 === 'Pricing one' && a1?.h1 === 'Pricing two', JSON.stringify([a0, a1]));
       check(eng, 'the other frame is not reloaded', b1?.kept === true && b1.h1 === 'Checkout one', JSON.stringify(b1));
       check(eng, 'the board page is not reloaded', await p.evaluate(() => window.__kept === 1));
       check(eng, 'the camera did not move', JSON.stringify(await cam()) === JSON.stringify(c0), JSON.stringify([c0, await cam()]));
@@ -115,7 +117,7 @@ try {
     }
   }
 } finally {
-  server.kill();
-  fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
+  await L.stop();
+  fs.rmSync(L.dir, { recursive: true, force: true, maxRetries: 5 });
 }
 finish();

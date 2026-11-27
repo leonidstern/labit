@@ -13,7 +13,7 @@ const pw = playwright({ ciFails: true });
 
 const DIR = fs.realpathSync(tmp('labit-proxyreload-'));
 const PORT = claimPort(11400, 60);
-const APP_PORT = PORT + 60;
+const APP_PORT = claimPort(11460, 60); // claimed too: another program on PORT + 60 stopped the app before any check
 const B = `http://localhost:${PORT}`;
 fs.writeFileSync(`${DIR}/labit.json`, JSON.stringify({ port: PORT }));
 const lines = (n) => Array.from({ length: n }, (_, i) => `<p>Paragraph number ${i} with some words in it.</p>`).join('');

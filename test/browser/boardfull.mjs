@@ -124,7 +124,7 @@ try {
         const step = () => {
           const box = ${V}.querySelector('#lab-board .f[data-id="a"]');
           const shown = [...box.querySelectorAll('iframe[data-ready]')].filter((f) => f.style.visibility !== 'hidden' && f.contentDocument?.querySelector('h1'));
-          out.push({ h: box.getBoundingClientRect().height, b: ${V}.querySelector('#lab-board .f[data-id="b"]').getBoundingClientRect().top, page: shown.length > 0, z: __labBoard.camera().z });
+          out.push({ h: box.getBoundingClientRect().height, b: ${V}.querySelector('#lab-board .f[data-id="b"]').getBoundingClientRect().top, page: shown.length > 0, cam: __labBoard.camera() });
           if (performance.now() - t0 < 4000) requestAnimationFrame(step);
         };
         step();
@@ -138,7 +138,7 @@ try {
       check(eng, 'a page saved: its frame never shows without its page', seen.every((x) => x.page), JSON.stringify(seen.filter((x) => !x.page).length));
       check(eng, 'its height never falls back to the device\'s while it loads', Math.min(...hs) >= h0 - 1, JSON.stringify({ h0, min: Math.min(...hs) }));
       check(eng, 'the new height eases there (steps between), and grew', h1 > h0 + 100 && hs.filter((h) => h > h0 + 2 && h < h1 - 2).length >= 3, JSON.stringify({ h0, h1, between: hs.filter((h) => h > h0 + 2 && h < h1 - 2).length }));
-      check(eng, 'the camera stays where it was', seen.every((x) => x.z === seen[0].z), JSON.stringify([seen[0].z, seen.at(-1).z]));
+      check(eng, 'the camera stays where it was', seen.every((x) => x.cam.x === seen[0].cam.x && x.cam.y === seen[0].cam.y && x.cam.z === seen[0].cam.z), JSON.stringify([seen[0].cam, seen.at(-1).cam]));
       const bs = seen.map((x) => Math.round(x.b));
       check(eng, 'the frame under it eases down with it', bs.at(-1) > bs[0] && bs.filter((v) => v > bs[0] + 2 && v < bs.at(-1) - 2).length >= 3, JSON.stringify({ from: bs[0], to: bs.at(-1) }));
       fs.writeFileSync(path.join(DIR, 'live.html'), live(1200));

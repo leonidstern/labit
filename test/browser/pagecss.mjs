@@ -116,7 +116,10 @@ try {
           check(eng, `${tag}: the widget is a plain box at the page's corner`, r.host.display === 'block' && r.host.position === 'absolute' && r.host.visibility === 'visible' && r.host.opacity === '1' && r.host.transform === 'none' && r.host.w === 0 && r.host.h === 0 && Math.abs(r.host.x) < 1 && Math.abs(r.host.y) < 1, JSON.stringify(r.host));
           check(eng, `${tag}: its pin stands on its spot, and takes the pointer there`, Boolean(r.pin) && Math.abs(r.pin.dx) < 1.5 && Math.abs(r.pin.dy) < 1.5 && r.pin.hit, JSON.stringify(r.pin));
           const off = [];
-          for (const [part, props] of Object.entries(calm.parts)) for (const q of PROPS) if (r.parts[part] && r.parts[part][q] !== props[q]) off.push(`${part} ${q}: ${props[q]} → ${r.parts[part][q]}`);
+          for (const [part, props] of Object.entries(calm.parts)) {
+            if (!r.parts[part]) off.push(`${part}: missing`); // a part the calm page has is gone: that differs too
+            else for (const q of PROPS) if (r.parts[part][q] !== props[q]) off.push(`${part} ${q}: ${props[q]} → ${r.parts[part][q]}`);
+          }
           check(eng, `${tag}: every part looks as on the calm page`, r.card && !off.length, `${Object.keys(r.parts).length} parts, ${off.length} differ${off.length ? `, e.g. ${off.slice(0, 3).join('; ')}` : ''}`);
         }
         // The band a heading wears when a message points at it is drawn in the widget, not among the page's own elements.

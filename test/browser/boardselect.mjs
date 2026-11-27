@@ -7,20 +7,25 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { claimPort } from './port.mjs';
-import { playwright, engines, tmp, labEnv, startLab, labUp, sleep, check, finish } from './harness.mjs';
+import { playwright, engines, freshLab, sleep, check, finish } from './harness.mjs';
 
 const pw = playwright();
 
-const DIR = tmp('labit-boardsel-');
 const PORT = claimPort(8230, 30);
 const B = `http://localhost:${PORT}`;
-fs.writeFileSync(path.join(DIR, 'pricing.html'), '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pricing</title><h1>Pricing</h1>');
-fs.writeFileSync(path.join(DIR, 'index.html'), '<!doctype html><meta charset="utf-8"><title>k</title><h1>Keys</h1>');
-fs.writeFileSync(path.join(DIR, 'labit.json'), JSON.stringify({ port: PORT }));
-const server = startLab(DIR, labEnv());
-await labUp(B);
-const put = (name, frames, extra = {}) => fetch(`${B}/_lab/api/board?name=${name}`, { method: 'PUT', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ v: 1, rev: 0, frames, ...extra }) }).then((r) => r.json());
-const file = (n) => JSON.parse(fs.readFileSync(path.join(DIR, `.lab/boards/${n}.json`), 'utf8'));
+// Each engine on a lab of its own: the one before moved the frames of its boards.
+const L = freshLab('labit-boardsel-', (dir) => {
+  fs.writeFileSync(path.join(dir, 'pricing.html'), '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pricing</title><h1>Pricing</h1>');
+  fs.writeFileSync(path.join(dir, 'index.html'), '<!doctype html><meta charset="utf-8"><title>k</title><h1>Keys</h1>');
+  fs.writeFileSync(path.join(dir, 'labit.json'), JSON.stringify({ port: PORT }));
+}, { base: B });
+// A new board (rev 0): one the lab already has would answer 409 and keep its frames, so a refused put stops the test.
+const put = (name, frames, extra = {}) =>
+  fetch(`${B}/_lab/api/board?name=${name}`, { method: 'PUT', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ v: 1, rev: 0, frames, ...extra }) }).then(async (r) => {
+    if (r.status !== 200) throw new Error(`board ${name} not set: ${r.status} ${await r.text()}`);
+    return r.json();
+  });
+const file = (n) => JSON.parse(fs.readFileSync(path.join(L.dir, `.lab/boards/${n}.json`), 'utf8'));
 const places = (n) => JSON.stringify(file(n).frames.map((f) => [f.id, f.state, f.x, f.y]));
 const three = () => [
   { id: 'a', src: '/pricing', w: 400, h: 500, x: 0, y: 0 },
@@ -29,6 +34,7 @@ const three = () => [
 ];
 try {
   for (const eng of engines()) {
+    await L.up();
     const browser = await pw[eng].launch();
     try {
       const ctx = await browser.newContext({ viewport: { width: 1200, height: 800 } });
@@ -236,9 +242,11 @@ try {
         await sleep(300);
       }
       await p.mouse.move(600, 600);
+      const w0 = await cam(); // read again here: the side buttons above may have panned it
       await p.mouse.wheel(0, 100);
       await sleep(250);
-      check(eng, 'the wheel pans', (await cam()).y !== h2.y);
+      const w1 = await cam();
+      check(eng, 'the wheel pans', w1.y !== w0.y, JSON.stringify([w0, w1]));
 
       // ----- a finger still pans
       const ph = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
@@ -275,7 +283,7 @@ try {
     }
   }
 } finally {
-  server.kill();
-  fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
+  await L.stop();
+  fs.rmSync(L.dir, { recursive: true, force: true, maxRetries: 5 });
 }
 finish();

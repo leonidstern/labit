@@ -118,6 +118,8 @@ try {
       await post(`while the stream connected in ${eng}`);
       letGo();
       check(eng, 'a comment made before the stream first speaks still shows, no reload', gotList && (await until(async () => (await pinsOf(p3)) === listed + 1, 5000)), `pins ${listed} → ${await pinsOf(p3)}`);
+      // Left, not just shut: a shut context says no bye, and the lab counts the tab 90 s more (the next engine's wait above).
+      await p3.goto('about:blank');
       await ctx3.close();
 
       // ---- a reply shows once when the stream brings it before the POST's answer does ----
@@ -141,6 +143,7 @@ try {
       await sleep(1800);
       const bubbles = await inShadow((r, a) => [...r.querySelectorAll('.card .msg')].filter((m) => m.textContent.includes(a)).length, `said once in ${eng}`);
       check(eng, 'a reply the stream brought before the POST answered shows once', bubbles === 1, `${bubbles} bubbles`);
+      await p4.goto('about:blank');
       await ctx4.close();
 
       // ---- two "changes since" answers reaching the page the wrong way round (wifi): the newer state stays ----

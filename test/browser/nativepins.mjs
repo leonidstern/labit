@@ -10,16 +10,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { claimPort } from './port.mjs';
-import { playwright, engines, tmp, labEnv, startLab, labUp, sleep, check, finish } from './harness.mjs';
+import { playwright, engines, freshLab, sleep, check, finish } from './harness.mjs';
 
 const pw = playwright({ ciFails: true });
 
-const DIR = tmp('labit-nativepins-');
 const PORT = claimPort(8340, 40);
 const B = `http://localhost:${PORT}`;
 const MOVING = new Set(['sticky', 'shifted']); // pins on these are held by the browser; on the rest, placed by the script
 const FILLER = '<p>Filler words to scroll past in the box.</p>'.repeat(4);
-fs.writeFileSync(path.join(DIR, 'index.html'), `<!doctype html><meta charset="utf-8"><title>held pins</title>
+// Each engine on a lab of its own: the pins the one before placed would be found as this one's.
+const L = freshLab('labit-nativepins-', (dir) => {
+  fs.writeFileSync(path.join(dir, 'index.html'), `<!doctype html><meta charset="utf-8"><title>held pins</title>
 <style>body{margin:0;font:18px/1.5 Georgia,serif;max-width:640px} p{margin:22px 24px}
 #sticky{position:sticky;top:0;z-index:1;background:#eee;padding:14px 24px} #box{height:240px;overflow:auto;margin:16px 24px;border:1px solid #999}
 #gapsec{padding:1px 0} #shifted{transform:translateX(40px)}</style>
@@ -31,9 +32,8 @@ fs.writeFileSync(path.join(DIR, 'index.html'), `<!doctype html><meta charset="ut
 <div id="shifted"><p id="tp">A paragraph whose parent is moved by a transform.</p></div>
 <div style="height:1600px"></div>
 <p id="own" style="anchor-name:--theirs">A paragraph the page anchors something to itself.</p>`);
-fs.writeFileSync(path.join(DIR, 'labit.json'), JSON.stringify({ port: PORT }));
-const server = startLab(DIR, labEnv(), { stdio: 'ignore' });
-await labUp(B);
+  fs.writeFileSync(path.join(dir, 'labit.json'), JSON.stringify({ port: PORT }));
+}, { stdio: 'ignore', base: B });
 
 // Each pin, by the element it was put on (what its place is measured from).
 const PINS = [
@@ -66,6 +66,7 @@ const settle = (p) => p.evaluate(() => new Promise((res) => requestAnimationFram
 
 try {
   for (const eng of engines()) {
+    await L.up();
     const browser = await pw[eng].launch();
     try {
       const ctx = await browser.newContext({ viewport: { width: 900, height: 700 } });
@@ -232,7 +233,7 @@ try {
     }
   }
 } finally {
-  server.kill();
-  fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
+  await L.stop();
+  fs.rmSync(L.dir, { recursive: true, force: true, maxRetries: 5 });
 }
 finish();

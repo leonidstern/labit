@@ -234,14 +234,17 @@ try {
         const m = document.querySelector('main').getBoundingClientRect();
         const anchor = A.anchorAt(m.left + 200, b.getBoundingClientRect().bottom + 40);
         b.remove();
+        // where the box now holds blocks, and where it ends (its padding under the last one)
+        const end = { last: document.querySelector('.a').getBoundingClientRect().bottom + scrollY, box: document.querySelector('main').getBoundingClientRect().bottom + scrollY };
         try {
-          return { said: [anchor.gapAbove, anchor.gapBelow], at: A.position(anchor) };
+          return { said: [anchor.gapAbove, anchor.gapBelow], at: A.position(anchor), end };
         } catch (e) {
           return { said: [anchor.gapAbove, anchor.gapBelow], error: String(e) };
         }
       });
       check(eng, 'a gap pin after the last block names only the block above', /Beta/.test(r.said[0]) && !r.said[1], JSON.stringify(r.said));
       check(eng, 'a gap pin after a removed last block does not throw', !r.error && Number.isFinite(r.at?.top), JSON.stringify(r));
+      check(eng, '… and sits at the box\'s end, under its last block', r.at?.top >= r.end?.last - 1 && r.at?.top <= r.end?.box + 1, JSON.stringify(r));
       await p.close();
 
       // A gap between look-alikes (cards with no words of their own) is the one it was put in.
@@ -256,7 +259,7 @@ try {
         return { same, put: y + scrollY, grown: A.position(anchor), top: cards[1].getBoundingClientRect().bottom + scrollY, bottom: cards[2].getBoundingClientRect().top + scrollY };
       });
       check(eng, 'a gap pin between look-alikes is where it was put', !r.same.moved && Math.abs(r.same.top - r.put) < 1, JSON.stringify(r));
-      check(eng, 'a gap pin between look-alikes stays in a gap when the page grows above', !r.grown.moved && [0, 100, 200, 300].some((d) => r.grown.top >= r.top + d - 200 && r.grown.top <= r.bottom + d - 200), JSON.stringify(r));
+      check(eng, 'a gap pin between look-alikes stays in its own gap when the page grows above', !r.grown.moved && r.grown.top >= r.top && r.grown.top <= r.bottom, JSON.stringify(r));
       await p.close();
 
       // 9. The pinned element is gone (another tag now): its words are looked for in the whole page.

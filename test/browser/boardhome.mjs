@@ -5,27 +5,28 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { claimPort } from './port.mjs';
-import { playwright, engines, tmp, labEnv, startLab, labUp, sleep, check, finish, withAlt } from './harness.mjs';
+import { playwright, engines, freshLab, sleep, check, finish, withAlt } from './harness.mjs';
 
 const pw = playwright();
 
-const DIR = tmp('labit-boardhome-');
 const PORT = claimPort(8330, 30);
 const B = `http://localhost:${PORT}`;
-fs.writeFileSync(path.join(DIR, 'pricing.html'), '<!doctype html><meta charset="utf-8"><title>Pricing</title><h1>Pricing one</h1><p>Plan two</p>');
-fs.writeFileSync(path.join(DIR, 'cart.html'), '<!doctype html><meta charset="utf-8"><title>Cart</title><h1>Cart</h1><a id="go" href="/_lab/board/shop">the shop board</a>');
-fs.writeFileSync(path.join(DIR, 'labit.json'), JSON.stringify({ port: PORT }));
-fs.mkdirSync(path.join(DIR, '.lab/boards'), { recursive: true });
-fs.mkdirSync(path.join(DIR, '.lab/comments'), { recursive: true });
-fs.writeFileSync(path.join(DIR, '.lab/boards/shop.json'), JSON.stringify({ v: 1, name: 'shop', rev: 1, of: '/pricing', frames: [{ id: 'a', src: '/pricing', w: 390, h: 844, state: 'live' }, { id: 'b', src: '/pricing', w: 820, h: 600, state: 'live' }] }));
-// A pin from before: left on the board's own address.
-fs.writeFileSync(path.join(DIR, '.lab/comments/_5fboard_2fshop.json'), JSON.stringify({ page: '/_board/shop', comments: { old1: { id: 'old1', name: 'leo', text: 'from the old address', createdAt: '2026-11-18T10:00:00.000Z', num: 1, anchor: { kind: 'board', board: 'shop', frame: 'b', fx: 100, fy: 100, bx: 0, by: 0 } } } }));
-const server = startLab(DIR, labEnv());
-await labUp(B);
+// Each engine on a lab of its own, from this board and its old pin: the one before moved the pin and added one.
+const L = freshLab('labit-boardhome-', (dir) => {
+  fs.writeFileSync(path.join(dir, 'pricing.html'), '<!doctype html><meta charset="utf-8"><title>Pricing</title><h1>Pricing one</h1><p>Plan two</p>');
+  fs.writeFileSync(path.join(dir, 'cart.html'), '<!doctype html><meta charset="utf-8"><title>Cart</title><h1>Cart</h1><a id="go" href="/_lab/board/shop">the shop board</a>');
+  fs.writeFileSync(path.join(dir, 'labit.json'), JSON.stringify({ port: PORT }));
+  fs.mkdirSync(path.join(dir, '.lab/boards'), { recursive: true });
+  fs.mkdirSync(path.join(dir, '.lab/comments'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.lab/boards/shop.json'), JSON.stringify({ v: 1, name: 'shop', rev: 1, of: '/pricing', frames: [{ id: 'a', src: '/pricing', w: 390, h: 844, state: 'live' }, { id: 'b', src: '/pricing', w: 820, h: 600, state: 'live' }] }));
+  // A pin from before: left on the board's own address.
+  fs.writeFileSync(path.join(dir, '.lab/comments/_5fboard_2fshop.json'), JSON.stringify({ page: '/_board/shop', comments: { old1: { id: 'old1', name: 'leo', text: 'from the old address', createdAt: '2026-11-18T10:00:00.000Z', num: 1, anchor: { kind: 'board', board: 'shop', frame: 'b', fx: 100, fy: 100, bx: 0, by: 0 } } } }));
+}, { base: B });
 const stored = async (page) => (await (await fetch(`${B}/_lab/api/comments?page=${page}`)).json()).comments || [];
 const pins = (p) => p.evaluate(() => [...document.querySelectorAll('*')].reduce((n, e) => n + (e.shadowRoot?.querySelectorAll('button.pin').length || 0), 0));
 try {
   for (const eng of engines('chromium,webkit')) {
+    await L.up();
     const browser = await pw[eng].launch();
     try {
       const ctx = await browser.newContext({ viewport: { width: 1200, height: 800 } });
@@ -76,7 +77,7 @@ try {
     }
   }
 } finally {
-  server.kill();
-  fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5 });
+  await L.stop();
+  fs.rmSync(L.dir, { recursive: true, force: true, maxRetries: 5 });
 }
 finish();

@@ -3,16 +3,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { claimPort } from './port.mjs';
-import { playwright, engines, tmp, labEnv, startLab, labUp, sleep, check, finish } from './harness.mjs';
+import { playwright, engines, freshLab, sleep, check, finish } from './harness.mjs';
 
-const pw = playwright();
-const DIR = tmp('labit-attach-');
+const pw = playwright({ ciFails: true });
 const PORT = claimPort(8420, 30);
 const B = `http://localhost:${PORT}`;
-fs.writeFileSync(path.join(DIR, 'index.html'), '<!doctype html><meta charset="utf-8"><title>Home</title><h1 style="margin:80px">Home</h1><p>words</p>');
-fs.writeFileSync(path.join(DIR, 'labit.json'), JSON.stringify({ port: PORT }));
-const server = startLab(DIR, labEnv());
-await labUp(B);
+// Each engine on a lab of its own: the replies the one before saved would be found as this one's.
+const L = freshLab('labit-attach-', (dir) => {
+  fs.writeFileSync(path.join(dir, 'index.html'), '<!doctype html><meta charset="utf-8"><title>Home</title><h1 style="margin:80px">Home</h1><p>words</p>');
+  fs.writeFileSync(path.join(dir, 'labit.json'), JSON.stringify({ port: PORT }));
+}, { base: B });
 const list = async () => (await (await fetch(`${B}/_lab/api/comments?page=/index`)).json()).comments || [];
 // a picture as the clipboard (or a drag) carries it: drawn here at 3000 × 2000
 const dataOf = (p) => p.evaluateHandle(async () => {
@@ -25,6 +25,7 @@ const dataOf = (p) => p.evaluateHandle(async () => {
 });
 try {
   for (const eng of engines()) {
+    await L.up();
     const browser = await pw[eng].launch();
     try {
       const ctx = await browser.newContext({ viewport: { width: 1100, height: 800 } });
@@ -78,7 +79,7 @@ try {
       for (let i = 0; i < 40 && !saved; i++) { await sleep(150); saved = (await list()).find((c) => c.text === 'the header overlaps'); }
       const im = saved?.images?.[0];
       check(eng, 'the comment is saved with its one picture, sent at 2000 px on its long side', saved?.images?.length === 1 && Math.max(im.w, im.h) === 2000, JSON.stringify(saved?.images));
-      const file = saved && path.join(DIR, '.lab/attachments', `${saved.id}-1.${im.type}`);
+      const file = saved && path.join(L.dir, '.lab/attachments', `${saved.id}-1.${im.type}`);
       check(eng, 'its file is in .lab/attachments under the comment id', Boolean(file) && fs.existsSync(file));
       check(eng, 'the agent reads its path', saved && (await (await fetch(`${B}/_lab/agent/index`)).text()).includes(`image: .lab/attachments/${saved.id}-1.${im.type} (${im.w}×${im.h})`));
       // the thread says the picture is there, in one line, no thumbnail and nothing that opens a tab (#424)
@@ -117,23 +118,27 @@ try {
         const over = new DragEvent('dragover', { dataTransfer: dt, bubbles: true, cancelable: true, composed: true });
         box.dispatchEvent(over);
         box.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true, composed: true }));
-        return over.defaultPrevented;
+        return over.dataTransfer?.files.length === 1; // the engine carried the files on a made-up event
       }).catch(() => null);
-      if (dropped === null || !(await until(async () => (await p.locator('.atts .p img').count()) === 1, 15))) console.log(`skip ${eng}   this engine did not carry a synthetic drop`);
+      // Only an engine that drops a made-up event's files is skipped: one that carries them and gets no thumbnail fails.
+      if (!dropped) console.log(`skip ${eng}   this engine did not carry a synthetic drop`);
       else {
-        check(eng, 'a drop on the reply box adds a thumbnail', true);
+        check(eng, 'a drop on the reply box adds a thumbnail', await until(async () => (await p.locator('.atts .p img').count()) === 1, 15));
         await reply.fill('and this');
         await reply.press('Enter');
         let withReply;
-        for (let i = 0; i < 40 && !withReply; i++) { await sleep(150); withReply = (await list()).find((c) => c.parent && c.images?.length); }
+        for (let i = 0; i < 40 && !withReply; i++) { await sleep(150); withReply = (await list()).find((c) => c.parent === saved?.id && c.text === 'and this' && c.images?.length); }
         check(eng, 'the reply is saved with it', Boolean(withReply), JSON.stringify((await list()).map((c) => c.images)));
       }
       // Leo, 23 Nov: "sends but image stuck there like doubled". The page redraws its boxes while a send with a picture is
       // on its way (a reply comes in on the same thread): the box drawn again took the picture back, and the send emptied only the old box.
+      // The send is held till the reply that came in shows: the thread was drawn again while it was on its way.
+      let redrew = null;
       await ctx.route('**/_lab/api/comments', async (r) => {
         if (r.request().method() !== 'POST') return r.continue();
         await fetch(`${B}/_lab/api/comments`, { method: 'POST', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ page: '/index', name: 'Other', text: 'meanwhile', parent: saved?.id }) });
-        await sleep(2500);
+        redrew = await until(() => p.evaluate(() => Boolean([...document.querySelectorAll('*')].find((n) => n.shadowRoot?.querySelector('.scrim'))?.shadowRoot.textContent.includes('meanwhile'))), 40);
+        await sleep(500);
         return r.continue();
       });
       await reply.focus();
@@ -144,6 +149,7 @@ try {
       let redrawn;
       for (let i = 0; i < 60 && !redrawn; i++) { await sleep(150); redrawn = (await list()).find((c) => c.text === 'sent while redrawn'); }
       await sleep(1200);
+      check(eng, 'the reply that came in meanwhile shows while the send is on its way', redrew === true, String(redrew));
       check(eng, 'a picture sent while the boxes are drawn again goes with the comment and leaves no box', redrawn?.images?.length === 1 && (await p.locator('.atts .p img').count()) === 0, `saved ${JSON.stringify(redrawn?.images)}, left in boxes ${await p.locator('.atts .p img').count()}`);
       await ctx.unroute('**/_lab/api/comments');
       // a send that fails keeps the words and the picture
@@ -213,6 +219,6 @@ try {
     }
   }
 } finally {
-  server.kill();
+  await L.stop();
 }
 finish();
