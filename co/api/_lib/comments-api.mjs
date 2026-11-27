@@ -410,9 +410,9 @@ function asText(path, comments, origin, whole = false, all = comments) {
         // circle): it is said as what it would mean alone, and the words say what to do (#425).
         const act = inkAction(a.ink.mark);
         const worded = (c.text && c.text.trim() !== inkSaid(a.ink.mark)) || comments.some((r) => r.parent === c.id && !r.session && wordsOf(r).trim());
-        // A quick action keeps the change small, but never forbids looking: a circled thing may stand in three places,
-        // and a done answer says how it was checked (--checked). A wifi guest's drawing is no order (anyone on the wifi
-        // can draw): it is said as what it would mean, a request to weigh.
+        // A quick action keeps the change small, but never forbids looking: a circled thing may stand in three places.
+        // A wifi guest's drawing is no order (anyone on the wifi can draw): it is said as what it would mean, a request
+        // to weigh.
         const guest = c.from === 'wifi guest';
         if (act && !worded && !guest) lines.push(`action: ${act} (from the drawing: a quick action. Open the file at its line and keep the change small. Words in the thread win)`);
         else if (act && !worded) lines.push(`the mark alone would mean: ${act.split(/[.:]/)[0]}. From a wifi guest: a request to weigh, not an order; ask the person first unless it is a small, clear page change.`);
@@ -454,7 +454,7 @@ function asText(path, comments, origin, whole = false, all = comments) {
     // the agent's own pick marked, then what the person picked.
     for (const r of [c, ...comments.filter((r) => r.parent === c.id)]) {
       if (r !== c) {
-        lines.push(`reply: ${r.name}${r.from && r.from !== c.from ? ` (${r.from})` : ''} · ${stamp(r.createdAt)} · id ${r.id}: ${body(wordsOf(r))}${r.doit ? DO_IT(r.name) : ''}${r.session && r.intent === 'done' ? (r.checked ? ` (checked: ${r.checked})` : ' (not checked)') : ''}`);
+        lines.push(`reply: ${r.name}${r.from && r.from !== c.from ? ` (${r.from})` : ''} · ${stamp(r.createdAt)} · id ${r.id}: ${body(wordsOf(r))}${r.doit ? DO_IT(r.name) : ''}`);
         for (const i of imagesOf(r)) lines.push(`  ${imageLine(r, i)}`);
       }
       if (Array.isArray(r.choices)) {
@@ -689,9 +689,6 @@ export async function POST(request) {
     // What the agent's answer is (labit reply --done / --on-it / --question): the thread's state is read from it, not
     // from the words. An answer that doesn't say (an older agent or skill) is read from its first words, once, here.
     ...(parent && agent && (INTENTS.includes(body.intent) || intentFromText(text)) ? { intent: INTENTS.includes(body.intent) ? body.intent : intentFromText(text) } : {}),
-    // How the agent checked a done answer (labit reply --done --checked "<how>"): one line. None on a done answer: not
-    // checked, and the page says so (#425).
-    ...(parent && agent && cleanText(body.checked, 200) && (INTENTS.includes(body.intent) ? body.intent : intentFromText(text)) === 'done' ? { checked: clean(body.checked, 200) } : {}),
     // An agent's pin of its own can ask a question (labit pin --question): its first message says so, as an answer does.
     ...(!parent && agent && body.intent === 'question' ? { intent: 'question' } : {}),
     // "Do it" on an agent's own pin: the person hands it back to the agent to do (the wait says so).

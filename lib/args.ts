@@ -115,6 +115,7 @@ export const WRITE_SHORT = "Write answers short: they're read in a small window,
 // Where a new version of something goes: beside the one it follows, so nobody hunts for it at the page's end (Leo, 23 Nov).
 // The first hand-off says it short; the skill says it whole (test/skill-sync).
 export const NEW_VERSION_NEAR = 'A new version: on a research page, right after the one it follows, never at the bottom, its heading saying so; on a live project, where it was asked, as a board variant, the page unchanged until picked.';
+// --checked "<how>" was dropped (27 Nov) but is still read and ignored, so an agent on an old skill keeps its reply; remove later.
 const VALUED = ['--port', '--name', '--page', '--pages', '--timeout', '--dir', '--proxy', '--model', '--checked', '--at', '--progress', '--choice', '--hint', '--recommend', '--of', '--variants', '--widths', '--flow', '--label', '--width', '--after', '--quote', '--file', '--board', '--frame'];
 // Flags given more than once, each time adding one (reply --choice "A" --choice "B"): a list, in the order given.
 const REPEATED = ['--choice', '--hint'];
