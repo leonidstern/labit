@@ -37,6 +37,7 @@ import { IMAGE_FILE, imageInfo, MAX_IMAGE } from './lib/images.mjs';
 import { IMAGE_TYPES, IMAGES_SAID, imageLine, imageName, imagesOf, MAX_IMAGES, wordsOf } from './lib/schema.mjs';
 import { proxy as makeProxy } from './lib/proxy.ts';
 import { stripTags } from './lib/colabit.ts';
+import { shipsWithSite } from './lib/shipping.ts';
 import { newer, fetchNotes } from './lib/update.ts';
 
 // The package's folder: this file's, or its parent when this is the built copy in dist/ (what npm ships).
@@ -3339,6 +3340,9 @@ server.on('listening', async () => {
     : `[lab] only this computer can open it (\`${CMD} invite\` lets a phone on the same wifi in)`);
   console.log(`[lab] your agent: run \`${CMD} wait\` in the background from ${ROOT}; it ends with the next comment.`);
   console.log(`[lab] agents without the labit plugin or skill: read \`${CMD} skill\` once, for how to answer pins.`);
+  // .lab is out of git (its .gitignore), but not out of a deploy: built output, or public/ copied into the build.
+  const ships = shipsWithSite(ROOT);
+  if (ships) console.log(`[lab] careful: ${ships}. This lab keeps its comments, pictures and key in ${path.join(ROOT, '.lab')}, so a deploy would take them along. Run labit from the project folder instead (in front of its dev server), or delete that .lab before you deploy.`);
   // Open a page, not a list of folders: the project's main page when there's no index.html at the top.
   const first = !PROXY && !fs.existsSync(path.join(ROOT, 'index.html')) ? pagesUnder(ROOT)[0] : null;
   const start = first ? urlOf(first) : '/';
