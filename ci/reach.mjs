@@ -13,7 +13,8 @@
 // "#classes" are the classes the widget's elements wore during the test: a change to a CSS rule runs the tests that
 // showed one of its classes.
 // Chromium only: a line only WebKit runs is in no test's list, and ci/affected.mjs runs every test for a change there.
-// The plain build is put back at the end. reach.yml makes the map on a GitHub runner after each code merge to main.
+// The plain build is put back at the end. reach.yml makes the map on GitHub's runners each night, and carries it to
+// each code merge to main in between (--carry).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

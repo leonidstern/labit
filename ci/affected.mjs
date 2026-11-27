@@ -1,5 +1,5 @@
-// Which browser tests a pull request needs (Leo, 20 Nov: PR CI should run only the tests a change can break). The
-// browser jobs run on GitHub's runners; this picks, from the files a PR changes, which test/browser files they run.
+// Which browser tests a pull request needs (Leo, 20 Nov: PR CI should run only the tests a change can break). This
+// picks, from the files a PR changes, which test/browser files test.yml's browser jobs run.
 //
 // Rules, first match per changed file:
 // - Never affects a browser: docs, skills, hooks, examples, unit tests, the phone kit, the size gate's ci/ scripts,
@@ -102,10 +102,10 @@ export function listEdit(diff) {
 
 // The browser jobs: the picked tests packed into shards per engine, longest first onto the shortest shard, so they
 // end at about the same time. As many shards as the tests need at about TARGET seconds each, at most RUNNERS[engine]:
-// WebKit runs on GitHub's macOS runners (Safari's own WebKit; Linux WebKit draws, scrolls and times frames otherwise),
-// 5 at once for a free account; Chromium on Linux, 5 so a release keeps room for a PR. The bench rides on the first
-// WebKit shard.
-const RUNNERS = { webkit: 5, chromium: 5 };
+// WebKit runs on macOS (Safari's own WebKit; Linux WebKit draws, scrolls and times frames otherwise), on the six
+// runners of Leo's Mac Studio (WEBKIT_OS set) or GitHub's, 5 at once for the account; Chromium on Linux, 5 so a
+// release keeps room for a PR. The bench rides on the first WebKit shard.
+const RUNNERS = { webkit: process.env.WEBKIT_OS ? 6 : 5, chromium: 5 };
 const TARGET = 60;
 // Tests too long for one shard, run in parts side by side: name@i/n, ci/browser-run.mjs passes TEST_PART=i/n and the
 // test runs only that part. Each part counts as its share of the test's time. anchoring-torture alone took 250-500 s,

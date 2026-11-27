@@ -45,7 +45,7 @@ jobs:
       - run: npm run build
       - run: node --import ./test/setup.mjs --test test/windows.test.mjs
 
-  # Two quick checks in one job:
+  # Three quick checks in one job:
   # - Dead code: files nothing imports, and exports nothing outside their own file uses. Knip runs from npx,
   #   pinned, so labit keeps zero dependencies; knip.json lists the entry points.
   # - Reuse: one drawer, one dimmed page, shared gestures, keyboard fit, animations and styles (ci/reuse.mjs).
@@ -99,8 +99,8 @@ jobs:
           done
           [ -f ci/reach-map.json ] || echo "no reach map: every test runs"
       # WebKit on Leo's Mac Studio (Leo, 27 Nov: "do macos ci on my mac studio"): GitHub runs only 5 macOS jobs at a time
-      # for the account and a PR's WebKit takes up to 5, so PRs queued behind each other. Four runners on the Studio
-      # (self-hosted + labit-mac, services in ~/actions-runner-labit-1..4) take the WebKit shards while the repository
+      # for the account and a PR's WebKit takes up to 5, so PRs queued behind each other. Six runners on the Studio
+      # (self-hosted + labit-mac, services in ~/actions-runner-labit-1..6) take the WebKit shards while the repository
       # variable MAC_RUNNERS is "on"; `gh variable set MAC_RUNNERS --body off` sends them back to GitHub's macOS runners
       # (the Studio away or busy). Never for a fork's PR: the repository is public, and a stranger's PR would run its code
       # on the Studio.
@@ -127,9 +127,9 @@ jobs:
 
   # The widget in real browsers: Safari's engine (WebKit) and Chrome's. Playwright is installed only here (--no-save),
   # so labit itself keeps zero dependencies. One job per shard the plan made, side by side.
-  # WebKit on Leo's Mac Studio while MAC_RUNNERS is on (plan, above), else on GitHub's macOS runners; Chromium on Linux. WebKit on macOS,
-  # Safari's own engine (on Linux, WebKit's frames, wheel scrolling and timing differ: sheetrelease, motionreduce and
-  # cardscroll failed there), Chromium on Linux. Playwright's browsers are cached per version on GitHub's runners.
+  # WebKit on macOS, Safari's own engine (on Linux, WebKit's frames, wheel scrolling and timing differ: sheetrelease,
+  # motionreduce and cardscroll failed there): on Leo's Mac Studio while MAC_RUNNERS is on (plan, above), else on
+  # GitHub's macOS runners. Chromium on Linux. Playwright's browsers are cached per version on GitHub's runners.
   browser:
     needs: plan
     if: needs.plan.outputs.jobs != '[]'
@@ -173,7 +173,7 @@ jobs:
         run: node bench/run.mjs
       # Native features (ci/native.mjs): what Safari's engine and Chrome's can do that labit could use, as a table in the
       # job's summary. Fails only when a feature labit uses goes missing from one of them. In the first WebKit shard, so
-      # it takes none of the five macOS runners of its own.
+      # it takes no macOS runner of its own.
       - if: matrix.native
         run: node ci/native.mjs
         env:

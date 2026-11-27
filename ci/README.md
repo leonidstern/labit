@@ -19,7 +19,8 @@ Every PR, forks included, is measured against its own base commit. Takes seconds
 - Over a per-PR budget on purpose? Add the `size-approved` label. Hard caps still apply;
   raising one means editing `ci/metrics.mjs`.
 - Both sides are measured with the **base** branch's `ci/`, so a PR can't change how it's judged.
-- Both sides use the **PR's** `.oxlintrc.json`, so adding a rule doesn't fail the PR that adds it.
+- Both sides use the **PR's** lint and type rules (`tsconfig.json`, and `.oxlintrc.json` once `ci/meta-improve.sh` adds
+  one; oxlint's defaults until then), so adding a rule doesn't fail the PR that adds it.
 
 ## Tests (`.github/workflows/test.yml`)
 
@@ -37,7 +38,7 @@ Built so a PR, mostly opened by agents, hears back in about 3 minutes, and a fai
   starting, a pin drawn) picks five of them: the three that run most of that file and the two quickest. Locally: `node ci/reach.mjs` writes
   `ci/reach-map.json`, which `ci/affected.mjs` and `npm run check` use.
 - **Even shards.** `ci/browser-tests.json` lists every browser test CI runs with its WebKit time on a CI runner (seconds).
-  The plan packs the picked tests into shards of about a minute: WebKit on up to 5 macOS jobs, Chromium on Linux. A new browser test goes in
+  The plan packs the picked tests into shards of about a minute: WebKit on up to 6 macOS jobs on Leo's Mac Studio (5 on GitHub's macOS runners when `MAC_RUNNERS` is off), Chromium on Linux. A new browser test goes in
   this list, or it never runs in CI; refresh a time from a run's log ("<test> took N s") when it drifts. A test CI runs
   in parts (`SPLIT` in `ci/affected.mjs`, e.g. `anchoring-torture@1/3`) logs each part: its time is the parts' sum.
 - **Unit tests by the map too.** The map also keeps the lines each unit test file runs (its labs' included). A PR

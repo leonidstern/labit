@@ -3,7 +3,8 @@
 #
 # - The PR is compared with its own base commit. No baseline file, nothing pushed.
 # - Both sides are measured with the base branch's judge (ci/), so a PR can't change how it's judged.
-# - Both sides use the PR's .oxlintrc.json, so a PR adding a rule isn't blamed for old problems.
+# - Both sides use the PR's tsconfig.json and .oxlintrc.json (none yet: oxlint's defaults; ci/meta-improve.sh may add
+#   one), so a PR adding a rule isn't blamed for old problems.
 name: gates
 
 on:
