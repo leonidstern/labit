@@ -1587,10 +1587,19 @@ export const wholeWords = (range: Range) => {
   return range;
 };
 const canMark = typeof Highlight === 'function' && Boolean(CSS.highlights);
+/** Whether a highlight holds just this range (same start and end, in the page as it is now). */
+export const sameLit = (lit: { size: number; values(): IterableIterator<AbstractRange> } | undefined, range: AbstractRange): boolean => {
+  if (!lit || lit.size !== 1) return false;
+  const [r] = lit.values();
+  return r.startContainer === range.startContainer && r.startOffset === range.startOffset && r.endContainer === range.endContainer && r.endOffset === range.endOffset && r.startContainer.isConnected;
+};
 export const markQuote = (anchor) => {
   if (!canMark) return;
   const range = anchor && quoteRange(anchor);
   if (!range) return CSS.highlights.delete('lab-quote');
+  // The same words lit already (each drawing of an open thread sets them again): nothing to do. lab-lit on <html> makes
+  // the page's text selectable for two frames, and each flip restyled the whole page (~10 ms, iOS 27 simulator, 27 Nov).
+  if (sameLit(CSS.highlights.get('lab-quote'), range)) return;
   // WebKit paints no highlight set while the text can't be selected (comments on, Shift up: data-lab-pinning in
   // comments.js), and keeps one set while it can: the page's text is selectable for the frame the words are lit in.
   document.documentElement.classList.add('lab-lit');

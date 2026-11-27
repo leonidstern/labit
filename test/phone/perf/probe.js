@@ -3,7 +3,7 @@
 // - records every interaction a touch starts: the frames after it (rAF times, the open sheet's top, the dimmed page's
 //   opacity, the scroll, the keyboard), the tap's click handler time and Event Timing entries, and posts it to the sink;
 // - runs the widget's own open and close paths by script (`bench`): a pin's click (what a tap on it ends in) and a click on
-//   the dimmed page, each timed from the dispatch to the frames that follow;
+//   the dimmed page, each timed from the dispatch to the frames that follow; `benchNew`: a new comment held, lifted, dropped;
 // - answers `ask`: JavaScript from run.mjs, with the widget's shadow root as `shadow`.
 (() => {
   if (self !== top) return;
@@ -112,6 +112,42 @@
           await timed(`${label}pin${pin}:close`, () => root().querySelector('.scrim').click());
           await sleep(500);
         }
+      flush();
+      return 'done';
+    },
+    // A new comment, by script: a finger held still at (x, y) with the page at `sy` (the widget pins after 400 ms, and
+    // moves the page so the pin shows above the sheet), lifted at 640 ms, then a click on the dimmed page drops it.
+    // The open is timed from the hold (the 400 ms timer) and its handler is that timer's work; the close from the click.
+    // No keyboard comes for a scripted touch: the page's shift runs out 450 ms after the lift (sheets.ts liftedDraft).
+    async benchNew({ n = 5, x = 100, y = 318, sy = 1803, label = '' } = {}) {
+      const st = setTimeout;
+      for (let i = 0; i < n; i++) {
+        if (root().querySelector('.card:not(.out), .float:not(.out)')) { root().querySelector('.scrim').click(); await sleep(1200); }
+        scrollTo(0, sy);
+        await sleep(900);
+        const target = document.elementFromPoint(x, y);
+        const touch = (type) => target.dispatchEvent(new PointerEvent(type, { pointerType: 'touch', isPrimary: true, clientX: x, clientY: y, bubbles: true, composed: true }));
+        let held = null;
+        window.setTimeout = (f, d, ...a) => {
+          if (d !== 400 || typeof f !== 'function') return st(f, d, ...a);
+          window.setTimeout = st;
+          return st(() => { const h0 = performance.now(); f(); held = { at: Math.round(h0), handler: Math.round((performance.now() - h0) * 10) / 10 }; }, d, ...a);
+        };
+        const t0 = now();
+        const recDone = new Promise((r) => (done = r));
+        start(t0 + 400, `${label}new:open`, { type: 'script', t: Math.round(t0 + 400) }, 1800);
+        touch('pointerdown');
+        window.setTimeout = st;
+        await sleep(640);
+        if (held) rec?.clicks.push(held);
+        touch('pointerup');
+        try { target.dispatchEvent(new TouchEvent('touchend', { bubbles: true, cancelable: true, composed: true })); } catch {}
+        await recDone;
+        done = null;
+        await sleep(300);
+        await timed(`${label}new:close`, () => root().querySelector('.scrim').click());
+        await sleep(900);
+      }
       flush();
       return 'done';
     },

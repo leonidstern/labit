@@ -1,5 +1,6 @@
 // Part of the comment widget (src/comments.js bundles it). Uses the widget's own parts through W, set once at startup.
 import * as move from './sheetmove.ts';
+import { TAP_SLOP } from './lifttap.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let W: any;
@@ -162,23 +163,41 @@ export function slideAway(node, close, ms = 0, speed = 0) {
 // the page and the sheet is thrown about (its top went 331, 182, 234, 197, 267: iOS 27 simulator); scrolled in the lift
 // itself, just before the focus, iOS never took the scroll and the keyboard came up over the sheet. So, as the pin appears
 // under the finger (the hold): the page is put at its new place in one step and drawn where it was (shifted back by as
-// much, --lab-shift on the page's own blocks and on the pins), and when the keyboard starts up that shift runs out, as
-// the sheet's own rise does. Nothing is scrolled while the keyboard is there, and nothing is seen to move before it.
+// much: an inline translate on the page's own blocks, --lab-shift on the pins), and when the keyboard starts up that
+// shift runs out, as the sheet's own rise does. Nothing is scrolled while the keyboard is there, and nothing is seen to move before it.
 let gen = 0; // each shift is the last one's end
+// The shift is written on the page's own blocks (inline) and on the widget's host, never as custom properties on <html>:
+// one there is inherited by every element, so each write restyled the whole page (17-21 ms a write, four or five writes
+// a new comment: iOS 27 simulator, 27 Nov). A block's own translate and transition are put back as they were.
+let easeSettle = ''; // a token: read once
+const kept = new Map<HTMLElement, string[]>();
+const blocks = () => Array.from(document.body.children).filter((n): n is HTMLElement => n instanceof HTMLElement && n !== W.host && n.localName !== 'script' && n.localName !== 'style' && !n.hasAttribute('data-lab-board-view') && !n.hasAttribute('data-lab-still'));
 const shifted = (px: number, ms: number) => {
-  const de = document.documentElement;
   gen++;
-  de.style.setProperty('--lab-shift-t', `${ms}ms`);
-  de.style.setProperty('--lab-shift-e', getComputedStyle(W.host).getPropertyValue('--_ease-settle').trim() || 'ease');
-  de.style.setProperty('--lab-shift', `${px}px`);
-  de.classList.add('lab-moved'); // (not lab-shift: that is the Shift key's)
+  easeSettle ||= getComputedStyle(W.host).getPropertyValue('--_ease-settle').trim() || 'ease';
+  for (const n of kept.size ? kept.keys() : blocks()) {
+    const st = n.style;
+    if (!kept.has(n)) kept.set(n, [st.getPropertyValue('translate'), st.getPropertyPriority('translate'), st.getPropertyValue('transition'), st.getPropertyPriority('transition')]);
+    st.setProperty('translate', `0 ${px}px`, 'important');
+    st.setProperty('transition', `translate ${ms}ms ${easeSettle}`, 'important');
+  }
+  const h = W.host.style;
+  h.setProperty('--lab-shift-t', `${ms}ms`);
+  h.setProperty('--lab-shift-e', easeSettle);
+  h.setProperty('--lab-shift', `${px}px`);
+  document.documentElement.classList.add('lab-moved'); // only for overflow-anchor (comments.js); not lab-shift: that is the Shift key's
   W.host.setAttribute('data-shift', '');
 };
 const unshifted = () => {
-  const de = document.documentElement;
   gen++;
-  de.classList.remove('lab-moved');
-  for (const k of ['--lab-shift', '--lab-shift-t', '--lab-shift-e']) de.style.removeProperty(k);
+  document.documentElement.classList.remove('lab-moved');
+  for (const [n, [t, tp, tr, trp]] of kept) {
+    n.style.setProperty('translate', t, tp);
+    n.style.setProperty('transition', tr, trp);
+    if (!n.getAttribute('style')) n.removeAttribute('style'); // a block that had none is left with none
+  }
+  kept.clear();
+  for (const k of ['--lab-shift', '--lab-shift-t', '--lab-shift-e']) W.host.style.removeProperty(k);
   W.host.removeAttribute('data-shift');
   for (const n of document.querySelectorAll('[data-lab-still]')) n.removeAttribute('data-lab-still');
 };
@@ -412,6 +431,7 @@ export function swipeDown(node, close, grows = false) {
       const down = t.clientY - y0;
       const across = t.clientX - x0;
       if (!down && !across) return; // iOS sends moves for pressure changes too
+      if (fromScrim && Math.hypot(down, across) <= TAP_SLOP) return; // a tap's wobble on the dimmed page: still a tap, which closes (lifttap.ts)
       const sideways = Math.abs(across) > Math.abs(down);
       // The sheet's top quarter pulls it down too, messages and all, as does the dimmed page above it (Leo, 15 Nov);
       // below that a pull scrolls the messages until they reach their top.

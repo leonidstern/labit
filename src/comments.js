@@ -44,6 +44,7 @@ import { bindDrag, draftHasText, drawOnce, endDrag, inkSaid, offerSelection, sta
 import { boardStrip, bindBoardCam, newBoard, pinBoardGone, pressBoard, showBoard } from './widget/boardcam.ts';
 import { bindFramework, overFramework, scanForFramework } from './widget/framework.ts';
 import { bindKeys } from './widget/keys.ts';
+import { isTap, liftTarget } from './widget/lifttap.ts';
 
 (() => {
   // colabit stays off on a page a labit lab serves (lib/colabit.ts): the lab's reload holder (window.__lab, first on a
@@ -536,13 +537,21 @@ import { bindKeys } from './widget/keys.ts';
     }
   }, 10000);
 
+  // Where sheets take the screen's bottom (styles.css), phones upright or on their side: a new comment on selected words
+  // grows into the sheet there.
+  const sheetMode = matchMedia('(pointer: coarse) and (max-width: 560px), (pointer: coarse) and (max-height: 500px)');
   // One way to pin (Leo, 20 Nov): a click pins, on a page or a board, the page's own links and buttons keep their
   // clicks, and holding Option pins on anything, controls too. There is no mode to switch.
   // Whether a click on the page would place something: comments on, and not while you are
   // writing one — mid-sentence the page's own pointer is what you want, not a second pin waiting to be dropped.
   const setPinning = () => {
     const placing = S.on && !anyWriting() && !S.draft && !using(); // an open new comment, empty or not, gives the page its own pointer (Leo, 18 Nov); so does the arrow (Leo, 26 Nov)
-    host.toggleAttribute('data-lab-pinning', placing); // not a class on <html>: a framework that hydrates the page (Next) reports it
+    // A phone's sheet (a new comment, a thread, the chat) covers the page with its dimmed layer: nothing on the page can be
+    // pointed at, held or selected until it closes, so the page's rules stay as they are. Each flip of this attribute
+    // restyles the whole page (its rules are on every element: html:has(...) body *), ~11 ms on the iOS 27 simulator, twice
+    // a new comment (27 Nov).
+    const covered = S.on && !using() && coarse && sheetMode.matches && host.hasAttribute('data-sheet');
+    host.toggleAttribute('data-lab-pinning', placing || covered); // not a class on <html>: a framework that hydrates the page (Next) reports it
     sayMode();
     recheck();
   };
@@ -1503,8 +1512,6 @@ import { bindKeys } from './widget/keys.ts';
   // The open thread's card. New replies (Claude's too) are added to it in place, so the reply box keeps focus.
   S.openCard = null;
   const coarse = matchMedia('(pointer: coarse)').matches;
-  // Where sheets take the screen's bottom (styles.css): a new comment on selected words grows into the sheet there.
-  const sheetMode = matchMedia('(pointer: coarse) and (max-width: 560px), (pointer: coarse) and (max-height: 500px)');
 
   // ---------- events ----------
   const setOn = (value) => {
@@ -1964,7 +1971,33 @@ import { bindKeys } from './widget/keys.ts';
   // click that ends such a pull isn't a tap.
   S.sheetDraggedAt = -1e9;
   scrim.addEventListener('click', () => performance.now() - S.sheetDraggedAt > 300 && closeOrNudge());
-  scrim.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false }); // iOS's sheet curve
+  // iOS's sheet curve: a move on the dimmed page is the sheet's, once it is one (past TAP_SLOP). A finger's few pixels of
+  // wobble in a tap stay a tap.
+  scrim.addEventListener('touchmove', (e) => S.liftTap?.at !== scrim && e.cancelable && e.preventDefault(), { passive: false });
+  // Phones: a tap on a pin or on the dimmed page acts on the finger's lift, not on the click iOS makes of it afterwards.
+  // iOS sends a tap's mouse events first and holds its click back when something on the page appears meanwhile (a demo
+  // that animates, a pin's tip on :hover): 3 taps in 60 did nothing (iOS 27 simulator, 27 Nov: touchend, then mouseover,
+  // and no mousedown or click). The lift's default is stopped, so no click follows to do it a second time.
+  S.liftTap = null;
+  root.addEventListener('touchstart', (e) => {
+    const t = e.touches.length === 1 ? e.changedTouches[0] : null;
+    const at = t && liftTarget(e.composedPath());
+    S.liftTap = at ? { at, x: t.clientX, y: t.clientY, t: performance.now(), id: t.identifier } : null;
+  }, { passive: true, capture: true });
+  root.addEventListener('touchmove', (e) => {
+    const p = S.liftTap;
+    const t = p && [...e.changedTouches].find((x) => x.identifier === p.id);
+    if (t && !isTap(p, t.clientX, t.clientY, p.t)) S.liftTap = null;
+  }, { passive: true, capture: true });
+  root.addEventListener('touchcancel', () => (S.liftTap = null), { passive: true, capture: true });
+  root.addEventListener('touchend', (e) => {
+    const p = S.liftTap;
+    S.liftTap = null;
+    const t = p && !e.touches.length && [...e.changedTouches].find((x) => x.identifier === p.id);
+    if (!t || !p.at.isConnected || !isTap(p, t.clientX, t.clientY, performance.now()) || !e.cancelable) return;
+    e.preventDefault();
+    p.at.click(); // its own click handler, and the page's click listeners, as for the click iOS would have sent
+  }, { passive: false });
   // Android's back gesture closes an open sheet first, like a native one, instead of leaving the page (CloseWatcher,
   // Chrome 120+; elsewhere back works as before). With something typed it nudges, as a tap on the dimmed page does.
   S.backWatcher = null;
@@ -2477,9 +2510,6 @@ import { bindKeys } from './widget/keys.ts';
   // too: Safari's scroll anchoring took the shift for the page's content moving and scrolled as much again, so a new pin
   // went off screen (Leo's iPhone, 25 Nov, a page with a tall product picture: scrolled 988 for 494).
   pageStyle.textContent += 'html.lab-sheet, html.lab-moved, html.lab-room { overflow-anchor: none; }';
-  // Phones: the page is scrolled in one step for a new comment's pin and drawn where it was, then let go as the keyboard
-  // comes (sheets.ts revealDraft): its own blocks, not what it holds to the screen itself, nor the widget or a board's view.
-  pageStyle.textContent += 'html.lab-moved body > :not([data-lab-comments], [data-lab-board-view], [data-lab-still]) { translate: 0 var(--lab-shift, 0px) !important; transition: translate var(--lab-shift-t, 0s) var(--lab-shift-e, ease) !important; }';
   // Once the scroll rests, not on each scroll event: each new value restyles the whole page (roomFor), and the room is below
   // the window's bottom while you scroll up, so nothing shows it going a moment later.
   /** @type {ReturnType<typeof setTimeout> | undefined} */
