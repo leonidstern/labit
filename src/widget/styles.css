@@ -63,6 +63,8 @@ button:focus-visible { outline: 2px solid var(--_accent); outline-offset: 2px; }
 @layer zoom { :host([data-zoom]) .ui > * { pointer-events: auto; } } /* a layer: loses to their own pointer-events rules */
 .pin, .pin * { -webkit-user-select: none; user-select: none; } /* a hold on a placed pin selected its letter on iOS and later taps did nothing; the page-level rule skips the widget host */
 .pin { box-shadow: 0 0 0 1px var(--_edge), 0 2px 8px rgba(0,0,0,.16); }
+/* A pin on a sticky or fixed thing fades while the page scrolls: Safari draws it late there (pinhold.ts, stuck). */
+:host([data-scrolling]) .pin.stuck:not(.open) { opacity: 0 !important; transition: opacity var(--_t-quick) var(--_ease-out) !important; }
 .layer[data-moving] .pin:not(.open, .ink, .dragging, :hover) { box-shadow: 0 0 0 1px var(--_edge); } /* boardcam.ts moving */
 .pin { position: absolute; width: 28px; height: 28px; margin: -28px 0 0 0; border-radius: 14px 14px 14px 2px;
        background: var(--_bg); border: 0;

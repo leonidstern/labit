@@ -2377,7 +2377,17 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
   };
   addEventListener('resize', reflow);
   addEventListener('resize', () => requestAnimationFrame(() => requestAnimationFrame(revealOpen))); // a turned phone: the open thread's pin stays in sight, above its sheet
-  addEventListener('scroll', (e) => e.target !== document && !host.contains(/** @type {Node} */ (e.target)) && reflow(true), { capture: true, passive: true }); // the page's own scroll moves only what is held to the screen
+  addEventListener('scroll', (e) => e.target !== document && !host.contains(/** @type {Node} */ (e.target)) && reflow(true), { capture: true, passive: true });
+  // Pins on sticky or fixed things (phones and tablets, pinhold.ts stuck) fade while the page itself scrolls, and are
+  // placed again on their spots 150 ms after it stops.
+  /** @type {any} */
+  let scrollQuiet = 0;
+  addEventListener('scroll', (e) => {
+    if (e.target !== document || !layer.querySelector('.stuck')) return;
+    if (!host.hasAttribute('data-scrolling')) host.setAttribute('data-scrolling', '');
+    clearTimeout(scrollQuiet);
+    scrollQuiet = setTimeout(() => (host.removeAttribute('data-scrolling'), reflow()), 150);
+  }, { passive: true }); // the page's own scroll moves only what is held to the screen
 
   // Client-side navigation (pushState, back/forward, Astro view transitions): comments follow the new page,
   // and the layer comes back if the page swapped out <body>.
