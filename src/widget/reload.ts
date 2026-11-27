@@ -75,11 +75,12 @@ export function reloader({ W, reload, loaded, samePath, idOf, selDirty, board, s
   let restyled = false;
   const restyle = (paths) => {
     const urls = new Map(); // old address -> new address
+    const failed = new Set(); // a new picture that didn't load (mid-save): its old address stays
     const fix = (text, base) =>
       text.replace(/url\(\s*(["']?)([^"')]+)\1\s*\)/g, (m, _q, u) => {
         try {
           const abs = new URL(u, base).href;
-          if (!samePath(abs.split('#')[0], paths)) return m;
+          if (!samePath(abs.split('#')[0], paths) || failed.has(abs)) return m;
           if (!urls.has(abs)) urls.set(abs, fresh(abs));
           return `url("${urls.get(abs)}")`;
         } catch {
@@ -114,7 +115,7 @@ export function reloader({ W, reload, loaded, samePath, idOf, selDirty, board, s
     pass(false);
     if (!urls.size) return 0;
     restyled = true;
-    void Promise.all([...urls.values()].map((u) => new Promise((done) => Object.assign(new Image(), { onload: done, onerror: done, src: u })))).then(() => pass(true));
+    void Promise.all([...urls].map(([old, u]) => new Promise((done) => Object.assign(new Image(), { onload: done, onerror: () => done(failed.add(old)), src: u })))).then(() => pass(true));
     return urls.size;
   };
   // A font: each @font-face that uses it is loaded again as a new face, which takes over from the old one.

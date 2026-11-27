@@ -1480,7 +1480,10 @@ import { bindKeys } from './widget/keys.ts';
         empty: anchor.ink ? inkSaid(anchor.ink.mark) : '',
         attach: true,
         onSubmit: async (name, said, att) => {
+          const on = S.page;
           const { comment, edit } = await send({ name, text: said, anchor, ...att });
+          // Saved after the app moved to another page: it is on the page it was written on, and this page's draft stays.
+          if (S.page !== on) return void (edit && store.set(`lab-edit:${comment.id}`, edit));
           posted(comment, edit, said, anchor);
         },
       });
@@ -2352,10 +2355,14 @@ import { bindKeys } from './widget/keys.ts';
   };
   // The Navigation API says when the current entry changed (pushState, replaceState, back and forward alike), so the
   // page's own history is left as it is.
-  // Without it (Safari before 26.2, older Firefox): back and forward still say so; a pushState alone waits for the next load.
+  // Without it (Safari before 26.2, older Firefox): back and forward, and a look at the address twice a second for the
+  // app's own pushState, so a comment is always written to the page on screen.
   const nav = /** @type {any} */ (window).navigation;
   if (nav?.addEventListener) nav.addEventListener('currententrychange', () => queueMicrotask(navigated));
-  else addEventListener('popstate', () => queueMicrotask(navigated));
+  else {
+    addEventListener('popstate', () => queueMicrotask(navigated));
+    setInterval(() => pageNow() !== S.page && navigated(), 500);
+  }
   document.addEventListener('astro:after-swap', navigated);
   // A framework's hot update that writes the whole <body> again (or swaps it) takes the widget out with it, and with it an
   // unsent comment (issue 428): it is put back at once, its words and cursor as they were. Only <html>'s and <body>'s own
