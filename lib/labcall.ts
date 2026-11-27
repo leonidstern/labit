@@ -46,6 +46,7 @@ export const labCall = (server: Server, pathname: string, body: object, session:
           'x-lab-admin': server.agent || server.token, 'x-lab-agent': '1', 'x-lab-session': encodeURIComponent(JSON.stringify(session)) } },
       (res) => {
         let text = '';
+        res.setEncoding('utf8'); // a character split between two chunks stays whole
         res.on('data', (c) => (text += c));
         // delivery: a wait's hand-off to confirm once it is shown (labAck), so the lab doesn't send its pins again.
         res.on('end', () => resolve({ status: res.statusCode || 0, text, delivery: String(res.headers['x-lab-delivery'] || '') }));

@@ -6,11 +6,13 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 const README = "README.md";
 const FULL = ".README.full.md";
 
+const stripped = (t) => t.replace(/^(<picture>.*<\/picture>|!\[[^\]]*\]\([^)]*\))\n\n?/gm, "");
+
 if (process.argv[2] === "strip") {
-  if (!existsSync(FULL)) renameSync(README, FULL);
-  const text = readFileSync(FULL, "utf8")
-    .replace(/^(<picture>.*<\/picture>|!\[[^\]]*\]\([^)]*\))\n\n?/gm, "");
-  writeFileSync(README, text);
+  // A full README left aside by a pack that stopped half way is the full one only while README is still its stripped
+  // copy; a README edited since is the newer one, and it is what is kept aside.
+  if (!existsSync(FULL) || readFileSync(README, "utf8") !== stripped(readFileSync(FULL, "utf8"))) renameSync(README, FULL);
+  writeFileSync(README, stripped(readFileSync(FULL, "utf8")));
 } else if (process.argv[2] === "restore") {
   if (existsSync(FULL)) renameSync(FULL, README);
 } else {

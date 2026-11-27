@@ -18,8 +18,15 @@ export const SIZES: Record<number, number> = { 390: 844, 820: 1180, 1280: 800, 1
 const GAP = 80;
 const ROW = 4800;
 
-/** The name of the board of a page: /a/b is a--b, / is index. The file also says `of`, so the name is never read back. */
-export const nameOf = (page: string) => page.replace(/^\/+|\/+$/g, '').replace(/\//g, '--').slice(0, 80) || 'index';
+/** The name of the board of a page: /a/b is a--b, / is index. The file also says `of`, so the name is never read back.
+ *  A page whose own path has -- in it (/a--b) gets a short hash of it after, so it never shares /a/b's board. */
+export const nameOf = (page: string) => {
+  const p = page.replace(/^\/+|\/+$/g, '');
+  if (!p.includes('--')) return p.replace(/\//g, '--').slice(0, 80) || 'index';
+  let h = 5381;
+  for (const c of p) h = (h * 33 + c.codePointAt(0)!) >>> 0;
+  return `${p.replace(/\//g, '--').slice(0, 73)}-${h.toString(36).padStart(6, '0').slice(-6)}`;
+};
 /** The height a width gets: its preset, else the nearest one's. */
 export const heightFor = (w: number) => SIZES[w] ?? (w <= 500 ? 844 : w <= 1000 ? 1180 : w <= 1360 ? 800 : 900);
 const idOf = (n: number) => (n < 26 ? String.fromCharCode(97 + n) : `z${n - 24}`);
@@ -74,17 +81,26 @@ export function check(raw: any, name: string, was?: Board | null): Board | strin
  * 26 Nov: two names drawn over each other). */
 export function place(board: Board): Board {
   const put = board.frames.filter((f) => f.state !== 'archived' && Number.isFinite(f.x) && Number.isFinite(f.y));
+  // The rows laid out from 0 first, to know how tall they are.
   let x = 0;
-  let y = put.length ? Math.min(Math.max(...put.map((f) => f.y! + f.h)) + GAP * 2, 9e5) : 0; // (held well inside the board, whose places stop at 1e6)
+  let y = 0;
   let row = 0;
-  const frames = board.frames.map((f) => {
-    if (f.state === 'archived') return { ...f, x: undefined, y: undefined };
-    if (Number.isFinite(f.x) && Number.isFinite(f.y)) return f;
+  const rows = new Map<string, { x: number; y: number }>();
+  for (const f of board.frames) {
+    if (f.state === 'archived' || (Number.isFinite(f.x) && Number.isFinite(f.y))) continue;
     if (x && x + f.w > ROW) [x, y, row] = [0, y + row + GAP * 2, 0];
-    const at = { ...f, x, y, auto: true };
+    rows.set(f.id, { x, y });
     x += f.w + GAP;
     row = Math.max(row, f.h);
-    return at;
+  }
+  const tall = y + row;
+  // Under the placed frames, or above them when that would run past the board's last places (1e6): never over one.
+  const bottom = put.length ? Math.max(...put.map((f) => f.y! + f.h)) + GAP * 2 : 0;
+  const top = bottom + tall > 1e6 ? Math.max(Math.min(...put.map((f) => f.y!)) - GAP * 2 - tall, -1e6) : bottom;
+  const frames = board.frames.map((f) => {
+    if (f.state === 'archived') return { ...f, x: undefined, y: undefined };
+    const at = rows.get(f.id);
+    return at ? { ...f, x: at.x, y: top + at.y, auto: true } : f;
   });
   return { ...board, frames };
 }
@@ -161,19 +177,23 @@ export const imageAt = (file: string) => {
   const head = Buffer.alloc(65536);
   const fd = fs.openSync(file, 'r');
   const n = fs.readSync(fd, head, 0, head.length, 0);
+  // Its last 64 KB too: a png cut short (no IEND) is no picture.
+  const size = fs.fstatSync(fd).size;
+  const end = Buffer.alloc(Math.min(65536, size));
+  fs.readSync(fd, end, 0, end.length, size - end.length);
   fs.closeSync(fd);
-  return imageInfo(head.subarray(0, n));
+  return imageInfo(head.subarray(0, n), end);
 };
 /** A picture as a new frame of a stored board: its file is written, the frame put (at the given centre or top-left corner, or placed by the lab),
  *  rev and file saved. All of it is synchronous, so nothing can come between the read and the write. */
-export function addImage(root: string, b: Board, bytes: Buffer, info: { ext: string; w: number; h: number }, at?: { x: number; y: number; corner?: boolean }, opts?: { label?: string; after?: string; guest?: boolean }): { frame: Frame } | { error: string } {
+export function addImage(root: string, b: Board, bytes: Buffer, info: { ext: string; w: number; h: number }, at?: { x: number; y: number; corner?: boolean }, opts?: { label?: string; after?: string; guest?: boolean; width?: number }): { frame: Frame } | { error: string } {
   if (counted(b.frames) >= MAX_FRAMES) return { error: `A board holds at most ${MAX_FRAMES} frames.` };
   const dir = path.join(dirOf(root), safeName(b.name));
   const left = (id: string) => { try { return fs.readdirSync(dir).some((n) => n.startsWith(`${id}.`)); } catch { return false; } };
   const id = nextId(b.frames, left);
   const file = `${id}.${info.ext}`;
-  // The size it is drawn at: its long side up to 1440 world px, the aspect kept, each side held to 200..4000.
-  const k = Math.min(1, 1440 / Math.max(info.w, info.h));
+  // The size it is drawn at: the width asked for, else its long side up to 1440 world px; the aspect kept, each side held to 200..4000.
+  const k = opts?.width ? opts.width / info.w : Math.min(1, 1440 / Math.max(info.w, info.h));
   const w = px(info.w * k, 200, 4000)!;
   const h = px(info.h * k, 200, 4000)!;
   const f: Frame = { id, src: `/_lab/board/${b.name}/${id}`, kind: 'image', file, iw: info.w, ih: info.h, w, h, state: 'live', ...(opts?.guest ? { guest: true } : {}), ...(opts?.label ? { label: one(opts.label, 80) } : {}) };
@@ -181,6 +201,14 @@ export function addImage(root: string, b: Board, bytes: Buffer, info: { ext: str
   writeAtomic(imageFile(root, b.name, file), bytes);
   insert(b, f, opts?.after);
   b.rev++;
-  save(root, b);
+  try {
+    save(root, b);
+  } catch (e) {
+    // The board not saved: the picture goes too, and the board is as it was.
+    fs.rmSync(imageFile(root, b.name, file), { force: true });
+    b.frames.splice(b.frames.indexOf(f), 1);
+    b.rev--;
+    return { error: `could not save the board: ${(e as Error).message}` };
+  }
   return { frame: f };
 }

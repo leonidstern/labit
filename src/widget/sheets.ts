@@ -305,7 +305,7 @@ export function scrollPageTo(top: number, done?: () => void) {
   // Up to 0.9 s: at 0.56 s a pin 2700 px away went by at 237 px a frame, which is a jump too (iOS 27 simulator, 21 Nov).
   const ms = Math.min(900, 260 + Math.abs(to - from) * 0.4);
   const t0 = performance.now();
-  const stop = () => (cancelAnimationFrame(glideId), removeEventListener('touchstart', stop), removeEventListener('wheel', stop));
+  const stop = () => (cancelAnimationFrame(glideId), (glideId = 0), removeEventListener('touchstart', stop), removeEventListener('wheel', stop), afterGlide());
   addEventListener('touchstart', stop, { passive: true });
   addEventListener('wheel', stop, { passive: true });
   const step = (now: number) => {
@@ -320,6 +320,10 @@ export function scrollPageTo(top: number, done?: () => void) {
   glideId = requestAnimationFrame(step);
 }
 let glideId = 0;
+// The sheets' fit to the screen (startSheets), run once a glide ends: not on each of its frames, where Safari's scroll
+// events had it read layout and write the host's properties every frame, and each step's scrollTo then laid the page out
+// again (3-4.5 ms a frame, 1-3 dropped frames per thread opened: iOS 27 simulator, 27 Nov).
+let afterGlide = () => {};
 // Room below the page's end, so that it can scroll to `top` on a phone. The page's own height is html's box when the page is
 // shorter than the screen: scrollHeight is never less than the screen's height, so a short page read as tall as the screen,
 // got 283 px of room where it needed 817, and could not scroll at all: the pin stayed under the sheet until the keyboard
@@ -635,12 +639,13 @@ export function startSheets() {
       W.host.style.setProperty('--lab-zk', String(1 / k));
     };
     W.vv.addEventListener('resize', zoomFit);
-    W.vv.addEventListener('scroll', zoomFit);
+    W.vv.addEventListener('scroll', () => glideId || zoomFit());
     zoomFit();
     W.root.addEventListener('focusin', () => setTimeout(fit, 50));
     W.root.addEventListener('focusout', () => setTimeout(fit, 50));
     W.vv.addEventListener('resize', fit);
-    W.vv.addEventListener('scroll', fit);
+    W.vv.addEventListener('scroll', () => glideId || fit());
+    afterGlide = () => (zoomFit(), fit());
     addEventListener('pointerdown', (e) => (tap = { x: e.clientX, y: e.clientY, at: performance.now() }), { capture: true, passive: true });
     fit();
     // ?kbdebug on the page's address: every frame for 1.5 s after the keyboard is asked for or let go, where the open

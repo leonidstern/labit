@@ -116,7 +116,8 @@ if (co) {
 await labCss();
 if (watch) {
   for (const o of builds) await (await esbuild.context(o)).watch();
-  fs.watch('src/lab.css', () => void labCss());
+  // Its folder is watched, not the file: an editor that saves by replacing the file would leave a file watcher on the old one.
+  fs.watch('src', (_, name) => String(name) === 'lab.css' && void labCss().catch((e) => console.error(`lab.css: ${e.message}`)));
 } else {
   const results = await Promise.all(builds.map((o) => esbuild.build(o)));
   // Code shipped twice (Leo, 23 Nov: "add check so this wont happen again when you duplicating things"): a module built

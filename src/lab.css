@@ -127,7 +127,7 @@ body.lab {
 .lab-page-t { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lab-page-f { grid-column: 1; font-size: 13px; color: var(--lab-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lab-page-m { grid-row: 1; grid-column: 2; display: inline-flex; gap: 8px; align-items: baseline; font-size: 13px; color: var(--lab-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.lab-page-m b { font-weight: 600; color: var(--lab-green); }
+.lab-page-m b:not(.lab-warn) { font-weight: 600; color: var(--lab-green); }
 .lab-filter { width: 100%; box-sizing: border-box; margin: 0; padding: 9px 12px; border: 0; border-radius: var(--lab-corner); background: var(--lab-soft); color: inherit; font: inherit; outline: none; }
 .lab-filter:focus-visible { outline: 2px solid var(--lab-fg); outline-offset: 2px; } /* the widget's button focus ring */
 .lab-hint { font-size: 13px; margin: 0; }

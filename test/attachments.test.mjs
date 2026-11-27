@@ -47,7 +47,10 @@ test('a picture is sent, then comes with the comment: a file under its id, a lin
   assert.equal(got.headers.get('content-type'), 'image/png');
   assert.equal(got.headers.get('x-content-type-options'), 'nosniff');
   assert.equal(got.headers.get('content-security-policy'), "default-src 'none'; sandbox");
-  assert.match(got.headers.get('cache-control'), /immutable/);
+  assert.equal(got.headers.get('cache-control'), 'private, no-cache'); // asked again each time: a guest whose pass ended reads nothing from the cache
+  const etag = got.headers.get('etag');
+  assert.ok(etag);
+  assert.equal((await fetch(`${B}/_lab/attachments/${c.id}-1.png`, { headers: { 'if-none-match': etag } })).status, 304);
   assert.ok(Buffer.from(await got.arrayBuffer()).equals(bytes));
   const t = await agentText();
   assert.match(t, new RegExp(`comment: the header overlaps here\\nimage: \\.lab/attachments/${c.id}-1\\.png \\(8×6\\)`));
@@ -143,4 +146,34 @@ test('the wait that brings only new replies puts each picture under its own mess
   assert.match(block, new RegExp(`id ${reply.id}: \\(a picture, no words\\)`), 'a reply with no words says it is a picture');
   assert.match(opened.out, /Pictures: an "image:" line is a file the person attached/, 'the wait says what an image: line is');
   assert.match(next, /Pictures: an "image:" line/, 'and so does the one with only new replies');
+});
+
+test('a retry of a comment that is only a picture gets that comment back, not "text is required"', async () => {
+  const staged = await (await upload(png(8, 6))).json();
+  const body = { text: '', attachments: [staged.token], nonce: nonce() };
+  const r = await comment(body);
+  assert.equal(r.status, 201, await r.clone().text());
+  const { comment: c } = await r.json();
+  const again = await comment(body); // the staged file has moved: the retry carries no pictures of its own
+  assert.equal(again.status, 200, await again.clone().text());
+  assert.equal((await again.json()).comment.id, c.id);
+});
+
+test('pictures that can\'t all be kept: the comment is not saved, and the send can be tried again whole', { skip: (process.platform === 'win32' || process.getuid?.() === 0) && 'a read-only folder does not stop this user' }, async () => {
+  const staged = await (await upload(png(8, 6))).json();
+  const second = await (await upload(png(10, 6))).json();
+  const dir = path.join(DIR, '.lab/attachments');
+  const before = fs.readdirSync(dir).filter((f) => !f.startsWith('.'));
+  fs.chmodSync(dir, 0o555); // the second rename (and the first) can't land
+  let r;
+  try {
+    r = await comment({ text: 'two pictures', attachments: [staged.token, second.token], nonce: nonce() });
+  } finally {
+    fs.chmodSync(dir, 0o755);
+  }
+  assert.equal(r.status, 500, await r.clone().text());
+  assert.doesNotMatch(await agentText(), /two pictures/);
+  assert.deepEqual(fs.readdirSync(dir).filter((f) => !f.startsWith('.')), before);
+  const ok = await comment({ text: 'two pictures', attachments: [staged.token, second.token], nonce: nonce() });
+  assert.equal(ok.status, 201, await ok.clone().text());
 });

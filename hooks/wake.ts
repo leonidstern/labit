@@ -44,7 +44,7 @@ let working: { lab: Lab; page: string; id: string }[] = [];
 // say it has them now, not when its turn ends. Pins handed to its wait with no word back for QUIET_MS, or pins no wait
 // has taken while it isn't listening. Once per set of pins; the next look after WORKING_MS sees new ones.
 const QUIET_MS = 30000;
-let mid: { lab: Lab; quiet: { id: string; at: string }[]; fresh: number; listening: boolean; cmd: string; dir: string }[] = [];
+let mid: { lab: Lab; quiet: { id: string; at: string }[]; fresh: number; key: string; listening: boolean; cmd: string; dir: string }[] = [];
 const midTold = new Set<string>();
 let workingAt = -Infinity;
 const noted = new Map<string, number>(); // lab port + pin id -> when its line was last written
@@ -68,12 +68,20 @@ const ask = ($: any, lab: Lab, me: string) =>
     headers: { host: `localhost:${lab.port}`, 'x-lab-admin': lab.key, 'x-lab-agent': '1' },
   });
 
-// The lab's address and the agent's key, from .lab/server.json in a folder or one above it.
+// ~/.labit (or LABIT_HOME): the registry of running labs is its servers/ folder.
+const homeOf = async ($: any) => (await $.env.get('LABIT_HOME')) || `${(await $.env.get('HOME')) || ''}/.labit`;
+
+// The lab's address and the agent's key, from .lab/server.json in a folder or one above it. Only while that lab runs:
+// its registry file (written while it runs, removed as it stops) names the same pid. A server.json a lab left behind
+// (it was killed) would send its key to whatever answers on that port now.
 async function labAt($: any, dir: string, port?: number): Promise<Lab | null> {
   for (;;) {
     try {
       const s = JSON.parse(await $.fs.read(`${dir}/.lab/server.json`));
-      if (s && Number(s.port) && (!port || Number(s.port) === port)) return { port: Number(s.port), key: String(s.agent || s.token || '') };
+      if (s && Number(s.port) && (!port || Number(s.port) === port)) {
+        const r = JSON.parse(await $.fs.read(`${await homeOf($)}/servers/${Number(s.port)}.json`));
+        return Number(r?.pid) > 0 && Number(r.pid) === Number(s.pid) ? { port: Number(s.port), key: String(s.agent || s.token || '') } : null;
+      }
     } catch {}
     if (port) return null; // a registry root is the lab's own folder: no looking above it
     const up = dir.replace(/\/[^/]+\/?$/, '');
@@ -86,8 +94,7 @@ async function labAt($: any, dir: string, port?: number): Promise<Lab | null> {
 async function registered($: any, me: string): Promise<Lab[]> {
   const found: Lab[] = [];
   try {
-    const home = (await $.env.get('LABIT_HOME')) || `${(await $.env.get('HOME')) || ''}/.labit`;
-    const dir = `${home}/servers`;
+    const dir = `${await homeOf($)}/servers`;
     for (const f of (await $.fs.list(dir)).slice(0, MAX_FILES)) {
       if (found.length >= MAX_LABS) break;
       if (!/^\d+\.json$/.test(f.name)) continue;
@@ -128,7 +135,7 @@ async function note($: any, line: string): Promise<void> {
         const p: Pending = res.ok ? JSON.parse(res.text) : null;
         if (!mine(p, me)) continue;
         for (const w of p.working || []) list.push({ lab, ...w });
-        seen.push({ lab, quiet: p.quiet || [], fresh: p.fresh, listening: p.listening, cmd: p.cmd, dir: p.dir });
+        seen.push({ lab, quiet: p.quiet || [], fresh: p.fresh, key: p.key, listening: p.listening, cmd: p.cmd, dir: p.dir });
       } catch {}
     }
     working = list;
@@ -154,10 +161,11 @@ async function midWord(): Promise<string> {
   const out: string[] = [];
   for (const m of mid) {
     const quiet = m.quiet.filter((q) => now - Date.parse(q.at) > QUIET_MS && !midTold.has(`${m.lab.port}:${q.id}:${q.at}`));
-    const fresh = !m.listening && m.fresh && !midTold.has(`${m.lab.port}:fresh:${m.fresh}`) ? m.fresh : 0;
+    // Once per set of pins (the lab's key for them), not per count: two new pins after two others are said too.
+    const fresh = !m.listening && m.fresh && !midTold.has(`${m.lab.port}:fresh:${m.key}`) ? m.fresh : 0;
     if (!quiet.length && !fresh) continue;
     for (const q of quiet) midTold.add(`${m.lab.port}:${q.id}:${q.at}`);
-    if (fresh) midTold.add(`${m.lab.port}:fresh:${m.fresh}`);
+    if (fresh) midTold.add(`${m.lab.port}:fresh:${m.key}`);
     const n = (k: number) => (k === 1 ? 'a pin' : `${k} pins`);
     out.push(
       `labit: ${[quiet.length && `${n(quiet.length)} handed to you with no word back yet (${quiet.map((q) => q.id).join(', ')})`, fresh && `${n(fresh)} nobody has taken (run \`${m.cmd} wait --timeout 5\` in ${m.dir})`].filter(Boolean).join(', and ')}. ` +
