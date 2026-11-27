@@ -8,6 +8,7 @@
 // The drawing is the pin: no marker, its line is what you click (comments.js).
 
 type P = { x: number; y: number; w?: number };
+type Read = { mark: string; from?: string; to?: string; box: { l: number; t: number; r: number; b: number }; lines: P[][]; marks?: string[]; cut?: number; head?: number; whole?: boolean };
 
 const dist = (a: P, b: P) => Math.hypot(a.x - b.x, a.y - b.y);
 const length = (s: P[]) => s.reduce((n, p, i) => (i ? n + dist(p, s[i - 1]) : 0), 0);
@@ -250,7 +251,7 @@ export function readInk(strokes: P[][], say: (e: Element | null) => string | und
   }
   // What is under a point on the page itself: labit's own bars and layers (data-lab-comments) are skipped.
   // Over a board: the board's own frame there (its view keeps its frames in a shadow root, so the page's lookup stops at the
-  // view's box: an arrow on a board named "board pin-…" at both ends; Leo's drawings, 21 Nov).
+  // view's box: an arrow read as on "board …" at both ends; Leo's drawings, 21 Nov).
   // On a board's own page the board says which frame is there (the page's lookup found the board's dialog: each mark of a
   // drawing was "on" it, issue 423); between frames, the board itself.
   const board = (window as unknown as { __labBoard?: { anchor?: (x: number, y: number) => { frame?: string }; box?: (id: string) => HTMLElement | null; contains?: (x: number, y: number) => boolean } }).__labBoard;
@@ -297,3 +298,22 @@ export function readInk(strokes: P[][], say: (e: Element | null) => string | und
   return { mark: out.mark, from: at(out.from), to: at(out.to), box, lines: kept.map(thin), ...(marks ? { marks } : {}), whole: true, ...(strokes.length > kept.length ? { cut: strokes.length } : {}) };
 }
 
+// The drawing as an area comment: the area (at least min each way), plus the lines as 0–1000 across and down it, to a
+// tenth (whole steps moved points of a wide drawing by up to 3 px as it landed). Kept inside 0–1000, as the lab keeps them.
+// zoneAnchor is the page script's (anchoring.ts), handed in so it is not built in twice.
+export function inkAnchor({ mark, from, to, box, lines, marks, cut, whole }: Read, min: number, zoneAnchor: (z: { x0: number; y0: number; x1: number; y1: number }) => any) {
+  for (const [a, b] of [['l', 'r'], ['t', 'b']] as const) {
+    if (box[b] - box[a] >= min) continue;
+    const mid = (box[a] + box[b]) / 2;
+    [box[a], box[b]] = [mid - min / 2, mid + min / 2];
+  }
+  const anchor = zoneAnchor({ x0: box.l, y0: box.t, x1: box.r, y1: box.b });
+  const fit = (v: number, a: number, b: number) => Math.min(1000, Math.max(0, Math.round(((v - a) / (b - a)) * 10000) / 10));
+  anchor.ink = { mark, from, to, pts: lines.map((s) => s.flatMap((p) => [fit(p.x, box.l, box.r), fit(p.y, box.t, box.b)])) };
+  // The pen's width at each point, in tenths of a px (pressure with a pen, speed otherwise): Leo's pick 4, 20 Nov.
+  if (marks?.length) anchor.ink.marks = marks;
+  if (cut) anchor.ink.cut = cut;
+  if (whole) anchor.ink.whole = true;
+  if (lines.some((s) => s.some((p) => p.w))) anchor.ink.w = lines.map((s) => s.map((p) => Math.round((p.w || 3) * 10)));
+  return anchor;
+}

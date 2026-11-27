@@ -5,6 +5,8 @@ type Deps = {
   el: (tag: string, attrs?: Record<string, string>, text?: string) => HTMLElement;
   store: { get: (k: string) => string; set: (k: string, v: string) => void };
   root: ShadowRoot;
+  /** Reduced motion asked for (the widget's one query). */
+  still: MediaQueryList;
   /** A motion token in ms, and a motion curve (anchoring.ts). */
   ms: (token: 'quick' | 'base' | 'slow', times?: number) => number;
   ease: (curve?: '' | 'out' | 'in' | 'settle' | 'pop') => string;
@@ -178,7 +180,7 @@ export function composer({ placeholder, onSubmit, autofocus = false, opened = fa
   const sync = () => {
     const open = opened || text.value.length > 0 || root.activeElement === name || !!error.textContent;
     // Opening moves the arrow from the text row to the name row: slide it there while the box grows, no jump.
-    const glide = open !== box.classList.contains('open') && !store.get('lab-name') && box.isConnected && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const glide = open !== box.classList.contains('open') && !store.get('lab-name') && box.isConnected && !d.still.matches;
     const from = glide && { arrow: sendBtn.getBoundingClientRect(), height: box.getBoundingClientRect().height };
     const one = Boolean(store.get('lab-name'));
     box.classList.toggle('one', one);

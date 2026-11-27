@@ -168,7 +168,7 @@ export function reloader({ W, reload, loaded, samePath, idOf, selDirty, board, s
   // What the morph touched, to be outlined for a moment: the person sees what the agent's save changed.
   const touched = new Set<Element>();
   const hit = (n) => (n?.nodeType === 1 ? touched.add(n) : touched.add(n?.parentNode));
-  // Labit's own (the widget, an open board's view: +board writes the page's file while its board is open) and scripts.
+  // Labit's own (the widget, an open board's view) and scripts.
   const keepOut = (n) => n === W.host || (n.nodeType === 1 && (n.localName === 'script' || n.hasAttribute('data-lab-board-view')));
   // Old and new children are paired in order, looking a few ahead, so an added or removed element doesn't shift
   // everything after it (an open <details> further down stays the same element, and stays open).
@@ -294,7 +294,7 @@ export function reloader({ W, reload, loaded, samePath, idOf, selDirty, board, s
         W.script.dataset.sum = tag.dataset.sum || ''; // this page now is that file
         aroundMorph(() => morphKids(document.body, doc.body)); // a choice tried in the page: its words back first (thread.ts)
         // The elements that changed are outlined for a moment (not for someone who asked for less motion).
-        if (!matchMedia('(prefers-reduced-motion: reduce)').matches) for (const e of [...touched].slice(0, 12)) if (e?.isConnected && e !== document.body) e.animate?.([{ outline: '2px solid Highlight' }, { outline: '2px solid transparent' }], 1200);
+        if (!matchMedia('(prefers-reduced-motion: reduce)').matches) for (const e of [...touched].slice(0, 12)) if (e?.isConnected && e !== document.body) e.animate([{ outline: '2px solid Highlight' }, { outline: '2px solid transparent' }], 1200);
         touched.clear();
         if (mark?.isConnected) {
           const moved = mark.getBoundingClientRect().top - markTop;

@@ -259,6 +259,8 @@ function fileSize(img) {
   }
   return { nw, nh };
 }
+// A picture's file size, or a video's own.
+const mediaSize = (m) => (m.localName === 'img' ? fileSize(m) : { nw: m.videoWidth, nh: m.videoHeight });
 
 // Which component drew an element and where (React, Vue 3, Svelte dev builds): components.ts, its own file, which
 // src/comments.js loads only on a page made with one of them and hands over here. Until then (and on any other page)
@@ -349,6 +351,14 @@ function untransform(el, cx, cy) {
   return { rect: { left: 0, top: 0, width: w, height: h }, x: q.x + ox, y: q.y + oy };
 }
 
+// A picture file's size, given to fill now when it is loaded already (the cache), else once it is.
+function whenLoaded(src, fill) {
+  const probe = new Image();
+  probe.onload = () => fill(probe.naturalWidth, probe.naturalHeight);
+  probe.src = src;
+  if (probe.complete) fill(probe.naturalWidth, probe.naturalHeight);
+}
+
 // A picture inside an SVG (<image>): its file size, and preserveAspectRatio (default: fit inside, centred).
 function svgImageSpot(el, anchor, cx, cy) {
   const r = el.getBoundingClientRect();
@@ -365,10 +375,7 @@ function svgImageSpot(el, anchor, cx, cy) {
     const oy = keep[0] === 'none' ? 0 : align(keep[0].slice(5, 8), r.height - dh);
     Object.assign(anchor, { nw: iw, nh: ih, imgX: clamp01((cx - r.left - ox) / dw), imgY: clamp01((cy - r.top - oy) / dh) });
   };
-  const probe = new Image();
-  probe.onload = () => fill(probe.naturalWidth, probe.naturalHeight);
-  probe.src = anchor.src;
-  if (probe.complete) fill(probe.naturalWidth, probe.naturalHeight);
+  whenLoaded(anchor.src, fill);
 }
 
 // Where the click is inside a CSS background picture: its file size (loaded once, usually from the cache),
@@ -407,10 +414,7 @@ function backgroundSpot(n, url, anchor, cx, cy) {
     const oy = off(py, r.height - dh);
     Object.assign(anchor, { nw: iw, nh: ih, fit: `background ${size}`, imgX: clamp01((cx - r.left - ox) / dw), imgY: clamp01((cy - r.top - oy) / dh) });
   };
-  const probe = new Image();
-  probe.onload = () => fill(probe.naturalWidth, probe.naturalHeight);
-  probe.src = url;
-  if (probe.complete) fill(probe.naturalWidth, probe.naturalHeight);
+  whenLoaded(url, fill);
 }
 
 // A click on empty space: the blocks just above and below it inside the element, by heading or first words.
@@ -547,7 +551,8 @@ function quoteAt(cx, cy, shadowRoots = []) {
     const breaks = [...box.querySelectorAll('br, tr')];
     // A code table counts its rows, whatever line breaks its markup has.
     if ((box.localName === 'table' || !all.includes('\n')) && breaks.length) {
-      const ends = box.querySelectorAll('br').length ? [...box.querySelectorAll('br')] : [...box.querySelectorAll('tr')].slice(0, -1);
+      const brs = [...box.querySelectorAll('br')];
+      const ends = brs.length ? brs : [...box.querySelectorAll('tr')].slice(0, -1);
       const before = ends.filter((e) => e.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING && !e.contains(node)).length;
       const lineRange = document.createRange();
       if (before) lineRange.setStartAfter(ends[before - 1]);
@@ -555,10 +560,10 @@ function quoteAt(cx, cy, shadowRoots = []) {
       if (ends[before]) lineRange.setEndBefore(ends[before]);
       else lineRange.setEnd(box, box.childNodes.length);
       // Rows are the lines themselves; with <br> a line is what lies between two of them.
-      const row = box.querySelectorAll('br').length ? null : node.parentElement?.closest('tr');
+      const row = brs.length ? null : node.parentElement?.closest('tr');
       quote.line = short((row ? row.textContent : lineRange.toString()).trim(), 200);
       quote.lineNo = before + 1;
-      quote.lines = ends.length + (box.querySelectorAll('br').length ? 0 : 1);
+      quote.lines = ends.length + (brs.length ? 0 : 1);
     } else {
       const from = upto.lastIndexOf('\n') + 1;
       const to = all.indexOf('\n', upto.length);
@@ -723,9 +728,8 @@ export function anchorAt(clickX, clickY, words = false, onto = null, later = fal
       // Turned or skewed by a CSS transform: undo it, so the spot is measured on the picture itself.
       const local = untransform(media, clientX, clientY);
       const [box, px, py] = local ? [local.rect, local.x, local.y] : [r, clientX, clientY];
-      const spot = media.localName === 'img'
-        ? naturalSpot(media, box, px, py, fileSize(media).nw, fileSize(media).nh)
-        : naturalSpot(media, box, px, py, video.videoWidth, video.videoHeight);
+      const { nw, nh } = mediaSize(media);
+      const spot = naturalSpot(media, box, px, py, nw, nh);
       if (spot) Object.assign(anchor, spot);
       if (local) anchor.transform = short(getComputedStyle(media).transform, 80);
       // An animated picture (GIF, WebP, APNG): how long it had been showing, to find the frame.
@@ -1644,10 +1648,13 @@ export const zoneEl = (cls) => {
   z.innerHTML = '<svg aria-hidden="true"><rect class="dots" width="100%" height="100%"/></svg>';
   return z;
 };
+/** An outline set on a box (page px). */
+export const boxTo = (z: HTMLElement | null, box: { left: number; top: number; width: number; height: number }) =>
+  z && Object.assign(z.style, { left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px` });
 export const drawZone = (box, cls) => {
   if (!box) return;
   const z = zoneEl(cls);
-  Object.assign(z.style, { left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px` });
+  boxTo(z, box);
   layer.append(z);
   return z;
 };
@@ -1750,8 +1757,7 @@ export function zoneAnchor({ x0, y0, x1, y1 }) {
   }
   // The same area inside the original image or video file, when the zone is on one.
   if (/^(img|video)$/.test(box.localName)) {
-    const nw = box.localName === 'img' ? fileSize(box).nw : (box as HTMLVideoElement).videoWidth;
-    const nh = box.localName === 'img' ? fileSize(box).nh : (box as HTMLVideoElement).videoHeight;
+    const { nw, nh } = mediaSize(box);
     const a = naturalSpot(box, r, left, top, nw, nh);
     const b = naturalSpot(box, r, right, bottom, nw, nh);
     if (a && b) Object.assign(anchor, { imgX: a.imgX, imgY: a.imgY, imgX2: b.imgX, imgY2: b.imgY });

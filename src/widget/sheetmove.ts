@@ -1,6 +1,5 @@
-// How a drawer moves under a finger and after it lets go, one set of rules for the comment drawers (sheets.ts) and the
-// board drawer (src/board/overlay.ts; Leo, 21 Nov: "can it share component?"). Pure: the motion tokens' lengths come in
-// as numbers (ms), so a part without the widget's styles uses it too.
+// How a drawer moves under a finger and after it lets go: the rules of the comment drawers (sheets.ts). Pure: the motion
+// tokens' lengths come in as numbers (ms).
 
 // A sheet let go carries on at the speed it had (Apple's "Designing Fluid Interfaces": a thing you drag and let go
 // continues at the finger's velocity, and nothing starts steeply for no reason). A cubic-bezier's first slope is its

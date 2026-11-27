@@ -2,17 +2,17 @@
 //
 // Drag to mark: a mouse or a pen drags an area (or, holding D, a drawing) instead of a point; the ink at the end of a
 // drag; and the words selected with Shift + drag, offered as a comment on them.
-import { inkAnchor, liveInk } from './ink.ts';
+import { liveInk } from './ink.ts';
 import { holdWhileDrawing } from './hold.ts';
 import { cut, openingTag, short, wholeWords, zoneAnchor, zoneEl, anchorAt } from './anchoring.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let W: any;
 let S: any; // the widget's state (W.S), read once at startup
-// One write per frame, position by transform: the frame follows the pointer without forcing layout in between.
 // The least an area is, each way. A flat drag drew a hairline as wide as the window, which reads as a line
 // across the page rather than as something being marked. The saved area grows to the same (see endDrag).
 const ZONE_MIN = 12;
+// One write per frame, position by transform: the frame follows the pointer without forcing layout in between.
 const paintZone = () => {
   S.zoneFrame = 0;
   if (!S.drag?.active || !S.liveZone) return;
@@ -26,14 +26,14 @@ const paintZone = () => {
   S.liveZone.style.width = `${across.size}px`;
   S.liveZone.style.height = `${down.size}px`;
 };
-// An open new-comment box with nothing typed in it doesn't block drawing an area (a stray click had opened one, and
-// every drag after it silently did nothing until it was closed); one with words in it does, so they aren't lost.
 // The right-click menu's "draw here" (motion.ts): one drawing, as if D were held until its stroke ends; Esc lets it go.
 export const drawOnce = () => {
   S.dKey = S.drawOnce = true;
   S.drew = false;
   W.recheck();
 };
+// An open new-comment box with nothing typed in it doesn't block drawing an area (a stray click had opened one, and
+// every drag after it silently did nothing until it was closed); one with words in it does, so they aren't lost.
 export const draftHasText = () => Boolean(S.draft) && [...(W.root.querySelectorAll('.float textarea') as NodeListOf<HTMLTextAreaElement>)].some((t) => t.value.trim());
 export function startDrag(e) {
   // The board's draw tool (⋯ → draw): a pen or mouse draws, a finger moves the board.
@@ -170,7 +170,7 @@ async function endInk() {
   letGo();
 }
 async function sendInk(ink) {
-  const { readInk } = await W.part('draw').catch(() => ({ readInk: null }));
+  const { readInk, inkAnchor } = await W.part('draw').catch(() => ({ readInk: null, inkAnchor: null }));
   S.lastInk = ink.strokes; // a stroke drawn while its box is open, empty, joins it (above)
   if (!readInk) return ink.svg.remove();
   W.showAgain();
@@ -183,7 +183,7 @@ async function sendInk(ink) {
   // open comment to send it, just send"); words are added in its thread after.
   const was = S.posted;
   try {
-    await W.sendDrawing(inkAnchor(read, ZONE_MIN));
+    await W.sendDrawing(inkAnchor(read, ZONE_MIN, zoneAnchor));
   } finally {
     landed(ink.svg, S.posted !== was && S.posted);
   }

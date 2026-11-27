@@ -18,6 +18,26 @@ export function bindMessages(deps: Deps) {
   d = deps;
 }
 
+// The time in a bubble's corner, as in messengers (no hover tooltip over the text), and on yours ✓ sent, ✓✓ handed to
+// the agent (its thread went to the agent at or after you wrote it). Chat and threads alike.
+// The time and its mark sit pinned in the bubble's bottom-right corner, as WhatsApp and Telegram do: an invisible
+// copy at the end of the last line keeps room for it there, so it shares that line when it fits and gets a line of
+// its own when it doesn't. Smaller than the words, it sits a touch below their line: a stamp on the bubble.
+export const stamped = (bubble: HTMLElement, stamp: HTMLElement) => {
+  const room = stamp.cloneNode(true) as HTMLElement;
+  room.classList.replace('stamp', 'stamp-room'); // its other classes stay, so it keeps the stamp's width
+  room.setAttribute('aria-hidden', 'true');
+  room.querySelector('.state')?.remove(); // the words go under the bubble: no room for them in it
+  bubble.classList.toggle('waits', Boolean(stamp.querySelector('.state')));
+  for (const n of room.querySelectorAll('[role]')) n.removeAttribute('role');
+  const ps = [...bubble.children].filter((n) => n.classList?.contains('p'));
+  // A question with choices wears its time at the top right (its rows fill the bottom): the room goes first in its first
+  // line, floated there, so the question's words wrap before the time instead of running under it.
+  if (bubble.classList.contains('asks') && ps[0]) ps[0].prepend(room);
+  else (ps.at(-1) || bubble).append(room);
+  bubble.append(stamp);
+};
+
 export const stampOf = (m: any, root: any, prefix = ''): HTMLElement => {
   const { el, mine, repliesOf, lineUp, ord } = d;
   const at = new Date(m.createdAt);
@@ -113,14 +133,13 @@ export function foldStatus(msgs: any[], rootOf: (m: any) => string, openKeys: Se
 // it opens).
 export const foldRow = (slot: Extract<Slot, { fold: string }>, unfolded: Set<string>, inPlace?: (open: boolean) => void): HTMLElement => {
   const label = (open: boolean) => `${slot.n} update${slot.n === 1 ? '' : 's'} ${open ? '‹' : '›'}`;
-  const b = d.el('button', { class: `updates${slot.open ? ' open' : ''}`, type: 'button', 'data-id': slot.fold, 'aria-expanded': String(slot.open) }, label(slot.open));
+  const b = d.el('button', { class: 'updates', type: 'button', 'data-id': slot.fold, 'aria-expanded': String(slot.open) }, label(slot.open));
   b.addEventListener('click', (e) => {
     e.stopPropagation();
     const open = !unfolded.has(slot.fold);
     if (open) unfolded.add(slot.fold);
     else unfolded.delete(slot.fold);
     if (inPlace) {
-      b.classList.toggle('open', open);
       b.setAttribute('aria-expanded', String(open));
       b.textContent = label(open);
       return inPlace(open);
