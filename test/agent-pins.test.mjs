@@ -177,7 +177,9 @@ test('3: a browser fills an agent pin made from a bare selector (move with fill)
   // next edit (a card before it deleted) can't move it to the next one in silence (Leo, 27 Nov).
   assert.equal((await cli(S, 'pin', 'move', theirs.id, '#t', '--page', '/index')).code, 0);
   await api({ page: '/index', action: 'resolve', id: theirs.id });
-  const placed = await api({ page: '/index', action: 'move', id: theirs.id, fill: true, anchor: { selector: '#t', element: '<h1 id="t">', text: 'Pricing', fp: { h: 'abc123', t: 'Pricing', u: 1, k: 0, x: '', l: 1, o: [0, 1] } } });
+  const stale = await api({ page: '/index', action: 'move', id: theirs.id, fill: true, was: '#elsewhere', anchor: { selector: '#t', element: '<h1 id="t">' } });
+  assert.equal(stale.status, 400, 'a fill looked for at a selector it no longer has adds nothing');
+  const placed = await api({ page: '/index', action: 'move', id: theirs.id, fill: true, was: '#t', anchor: { selector: '#t', element: '<h1 id="t">', text: 'Pricing', fp: { h: 'abc123', t: 'Pricing', u: 1, k: 0, x: '', l: 1, o: [0, 1] } } });
   assert.equal(placed.status, 200, JSON.stringify(placed));
   assert.deepEqual([placed.comment.anchor.element, placed.comment.anchor.fp?.t, placed.comment.resolved], ['<h1 id="t">', 'Pricing', true]);
 });

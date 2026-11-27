@@ -486,7 +486,7 @@ import { followTap, liftTarget } from './widget/lifttap.ts';
       // so (the agent is told), and fills in when it is found later.
       if (bare && !anchor) {
         const fill = fillAt(c.anchor);
-        if (fill || (c.session && !c.resolved && !c.unmatched)) send({ action: 'move', id: c.id, anchor: fill || c.anchor, [fill ? 'fill' : 'unmatched']: true, edit }).then(({ comment }) => Object.assign(c, comment), () => {});
+        if (fill || (c.session && !c.resolved && !c.unmatched)) send({ action: 'move', id: c.id, anchor: fill || c.anchor, [fill ? 'fill' : 'unmatched']: true, was: c.anchor.selector, edit }).then(({ comment }) => Object.assign(c, comment), () => {});
       }
     }
   };

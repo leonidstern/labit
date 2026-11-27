@@ -1127,8 +1127,7 @@ function prove(a): Proof {
   // Its tag changed (a div made an article, a p a div) with too few words to tell: the one element of another tag with
   // all its classes (in its company, among several), shown as changed, so the pin follows it (Leo, 27 Nov).
   const like = cls.length ? [...document.querySelectorAll(cls.map((c) => '.' + CSS.escape(c)).join(''))].filter((n) => n.localName !== tag && !host.contains(n)) : [];
-  const company2 = like.filter(co); // in its company, else in its section: never only because its classes are rare
-  const there = company2.length ? company2 : like.filter((n) => a.section && inSection(n, a.section));
+  const there = like.filter(co); // in its company: never only because its classes are rare, or share its section
   if (there.length === 1) return guess(there[0]);
   // Nothing else, and its words came to stand on several elements (a copy): the one nearest to where it was, told as unsure.
   return guess(near(set.length ? set : ex), true);
