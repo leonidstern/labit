@@ -550,7 +550,12 @@ export function startSheets() {
       // keyboard came out 0 and a new comment sat behind the keyboard's bar (Leo, 16 Nov, "sometimes": only when Safari
       // pans instead of scrolling).
       const seen = (top ? top + r.top : 0) + W.vv.height;
-      const kb = zoomed ? 0 : Math.max(0, Math.round(r.bottom - seen));
+      // A keyboard comes up only for something to type in (an iframe's own field shows as the iframe): the screen getting
+      // shorter without one is Safari's bar (iPhone 18 Pro simulator, 27 Nov: a page scrolled to its top as the chat
+      // opened, 62 px shorter for a frame, and the chat jumped up to fill the screen and slid back). One already up keeps
+      // counting after its field lets go, until the screen is tall again (its way down).
+      const keys = typing || field?.localName === 'iframe' || fit.kbUp;
+      const kb = zoomed || !keys ? 0 : Math.max(0, Math.round(r.bottom - seen));
       const gap = zoomed ? 0 : Math.max(0, Math.round(seen - r.bottom));
       const vh = zoomed ? 0 : Math.round(W.vv.height);
       // Safari 26 doesn't count as "keyboard up" here (its fixed layer ends above the keyboard by itself): the sheet stays
