@@ -1,0 +1,303 @@
+// A picture put on a board in real browsers (WebKit and Chrome's engine): the "+ image" button, a paste with the pointer over
+// the board, a paste into a comment box (left alone), a pin on the picture. Not part of `npm test`; CI runs it in the `browser` job.
+import fs from 'node:fs';
+import path from 'node:path';
+import { claimPort } from './port.mjs';
+import { playwright, engines, tmp, labEnv, startLab, labUp, sleep, check, finish, withAlt } from './harness.mjs';
+import { png } from '../pictures.mjs';
+
+const pw = playwright();
+const DIR = tmp('labit-boardimage-');
+const PORT = claimPort(8380, 30);
+const B = `http://localhost:${PORT}`;
+fs.writeFileSync(path.join(DIR, 'pricing.html'), '<!doctype html><meta charset="utf-8"><title>Pricing</title><h1>Pricing one</h1>');
+fs.writeFileSync(path.join(DIR, 'labit.json'), JSON.stringify({ port: PORT }));
+const server = startLab(DIR, labEnv());
+await labUp(B);
+const put = (name, frames) => fetch(`${B}/_lab/api/board?name=${name}`, { method: 'PUT', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ v: 1, rev: 0, frames }) }).then((r) => r.json());
+const frames = async (name) => (await (await fetch(`${B}/_lab/api/board?name=${name}`)).json()).frames;
+try {
+  for (const eng of engines()) {
+    const name = `pics-${eng}`;
+    await put(name, [{ id: 'a', src: '/pricing', w: 600, h: 400 }]);
+    const browser = await pw[eng].launch();
+    try {
+      const ctx = await browser.newContext({ viewport: { width: 1200, height: 800 } });
+      await ctx.addInitScript(() => { localStorage.setItem('lab-name', 'tester'); localStorage.setItem('lab-on', '1'); });
+      const p = await ctx.newPage();
+      p.on('pageerror', (e) => console.log('pageerror', e.message));
+      await p.goto(`${B}/_lab/board/${name}`);
+      await p.waitForFunction(() => document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector('#lab-board .f[data-id="a"]'), null, { timeout: 8000 });
+      await sleep(1500);
+      const rect = (id) => p.evaluate((i) => { const r = document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector(`#lab-board .f[data-id="${i}"]`)?.getBoundingClientRect(); return r && { x: r.x, y: r.y, w: r.width, h: r.height }; }, id);
+      const shown = (id) => p.evaluate((i) => { const im = document.querySelector('[data-lab-board-view]')?.shadowRoot?.querySelector(`#lab-board .f[data-id="${i}"] img`); return im ? im.naturalWidth : -1; }, id);
+      const until = async (fn, tries = 40) => { for (let i = 0; i < tries; i++) { const v = await fn(); if (v) return v; await sleep(150); } return false; };
+
+      // "+ image": the file picker's input
+      check(eng, 'a "+ image" button is in the corner cluster', await p.locator('.zm .zi').count() === 1);
+      await p.locator('.zm input[type=file]').setInputFiles({ name: 'shot.png', mimeType: 'image/png', buffer: png(64, 48) });
+      const b = await until(async () => (await frames(name)).find((f) => f.id === 'b'));
+      check(eng, 'a picked file is a new image frame with the picture in it', b?.kind === 'image' && b.iw === 64 && await until(async () => (await shown('b')) > 0), JSON.stringify(b));
+
+      // a paste with the pointer over the board: the picture, drawn at 3000 × 2000, is sent smaller and lands under the pointer
+      await p.mouse.move(700, 500);
+      await sleep(200);
+      const before = (await frames(name)).length;
+      await p.evaluate(async () => {
+        const cv = Object.assign(document.createElement('canvas'), { width: 3000, height: 2000 });
+        const g = cv.getContext('2d');
+        g.fillStyle = '#3a7'; g.fillRect(0, 0, 3000, 2000);
+        const blob = await new Promise((r) => cv.toBlob(r, 'image/png'));
+        const dt = new DataTransfer();
+        dt.items.add(new File([blob], 'image.png', { type: 'image/png' }));
+        document.body.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true, composed: true }));
+      });
+      const c = await until(async () => (await frames(name)).find((f) => f.id === 'c'));
+      if (!c && !(await p.evaluate(() => { const dt = new DataTransfer(); dt.items.add(new File(['x'], 'x.png', { type: 'image/png' })); return new ClipboardEvent('paste', { clipboardData: dt }).clipboardData?.items.length === 1; }))) console.log(`skip ${eng}   this engine drops clipboardData from a synthetic paste`);
+      else {
+        check(eng, 'a paste adds an image frame', before === 2 && c?.kind === 'image', JSON.stringify(c));
+        check(eng, 'it is sent at 2400 px or less, never the 3000 it was drawn at', c && Math.max(c.iw, c.ih) <= 2400, JSON.stringify(c));
+        check(eng, 'its centre is where the pointer was (the pointer on the board, in world px)', Boolean(c) && await until(async () => { const r = await rect('c'); return r && Math.abs(r.x + r.w / 2 - 700) < 6 && Math.abs(r.y + r.h / 2 - 500) < 6; }), JSON.stringify(await rect('c')));
+        check(eng, 'and the picture shows', await until(async () => (await shown('c')) > 0));
+      }
+
+      // a pin on the picture is an ordinary board pin
+      const r = await rect('c'); // on top of the frames it was pasted over
+      await withAlt(p, () => p.mouse.click(r.x + r.w / 2, r.y + r.h / 2));
+      await p.waitForFunction(() => [...document.querySelectorAll('*')].some((n) => n.shadowRoot?.querySelector('textarea')), null, { timeout: 4000 }).catch(() => {});
+      const area = p.locator('textarea').first();
+      check(eng, 'a click on the picture opens the comment box', await area.count() > 0);
+      // a paste with focus in the comment box is the box's own: no frame is added
+      const n1 = (await frames(name)).length;
+      await area.focus();
+      await p.evaluate(() => {
+        const dt = new DataTransfer();
+        dt.items.add(new File([new Uint8Array([1, 2, 3])], 'image.png', { type: 'image/png' }));
+        (document.activeElement?.shadowRoot?.activeElement || document.activeElement).dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true, composed: true }));
+      });
+      await sleep(800);
+      check(eng, 'a paste into the comment box adds no frame', (await frames(name)).length === n1);
+      await p.locator('.atts .x').first().click({ timeout: 1500 }).catch(() => {}); // with comment pictures (attach.ts) the box takes the paste as an attachment: not a real picture here, so it goes
+      await area.focus();
+      await p.keyboard.type('crop here');
+      await p.keyboard.press('Enter');
+      let saved;
+      for (let i = 0; i < 30 && !saved; i++) { await sleep(150); saved = (await (await fetch(`${B}/_lab/api/comments?page=/_board/${name}`)).json()).comments?.[0]; }
+      check(eng, 'the pin on the picture is anchored to the picture, not the frame under it', saved?.anchor?.kind === 'board' && saved.anchor.frame === 'c', JSON.stringify(saved?.anchor));
+      const sp = saved?.anchor;
+      check(eng, 'and it says where on the file: the file, its size, and the spot as shares of it (centre click: half across, half down)', /^c\.(png|webp)$/.test(sp?.file || '') && sp.nw === 2400 && sp.nh === 1600 && Math.abs(sp.imgX - 0.5) < 0.03 && Math.abs(sp.imgY - 0.5) < 0.03, JSON.stringify(sp));
+
+      // ⌥⌘V: the picture goes at the pointer and its own comment box opens on it (the keys held before the paste event carry the ⌥)
+      await p.keyboard.press('Escape');
+      await p.mouse.move(420, 300);
+      await sleep(200);
+      const pins0 = (await (await fetch(`${B}/_lab/api/comments?page=/_board/${name}`)).json()).comments?.length || 0;
+      await p.keyboard.down('Alt');
+      await p.evaluate(async () => {
+        const cv = Object.assign(document.createElement('canvas'), { width: 600, height: 400 });
+        cv.getContext('2d').fillRect(0, 0, 600, 400);
+        const blob = await new Promise((r) => cv.toBlob(r, 'image/png'));
+        const dt = new DataTransfer();
+        dt.items.add(new File([blob], 'image.png', { type: 'image/png' }));
+        document.body.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true, composed: true }));
+      });
+      await until(async () => (await frames(name)).find((f) => f.id === 'd'));
+      await p.keyboard.up('Alt');
+      const boxOpen = await until(async () => (await p.locator('textarea').count()) > 0);
+      check(eng, '⌥⌘V puts the picture down and opens its comment box', Boolean(boxOpen));
+      await p.keyboard.type('this one');
+      await p.keyboard.press('Enter');
+      let alted;
+      for (let i = 0; i < 30 && !alted; i++) { await sleep(150); alted = (await (await fetch(`${B}/_lab/api/comments?page=/_board/${name}`)).json()).comments?.find((x) => x.text === 'this one'); }
+      check(eng, 'that comment is anchored to the new picture, near its centre', alted?.anchor?.frame === 'd' && Math.abs(alted.anchor.fx - 300) < 40 && Math.abs(alted.anchor.fy - 200) < 40, JSON.stringify(alted?.anchor));
+      // a plain ⌘V never opens a box
+      await p.keyboard.press('Escape');
+      await p.mouse.move(900, 600);
+      await sleep(200);
+      await p.evaluate(async () => {
+        const dt = new DataTransfer();
+        const cv = Object.assign(document.createElement('canvas'), { width: 100, height: 100 });
+        const blob = await new Promise((r) => cv.toBlob(r, 'image/png'));
+        dt.items.add(new File([blob], 'image.png', { type: 'image/png' }));
+        document.body.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true, composed: true }));
+      });
+      await until(async () => (await frames(name)).find((f) => f.id === 'e'));
+      await sleep(600);
+      check(eng, 'a plain paste opens no comment box', await p.locator('textarea').count() === 0);
+      // ⌥-click on a picture frame comments on it as on any frame
+      const rb = await rect('b');
+      await p.keyboard.down('Alt');
+      await p.mouse.click(rb.x + rb.w / 2, rb.y + rb.h / 2);
+      await p.keyboard.up('Alt');
+      check(eng, '⌥-click on a picture frame opens a comment box', Boolean(await until(async () => (await p.locator('textarea').count()) > 0)));
+      void pins0;
+      // an area dragged over the picture: its two corners on the file
+      await p.keyboard.press('Escape');
+      await p.mouse.move(5, 5);
+      const rc = await rect('c');
+      // (the part of c the pictures pasted over it, d and e, do not cover: 72%–83% across, 60%–72% down)
+      await withAlt(p, async () => {
+        await p.mouse.move(rc.x + rc.w * 0.72, rc.y + rc.h * 0.6);
+        await p.mouse.down();
+        await p.mouse.move(rc.x + rc.w * 0.78, rc.y + rc.h * 0.66, { steps: 6 });
+        await p.mouse.move(rc.x + rc.w * 0.83, rc.y + rc.h * 0.72, { steps: 6 });
+        await p.mouse.up();
+      });
+      await until(async () => (await p.locator('textarea').count()) > 0);
+      await p.keyboard.type('this part');
+      await p.keyboard.press('Enter');
+      let drawn;
+      for (let i = 0; i < 30 && !drawn; i++) { await sleep(150); drawn = (await (await fetch(`${B}/_lab/api/comments?page=/_board/${name}`)).json()).comments?.find((x) => x.text === 'this part'); }
+      const aa = drawn?.anchor;
+      check(eng, 'an area on the picture says its corners on the file (72%–83% across, 60%–72% down)', Boolean(aa) && aa.frame === 'c' && Math.abs(aa.imgX - 0.72) < 0.04 && Math.abs(aa.imgX2 - 0.83) < 0.04 && Math.abs(aa.imgY - 0.6) < 0.04 && Math.abs(aa.imgY2 - 0.72) < 0.04, JSON.stringify(aa));
+      check(eng, 'and the agent reads it as an area in the original, with the file path', Boolean(drawn) && /on: image "c\.(png|webp)" \(pasted onto this board: \.lab\/boards\/[^)]+\)\narea in original: 7\d%–8\d% across, 6\d%–7\d% down of 2400×1600 \(pixels 1[67]\d\d,9\d\d to 19\d\d,1[01]\d\d\)/.test(await (await fetch(`${B}/_lab/agent/_board/${name}`)).text()));
+      // a wide banner sits in a 200 px tall frame with bars above and below: a point on a bar is held to the picture's edge
+      await p.keyboard.press('Escape');
+      await p.locator('.zm input[type=file]').setInputFiles({ name: 'banner.png', mimeType: 'image/png', buffer: png(3000, 150) });
+      const banner = await until(async () => (await frames(name)).find((f) => f.kind === 'image' && f.iw === 2400 && f.ih === 120));
+      check(eng, 'a banner picture is drawn again at 2400 px and held to a 200 px tall frame', Boolean(banner) && banner.h === 200, JSON.stringify(banner));
+      await until(async () => (await shown(banner?.id)) > 0);
+      await p.keyboard.press('Shift+Digit1'); // fit all
+      await sleep(600);
+      const rbn = await rect(banner.id);
+      await withAlt(p, () => p.mouse.click(rbn.x + rbn.w / 2, rbn.y + 3)); // on the bar above the picture
+      await until(async () => (await p.locator('textarea').count()) > 0);
+      await p.keyboard.type('bar');
+      await p.keyboard.press('Enter');
+      let onbar;
+      for (let i = 0; i < 30 && !onbar; i++) { await sleep(150); onbar = (await (await fetch(`${B}/_lab/api/comments?page=/_board/${name}`)).json()).comments?.find((x) => x.text === 'bar'); }
+      check(eng, 'a pin on the bar above the picture is held to its top edge (0% down) and halfway across', Boolean(onbar) && onbar.anchor.frame === banner.id && onbar.anchor.imgY === 0 && Math.abs(onbar.anchor.imgX - 0.5) < 0.03, JSON.stringify(onbar?.anchor));
+      // a picture off the board and back (e, the last pasted, lies on top): a click picks it (its ring), Backspace takes it
+      // off, ⌘Z puts it back; no × over its corner (Leo, 21 Nov: "no need this on board > select and delete")
+      await p.keyboard.press('Escape');
+      await p.keyboard.press('Shift+Digit1');
+      await sleep(700);
+      const bBefore = (await frames(name)).find((f) => f.id === 'e');
+      const rb3 = await rect('e');
+      check(eng, 'no × on a picture', await p.locator('.f .rm').count() === 0);
+      check(eng, 'no white card under a picture (its edge showed as a light line while moving)', await p.evaluate(() => getComputedStyle(document.querySelector('[data-lab-board-view]').shadowRoot.querySelector('#lab-board .f[data-id="e"] .b')).backgroundColor) === 'rgba(0, 0, 0, 0)');
+      const nameShown = () => p.evaluate(() => getComputedStyle(document.querySelector('[data-lab-board-view]').shadowRoot.querySelector('#lab-board .f[data-id="e"] .t')).visibility === 'visible');
+      check(eng, 'a picture\'s file name is not shown till it is picked', !(await nameShown()));
+      check(eng, 'nor any other picture\'s name (a page\'s shows always: Leo, 26 Nov)', await p.evaluate(() => [...document.querySelector('[data-lab-board-view]').shadowRoot.querySelectorAll('#lab-board .f.i .t')].every((t) => getComputedStyle(t).visibility === 'hidden')));
+      await p.mouse.move(rb3.x + rb3.w / 2, rb3.y + rb3.h / 2);
+      await p.mouse.down();
+      check(eng, 'its file name shows as the press starts, not on the lift', await nameShown());
+      await p.mouse.up();
+      await sleep(250);
+      check(eng, 'a click picks the picture: its ring', await p.locator('.f[data-id="e"].pick').count() === 1);
+      check(eng, 'and its file name shows', await nameShown());
+      await p.keyboard.press('Backspace');
+      check(eng, 'Backspace on a picked picture takes it off the board (archived)', Boolean(await until(async () => (await frames(name)).find((f) => f.id === 'e')?.state === 'archived')));
+      check(eng, 'the picture is gone from the board, its file kept', Boolean(await until(async () => (await rect('e')) == null)) && (await fetch(`${B}/_lab/board/${name}/e`)).status === 200);
+      check(eng, 'the agent reads the frame as archived', /\ne {2}pasted image [^\n]*archived/.test(await (await fetch(`${B}/_lab/agent/_board/${name}`)).text()));
+      await p.keyboard.press('Control+z');
+      const back = await until(async () => { const f = (await frames(name)).find((g) => g.id === 'e'); return f?.state === 'live' ? f : null; });
+      check(eng, '⌘Z puts it back, in the same place', Boolean(back) && back.x === bBefore.x && back.y === bBefore.y && Boolean(await until(async () => (await rect('e')) != null)), JSON.stringify([bBefore, back]));
+      // one ⌘Z undoes only the newest thing: a pin put after a picture moved goes, the picture stays (Leo, 23 Nov: "cmd z on
+      // drawings or pins reverting also image positions"); the next ⌘Z moves the picture back
+      {
+        await p.keyboard.press('Escape');
+        const r0 = await rect('e');
+        await p.mouse.move(r0.x + r0.w / 2, r0.y + r0.h / 2);
+        await p.mouse.down();
+        await p.mouse.move(r0.x + r0.w / 2 + 20, r0.y + r0.h / 2, { steps: 4 });
+        await p.mouse.move(r0.x + r0.w / 2 + 40, r0.y + r0.h / 2, { steps: 4 });
+        await p.mouse.up();
+        const movedTo = await until(async () => { const f = (await frames(name)).find((g) => g.id === 'e'); return f && f.x !== back.x ? f : null; });
+        await sleep(400);
+        const r1 = await rect('e');
+        await withAlt(p, () => p.mouse.click(r1.x + r1.w / 2, r1.y + r1.h / 3));
+        await p.waitForFunction(() => [...document.querySelectorAll('*')].some((n) => n.shadowRoot?.querySelector('.float textarea')), null, { timeout: 4000 }).catch(() => {});
+        await p.keyboard.type('undo me');
+        await p.keyboard.press('Enter');
+        let pin;
+        for (let i = 0; i < 30 && !pin; i++) { await sleep(150); pin = (await (await fetch(`${B}/_lab/api/comments?page=/_board/${name}`)).json()).comments?.find((x) => x.text === 'undo me'); }
+        await sleep(3500); // past the card's own undo moment
+        await p.keyboard.press('Escape');
+        await p.evaluate(() => document.activeElement?.blur());
+        await p.keyboard.press('Control+z');
+        await sleep(1200);
+        const after = (await (await fetch(`${B}/_lab/api/comments?page=/_board/${name}`)).json()).comments?.find((x) => x.text === 'undo me');
+        const still = (await frames(name)).find((g) => g.id === 'e');
+        check(eng, 'a picture moved, then a pin: ⌘Z takes the pin back and leaves the picture where it was moved', Boolean(movedTo) && Boolean(pin) && (!after || after.resolved) && still.x === movedTo.x, JSON.stringify({ moved: movedTo?.x, pin: Boolean(pin), after: after && { resolved: after.resolved }, x: still?.x }));
+        await p.keyboard.press('Control+z');
+        const backAgain = await until(async () => { const f = (await frames(name)).find((g) => g.id === 'e'); return f?.x === back.x ? f : null; });
+        check(eng, 'and the next ⌘Z moves the picture back', Boolean(backAgain));
+      }
+      // panned to the board's edge, the frame that made that edge moved in: the view stays where it was panned to (Leo, 23 Nov:
+      // "it happens when moving several images after panned canvas right or left")
+      {
+        await p.keyboard.press('Escape');
+        await p.keyboard.press('Shift+Digit1');
+        await sleep(500);
+        for (let i = 0; i < 10; i++) await p.mouse.wheel(4000, 0);
+        await sleep(600);
+        const cam0 = await p.evaluate(() => __labBoard.camera());
+        const far = await p.evaluate(() => { const fs = [...document.querySelector('[data-lab-board-view]').shadowRoot.querySelectorAll('#lab-board .f')].map((f) => ({ id: f.dataset.id, r: f.getBoundingClientRect() })).filter((f) => f.r.right > 0 && f.r.left < innerWidth); const f = fs.sort((a, b) => b.r.right - a.r.right)[0]; return f && { id: f.id, x: f.r.x + f.r.width / 2, y: f.r.y + f.r.height / 2 }; });
+        await p.mouse.move(far.x, far.y);
+        await p.mouse.down();
+        for (let i = 1; i <= 6; i++) await p.mouse.move(far.x - i * 50, far.y);
+        await p.mouse.up();
+        await sleep(1500);
+        const cam1 = await p.evaluate(() => __labBoard.camera());
+        check(eng, 'at the board\'s edge, moving the edge frame in leaves the camera where it was', Math.abs(cam1.x - cam0.x) < 0.5 && Math.abs(cam1.y - cam0.y) < 0.5 && cam1.z === cam0.z, JSON.stringify({ far, cam0, cam1 }));
+      }
+      // with nothing picked, Backspace takes nothing off
+      await p.keyboard.press('Shift+Digit1');
+      await sleep(600);
+      const rc2 = await rect('d');
+      await p.mouse.click(rc2.x + rc2.w / 2, rc2.y - 200 > 0 ? rc2.y - 200 : 5); // the canvas: nothing picked
+      await sleep(250);
+      await p.mouse.move(rc2.x + rc2.w / 2, rc2.y + rc2.h / 2);
+      await p.keyboard.press('Backspace');
+      await sleep(600);
+      check(eng, 'Backspace with nothing picked takes nothing off', (await frames(name)).find((f) => f.id === 'd')?.state !== 'archived');
+      // several pictures pasted at once: each one is a frame, not only the first (Leo, 23 Nov)
+      if (c) {
+        const n2 = (await frames(name)).length;
+        await p.mouse.move(600, 400);
+        await sleep(150);
+        await p.evaluate(async () => {
+          const dt = new DataTransfer();
+          for (const [i, col] of [['1', '#a37'], ['2', '#37a']]) {
+            const cv = Object.assign(document.createElement('canvas'), { width: 80, height: 60 });
+            const g = cv.getContext('2d');
+            g.fillStyle = col; g.fillRect(0, 0, 80, 60);
+            dt.items.add(new File([await new Promise((r) => cv.toBlob(r, 'image/png'))], `multi${i}.png`, { type: 'image/png' }));
+          }
+          document.body.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true, composed: true }));
+        });
+        const both = await until(async () => (await frames(name)).length === n2 + 2);
+        const [m1, m2] = (await frames(name)).slice(-2);
+        check(eng, 'two pictures pasted at once are two image frames', Boolean(both), JSON.stringify((await frames(name)).map((f) => f.id)));
+        check(eng, 'side by side in the order pasted, tops in line, not piled up', Boolean(both) && m2.x === m1.x + m1.w + 80 && m2.y === m1.y, JSON.stringify([m1, m2]));
+      }
+
+
+      // a picture drawn small shows a preview the page made once and the lab keeps (Leo, 23 Nov: fine lines sparkled far out)
+      if (c) {
+        const kept = await until(async () => (await frames(name)).find((f) => f.id === 'c')?.pv?.length === 4, 80);
+        const pv = (await frames(name)).find((f) => f.id === 'c')?.pv;
+        check(eng, 'the page makes previews of 1024, 512, 256 and 128 px once, and the lab keeps them', Boolean(kept) && pv.join() === '1024,512,256,128' && (await fetch(`${B}/_lab/board/${name}/c-p256`)).ok, JSON.stringify(pv));
+        const shownPv = () => p.evaluate(() => { const f = document.querySelector('[data-lab-board-view]').shadowRoot.querySelector('#lab-board .f[data-id="c"]'); const v = f.querySelector('img.pv'); return { on: v.style.visibility !== 'hidden', src: v.getAttribute('src') || '', w: f.getBoundingClientRect().width }; });
+        await p.mouse.move(600, 400);
+        await p.keyboard.down('Control');
+        for (let i = 0; i < 12; i++) { await p.mouse.wheel(0, 120); await sleep(30); }
+        await p.keyboard.up('Control');
+        const far = await until(async () => { const d = await shownPv(); return d.on && d; });
+        check(eng, 'zoomed far out, a small preview shows over the picture', Boolean(far) && /-p(128|256)$/.test(far.src), JSON.stringify(far || await shownPv()));
+        await p.keyboard.down('Control');
+        for (let i = 0; i < 30; i++) { await p.mouse.wheel(0, -120); await sleep(30); }
+        await p.keyboard.up('Control');
+        check(eng, 'zoomed back in, once it rests the picture itself shows', Boolean(await until(async () => !(await shownPv()).on)), JSON.stringify(await shownPv()));
+        const bad = await fetch(`${B}/_lab/api/image?board=${name}&preview=c`, { method: 'POST', headers: { 'content-type': 'image/png', origin: B }, body: png(300, 200) });
+        check(eng, 'a preview of a size that is not one of them is refused', bad.status === 400 || bad.status === 403, String(bad.status));
+      }
+    } finally {
+      await browser.close();
+    }
+  }
+} finally {
+  server.kill();
+}
+finish();
