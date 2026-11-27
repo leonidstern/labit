@@ -21,7 +21,7 @@ const B = `http://localhost:${PORT}`;
 const paras = Array.from({ length: 30 }, (_, i) => `<p id="p${i}">paragraph ${i} with some words to read on a phone</p>`).join('');
 fs.writeFileSync(path.join(DIR, 'index.html'), `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>P</title>
 <style>body{margin:0 20px;font:16px/1.5 sans-serif} #bar{position:sticky;top:0;background:#eee;padding:8px}</style>
-<body><header id="bar"><b>Sticky bar</b></header><main id="main" style="color: #111">${paras}</main><aside id="side" style="translate: 50px 0">Aside.</aside><footer id="foot" style="transition-duration: 123ms !important; translate: 0 1px">The end.</footer></body>`);
+<body><header id="bar"><b>Sticky bar</b></header><main id="main" style="color: #111">${paras}</main><aside id="side" style="translate: 50px 0">Aside.</aside><svg id="pic" width="40" height="20"><rect width="40" height="20"/></svg><footer id="foot" style="transition-duration: 123ms !important; translate: 0 1px">The end.</footer></body>`);
 const server = startLab(DIR, labEnv({}, { settings: false }), { root: '.', port: PORT });
 await labUp(B);
 const token = JSON.parse(fs.readFileSync(path.join(DIR, '.lab', 'server.json'), 'utf8')).token;
@@ -73,7 +73,7 @@ try {
         t.dispatchEvent(new PointerEvent('pointerup', at));
         return Math.round(scrollY);
       });
-      const during = await p.evaluate(() => ({ main: document.getElementById('main').style.translate, foot: document.getElementById('foot').style.translate, side: getComputedStyle(document.getElementById('side')).translate, bar: document.getElementById('bar').style.translate, html: document.documentElement.getAttribute('style') || '' }));
+      const during = await p.evaluate(() => ({ main: document.getElementById('main').style.translate, foot: document.getElementById('foot').style.translate, side: getComputedStyle(document.getElementById('side')).translate, pic: document.getElementById('pic').style.translate, bar: document.getElementById('bar').style.translate, html: document.documentElement.getAttribute('style') || '' }));
       check(eng, 'a held new comment opens and moves the page', (await open()) === 'float' && hold > 0, `open ${await open()}, scrollY ${hold}`);
       check(eng, 'the page is held still by a translate on its own blocks (not the sticky bar), nothing on <html>', /px/.test(during.main) && !during.bar && !/--lab-shift/.test(during.html), JSON.stringify(during));
       check(eng, 'the commenting rules stay while the new comment is open', (await pinning()) === true, '');
@@ -86,6 +86,8 @@ try {
       check(eng, 'the shift ran on the page\'s block', after.w.shifts.some((s) => /px/.test(s)), JSON.stringify(after.w.shifts));
       const footAfter = await footStyle();
       const sideAfter = await p.evaluate(() => ({ inline: document.getElementById('side').style.translate, x: document.getElementById('side').getBoundingClientRect().left }));
+      const picAfter = await p.evaluate(() => document.getElementById('pic').getAttribute('style'));
+      check(eng, 'an <svg> straight in <body> is shifted with the page\'s other blocks, and left with no style after', /px/.test(during.pic) && during.pic === during.main && picAfter === null, `${during.pic} vs ${during.main}, after ${picAfter}`);
       check(eng, 'a block with its own translate 50px across keeps it while shifted (only its y gets the shift)', /^50px /.test(during.side) && /px$/.test(during.side) && during.side !== '50px', during.side);
       check(eng, '... and after: the same inline translate, the same place across', sideAfter.inline === sideBefore.inline && Math.abs(sideAfter.x - sideBefore.x) < 0.5, `${JSON.stringify(sideBefore)} -> ${JSON.stringify(sideAfter)}`);
       check(eng, 'a block with only transition-duration !important and its own translate was shifted too', during.foot !== '0px 1px' && /px/.test(during.foot), during.foot);

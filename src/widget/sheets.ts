@@ -173,9 +173,10 @@ let gen = 0; // each shift is the last one's end
 // that "" back wiped its duration.
 let easeSettle = ''; // a token: read once
 const WRITTEN = ['translate', 'transition-property', 'transition-duration', 'transition-timing-function', 'transition-delay', 'transition-behavior'];
-const kept = new Map<HTMLElement, [string, string][]>();
-const ownTranslate = new Map<HTMLElement, string>(); // a block's own (computed) translate: the shift is added to it
-const blocks = () => Array.from(document.body.children).filter((n): n is HTMLElement => n instanceof HTMLElement && n !== W.host && n.localName !== 'script' && n.localName !== 'style' && !n.hasAttribute('data-lab-board-view') && !n.hasAttribute('data-lab-still'));
+type Block = HTMLElement | SVGElement; // an <svg> straight in <body> is moved too, as the page's own blocks are
+const kept = new Map<Block, [string, string][]>();
+const ownTranslate = new Map<Block, string>(); // a block's own (computed) translate: the shift is added to it
+const blocks = () => Array.from(document.body.children).filter((n): n is Block => (n instanceof HTMLElement || n instanceof SVGElement) && n !== W.host && n.localName !== 'script' && n.localName !== 'style' && !n.hasAttribute('data-lab-board-view') && !n.hasAttribute('data-lab-still'));
 const shifted = (px: number, ms: number) => {
   gen++;
   easeSettle ||= getComputedStyle(W.host).getPropertyValue('--_ease-settle').trim() || 'ease';
