@@ -34,6 +34,14 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die, model }: Ctx):
     const slug = dashed(topic) || 'page';
     if (!dir && !/\.html?$/i.test(src)) die(`${src}: give an .html file, or a folder of pages`);
     const dest = path.join(root, dir ? slug : `${slug}.html`);
+    // lab.css styles only what sits in <body class="lab"> (Leo, 28 Nov: a page that linked it without the class came
+    // out as bare browser defaults, "ugly af"): say so, the page still goes up.
+    const page = dir ? path.join(src, 'index.html') : src;
+    try {
+      const html = fs.readFileSync(page, 'utf8');
+      if (/\/_lab\/lab\.css/.test(html) && !/<body[^>]*\bclass\s*=\s*["'][^"']*\blab\b/i.test(html))
+        console.warn(`${path.basename(page)} links /_lab/lab.css but its <body> has no class="lab": lab.css styles only inside body.lab, so the page shows browser defaults. Use <body class="lab"><main>… (the skill's "How a page you write looks").`);
+    } catch { /* no index.html: nothing to check */ }
     // The page's old copy is removed first, so the source must not be that copy, in it or around it: a folder
     // published under the name of the folder it sits in (or through a link to the pages folder) used to delete itself.
     const from = fs.realpathSync(src);

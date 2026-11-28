@@ -403,6 +403,14 @@ test('labit publish puts a page in the one pages lab, starts it once, and publis
     assert.equal(heard.out.split('\n')[0], link, 'the link first');
     assert.match(heard.out, /No new comments yet/, 'then a wait on the page');
     assert.doesNotMatch(heard.out, /Listen for its pins:/, 'no line to run by hand');
+    // A page that links lab.css without <body class="lab"> gets a warning (it would show browser defaults), and still goes up.
+    fs.writeFileSync(path.join(home, 'Bare.html'), '<!doctype html><link rel="stylesheet" href="/_lab/lab.css"><body><h1>bare</h1>');
+    const bare = await new Promise((r) => execFile(process.execPath, [LAB, 'publish', 'Bare.html'], { cwd: home, env }, (err, out, errOut) => r({ code: err?.code ?? 0, said: String(errOut) })));
+    assert.equal(bare.code, 0);
+    assert.match(bare.said, /no class="lab"/);
+    fs.writeFileSync(path.join(home, 'Kit.html'), '<!doctype html><link rel="stylesheet" href="/_lab/lab.css"><body class="lab"><main><h1>kit</h1></main>');
+    const kit = await new Promise((r) => execFile(process.execPath, [LAB, 'publish', 'Kit.html'], { cwd: home, env }, (err, out, errOut) => r(String(errOut))));
+    assert.doesNotMatch(kit, /class="lab"/, 'no warning with the class');
   } finally {
     if (pid) process.kill(pid);
     await sleep(300);
