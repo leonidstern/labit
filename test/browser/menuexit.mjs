@@ -40,18 +40,22 @@ try {
       const sh = (p, expr) => p.evaluate(`(() => { const r = ${ROOT}; return ${expr}; })()`);
 
       // E. The ⋯ menu after Esc and after the ⋯ button: one sample per frame from the key / click on.
+      // Only frames clocked after the close count: on a busy machine (Chromium, CI's Linux runner) the first frame after
+      // the key can be a late one whose clock is from before it, and a transition can't start in it. It starts in the
+      // next frame, so that late frame showed a second full-opacity frame though the close itself ran at once. The fade
+      // never goes back up either.
       {
         const [ctx, p] = await mk({ viewport: { width: 1200, height: 800 } });
-        await sh(p, `(window.__sample = (ev, target) => { window.__fr = []; const go = () => { const m = r.querySelector('.more-menu'); const cs = getComputedStyle(m); window.__fr.push(cs.display === 'none' ? null : +(+cs.opacity).toFixed(2)); if (window.__fr.length < 30) requestAnimationFrame(go); }; addEventListener(ev, () => requestAnimationFrame(go), { capture: true, once: true }); })`);
+        await sh(p, `(window.__sample = (ev) => { window.__fr = []; window.__late = 0; let at = 0; const go = (t) => { const m = r.querySelector('.more-menu'); const cs = getComputedStyle(m); if (t < at) window.__late++; else window.__fr.push(cs.display === 'none' ? null : +(+cs.opacity).toFixed(2)); if (window.__fr.length < 30) requestAnimationFrame(go); }; addEventListener(ev, () => { at = performance.now(); requestAnimationFrame(go); }, { capture: true, once: true }); })`);
         const frames = async (how) => {
-          await p.evaluate(`window.__sample(${JSON.stringify(how === 'esc' ? 'keydown' : 'pointerdown')})`);
+          await p.evaluate(`window.__sample(${JSON.stringify(how === 'esc' ? 'keydown' : 'click')})`);
           if (how === 'esc') await p.keyboard.press('Escape');
           else {
             const b = await sh(p, `(() => { const q = r.querySelector('.more').getBoundingClientRect(); return [q.x + q.width / 2, q.y + q.height / 2]; })()`);
             await p.mouse.click(b[0], b[1]);
           }
           await sleep(700);
-          return p.evaluate('window.__fr');
+          return [await p.evaluate('window.__fr'), await p.evaluate('window.__late')];
         };
         const open = async () => {
           const b = await sh(p, `(() => { const q = r.querySelector('.more').getBoundingClientRect(); return [q.x + q.width / 2, q.y + q.height / 2]; })()`);
@@ -60,10 +64,10 @@ try {
         };
         for (const how of ['esc', 'button']) {
           await open();
-          const fr = await frames(how);
+          const [fr, late] = await frames(how);
           const shown = fr.filter((o) => o !== null);
-          console.log(`     ${eng} ${how}: ${fr.map((o) => (o === null ? '-' : o)).join(' ')}`);
-          check(eng, `the ⋯ menu fades out after ${how === 'esc' ? 'Esc' : 'the ⋯ button'}`, shown.length >= 3 && shown[1] < 1 && fr[fr.length - 1] === null, `${shown.length} frames shown, second frame opacity ${shown[1]}`);
+          console.log(`     ${eng} ${how}: ${fr.map((o) => (o === null ? '-' : o)).join(' ')}${late ? ` (${late} late frame from before the close left out)` : ''}`);
+          check(eng, `the ⋯ menu fades out after ${how === 'esc' ? 'Esc' : 'the ⋯ button'}`, shown.length >= 3 && shown[1] < 1 && shown.every((o, i) => !i || o <= shown[i - 1]) && fr[fr.length - 1] === null, `${shown.length} frames shown, second frame opacity ${shown[1]}`);
           await sleep(200);
         }
         // "hide comments" from the menu: it fades out at its own height, not snapped shorter as its rows go (Leo, 26 Nov),
