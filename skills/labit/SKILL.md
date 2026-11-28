@@ -61,7 +61,7 @@ Leave your own pins with `LAB pin <selector> "<point>" [--page /path]` when what
 
 ## How a page you write looks
 
-One plain look, unless the person asks for one or it is their app's page: colours, corners and font only from `/_lab/lab.css` (`--lab-*`); no fonts or palette of your own, no hero, no animation. Highlight little: words first ("Recommended", bold), `lab-ok`/`lab-warn` only for state; no accent stripes, chips, dots, emoji or number tiles. `lab-box` sets one thing apart, not every block. Numbers only for real steps. Real content only, never invented data. No sideways scroll at 390 px.
+One plain look, unless the person asks for one or it is their app's page: colours, corners and font only from `/_lab/lab.css` (`--lab-*`); no fonts or palette of your own, no hero, no animation. lab.css styles only what sits in `<body class="lab">`: a page is `<body class="lab"><main>`, a `<header>` with the `<h1>` and a `<p class="lede">`, each part a `<section>` under its `<h2 id>`, `lab-box` for a block set apart (code too), `lab-table` for a table, `lab-muted lab-small` for a note. Without `class="lab"` the page shows the browser's defaults (`publish` warns). Highlight little: words first ("Recommended", bold), `lab-ok`/`lab-warn` only for state; no accent stripes, chips, dots, emoji or number tiles. `lab-box` sets one thing apart, not every block. Numbers only for real steps. Real content only, never invented data. No sideways scroll at 390 px.
 
 ## Instead of an Artifact ("use lab")
 
