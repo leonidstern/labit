@@ -409,8 +409,13 @@ test('labit publish puts a page in the one pages lab, starts it once, and publis
     assert.equal(bare.code, 0);
     assert.match(bare.said, /no class="lab"/);
     fs.writeFileSync(path.join(home, 'Kit.html'), '<!doctype html><link rel="stylesheet" href="/_lab/lab.css"><body class="lab"><main><h1>kit</h1></main>');
-    const kit = await new Promise((r) => execFile(process.execPath, [LAB, 'publish', 'Kit.html'], { cwd: home, env }, (err, out, errOut) => r(String(errOut))));
-    assert.doesNotMatch(kit, /class="lab"/, 'no warning with the class');
+    const kit = await new Promise((r) => execFile(process.execPath, [LAB, 'publish', 'Kit.html'], { cwd: home, env }, (err, out, errOut) => r({ code: err?.code ?? 0, said: String(errOut) })));
+    assert.equal(kit.code, 0);
+    assert.doesNotMatch(kit.said, /class="lab"/, 'no warning with the class');
+    // lab-dark alone isn't the lab class: still warned.
+    fs.writeFileSync(path.join(home, 'Near.html'), '<!doctype html><link rel="stylesheet" href="/_lab/lab.css"><body class="lab-dark"><h1>near</h1>');
+    const near = await new Promise((r) => execFile(process.execPath, [LAB, 'publish', 'Near.html'], { cwd: home, env }, (err, out, errOut) => r(String(errOut))));
+    assert.match(near, /no class="lab"/);
   } finally {
     if (pid) process.kill(pid);
     await sleep(300);

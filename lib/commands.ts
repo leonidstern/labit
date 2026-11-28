@@ -39,7 +39,10 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die, model }: Ctx):
     const page = dir ? path.join(src, 'index.html') : src;
     try {
       const html = fs.readFileSync(page, 'utf8');
-      if (/\/_lab\/lab\.css/.test(html) && !/<body[^>]*\bclass\s*=\s*["'][^"']*\blab\b/i.test(html))
+      // The body's class list must hold the token lab itself (not lab-dark), as the stylesheet's body.lab reads it.
+      const classes = /<body\b[^>]*?\sclass\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(html);
+      const hasLab = !!classes && (classes[1] ?? classes[2] ?? classes[3] ?? '').split(/\s+/).includes('lab');
+      if (/\/_lab\/lab\.css/.test(html) && !hasLab)
         console.warn(`${path.basename(page)} links /_lab/lab.css but its <body> has no class="lab": lab.css styles only inside body.lab, so the page shows browser defaults. Use <body class="lab"><main>… (the skill's "How a page you write looks").`);
     } catch { /* no index.html: nothing to check */ }
     // The page's old copy is removed first, so the source must not be that copy, in it or around it: a folder
