@@ -4,6 +4,8 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 
 ## Unreleased
 
+## 0.8.6 · 2026-11-27
+
 - **Pins follow what changed, and stay off what they are not on.** Tried on purpose to lose pins with the edits people and agents make (a new suite, `test/browser/anchoring-usecases.mjs`: a landing page, an app dashboard with live numbers, docs, a form, a gallery and an open menu, 30 edits, the three kinds of pin; in CI). Fixed: a card wrapped in a new box no longer moves its pin to the box; a status or a label rewritten where it stood ("Pending" to "Refunded", "Sign up" to "Create account") keeps its pin, shown as changed; an element whose tag changed (a div made an article) is followed by its classes; a pin the agent placed with `labit pin move` learns its element the first time a browser shows it, done or not, so a card deleted before it no longer moves it to the next one in silence.
 - **Pins the agent placed stay on their element.** A pin placed with `labit pin move` (a selector and nothing else) whose selector had a space in it (`#motion .sv-vid`) was shown lost even though its selector found the element; it is on that element now. And when the page renames an id its selector goes through (`#video` became `#motion`), it takes the rest of the path after that id when that names one element only.
 - **A pin you delete stays deleted.** "delete comment?" stays asked when the agent's answer comes in meanwhile (the card used to put its buttons back, so the delete never went and the pin seemed to come back). An answer, question, progress line or resolve that reaches a pin after it was deleted is dropped, and `labit reply` says "Dropped: the person deleted that pin" instead of "Replied".
@@ -12,6 +14,19 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 - **Agent pins on the spot.** The skill tells agents to pin the exact spot on an image or a big element with `--at x,y`, and `pin` says so when one lands in a picture's centre.
 - **`labit preview` is gone.** It wrote a "lab" entry into `.claude/launch.json` for the Claude desktop app's preview pane; the skill now opens pages there by their URL. A "lab" entry it wrote before still works.
 - **`reply --done --checked` is gone.** The page stopped showing how an agent checked its work on 23 Nov; now the agent text no longer says "(checked: …)" or "(not checked)" either. An agent on an older skill that still passes `--checked` keeps its reply (the flag is ignored), and saved answers that carry it load as before.
+- **A full CodeRabbit review, fixed.** About 400 findings across the widget, the server, CI and the tests were checked against main; every real one is fixed. Among them: a Wi-Fi guest can no longer read files outside the project, a malformed JPEG can't hang the lab, a lab's key only goes to the lab that runs on that port, comments and pictures aren't lost when a save fails halfway, a guest's picture isn't kept in the browser's cache, board undo can be tried again after a clash, an older board read never replaces a newer one, drafts come back after the app changes route, a walkie-talkie walk the lab refused is kept to send again, and an open thread drops replies deleted elsewhere.
+- **Pin placement, two more fixes.** A gap pin between look-alike cards stays in its own gap when the page grows above it, and a live patch that writes new words of the same length no longer sends a quote's pin to its twin.
+- **iPad.** A tap on the page closes an open card or new comment, a card no longer jumps up as it closes, and a pull on a card's messages scrolls them instead of closing the chat.
+- **Phones.** A new comment, a thread or the room below the page's end no longer restyle the whole page; taps act on the lift; a fast flick down closes a thread or the chat; chat and thread messages fade under the reply box; the bar stays on screen while a board is open; a pin on a sticky bar fades while the page scrolls.
+- **Boards.** A draw tool in the ⋯ menu, for iPads and pencils; a page in a frame that grows twice by the same amount is drawn whole.
+- **⌥W** goes to the next new comment, **⌥⇧W** back to the one read before.
+- **Done pins** wear a frosted green face, faded.
+- **The widget is 2.7 KB smaller.** The chat's messages and a board frame's page load their parts when first needed.
+- **Colabit follows labit's releases.** A colabit loads the widget of labit's latest release (it was main's, so every merge went live there before any release).
+- **The reply rules are gone.** The "rule?" offer on your replies, `--suggest-rule` and `~/.config/labit/replies.md` (a leftover file is ignored).
+- **Pins that carried their own board are gone** (made by "+board" on a pin before boards had their own list).
+- **Ports are digits only** (`--port 0x50` was port 80), and a comment's NEL, vertical tab or form feed no longer starts a line in the agent text.
+- **The `--fast` flag is gone** (it did nothing since 15 Nov).
 
 ## 0.8.5 · 2026-11-26
 
