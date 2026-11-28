@@ -284,8 +284,6 @@ button.btn.undo { color: var(--_fg); }
 /* One line of text is exactly as tall as the send button (20 + 2 + 2 = 24), so the text and the button share one middle. */
 .box textarea { grid-area: text; width: 100%; border: 0; background: none; padding: 2px 0; line-height: 20px; margin: 0; resize: none;
                 min-height: 0; max-height: min(200px, max(80px, 30vh)); overflow-x: hidden; overflow-y: auto; outline: none; display: block; field-sizing: content; } /* it grows with its words, no script */
-/* The fields draw no outline of their own: the box shows where the cursor is, a quiet ring in the accent (keyboard users saw nothing). */
-.box:has(textarea:focus-visible, .who input:focus-visible) { outline: 1px solid color-mix(in srgb, var(--_accent) 45%, transparent); outline-offset: -1px; }
 .box textarea::placeholder, .who input::placeholder { color: var(--_muted); opacity: 1; }
 .box textarea::placeholder { white-space: nowrap; text-overflow: ellipsis; } /* one line, cut with … on a box too narrow: a wrapped second line was half hidden */
 .line { grid-area: line; height: 0; border-top: var(--_hair); margin: 0 -7px 0 -14px; display: none; }

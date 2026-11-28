@@ -4,6 +4,7 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 
 ## Unreleased
 
+- **The comment box has no ring around it while you type.** The faint ring added on 27 Nov showed every time the box had the cursor (a text field always counts as keyboard-focused), so it read as a border. The caret shows where you are.
 - **`labit publish … --wait` publishes and listens in one command.** The link comes first, then it waits for that page's pins (with `--bg` the full wait, run in the background), so a published page is never live with nobody listening. The skill now publishes this way. Without `--wait` it prints the line to listen with, as before.
 
 ## 0.8.6 · 2026-11-27
