@@ -397,6 +397,12 @@ test('labit publish puts a page in the one pages lab, starts it once, and publis
     const linked = await new Promise((r) => execFile(process.execPath, [LAB, 'publish', path.join(home, 'pages-link/heading-options.html')], { cwd: home, env }, (err, out) => r(String(out).split('\n')[0])));
     assert.equal(linked, link);
     assert.match(fs.readFileSync(path.join(home, 'lab-pages/heading-options.html'), 'utf8'), /<h1>two<\/h1>/);
+    // --wait: the link, then it listens for that page's pins in the same command (a page is never live unheard).
+    const heard = await new Promise((r) => execFile(process.execPath, [LAB, 'publish', 'Heading options.html', '--wait', '--timeout', '2'], { cwd: home, env }, (err, out) => r({ code: err?.code ?? 0, out: String(out) })));
+    assert.equal(heard.code, 0, 'it ends with the wait');
+    assert.equal(heard.out.split('\n')[0], link, 'the link first');
+    assert.match(heard.out, /No new comments yet/, 'then a wait on the page');
+    assert.doesNotMatch(heard.out, /Listen for its pins:/, 'no line to run by hand');
   } finally {
     if (pid) process.kill(pid);
     await sleep(300);
