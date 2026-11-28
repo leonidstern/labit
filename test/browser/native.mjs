@@ -129,6 +129,10 @@ try {
         const grown = await inRoot(p, (r, sel) => { const t = r.querySelector(sel); return { h: t.getBoundingClientRect().height, inline: t.style.height, grow: getComputedStyle(t).fieldSizing === 'content' }; }, box);
         const lines = await inRoot(p, (r, sel) => parseFloat(getComputedStyle(r.querySelector(sel)).lineHeight), box);
         check(tag, 'the box grows with its words (three lines), the script writing no height', grown.h >= 3 * lines && grown.grow && !grown.inline, JSON.stringify({ h1, lines, ...grown }));
+        // The box with the cursor in it draws no ring around itself (Leo, 28 Nov: "was input with border like this or its
+        // regression" → "drop it"): the caret says where the cursor is.
+        const ring = await inRoot(p, (r, sel) => { const t = r.querySelector(sel), b = t.closest('.box'), c = getComputedStyle(b); return { focused: r.activeElement === t, outline: c.outlineStyle === 'none' ? 'none' : `${c.outlineStyle} ${c.outlineWidth}` }; }, box);
+        check(tag, 'the box with the cursor in it has no ring around it', ring.focused && ring.outline === 'none', JSON.stringify(ring));
         if (phone) {
           await inRoot(p, (r, sel) => { const t = r.querySelector(sel); t.value = ''; t.dispatchEvent(new Event('input', { bubbles: true })); t.blur(); }, box); // nothing sent: the chat is the long chat below
           await inRoot(p, (r) => r.querySelector('.chat-btn').click());
