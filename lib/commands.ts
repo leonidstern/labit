@@ -25,7 +25,7 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die, model }: Ctx):
   // it isn't running; the link is printed. Publishing again replaces it, same link. No folder or lab of its own.
   if (pos[0] === 'publish') {
     const src = pos[1] && path.resolve(pos[1]);
-    if (!src || !fs.existsSync(src)) die(`Usage: ${CMD} publish <page.html | folder> [--name "topic"]`);
+    if (!src || !fs.existsSync(src)) die(`Usage: ${CMD} publish <page.html | folder> [--name "topic"] [--wait [--bg]]`);
     const home = String(loadSettings(HERE, {}).values.pagesFolder || '~/lab-pages').replace(/^~(?=$|\/)/, os.homedir());
     fs.mkdirSync(home, { recursive: true });
     const root = fs.realpathSync(home);
@@ -66,8 +66,15 @@ export async function runCommand({ pos, opts, HERE, CMD, ME, die, model }: Ctx):
     const key = keyFor(path.relative(root, dir ? path.join(dest, 'index.html') : dest)); // "/topic", or "/topic/index"
     console.log(`http://localhost:${lab.port}${key.replace(/\/index$/, '/')}`);
     console.log(`In the pages lab (${root.replace(os.homedir(), '~')}). Publish again to update it, same link.`);
-    console.log(`Listen for its pins: cd ${root} && ${CMD} wait --bg --pages ${key}`);
-    process.exit(0);
+    // --wait: it listens for the page's pins at once, in the same command (a wait with --pages), so a page is never live
+    // with nobody listening (Leo, 28 Nov: a published page's pin sat unheard; the agent had skipped the line below).
+    if (!opts.wait) {
+      console.log(`Listen for its pins: cd ${root} && ${CMD} wait --bg --pages ${key}`);
+      process.exit(0);
+    }
+    const flags = [...(opts.bg ? ['--bg'] : []), ...['timeout', 'model'].flatMap((k) => (opts[k] ? [`--${k}`, String(opts[k])] : []))]; // (its --name is the page's topic, not the wait's)
+    const listen = spawn(process.execPath, [ME, 'wait', '--pages', key, ...flags], { cwd: root, env: process.env, stdio: 'inherit' });
+    await new Promise(() => listen.on('exit', (code) => process.exit(code ?? 0))); // it ends with the wait
   }
 
   // `labit gc`: what each lab keeps in its .lab and what could go. Only reports (lib/gc.ts).

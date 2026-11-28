@@ -69,7 +69,7 @@ const newerBuild = () => {
 const HELP = `labit ${VERSION}: comment on local pages; your agent answers on the pins (labit skill: how).
 
   labit [folder] [--name topic] [--proxy [port]] [--port 4400] [--wifi|--no-wifi] [--no-open] [--new]
-  labit publish <page.html|folder> [--name topic] [--dev]
+  labit publish <page.html|folder> [--name topic] [--wait [--bg]] [--dev]
   labit invite [name] [--page /path]
   labit list | pages [--all] | settings | skill | update
   labit use   this lab moves onto the build you run this from (a branch)

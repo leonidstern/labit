@@ -4,6 +4,8 @@ Versions follow [semver](https://semver.org). Before 1.0, a minor version can ch
 
 ## Unreleased
 
+- **`labit publish … --wait` publishes and listens in one command.** The link comes first, then it waits for that page's pins (with `--bg` the full wait, run in the background), so a published page is never live with nobody listening. The skill now publishes this way. Without `--wait` it prints the line to listen with, as before.
+
 ## 0.8.6 · 2026-11-27
 
 - **Pins follow what changed, and stay off what they are not on.** Tried on purpose to lose pins with the edits people and agents make (a new suite, `test/browser/anchoring-usecases.mjs`: a landing page, an app dashboard with live numbers, docs, a form, a gallery and an open menu, 30 edits, the three kinds of pin; in CI). Fixed: a card wrapped in a new box no longer moves its pin to the box; a status or a label rewritten where it stood ("Pending" to "Refunded", "Sign up" to "Create account") keeps its pin, shown as changed; an element whose tag changed (a div made an article) is followed by its classes; a pin the agent placed with `labit pin move` learns its element the first time a browser shows it, done or not, so a card deleted before it no longer moves it to the next one in silence.
